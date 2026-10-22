@@ -1,53 +1,30 @@
-# cookiecutter-comfy-extension
+# ComfyUI-AstroPhotoFlow
 
-## Get started writing custom nodes in one step without setting up a ton of Python project config.
+AstroPhotoFlow 是一个基于 ComfyUI Extension 的本地天文图像处理工作台，目标是让用户和 Agent 在同一项目中组织天文素材、构建处理流程、调用外部天文软件并追溯运行结果。
 
-An opinionated way to develop ComfyUI custom nodes. Uses cookiecutter to scaffold a python project.
+## 当前状态
 
-This template helps you
+本仓库处于需求基线和 Extension 脚手架阶段。产品范围、架构约束与验收目标见 [`docs/AstroPhotoFlow_Requirements_v1.0`](docs/AstroPhotoFlow_Requirements_v1.0/README.md)。文档定义的是开发目标，不代表功能已经实现或验收。
 
-## Usage
+本仓库保留 ComfyUI 官方 Cookiecutter Extension 模板结构，供 AstroPhotoFlow Extension 开发使用。
 
-- First install `cookiecutter`:
+## 生成 Extension 项目
 
-  ```bash
-  # pipx is strongly recommended
-  pipx install cookiecutter
+需要 Python 和 Cookiecutter：
 
-  # if pipx is not an option, you can install cookiecutter in your Python user directory.
-  python -m pip install --user cookiecutter
-  ```
+```bash
+python -m pip install cookiecutter
+cookiecutter .
+```
 
-- Run `cookiecutter` with this template:
+默认项目名为 `ComfyUI-AstroPhotoFlow`，Python 模块名为 `astrophotoflow`。运行 Cookiecutter 时可按需修改默认值。
 
-  ```bash
-  # if you installed cookiecutter with pipx
-  pipx run cookiecutter gh:comfy-org/cookiecutter-comfy-extension
+生成后，将 Extension 项目放入 ComfyUI 安装目录的 `custom_nodes/`，然后重启 ComfyUI。集成测试宿主路径为 `/home/maojiexu/Workshop/ComfyUI`。
 
-  # if you installed cookiecutter with pip
-  cookiecutter gh:comfy-org/cookiecutter-comfy-extension
+## 参考项目
 
-  # initialize git repo in your new project
-  cd <your-project-name>
-  git init
-  ```
-- Run `cookiecutter` with this as local template:
-  ```bash
-  git clone https://github.com/Comfy-Org/cookiecutter-comfy-extension
-  cd cookiecutter-comfy-extension
-  git submodule update --init --recursive
-  cookiecutter .
-  ```
+可借鉴的上游仓库清单与许可证边界记录在需求文档的 [开源项目借鉴与许可证](docs/AstroPhotoFlow_Requirements_v1.0/06_开源项目借鉴与许可证.md) 和 [调研来源与核验记录](docs/AstroPhotoFlow_Requirements_v1.0/08_调研来源与核验记录.md) 中。参考源码应单独克隆和审阅，不要放入本仓库提交。
 
-## Features
+## License
 
-The resulting ComfyUI node extension project will automatically come with a few neat features:
-
-- Support for Ruff linter and various recommended rules
-- A pre-commit hook for the Ruff linter
-- An optional `web` directory if your extension will include custom javascript
-  - If selected, `web` will also be added to the project's `MANIFEST.in` to ensure that any non-python code in `web` will also be correctly installed
-- Testing via PyTest (check the `tests/` directory)
-- A Github Action that will automatically run any unit tests as part of Pull Requests made against your project
-- A Github Action to diff your changes for backwards incompatible changes: (node-diff)[https://github.com/Comfy-Org/node-diff]
-- A Github Action to publish to the Comfy Registry
+本仓库保留上游模板的 GPL-3.0 许可与版权声明。复用或分发第三方代码时，请同时遵守其原始许可证。

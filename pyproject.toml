@@ -3,14 +3,14 @@ requires = ["setuptools>=70.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name="cookiecutter-comfy-extension"
+name = "comfyui-astrophotoflow-template"
 authors = [
     {name = "Max Klein", email = "telamonian@hotmail.com.com"}
 ]
 version="0.0.1"
-description="Cookiecutter template for a Python package"
+description = "Cookiecutter template for the ComfyUI-AstroPhotoFlow extension"
 license={file = "LICENSE"}
-keywords=["cookiecutter", "template", "package"]
+keywords = ["cookiecutter", "comfyui", "astrophotography", "extension"]
 requires-python=">=3.8"
 classifiers = [
 ]
@@ -28,8 +28,8 @@ dev = [
 ]
 
 [project.urls]
-bugs = "https://github.com/comfy-org/cookiecutter-comfy-extension/issues"
-homepage = "https://github.com/comfy-org/cookiecutter-comfy-extension"
+bugs = "https://github.com/MaojieXu/ComfyUI-AstroPhotoFlow/issues"
+homepage = "https://github.com/MaojieXu/ComfyUI-AstroPhotoFlow"
 
 [tool.pytest.ini_options]
 minversion = "6.0"

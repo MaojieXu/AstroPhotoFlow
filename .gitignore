@@ -34,6 +34,8 @@ Temporary Items
 .Python
 env/
 venv/
+.venv/
+ENV/
 build/
 develop-eggs/
 dist/
@@ -70,6 +72,9 @@ coverage.xml
 *,cover
 .hypothesis/
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.nox/
 
 # Translations
 *.mo
@@ -96,3 +101,31 @@ python_boilerplate/
 cookiecutter-pypackage-env/
 
 # vscode settings
+/.vscode/
+.history/
+*.code-workspace
+
+# Local reference checkouts
+/reference/
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# Node.js and frontend build artifacts
+node_modules/
+.npm/
+.pnpm-store/
+.vite/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
