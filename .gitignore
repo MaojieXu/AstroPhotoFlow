@@ -119,6 +119,7 @@ node_modules/
 .npm/
 .pnpm-store/
 .vite/
+/web/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*

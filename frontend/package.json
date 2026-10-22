@@ -1,0 +1,25 @@
+{
+  "name": "astrophotoflow-frontend",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.13.1",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "typecheck": "vue-tsc --noEmit",
+    "build": "vue-tsc --noEmit && vite build",
+    "build:watch": "vite build --watch"
+  },
+  "dependencies": {
+    "vue": "3.5.44"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "4.3.2",
+    "@vitejs/plugin-vue": "6.0.10",
+    "tailwindcss": "4.3.2",
+    "typescript": "6.0.3",
+    "vite": "8.3.5",
+    "vue-tsc": "3.3.11"
+  }
+}
