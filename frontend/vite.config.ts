@@ -20,7 +20,8 @@ export default defineConfig({
       cssFileName: 'astrophotoflow'
     },
     rollupOptions: {
-      external: ['../../scripts/app.js']
+      external: ['../../scripts/app.js', '../../../scripts/api.js'],
+      output: { paths: { '../../scripts/app.js': '/scripts/app.js', '../../../scripts/api.js': '/scripts/api.js' } }
     }
   }
 })

@@ -1,0 +1,12 @@
+[server]
+host = "127.0.0.1"
+port = 8190
+
+[storage]
+data_dir = "~/.local/share/astrophotoflow"
+
+[comfyui]
+allowed_origins = [
+  "http://127.0.0.1:8188",
+  "http://localhost:8188"
+]

@@ -21,3 +21,9 @@ declare module '*scripts/app.js' {
     registerExtension: (extension: ComfyExtension) => void
   }
 }
+
+declare module '*scripts/api.js' {
+  export const api: {
+    fetchApi: (path: string, init?: RequestInit) => Promise<Response>
+  }
+}

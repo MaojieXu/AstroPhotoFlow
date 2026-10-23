@@ -1,9 +1,7 @@
 <script setup lang="ts">
-const message = '这里astrophotoflow.'
+import Workspace from './workspace/Workspace.vue'
 </script>
 
 <template>
-  <main class="p-4">
-    <p class="m-0">{{ message }}</p>
-  </main>
+  <Workspace />
 </template>
