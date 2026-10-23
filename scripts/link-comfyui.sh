@@ -2,7 +2,7 @@
 set -eu
 
 comfyui_root=/home/maojiexu/Workshop/ComfyUI
-extension_root=/home/maojiexu/Workshop/ComfyUI-AstroPhotoFlow
+extension_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 extension_link="$comfyui_root/custom_nodes/ComfyUI-AstroPhotoFlow"
 
 if [ ! -d "$comfyui_root/custom_nodes" ]; then
