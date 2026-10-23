@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 
 export type WorkspaceSection = 'library' | 'calibration' | 'projects' | 'equipment' | 'capture-profiles'
+export type WorkspacePageSize = 10 | 20 | 50 | 'all'
 
 export const useWorkspaceStore = defineStore('astrophotoflow-workspace', {
   state: () => ({
@@ -8,7 +9,9 @@ export const useWorkspaceStore = defineStore('astrophotoflow-workspace', {
     layout: 'grid' as 'grid' | 'list',
     query: '',
     offset: 0,
-    activeProjectId: null as string | null
+    pageSize: 50 as WorkspacePageSize,
+    activeProjectId: null as string | null,
+    activeProjectRevision: null as number | null
   }),
   actions: {
     selectSection(section: WorkspaceSection) {
@@ -21,6 +24,10 @@ export const useWorkspaceStore = defineStore('astrophotoflow-workspace', {
     },
     movePage(delta: number) {
       this.offset = Math.max(0, this.offset + delta)
+    },
+    setPageSize(pageSize: WorkspacePageSize) {
+      this.pageSize = pageSize
+      this.offset = 0
     }
   }
 })

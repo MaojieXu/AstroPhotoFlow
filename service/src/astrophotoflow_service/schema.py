@@ -10,7 +10,7 @@ from sqlalchemy.engine import URL
 from .settings import Settings, ensure_data_dir
 
 
-SCHEMA_REVISION = "0001_foundation"
+SCHEMA_REVISION = "0005_dataset_removal_version_snapshot"
 ALEMBIC_INI = Path(__file__).resolve().parents[2] / "alembic.ini"
 
 

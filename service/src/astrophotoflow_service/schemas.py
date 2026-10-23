@@ -1,12 +1,13 @@
 from datetime import datetime
 from math import isfinite
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_serializer
 
 
 UuidInput = Annotated[UUID, Field(strict=False)]
+CfaPattern = Literal["MONO", "RGGB", "BGGR", "GRBG", "GBRG", "XTRANS", "QUAD_BAYER"]
 
 
 class StrictModel(BaseModel):
@@ -65,7 +66,7 @@ class CameraSpecs(StrictModel):
     pixel_size_x_um: float | None = Field(default=None, gt=0)
     pixel_size_y_um: float | None = Field(default=None, gt=0)
     native_bit_depth: int | None = Field(default=None, gt=0)
-    cfa_pattern: str | None = None
+    cfa_pattern: CfaPattern | None = None
 
     @field_validator("pixel_size_x_um", "pixel_size_y_um")
     @classmethod
@@ -145,7 +146,7 @@ class CameraSpecsPatch(StrictModel):
     pixel_size_x_um: float | None = Field(default=None, gt=0)
     pixel_size_y_um: float | None = Field(default=None, gt=0)
     native_bit_depth: int | None = Field(default=None, gt=0)
-    cfa_pattern: str | None = None
+    cfa_pattern: CfaPattern | None = None
 
     @field_validator("pixel_size_x_um", "pixel_size_y_um")
     @classmethod
@@ -201,6 +202,8 @@ class CaptureProfileCreate(StrictModel):
     optical_system_id: UuidInput | None = None
     filter_id: UuidInput | None = None
     frame_type: Literal["light", "bias", "dark", "flat", "dark_flat"]
+    parameter_mode: Literal["iso", "gain"] | None = None
+    iso: int | None = Field(default=None, gt=0)
     exposure_seconds: float | None = Field(default=None, ge=0)
     gain: float | None = None
     offset: float | None = None
@@ -220,6 +223,8 @@ class CaptureProfilePatch(StrictModel):
     optical_system_id: UuidInput | None = None
     filter_id: UuidInput | None = None
     frame_type: Literal["light", "bias", "dark", "flat", "dark_flat"] | None = None
+    parameter_mode: Literal["iso", "gain"] | None = None
+    iso: int | None = Field(default=None, gt=0)
     exposure_seconds: float | None = Field(default=None, ge=0)
     gain: float | None = None
     offset: float | None = None
@@ -270,6 +275,8 @@ class CaptureProfileOut(StrictModel):
     optical_system_id: UuidInput | None
     filter_id: UuidInput | None
     frame_type: Literal["light", "bias", "dark", "flat", "dark_flat"]
+    parameter_mode: Literal["iso", "gain"] | None
+    iso: int | None
     exposure_seconds: float | None
     gain: float | None
     offset: float | None
@@ -309,7 +316,14 @@ class AssetOut(StrictModel):
     scope: Literal["shared", "project"]
     owner_project_id: UUID | None
     role: Literal["raw", "calibration", "intermediate", "final"]
+    calibration_level: Literal["individual", "master"] | None
     current_version_id: UUID | None
+    classification: dict | None
+    parameters: dict
+    value_sources: dict
+    notes: str | None
+    status: Literal["active", "archived"]
+    revision: int
     created_at: datetime
     current_version: AssetVersionOut | None
 
@@ -352,6 +366,12 @@ class AssetPage(StrictModel):
     offset: int
 
 
+class LibraryAssetItemOut(StrictModel):
+    entry_type: Literal["asset"]
+    asset: AssetOut
+    import_issue: str | None
+
+
 class ProjectAssetReferencePage(StrictModel):
     items: list[ProjectAssetReferenceOut]
     total: int
@@ -368,3 +388,229 @@ class ErrorDetail(StrictModel):
 class ErrorEnvelope(StrictModel):
     error: ErrorDetail
     request_id: UUID
+
+
+class AssetVersionPage(StrictModel):
+    items: list[AssetVersionOut]
+    total: int
+    limit: int
+    offset: int
+
+
+class ImportRootOut(StrictModel):
+    id: str
+    label: str
+    available: bool
+
+
+class ImportRootEntryOut(StrictModel):
+    name: str
+    path: str
+    kind: Literal["file", "directory"]
+    format: str | None
+    supported: bool
+    size: int | None
+
+
+class ImportRootEntryPage(StrictModel):
+    items: list[ImportRootEntryOut]
+    total: int
+    limit: int
+    offset: int
+
+
+class ImportAccepted(StrictModel):
+    task_id: UUID
+    status: Literal["queued"]
+
+
+class TaskItemOut(StrictModel):
+    id: UUID
+    task_id: UUID
+    root_item_id: UUID
+    retry_of_item_id: UUID | None
+    root_id: str
+    source_path: str
+    position: int
+    status: str
+    content_status: str
+    metadata_status: str
+    preview_status: str
+    asset_id: UUID | None
+    asset_version_id: UUID | None
+    error: dict | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class AssetTaskOut(StrictModel):
+    id: UUID
+    status: str
+    sources: list[dict]
+    storage_mode: Literal["reference", "managed"]
+    classification: dict
+    parameters: dict
+    notes: str | None
+    dataset_name: str | None
+    target_dataset_id: UUID | None
+    dataset_base_revision: int | None
+    dataset_id: UUID | None
+    enumeration_completed: bool
+    retry_of_task_id: UUID | None
+    report: dict
+    error: dict | None
+    created_at: datetime
+    updated_at: datetime
+    items: list[TaskItemOut]
+    items_total: int
+    items_completed: int
+    items_limit: int
+    items_offset: int
+
+
+class AssetTaskPage(StrictModel):
+    items: list[AssetTaskOut]
+    total: int
+    limit: int
+    offset: int
+
+
+class DatasetOut(StrictModel):
+    id: UUID
+    name: str
+    notes: str | None
+    status: Literal["active", "archived"]
+    revision: int
+    current_version_id: UUID | None
+    member_count: int
+    created_at: datetime
+    updated_at: datetime
+
+
+class DatasetMemberParametersUpdateOut(StrictModel):
+    dataset_id: UUID
+    revision: int
+    version_id: UUID
+    assets: list[AssetOut]
+
+
+class DatasetPage(StrictModel):
+    items: list[DatasetOut]
+    total: int
+    limit: int
+    offset: int
+
+
+class DatasetMemberOut(StrictModel):
+    id: UUID
+    dataset_version_id: UUID
+    asset_version_id: UUID
+    position: int
+    relative_path: str | None
+    asset: AssetOut
+    version: AssetVersionOut
+
+
+class DatasetVersionOut(StrictModel):
+    id: UUID
+    dataset_id: UUID
+    version_number: int
+    created_at: datetime
+    members: list[DatasetMemberOut]
+
+
+class LibraryDatasetItemOut(StrictModel):
+    entry_type: Literal["dataset"]
+    dataset: DatasetOut
+    version: DatasetVersionOut | None
+    import_issue: str | None
+
+
+LibraryItemOut = Annotated[LibraryAssetItemOut | LibraryDatasetItemOut, Field(discriminator="entry_type")]
+
+
+class LibraryItemPage(StrictModel):
+    items: list[LibraryItemOut]
+    total: int
+    limit: int
+    offset: int
+
+
+class LibraryEntriesRemoveOut(StrictModel):
+    removed_count: int
+
+
+class FilterEquipmentOption(StrictModel):
+    id: UUID
+    name: str
+
+
+class NumericRangeOut(StrictModel):
+    min: float
+    max: float
+
+
+class LibraryFilterOptions(StrictModel):
+    frame_classes: list[str]
+    frame_types: list[str]
+    roles: list[str]
+    parameter_modes: list[str]
+    bin_values: list[str]
+    equipment: dict[str, list[FilterEquipmentOption]]
+    numeric_ranges: dict[str, NumericRangeOut]
+
+
+class DatasetVersionPage(StrictModel):
+    items: list[DatasetVersionOut]
+    total: int
+    limit: int
+    offset: int
+
+
+class ProjectDatasetReferenceOut(StrictModel):
+    id: UUID
+    project_id: UUID
+    dataset_id: UUID
+    dataset_version_id: UUID
+    base_revision: int
+    added_at: datetime
+    dataset: DatasetOut
+    version: DatasetVersionOut
+
+
+class ProjectDatasetReferencePage(StrictModel):
+    items: list[ProjectDatasetReferenceOut]
+    total: int
+    limit: int
+    offset: int
+
+
+class FitsHduOut(StrictModel):
+    id: UUID
+    asset_version_id: UUID
+    hdu_index: int
+    name: str | None
+    hdu_type: str
+    shape: list[int] | None
+    bitpix: int | None
+    pixel_type: str | None
+    bscale: float | None
+    bzero: float | None
+    bunit: str | None
+    parser_version: str
+    supported_kind: Literal["mono", "bayer", "rgb", "xtrans", "quad_bayer"] | None
+    is_selected: bool
+    parse_error: str | None
+
+
+class FitsHduPage(StrictModel):
+    items: list[FitsHduOut]
+    total: int
+    limit: int
+    offset: int
+
+
+class FitsHeaderOut(StrictModel):
+    asset_version_id: UUID
+    hdu_index: int
+    cards: list[dict[str, Any]]

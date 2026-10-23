@@ -1,6 +1,6 @@
 # AstroPhotoFlow 本地资产服务
 
-本服务独立于 ComfyUI 运行。扩展提供同源代理，不会启动领域服务。当前阶段只管理项目、设备和拍摄配置，并以只读方式查询资产。产品数据库不会预置演示资产。
+本服务以独立进程运行。ComfyUI 加载 AstroPhotoFlow Extension 时会复用已认证且健康的服务，或自动启动一个由扩展管理的服务并监控其状态。扩展不会安装依赖或自动迁移现有数据库。第一阶段的项目、设备和拍摄配置管理继续可用；第二阶段增加素材导入、资产资料编辑、数据集、项目选用和 FITS 显示。产品数据库不会预置演示资产。
 
 ## 环境与配置
 
@@ -10,21 +10,25 @@
 ~/.config/astrophotoflow/config.toml
 ```
 
-示例内容在 [config.example.toml](config.example.toml)。配置中的数据目录独立于扩展及 ComfyUI；默认是 `~/.local/share/astrophotoflow`。服务只绑定本机回环地址。
+示例内容在 [config.example.toml](config.example.toml)。配置中的数据目录独立于扩展及 ComfyUI；默认是 `~/.local/share/astrophotoflow`。服务只绑定本机回环地址。需要导入素材时，在共享配置中添加一个或多个 `[[imports.roots]]`，每项包含唯一 `id` 和绝对 `path`；没有配置来源时，管理及查询仍可用，导入页会提示未配置。
 
 从仓库根目录安装锁定依赖：
 
 ```bash
-uv sync --project service
+uv sync --project service --locked
 ```
 
-首次启动会创建数据目录、仅当前用户可读的 `service.token`，并通过 Alembic 初始化新数据库。令牌只由服务及 ComfyUI 后端代理读取，不放入浏览器。使用命令启动：
+日常使用时启动 ComfyUI 即会启动或复用资产服务。扩展在当前进程的 `PATH` 和 `~/.local/bin/uv` 中查找 uv，以锁定依赖启动服务并等待就绪，首次等待最多 20 秒；启动 ComfyUI 不会安装依赖或升级已有数据库。
+
+首次启动服务会创建数据目录、仅当前用户可读的 `service.token`，并为新数据库初始化 schema。令牌只由服务及 ComfyUI 后端代理读取，不放入浏览器。需要诊断时也可以手动启动服务：
 
 ```bash
 uv run --project service apf-service serve
 ```
 
-服务在终端前台运行。端口被占用或配置无效时会明确失败，不会改用其他地址。
+手动启动会在终端前台运行。端口被占用或配置无效时会明确失败，不会改用其他地址。
+
+ComfyUI 浏览器只能通过 `/astrophotoflow/api/v1/...` 同源代理调用服务；本机令牌由扩展后端持有。导入来源只接受配置根目录内的相对路径。
 
 ## 数据库状态与迁移
 
@@ -56,6 +60,10 @@ uv run --project service apf-service db upgrade
 
 API 使用 `/api/v1` 和本机 Bearer 令牌。ComfyUI 浏览器通过 `/astrophotoflow/api/v1/...` 同源路径访问代理。接口以 [OpenAPI 快照](openapi.json) 为准；快照由当前 FastAPI 应用生成。
 
+`GET /api/v1/library/items` 支持 `sort_by`：`created_at`、`name`、`classification`、`camera`、`parameter_mode`、`exposure_seconds`、`sensor_temperature_c`、`binning`、`cfa_pattern`、`optical_system`、`filter`、`integration_seconds`、`storage_mode`、`status` 和 `notes`，并支持 `order=asc|desc`。搜索和筛选先应用于完整匹配集，再排序和分页。
+
+`DELETE /api/v1/library/items` 接收 `{ "items": [{ "entry_type": "asset", "id": "<uuid>", "revision": 1, "current_version_id": null }] }`；数据集项将 `entry_type` 设为 `dataset`，并携带当前 `current_version_id`。服务在一个事务中校验整批 revision 和数据集版本；成功只隐藏素材库入口，不删除文件、资产、版本、数据集成员或项目引用。重复请求返回 `removed_count: 0`。
+
 测试使用隔离临时数据库，不会向产品库写入测试资产：
 
 ```bash
@@ -63,4 +71,8 @@ uv sync --project service --extra test
 uv run --project service --extra test pytest service/tests
 ```
 
-本阶段不提供文件导入、散列计算、资产引用写入、预览、科学格式解析、任务队列或软件／MCP／Agent 能力。
+支持格式、实际解析能力、固定预览预设及合成验收样本见[资产格式支持矩阵](../docs/资产格式支持矩阵.md)。FITS、常规图像和视频首帧生成两档 JPEG 预览；SER 使用格式读取器，其余视频使用系统 FFmpeg。RAW、XISF、NumPy 只入库，不宣称支持解码。导入任务保留逐文件内容、元数据和预览状态；取消后只重试已登记项，`resume` 仅用于服务中断的原任务。
+
+既有素材缺少预览时，可在服务停止或持有数据库锁的环境中执行 `uv run --project service --locked --no-sync apf-service previews backfill`。命令只补缺失预览，单项失败写入服务日志并继续后续项目。
+
+本阶段不提供导入后扫描或文件变化监控、科学处理、视频逐帧、NumPy 切片、软件 Node、MCP 或 Agent 能力。

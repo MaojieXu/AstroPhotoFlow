@@ -1,12 +1,12 @@
 # AstroPhotoFlow
 
-AstroPhotoFlow 是运行在 ComfyUI 中的本地天文资产工作台。资产管理服务独立运行，ComfyUI 扩展通过同源代理访问服务。
+AstroPhotoFlow 是运行在 ComfyUI 中的本地天文资产工作台。资产服务以独立进程运行；ComfyUI 加载 Extension 时会复用或自动启动服务，浏览器通过同源代理访问。
 
 ## 当前状态
 
-资产管理第一阶段在 Git 分支 `feature/database` 上实现：工作区提供项目、设备和拍摄配置管理，并只读查询共享资产及项目固定版本引用。产品资产库保持空库；本阶段没有文件导入、解析、预览、任务队列或资产写入功能。
+资产管理第一阶段已在 Git 分支 `feature/database` 上验收；第二阶段已在该分支完成素材导入、资料编辑、数据集、项目选用和 FITS 元数据／预览闭环及 S2-AT-01 至 S2-AT-11 验收。产品库不预置演示资产。格式支持范围及验证证据见[验收记录](docs/第二阶段验收记录.md)和[资产格式支持矩阵](docs/资产格式支持矩阵.md)。
 
-三个资产管理阶段都在 `feature/database` 开发。第一、第二阶段完成后停止并保留成果；只有三阶段完成、各阶段验收及必要的集成回归通过且无阻断问题，才具备合并到 `dev` 的条件。阶段范围见[资产管理三阶段计划](docs/资产管理三阶段实施计划.md)，第一阶段技术契约见[技术与接口设计](docs/第一阶段技术与接口设计.md)。
+当前数据库闭环按两个阶段在 `feature/database` 开发。第一、第二阶段及必要集成回归验收通过且无阻断问题后，报告合并就绪；第三阶段暂缓，不作为当前数据库闭环的合并门槛。实际合并等待用户指令。阶段范围见[资产管理实施计划](docs/资产管理三阶段实施计划.md)，接口契约见[第一阶段设计](docs/第一阶段技术与接口设计.md)和[第二阶段设计](docs/第二阶段技术与接口设计.md)。
 
 ## ComfyUI 扩展
 
@@ -28,12 +28,11 @@ bash scripts/link-comfyui.sh
 需要 Python 3.11+ 和 uv。首次设置时，将 [服务配置示例](service/config.example.toml) 复制到 `~/.config/astrophotoflow/config.toml`，再按需调整数据目录和 ComfyUI 来源。不要覆盖已有配置。默认服务绑定 `127.0.0.1:8190`，数据目录是 `~/.local/share/astrophotoflow`。
 
 ```bash
-uv sync --project service
+uv sync --project service --locked
 uv run --project service apf-service db status
-uv run --project service apf-service serve
 ```
 
-新数据库在首次服务启动时由 Alembic 初始化。已有数据库需检查 revision 后显式运行 `uv run --project service apf-service db upgrade`；升级前会使用 SQLite backup API 保存一致备份。服务令牌由首次启动生成，保存在数据目录中，仅当前用户可读；浏览器不接收令牌。
+ComfyUI 扩展启动时会复用已认证且健康的资产服务，或通过 PATH、`~/.local/bin/uv` 自动启动服务并等待就绪。ComfyUI 启动不会安装依赖或迁移已有数据库。若 `db status` 显示 revision 不是当前版本，先审阅并显式运行 `uv run --project service --locked --no-sync apf-service db upgrade`；升级前会用 SQLite Backup API 保存一致备份。新数据库在首次服务启动时初始化。服务令牌由首次启动生成，保存在数据目录中，仅当前用户可读；浏览器不接收令牌。
 
 更完整的启动、升级和恢复步骤见[服务 README](service/README.md)。实际应用导出的接口定义见 [OpenAPI 快照](service/openapi.json)。
 

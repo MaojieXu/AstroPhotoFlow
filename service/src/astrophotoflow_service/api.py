@@ -7,22 +7,36 @@ from uuid import UUID, uuid4
 from fastapi import APIRouter, Depends, FastAPI, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from sqlalchemy import and_, func, or_, select, update
+from sqlalchemy import and_, delete, func, or_, select, update
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from .db import Database
 from .errors import ApiError, invalid_reference, not_found
-from .models import Asset, AssetVersion, CaptureProfile, Equipment, Project, ProjectAssetReference, ProjectCaptureProfile
+from .models import (
+    Asset, AssetTask, AssetTaskItem, AssetVersion, CaptureProfile, Dataset, DatasetMember,
+    DatasetVersion, Equipment, FitsHduMetadata, Preview, Project, ProjectAssetReference,
+    ProjectCaptureProfile, ProjectDatasetReference,
+)
 from .schema import SCHEMA_REVISION, current_revision
 from .schemas import (
     AssetOut, AssetPage, AssetVersionOut, CaptureProfileCreate, CaptureProfileOut,
     CaptureProfilePage, CaptureProfilePatch, EquipmentCreate, EquipmentOut, EquipmentPage,
     EquipmentPatch, ErrorEnvelope, ProjectAssetReferenceOut, ProjectAssetReferencePage,
     ProjectCreate, ProjectOut, ProjectPage, ProjectPatch,
+    AssetTaskOut, AssetTaskPage, AssetVersionPage, DatasetOut, DatasetPage, DatasetVersionOut,
+    DatasetVersionPage, FitsHeaderOut, FitsHduOut, FitsHduPage, ImportAccepted, ImportRootEntryPage,
+    ImportRootOut, ProjectDatasetReferenceOut, ProjectDatasetReferencePage,
 )
 from .settings import Settings
+from .files import entries_page
+from .import_schemas import (
+    AssetClassification, AssetParameters, AssetPatch, DatasetPatch,
+    ProjectDatasetReferenceCreate, ProjectReferenceCreate, ProjectReferenceDelete,
+    RetryCreate, ImportCreate,
+)
+from .fits_preview import create_preview, PREVIEW_ALGORITHM_VERSION
 
 
 logger = logging.getLogger("astrophotoflow.service")
@@ -63,7 +77,7 @@ def write_session(request: Request):
 
 
 ReadSession = Annotated[Session, Depends(read_session)]
-WriteSession = Annotated[Session, Depends(write_session)]
+WriteSession = Annotated[Session, Depends(write_session, scope="function")]
 Limit = Annotated[int, Query(ge=1, le=200)]
 Offset = Annotated[int, Query(ge=0)]
 SortBy = Annotated[Literal["created_at", "name"], Query()]
@@ -150,7 +164,8 @@ def _profile_out(row: CaptureProfile) -> dict:
     return CaptureProfileOut(
         id=UUID(row.id), name=row.name, camera_id=UUID(row.camera_id),
         optical_system_id=_uuid(row.optical_system_id), filter_id=_uuid(row.filter_id),
-        frame_type=row.frame_type, exposure_seconds=row.exposure_seconds, gain=row.gain, offset=row.offset,
+        frame_type=row.frame_type, parameter_mode=row.parameter_mode, iso=row.iso,
+        exposure_seconds=row.exposure_seconds, gain=row.gain, offset=row.offset,
         sensor_temperature_c=row.sensor_temperature_c, binning_x=row.binning_x, binning_y=row.binning_y,
         notes=row.notes, status=row.status, revision=row.revision, created_at=_utc(row.created_at), updated_at=_utc(row.updated_at),
     ).model_dump()
@@ -168,6 +183,16 @@ def _version_out(row: AssetVersion) -> dict:
     ).model_dump()
 
 
+def _current_calibration_level(classification: dict | None, role: str) -> str | None:
+    if role != "calibration" or not classification:
+        return None
+    if classification.get("frame_class") == "masterframe":
+        return "master"
+    if classification.get("frame_class") == "subframe":
+        return "individual"
+    return None
+
+
 def _asset_out(session: Session, row: Asset) -> dict:
     version = None
     if row.current_version_id is not None:
@@ -178,6 +203,9 @@ def _asset_out(session: Session, row: Asset) -> dict:
     return AssetOut(
         id=UUID(row.id), name=row.name, scope=row.scope, owner_project_id=_uuid(row.owner_project_id),
         role=row.role, current_version_id=_uuid(row.current_version_id), created_at=_utc(row.created_at),
+        classification=row.classification, parameters=row.parameters or {}, value_sources=row.value_sources or {},
+        notes=row.notes, status=row.status, revision=row.revision,
+        calibration_level=_current_calibration_level(row.classification, row.role),
         current_version=version,
     ).model_dump()
 
@@ -227,9 +255,10 @@ def health(request: Request):
 @router.get("/capabilities", dependencies=[Depends(authenticate)])
 def capabilities():
     return {
-        "stage": "foundation", "shared_library_read": True, "project_assets_read": True,
+        "stage": "ingestion", "shared_library_read": True, "project_assets_read": True,
         "project_management": True, "equipment_management": True, "capture_profile_management": True,
-        "asset_import": False, "asset_reference_write": False, "asset_preview": False,
+        "asset_import": True, "asset_reference_write": True, "asset_preview": True,
+        "asset_metadata_edit": True, "dataset_management": True, "asset_task_management": True,
         "calibration_matching": False, "asset_publish": False,
     }
 
@@ -391,7 +420,8 @@ def create_capture_profile(body: CaptureProfileCreate, session: WriteSession):
     now = _now()
     row = CaptureProfile(
         id=str(uuid4()), name=body.name, camera_id=camera_id, optical_system_id=optical_id, filter_id=filter_id,
-        frame_type=body.frame_type, exposure_seconds=body.exposure_seconds, gain=body.gain, offset=body.offset,
+        frame_type=body.frame_type, parameter_mode=body.parameter_mode, iso=body.iso,
+        exposure_seconds=body.exposure_seconds, gain=body.gain, offset=body.offset,
         sensor_temperature_c=body.sensor_temperature_c, binning_x=body.binning_x, binning_y=body.binning_y,
         notes=body.notes, status="active", revision=1, created_at=now, updated_at=now,
     )
@@ -438,12 +468,18 @@ def _asset_page(session: Session, params: dict, limit: int, offset: int, sort_by
     filters = [scope]
     if params.get("q"):
         filters.append(Asset.name.contains(params["q"], autoescape=True))
+    if params.get("status") not in (None, "all"):
+        filters.append(Asset.status == params["status"])
     if params.get("role"):
         filters.append(Asset.role == params["role"])
-    for key in ("frame_type", "calibration_level", "camera_id", "optical_system_id", "filter_id"):
+    for key in ("frame_type", "camera_id", "optical_system_id", "filter_id"):
         value = params.get(key)
         if value is not None:
-            filters.append(getattr(AssetVersion, key) == (_id(value) if isinstance(value, UUID) else value))
+            column = Asset.classification["frame_type"].as_string() if key == "frame_type" else Asset.parameters[key].as_string()
+            filters.append(column == (_id(value) if isinstance(value, UUID) else value))
+    if params.get("calibration_level") is not None:
+        frame_class = "masterframe" if params["calibration_level"] == "master" else "subframe"
+        filters.extend((Asset.role == "calibration", Asset.classification["frame_class"].as_string() == frame_class))
     stmt = select(Asset).outerjoin(AssetVersion, asset_version_join).where(*filters)
     total = session.scalar(select(func.count()).select_from(Asset).outerjoin(AssetVersion, asset_version_join).where(*filters)) or 0
     column = Asset.name if sort_by == "name" else Asset.created_at
@@ -456,6 +492,7 @@ def list_library_assets(
     session: ReadSession, limit: Limit = 50, offset: Offset = 0,
     sort_by: SortBy = "created_at", order: Order = "desc", q: str | None = None,
     role: Literal["raw", "calibration", "intermediate", "final"] | None = None,
+    status: Literal["active", "archived", "all"] = "active",
     frame_type: Literal["light", "bias", "dark", "flat", "dark_flat"] | None = None,
     calibration_level: Literal["individual", "master"] | None = None,
     camera_id: UUID | None = None, optical_system_id: UUID | None = None, filter_id: UUID | None = None,
@@ -479,10 +516,14 @@ def _project_reference_filters(project_id: str, params: dict):
         filters.append(Asset.name.contains(params["q"], autoescape=True))
     if params.get("role"):
         filters.append(Asset.role == params["role"])
-    for key in ("frame_type", "calibration_level", "camera_id", "optical_system_id", "filter_id"):
+    for key in ("frame_type", "camera_id", "optical_system_id", "filter_id"):
         value = params.get(key)
         if value is not None:
-            filters.append(getattr(AssetVersion, key) == (_id(value) if isinstance(value, UUID) else value))
+            column = Asset.classification["frame_type"].as_string() if key == "frame_type" else Asset.parameters[key].as_string()
+            filters.append(column == (_id(value) if isinstance(value, UUID) else value))
+    if params.get("calibration_level") is not None:
+        frame_class = "masterframe" if params["calibration_level"] == "master" else "subframe"
+        filters.extend((Asset.role == "calibration", Asset.classification["frame_class"].as_string() == frame_class))
     return filters
 
 
@@ -566,6 +607,9 @@ def create_app(settings: Settings, token: str) -> FastAPI:
         return _error_response(request, 500, "INTERNAL_ERROR", "服务发生未预期错误。", [])
 
     app.include_router(router)
+    from .stage2 import router as stage2_router
+
+    app.include_router(stage2_router)
     return app
 
 
