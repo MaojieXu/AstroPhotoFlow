@@ -1,4 +1,5 @@
 import { createApp, type App as VueApp } from 'vue'
+import { createPinia } from 'pinia'
 import { app } from '../../scripts/app.js'
 
 import SidebarContent from './App.vue'
@@ -20,6 +21,7 @@ app.registerExtension({
     })
 
     let sidebarApp: VueApp | undefined
+    let sidebarContainer: HTMLElement | undefined
 
     app.extensionManager.registerSidebarTab({
       id: 'astrophotoflow',
@@ -29,12 +31,20 @@ app.registerExtension({
       type: 'custom',
       render(container) {
         sidebarApp?.unmount()
+        if (sidebarContainer && sidebarContainer !== container) {
+          sidebarContainer.classList.remove('apf-sidebar-mount')
+        }
+        sidebarContainer = container
+        sidebarContainer.classList.add('apf-sidebar-mount')
         sidebarApp = createApp(SidebarContent)
+        sidebarApp.use(createPinia())
         sidebarApp.mount(container)
       },
       destroy() {
         sidebarApp?.unmount()
         sidebarApp = undefined
+        sidebarContainer?.classList.remove('apf-sidebar-mount')
+        sidebarContainer = undefined
       }
     })
   }
