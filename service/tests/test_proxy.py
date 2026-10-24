@@ -14,11 +14,11 @@ from src.astrophotoflow import proxy
 def config_file(path: Path, port: int, data_dir: Path, origins: list[str], roots: list[tuple[str, str]] = ()) -> None:
     lines = [
         "[server]", 'host = "127.0.0.1"', f"port = {port}", "",
-        "[storage]", f'data_dir = "{data_dir}"', "",
+        "[storage]", f'data_dir = "{data_dir.as_posix()}"', "",
         "[comfyui]", "allowed_origins = [" + ", ".join(f'"{origin}"' for origin in origins) + "]", ""
     ]
     for root_id, root_path in roots:
-        lines.extend(["[[imports.roots]]", f'id = "{root_id}"', f'path = "{root_path}"', ""])
+        lines.extend(["[[imports.roots]]", f'id = "{root_id}"', f'path = "{Path(root_path).as_posix()}"', ""])
     path.write_text("\n".join(lines))
 
 
@@ -72,7 +72,7 @@ def test_proxy_whitelist_origin_headers_and_upstream_status(tmp_path, monkeypatc
         await client.start_server()
         origin = str(client.make_url("/")).rstrip("/")
         config = tmp_path / "config.toml"
-        config_file(config, upstream.port, data_dir, [origin], [("astrodata", "/tmp/astrodata")])
+        config_file(config, upstream.port, data_dir, [origin], [("astrodata", str(tmp_path / "astrodata"))])
         monkeypatch.setattr(proxy, "CONFIG_PATH", config)
 
         try:

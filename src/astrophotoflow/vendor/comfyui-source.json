@@ -1,0 +1,10 @@
+{
+  "repository": "https://github.com/Comfy-Org/ComfyUI.git",
+  "commit": "1a82e6d01f395b43275c77acd289af1eb7090bb9",
+  "comfyui_version": "0.42.0",
+  "comfyui_frontend_package": "1.57.1",
+  "archive": "comfyui-0.42.0.zip",
+  "sha256": "95b5146939bcb4c33d17334001698beec5c88b83493beb13a8ba75a86e033967",
+  "cpu_torch": "2.14.1+cpu",
+  "cpu_torchvision": "0.29.1+cpu"
+}

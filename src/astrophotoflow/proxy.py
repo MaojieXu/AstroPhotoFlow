@@ -1,5 +1,6 @@
 import asyncio
 import ipaddress
+import os
 from pathlib import Path
 import tomllib
 from urllib.parse import quote
@@ -82,7 +83,8 @@ class ProxyError(Exception):
 
 def _configuration(*, allow_missing_token: bool = False):
     try:
-        with CONFIG_PATH.open("rb") as stream:
+        config_path = Path(os.environ.get("ASTROPHOTOFLOW_CONFIG", CONFIG_PATH)).expanduser()
+        with config_path.open("rb") as stream:
             config = tomllib.load(stream)
         if set(config) not in ({"server", "storage", "comfyui"}, {"server", "storage", "comfyui", "imports"}):
             raise ValueError("配置包含未知字段")
@@ -124,7 +126,10 @@ def _configuration(*, allow_missing_token: bool = False):
                 raise ValueError("allowed_origins 只能包含本机回环地址")
             if parsed.port is None or not 1 <= parsed.port <= 65535:
                 raise ValueError("allowed_origins 配置无效")
-        token_path = Path(data_dir).expanduser() / "service.token"
+        data_path = Path(data_dir).expanduser()
+        if not data_path.is_absolute():
+            data_path = config_path.parent / data_path
+        token_path = data_path / "service.token"
         try:
             token = token_path.read_text(encoding="utf-8").strip()
         except FileNotFoundError:
