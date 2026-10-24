@@ -40,7 +40,8 @@ class Settings:
         return self.data_dir / ".database.lock"
 
 
-def load_settings(config_path: Path = CONFIG_PATH) -> Settings:
+def load_settings(config_path: Path | None = None) -> Settings:
+    config_path = Path(os.environ.get("ASTROPHOTOFLOW_CONFIG", config_path or CONFIG_PATH)).expanduser()
     if not config_path.is_file():
         raise ConfigurationError(f"配置文件不存在：{config_path}")
     try:
@@ -94,7 +95,10 @@ def load_settings(config_path: Path = CONFIG_PATH) -> Settings:
                 raise ValueError("allowed_origins 只能包含本机回环地址")
             if parsed.port is None or not 1 <= parsed.port <= 65535:
                 raise ValueError("allowed_origins 必须包含有效端口")
-        return Settings(str(address), port, Path(data_dir).expanduser(), tuple(origins), tuple(import_roots))
+        data_path = Path(data_dir).expanduser()
+        if not data_path.is_absolute():
+            data_path = config_path.parent / data_path
+        return Settings(str(address), port, data_path.resolve(), tuple(origins), tuple(import_roots))
     except (KeyError, TypeError, ValueError, tomllib.TOMLDecodeError) as exc:
         raise ConfigurationError(f"配置文件无效：{exc}") from exc
 

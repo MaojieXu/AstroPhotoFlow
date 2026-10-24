@@ -1,0 +1,12 @@
+include LICENSE
+include service/README.md
+include service/pyproject.toml
+include service/uv.lock
+include service/alembic.ini
+recursive-include service/alembic *.py
+recursive-include service/src *.py
+recursive-include src/astrophotoflow/vendor *.zip *.json *.lock
+prune src/astrophotoflow/comfy_node/__pycache__
+include src/astrophotoflow/comfy_node/__init__.py
+recursive-include web *
+include scripts/build_release.py

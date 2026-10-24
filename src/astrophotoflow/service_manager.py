@@ -124,6 +124,13 @@ class ServiceManager:
             self._owns_process = False
             return
 
+        if os.environ.get("APF_WORKBENCH_MANAGED") == "1":
+            raise ProxyError(
+                503,
+                "SERVICE_UNAVAILABLE",
+                "AstroPhotoFlow 工作台未启动资产服务；请先运行 apf start。",
+            )
+
         if not (self._service_project / "pyproject.toml").is_file():
             raise ProxyError(
                 503,

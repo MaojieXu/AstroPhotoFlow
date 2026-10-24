@@ -1,4 +1,5 @@
 from pathlib import Path
+import os
 import sys
 
 import pytest
@@ -41,7 +42,7 @@ def config_file(path: Path, data_dir: Path, port: int = 8190) -> None:
         "[server]\nhost = \"127.0.0.1\"\n"
         f"port = {port}\n\n"
         "[storage]\n"
-        f'data_dir = "{data_dir}"\n\n'
+        f'data_dir = "{data_dir.as_posix()}"\n\n'
         "[comfyui]\n"
         'allowed_origins = ["http://127.0.0.1:8188"]\n',
         encoding="utf-8",
@@ -99,7 +100,7 @@ def test_manager_launches_locked_uv_service_and_stops_owned_process(tmp_path, mo
         assert "--no-sync" in command
         assert command[-2:] == ["apf-service", "serve"]
         assert kwargs["cwd"] == tmp_path
-        assert kwargs["start_new_session"] is True
+        assert kwargs["start_new_session"] is (os.name == "posix")
         manager.ensure_available()
     finally:
         manager.stop()

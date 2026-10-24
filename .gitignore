@@ -108,6 +108,13 @@ cookiecutter-pypackage-env/
 # Local reference checkouts
 /reference/
 
+# Local astronomy test images
+/tests/data/Astro_Dataset/
+
+# Local workbench data used by bundle acceptance
+/test/workspace/
+/test/workspace-moved/
+
 # Local environment and secrets
 .env
 .env.*
