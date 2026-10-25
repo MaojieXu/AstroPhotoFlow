@@ -275,6 +275,8 @@ describe('first-stage regression fixes', () => {
     await openSettings()
     await wrapper.findAll('.apf-management-tabs button')[2].trigger('click')
     await flushPromises()
+    await wrapper.findAll('button').find(button=>button.text()==='旧版拍摄配置')!.trigger('click')
+    await flushPromises()
     await wrapper.get('.apf-record').trigger('click')
     await flushPromises()
     const selector='.apf-details .apf-detail-fields .apf-mode-field .apf-inline-value'
@@ -304,6 +306,8 @@ describe('first-stage regression fixes', () => {
     await flushPromises()
     await openSettings()
     await wrapper.findAll('.apf-management-tabs button')[2].trigger('click')
+    await flushPromises()
+    await wrapper.findAll('button').find(button=>button.text()==='旧版拍摄配置')!.trigger('click')
     await flushPromises()
     await wrapper.get('.apf-record').trigger('click')
     await flushPromises()

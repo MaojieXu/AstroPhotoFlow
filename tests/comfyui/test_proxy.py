@@ -129,7 +129,7 @@ def test_proxy_whitelist_origin_headers_and_upstream_status(tmp_path, monkeypatc
             assert uploaded.status == 200
             assert (await uploaded.json())["received"] == 101 * 1024 * 1024
 
-            assert len(proxy.ROUTES) == 60
+            assert len(proxy.ROUTES) == 69
             assert all(
                 method == "GET" or (method == "POST" and path == "/datasets/{dataset_id}/versions")
                 or (method == "PATCH" and path == "/datasets/{dataset_id}/member-parameters")

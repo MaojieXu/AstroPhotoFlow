@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 
-export type WorkspaceSection = 'library' | 'calibration' | 'projects' | 'equipment' | 'capture-profiles'
+export type WorkspaceSection = 'library' | 'calibration' | 'projects' | 'equipment' | 'equipment-setups' | 'capture-profiles'
 export type WorkspacePageSize = 10 | 20 | 50 | 'all'
 
 export const useWorkspaceStore = defineStore('astrophotoflow-workspace', {

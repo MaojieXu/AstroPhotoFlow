@@ -32,6 +32,35 @@ export const equipmentSchema = z.object({
   revision: z.number().int().positive(), created_at: timestamp, updated_at: timestamp
 }).strict()
 
+const inlineEquipmentSchema = equipmentSchema.omit({id:true,status:true,revision:true,created_at:true,updated_at:true})
+export const setupComponentSchema = z.discriminatedUnion('source', [
+  z.object({source:z.literal('registered'),equipment_id:id}).strict(),
+  z.object({source:z.literal('inline'),equipment:inlineEquipmentSchema}).strict()
+])
+export const equipmentSetupSchema = z.object({
+  id,name:z.string(),components:z.array(setupComponentSchema),notes:nullableText,
+  status:z.enum(['active','archived']),revision:z.number().int().positive(),created_at:timestamp,updated_at:timestamp
+}).strict()
+export const capturePresetSchema = z.object({
+  id,equipment_setup_id:id,name:z.string(),
+  classification:z.object({
+    frame_class:z.enum(['subframe','masterframe','video']).nullable().optional(),
+    frame_type:z.enum(['light','bias','dark','flat','dark_flat']).nullable().optional()
+  }).strict(),
+  parameters:z.object({
+    camera_id:id.nullable().optional(),optical_system_id:id.nullable().optional(),filter_id:id.nullable().optional(),
+    parameter_mode:z.enum(['iso','gain','standard']).nullable().optional(),iso:z.number().int().positive().nullable().optional(),
+    gain:z.number().nullable().optional(),offset:z.number().nullable().optional(),exposure_seconds:z.number().nonnegative().nullable().optional(),
+    integration_seconds:z.number().nonnegative().nullable().optional(),sensor_temperature_c:z.number().nullable().optional(),
+    binning_x:z.number().int().positive().nullable().optional(),binning_y:z.number().int().positive().nullable().optional(),
+    cfa_pattern:z.enum(['MONO','RGGB','BGGR','GRBG','GBRG','XTRANS','QUAD_BAYER']).nullable().optional()
+  }).strict(),
+  notes:nullableText,status:z.enum(['active','archived']),revision:z.number().int().positive(),created_at:timestamp,updated_at:timestamp
+}).strict()
+export type EquipmentSetup = z.infer<typeof equipmentSetupSchema>
+export type SetupComponent = z.infer<typeof setupComponentSchema>
+export type CapturePreset = z.infer<typeof capturePresetSchema>
+
 export const captureProfileSchema = z.object({
   id, name: z.string(), camera_id: id, optical_system_id: id.nullable(), filter_id: id.nullable(),
   frame_type: z.enum(['light', 'bias', 'dark', 'flat', 'dark_flat']),

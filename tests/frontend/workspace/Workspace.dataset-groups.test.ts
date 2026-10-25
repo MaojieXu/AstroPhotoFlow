@@ -150,7 +150,7 @@ describe('dataset group member table',()=>{
     await wrapper.get('nav button[aria-label="设置"]').trigger('click');await flushPromises()
     expect(get.mock.calls.some(([path])=>String(path).startsWith('/astrophotoflow/api/v1/projects?')&&String(path).includes('status=active'))).toBe(true)
     expect(wrapper.get('h1').text()).toBe('设置')
-    for(const [label,path] of [['设备','/astrophotoflow/api/v1/equipment?status=active'],['拍摄设置','/astrophotoflow/api/v1/capture-profiles?status=active']] as const){
+    for(const [label,path] of [['设备','/astrophotoflow/api/v1/equipment?status=active'],['使用组合','/astrophotoflow/api/v1/equipment-setups?status=active']] as const){
       await wrapper.findAll('.apf-management-tabs button').find(button=>button.text()===label)!.trigger('click');await flushPromises()
       expect(get.mock.calls.some(([request])=>String(request).startsWith(path.split('?')[0]+'?')&&String(request).includes('status=active'))).toBe(true)
     }

@@ -127,13 +127,13 @@ export default {
           <footer class="apf-pagination">
             <span>{{ total }} 条记录</span>
             <label>每页显示
-              <select aria-label="每页显示数量" :value="store.pageSize" :disabled="loading||bulkDeleteBusy" @change="store.setPageSize(($event.target as HTMLSelectElement).value==='all'?'all':Number(($event.target as HTMLSelectElement).value) as 10|20|50)">
+              <select aria-label="每页显示数量" :value="store.pageSize" :disabled="loading||bulkDeleteBusy||setupDirty" @change="store.setPageSize(($event.target as HTMLSelectElement).value==='all'?'all':Number(($event.target as HTMLSelectElement).value) as 10|20|50)">
                 <option value="10">10</option><option value="20">20</option><option value="50">50</option><option value="all">全部</option>
               </select>
             </label>
             <template v-if="store.pageSize!=='all'">
-              <button type="button" :disabled="store.offset === 0 || loading || bulkDeleteBusy" @click="store.movePage(-store.pageSize)">上一页</button>
-              <button type="button" :disabled="store.offset + rows.length >= total || loading || bulkDeleteBusy" @click="store.movePage(store.pageSize)">下一页</button>
+              <button type="button" :disabled="store.offset === 0 || loading || bulkDeleteBusy || setupDirty" @click="store.movePage(-store.pageSize)">上一页</button>
+              <button type="button" :disabled="store.offset + rows.length >= total || loading || bulkDeleteBusy || setupDirty" @click="store.movePage(store.pageSize)">下一页</button>
             </template>
           </footer>
           <p v-if="isAssetSection && capabilities && !capabilities.asset_preview" class="apf-disabled">资产预览将在后续阶段接入。</p>
