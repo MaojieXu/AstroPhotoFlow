@@ -5,9 +5,11 @@ from uuid import UUID, uuid4
 from alembic import command
 from pydantic import TypeAdapter
 from sqlalchemy import select
+from fastapi.testclient import TestClient
 
+from astrophotoflow.backend.api import create_app
 from astrophotoflow.backend.db import Database
-from astrophotoflow.backend.models import CapturePreset, Equipment, EquipmentSetup
+from astrophotoflow.backend.models import AssetTask, CapturePreset, Equipment, EquipmentSetup
 from astrophotoflow.backend.presets import capture_defaults_snapshot
 from astrophotoflow.backend.schema import SCHEMA_REVISION, _alembic_config, upgrade_database
 from astrophotoflow.backend.schemas import CalibrationBindings
@@ -57,6 +59,16 @@ def test_import_snapshot_freezes_registered_and_inline_components(tmp_path):
         snapshot = capture_defaults_snapshot(session, UUID(preset))
         assert snapshot["parameters"] == {"gain": 0, "exposure_seconds": 30, "camera_id": camera}
         assert len(session.scalars(select(Equipment)).all()) == 1
+    app = create_app(settings, "test-token")
+    with TestClient(app) as client:
+        response = client.post("/api/v1/uploads", headers={"Authorization": "Bearer test-token"}, json={
+            "files": [{"name": "light.fits", "size": 100}], "capture_preset_id": preset,
+        })
+        assert response.status_code == 202, response.text
+        task_id = response.json()["task_id"]
+    with database.read_session() as session:
+        assert session.get(AssetTask, task_id).import_defaults_snapshot == snapshot
+    app.state.database.close()
     frozen = json.dumps(snapshot, sort_keys=True)
     with database.write_session() as session:
         session.get(Equipment, camera).name = "changed camera"
