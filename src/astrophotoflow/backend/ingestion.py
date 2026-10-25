@@ -229,16 +229,17 @@ def _current_asset_parameters(request_values: dict, file_values: dict, defaults:
 
 
 def _current_classification(request_values: dict, file_values: dict, defaults: dict) -> tuple[dict, dict]:
-    if request_values:
-        return ({key: request_values.get(key) for key in ("frame_class", "frame_type")},
-                {"classification.frame_class": "manual", "classification.frame_type": "manual"})
     values, sources = {}, {}
     for key in ("frame_class", "frame_type"):
+        if key in request_values:
+            values[key], sources[f"classification.{key}"] = request_values[key], "manual"
+            continue
         observed, preset = file_values.get(key), defaults.get(key)
         values[key] = observed if observed is not None else preset
         sources[f"classification.{key}"] = "file" if observed is not None else "preset" if preset is not None else "unknown"
     if values["frame_class"] == "video":
         values["frame_type"] = None
+        sources["classification.frame_type"] = sources["classification.frame_class"]
     return values, sources
 
 

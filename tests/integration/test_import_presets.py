@@ -11,7 +11,8 @@ from astrophotoflow.backend.schema import upgrade_database
 from astrophotoflow.config import Settings
 
 
-@pytest.mark.parametrize("manual_classification", [None, {"frame_class": "masterframe", "frame_type": "flat"}])
+@pytest.mark.parametrize("manual_classification", [None, {"frame_class": "masterframe", "frame_type": "flat"},
+                                                   {"frame_type": "flat"}, {"frame_type": None}])
 def test_selected_preset_is_frozen_and_observed_values_win(tmp_path, manual_classification):
     settings = Settings("127.0.0.1", 8190, tmp_path / "data", ())
     upgrade_database(settings)
@@ -65,7 +66,14 @@ def test_selected_preset_is_frozen_and_observed_values_win(tmp_path, manual_clas
             assert asset["value_sources"]["gain"] == "manual"
             assert asset["value_sources"]["exposure_seconds"] == "file"
             assert asset["value_sources"]["offset"] == "preset"
-            assert asset["classification"] == (manual_classification or {"frame_class": "masterframe", "frame_type": "light"})
+            expected_classification = {"frame_class": "masterframe", "frame_type": "light"}
+            if manual_classification is not None:
+                expected_classification.update(manual_classification)
+                for key in manual_classification:
+                    assert asset["value_sources"]["classification." + key] == "manual"
+            assert asset["classification"] == expected_classification
+            if manual_classification is None or "frame_class" not in manual_classification:
+                assert asset["value_sources"]["classification.frame_class"] == "file"
             snapshot = asset["current_version"]["capture_snapshot"]["import_provenance"]["defaults_snapshot"]
             assert snapshot["capture_preset"]["revision"] == preset["revision"]
             assert snapshot["parameters"]["offset"] == 8

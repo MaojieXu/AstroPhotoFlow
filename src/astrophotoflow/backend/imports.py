@@ -47,7 +47,7 @@ def create_upload(body: UploadImportCreate, request: Request, session: deps.Writ
     create_dataset = body.create_dataset or len(body.files) > 1
     task = AssetTask(
         id=task_id, status="queued", sources=sources, storage_mode="managed",
-        classification=body.classification.model_dump(mode="json") if "classification" in body.model_fields_set else {}, parameters=body.parameters.model_dump(mode="json", exclude_unset=True),
+        classification=body.classification.model_dump(mode="json", exclude_unset=True), parameters=body.parameters.model_dump(mode="json", exclude_unset=True),
         import_defaults_snapshot=defaults_snapshot,
         notes=body.notes,
         dataset_name=(body.dataset_name or body.files[0].name) if create_dataset else None,
@@ -229,7 +229,7 @@ def create_import(body: ImportCreate, request: Request, background: BackgroundTa
         )
     task = AssetTask(
         id=task_id, status="queued", sources=sources, storage_mode=body.storage_mode,
-        classification=body.classification.model_dump(mode="json") if "classification" in body.model_fields_set else {},
+        classification=body.classification.model_dump(mode="json", exclude_unset=True),
         parameters=body.parameters.model_dump(mode="json", exclude_unset=True), notes=body.notes, dataset_name=dataset_name,
         import_defaults_snapshot=capture_defaults_snapshot(session, body.capture_preset_id),
         target_dataset_id=target_dataset_id, dataset_base_revision=None, dataset_id=None,
