@@ -22,6 +22,8 @@ const presetOriginal = ref('')
 const saving = ref(false)
 const error = ref('')
 let presetGeneration = 0
+let setupSelectionGeneration = 0
+watch(() => selectedSetup.value?.id, () => {setupSelectionGeneration++}, {flush:'sync'})
 const numericParameters = [
   {key:'iso',label:'ISO',integer:true,min:1}, {key:'gain',label:'Gain'}, {key:'offset',label:'Offset'},
   {key:'exposure_seconds',label:'曝光（秒）',min:0}, {key:'integration_seconds',label:'累计曝光（秒）',min:0},
@@ -32,7 +34,7 @@ const dirty = computed(() =>
   (editingSetup.value !== undefined && JSON.stringify(setupDraft.value) !== setupOriginal.value) ||
   (editingPreset.value !== undefined && JSON.stringify(presetDraft.value) !== presetOriginal.value))
 watch(dirty, value => {context.setupDirty.value = value})
-onBeforeUnmount(() => {context.setupDirty.value = false; presetGeneration++})
+onBeforeUnmount(() => {context.setupDirty.value = false; presetGeneration++; setupSelectionGeneration++})
 
 function leaveDraft() {
   if (dirty.value && !window.confirm('当前组合或预设有未保存修改。放弃修改吗？')) return false
@@ -58,10 +60,10 @@ function changeInlineKind(component: SetupComponent) {
   if (component.source === 'inline') component.equipment.specs = {}
 }
 async function saveSetup() {
-  const generation = presetGeneration
+  const generation = setupSelectionGeneration
   const { section, query, offset } = context.store
   const status = context.statusFilter.value
-  const currentView = () => generation === presetGeneration && context.store.section === section &&
+  const currentView = () => generation === setupSelectionGeneration && context.store.section === section &&
     context.store.query === query && context.store.offset === offset && context.statusFilter.value === status
   saving.value = true; error.value = ''
   try {

@@ -87,6 +87,37 @@ describe('workspace async view boundaries',()=>{
   expect(vm.selected.id).toBe(second.id)
   expect(wrapper.get('section[aria-label="使用组合详情"]').text()).toContain('Second rig')
  })
+ it('finishes the same setup save after retrying its failed preset list',async()=>{
+  let presetReads=0
+  get.mockImplementation(async(path:string)=>{
+   if(path.endsWith('/capabilities'))return cap
+   const pathname=new URL(path,'http://test').pathname
+   if(pathname.endsWith('/equipment-setups'))return page([setup])
+   if(pathname.endsWith('/presets')&&presetReads++===0)throw new Error('preset list unavailable')
+   return page([])
+  })
+  await flushPromises()
+  await wrapper.get('button[aria-label="设置"]').trigger('click');await flushPromises()
+  await click('使用组合')
+  await wrapper.findAll('.apf-record').find(button=>button.text().includes(setup.name))!.trigger('click');await flushPromises()
+  await click('编辑使用组合')
+  await wrapper.get('form[aria-label="使用组合表单"] input[required]').setValue('Updated rig')
+  let resolveSave!:(value:unknown)=>void
+  send.mockImplementationOnce(()=>new Promise(resolve=>{resolveSave=resolve}))
+  await wrapper.get('form[aria-label="使用组合表单"]').trigger('submit');await flushPromises()
+  await click('重试')
+  resolveSave({...setup,name:'Updated rig',revision:2});await flushPromises()
+  const vm=wrapper.getComponent(Workspace).vm as unknown as {selected:{name:string;revision:number}}
+  expect(vm.selected.name).toBe('Updated rig')
+  expect(vm.selected.revision).toBe(2)
+  expect(wrapper.find('form[aria-label="使用组合表单"]').exists()).toBe(false)
+  await click('编辑使用组合')
+  await wrapper.get('form[aria-label="使用组合表单"] input[required]').setValue('Updated again')
+  send.mockResolvedValueOnce({...setup,name:'Updated again',revision:3})
+  await wrapper.get('form[aria-label="使用组合表单"]').trigger('submit');await flushPromises()
+  expect(send.mock.calls.at(-1)![3].base_revision).toBe(2)
+  expect(vm.selected.revision).toBe(3)
+ })
  it('does not silently replace an explicit frame filter with the category filter',async()=>{
   get.mockImplementation(async(path:string)=>{
    if(path.endsWith('/capabilities'))return cap
