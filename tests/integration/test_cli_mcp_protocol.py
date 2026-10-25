@@ -454,3 +454,59 @@ def test_apf_cli_structured_domain_workflow(service, tmp_path):
     rejected = subprocess.run([_entrypoint("apf"), "assets", "patch", task["items"][0]["asset_id"], "--data", '{"base_revision":0}'],
                               cwd=ROOT, env=service["env"], capture_output=True, text=True, check=False)
     assert rejected.returncode == 1 and "base_revision" in rejected.stderr
+
+
+def test_apf_display_preview_stdio_image_and_cli_export(service, tmp_path):
+    from base64 import b64decode
+    from io import BytesIO
+
+    photo = tmp_path / "preview-source.png"
+    Image.new("RGB", (1600, 800), color=(32, 64, 96)).save(photo, format="PNG")
+    original = photo.read_bytes()
+    task = _wait_cli_task(service, _cli_json(service, "import-photo", str(photo))["task_id"])
+    asset_id, version_id = task["items"][0]["asset_id"], task["items"][0]["asset_version_id"]
+
+    async def exercise_preview():
+        params = StdioServerParameters(command=_entrypoint("apf"), args=["mcp"], env=service["env"], cwd=str(ROOT))
+        async with stdio_client(params) as streams:
+            async with ClientSession(*streams) as session:
+                await session.initialize()
+                initial = _tool_data(await session.call_tool("get_display_preview_status", {
+                    "asset_id": asset_id, "version_id": version_id,
+                }), service)
+                assert initial["status"] == "not_ready" and initial["error"]["code"] == "DISPLAY_NOT_GENERATED"
+                scheduled = _tool_data(await session.call_tool("schedule_display_preview", {
+                    "asset_id": asset_id, "version_id": version_id,
+                }), service)
+                assert scheduled["status"] in {"generating", "available"}
+                deadline = time.monotonic() + 10
+                while time.monotonic() < deadline:
+                    state = _tool_data(await session.call_tool("get_display_preview_status", {
+                        "asset_id": asset_id, "version_id": version_id,
+                    }), service)
+                    if state["status"] != "generating":
+                        break
+                    await asyncio.sleep(0.1)
+                assert state["status"] == "available" and (state["width"], state["height"]) == (1080, 540), state
+                result = await session.call_tool("read_display_preview", {"asset_id": asset_id, "version_id": version_id})
+                assert not result.is_error and result.structured_content is None
+                assert len(result.content) == 1 and result.content[0].type == "image"
+                assert result.content[0].mime_type == "image/jpeg"
+                jpeg = b64decode(result.content[0].data)
+                with Image.open(BytesIO(jpeg)) as image:
+                    assert image.format == "JPEG" and image.size == (1080, 540)
+                assert _tool_data(await session.call_tool("schedule_display_preview", {
+                    "asset_id": asset_id, "version_id": version_id,
+                }), service)["status"] == "available"
+                return jpeg
+
+    jpeg = asyncio.run(exercise_preview())
+    assert _cli_json(service, "previews", "status", asset_id, version_id)["status"] == "available"
+    output = tmp_path / "display.jpg"
+    exported = _cli_json(service, "previews", "export", asset_id, version_id, str(output))
+    assert exported == {"path": str(output.resolve()), "byte_size": len(jpeg)}
+    assert output.read_bytes() == jpeg
+    collision = subprocess.run([_entrypoint("apf"), "previews", "export", asset_id, version_id, str(photo)],
+                               cwd=ROOT, env=service["env"], capture_output=True, text=True, check=False)
+    assert collision.returncode == 1 and photo.name in collision.stderr
+    assert photo.read_bytes() == original
