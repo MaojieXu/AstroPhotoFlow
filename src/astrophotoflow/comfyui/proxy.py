@@ -67,6 +67,8 @@ ROUTES = [
     ("GET", "/library/assets/{asset_id}/versions/{version_id}/hdus/{hdu_index}/header", "/library/assets/{asset_id}/versions/{version_id}/hdus/{hdu_index}/header"),
     ("GET", "/library/assets/{asset_id}/versions/{version_id}/previews/{size}", "/library/assets/{asset_id}/versions/{version_id}/previews/{size}"),
     ("GET", "/datasets", "/datasets"),
+    ("POST", "/datasets", "/datasets"),
+    ("GET", "/calibration/targets", "/calibration/targets"),
     ("GET", "/datasets/{dataset_id}", "/datasets/{dataset_id}"),
     ("PATCH", "/datasets/{dataset_id}", "/datasets/{dataset_id}"),
     ("PATCH", "/datasets/{dataset_id}/member-parameters", "/datasets/{dataset_id}/member-parameters"),

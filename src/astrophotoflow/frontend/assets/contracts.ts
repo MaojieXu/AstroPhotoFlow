@@ -137,6 +137,13 @@ export const datasetSchema = z.object({
 }).strict()
 export const calibrationTargetSchema = z.object({kind:z.enum(['asset_version','dataset_version']),id}).strict()
 export const calibrationBindingsSchema = z.partialRecord(z.enum(['bias','dark','flat','dark_flat']),calibrationTargetSchema.nullable())
+export const calibrationTargetOptionSchema = z.object({
+  target:calibrationTargetSchema,name:z.string(),frame_type:z.enum(['bias','dark','flat','dark_flat']),
+  version_number:z.number().int().positive(),member_count:z.number().int().nonnegative()
+}).strict()
+export type CalibrationTarget = z.infer<typeof calibrationTargetSchema>
+export type CalibrationBindings = z.infer<typeof calibrationBindingsSchema>
+export type CalibrationTargetOption = z.infer<typeof calibrationTargetOptionSchema>
 export const datasetMemberSchema = z.object({
   id, dataset_version_id: id, asset_version_id: id, position: z.number().int().nonnegative(),
   relative_path: nullableText, asset: assetSchema, version: assetVersionSchema,
@@ -148,7 +155,7 @@ export const datasetVersionSchema = z.object({
 }).strict()
 export const libraryItemSchema = z.discriminatedUnion('entry_type', [
   z.object({ entry_type: z.literal('asset'), asset: assetSchema, import_issue: nullableText }).strict(),
-  z.object({ entry_type: z.literal('dataset'), dataset: datasetSchema, version: datasetVersionSchema.nullable(), import_issue: nullableText }).strict()
+  z.object({ entry_type: z.literal('dataset'), dataset: datasetSchema, version: datasetVersionSchema.nullable(), import_issue: nullableText, matching_member_count:z.number().int().nonnegative() }).strict()
 ])
 export const libraryFilterOptionsSchema = z.object({
   frame_classes: z.array(z.string()), frame_types: z.array(z.string()), roles: z.array(z.string()),
@@ -181,7 +188,7 @@ export const libraryTrashSelectionSchema = z.object({items:z.array(z.object({
 export const libraryTrashDeleteSchema = z.object({deleted_count:z.number().int().nonnegative(),deleted_entry_count:z.number().int().nonnegative(),deleted_file_count:z.number().int().nonnegative(),deleted_bytes:z.number().int().nonnegative(),missing_file_count:z.number().int().nonnegative(),failed:z.array(z.object({id:z.string(),error:z.string()}).strict())}).strict()
 export const libraryTrashPreviewSchema = z.object({
   items:z.array(libraryTrashItemSchema),
-  references:z.array(z.object({id,kind:z.enum(['project_asset','project_dataset','dataset_member']),name:z.string(),version:z.number().int().positive()}).strict()),
+  references:z.array(z.object({id,kind:z.enum(['project_asset','project_dataset','dataset_member','calibration']),name:z.string(),version:z.number().int().positive()}).strict()),
   tasks:z.array(z.string()),photo_count:z.number().int().nonnegative(),managed_file_count:z.number().int().nonnegative(),managed_bytes:z.number().int().nonnegative(),preview_fingerprint:z.string()
 }).strict()
 export const datasetMemberParametersUpdateSchema = z.object({

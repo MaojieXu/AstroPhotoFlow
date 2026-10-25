@@ -16,6 +16,7 @@ from .models import Asset, AssetTask, AssetTaskItem, AssetVersion, Dataset, Data
 from pathlib import Path
 from .import_schemas import LibraryEntriesRemove, LibraryTrashDelete, LibraryTrashSelection
 from .schemas import LibraryEntriesRemoveOut, LibraryTrashPage, LibraryTrashItemOut, LibraryTrashPreviewOut, LibraryTrashDeleteOut
+from .calibration import calibration_references, protect_calibration_targets
 
 
 router = APIRouter(prefix="/api/v1", responses=ERROR_RESPONSES)
@@ -250,6 +251,8 @@ def _trash_scope(session, settings, records):
     ).where(ProjectDatasetReference.dataset_version_id.in_(selected_dataset_version_ids))).all() if selected_dataset_version_ids else []:
         version = session.get(DatasetVersion, ref.dataset_version_id)
         refs.append({"id": UUID(ref.id), "kind": "project_dataset", "name": project.name, "version": version.version_number})
+    refs.extend(calibration_references(session, version_ids, selected_dataset_version_ids,
+                                      deleting_dataset_ids, version_ids))
     active_task_statuses = {"queued", "running", "cancelling", "interrupted"}
     task_ids = set(session.scalars(select(AssetTask.id).join(
         AssetTaskItem, AssetTaskItem.task_id == AssetTask.id
@@ -317,6 +320,8 @@ def library_trash_delete(body: LibraryTrashDelete, request: Request, session: de
     records = _selected_trash(session, body)
     settings = request.app.state.settings
     asset_ids, versions, previews, refs, tasks, paths, managed_bytes = _trash_scope(session, settings, records)
+    if any(ref["kind"] == "calibration" for ref in refs):
+        raise ApiError(409, "CALIBRATION_IN_USE", "仍有其他图像组版本使用所选校准目标，请先移除引用组。")
     if tasks:
         raise ApiError(409, "IMPORT_ACTIVE", "正在执行或可恢复的导入任务仍占用所选内容，请先取消任务。")
     expected_references = {str(ref["id"]) for ref in refs}
@@ -342,6 +347,7 @@ def library_trash_delete(body: LibraryTrashDelete, request: Request, session: de
                                    for preview in previews if preview.asset_version_id == version.id and preview.storage_path)
         paths_by_asset[asset_id] = [path for path in candidate_paths if str(path) in original_paths]
     success_assets, success_datasets, failed = set(), set(), []
+    deferred_assets = set()
     deleted_file_count = deleted_bytes = missing_file_count = 0
     dataset_revision_deltas = {}
     selected_group_states = {}
@@ -361,6 +367,8 @@ def library_trash_delete(body: LibraryTrashDelete, request: Request, session: de
         current_preview = library_trash_delete_preview(body, request, write)
         if current_preview["preview_fingerprint"] != body.preview_fingerprint:
             raise ApiError(409, "TRASH_PREVIEW_STALE", "清理范围已变化，请重新预览。")
+        if any(ref["kind"] == "calibration" for ref in current_preview["references"]):
+            raise ApiError(409, "CALIBRATION_IN_USE", "校准引用已变化，请先移除引用组。")
         asset_records = {}
         for asset_id in asset_ids:
             removal = write.get(LibraryEntryRemoval, ("asset", asset_id))
@@ -450,6 +458,16 @@ def library_trash_delete(body: LibraryTrashDelete, request: Request, session: de
                         raise ApiError(409, "TRASH_PREVIEW_STALE", "组导入任务占用已变化，请重新预览。")
                 if not current_refs.issubset(expected_references):
                     raise ApiError(409, "TRASH_PREVIEW_STALE", "项目或组关联已变化，请重新预览。")
+                owned_paths = {str(path) for path in paths_by_asset.get(asset_id, [])}
+                calibration_version_ids = version_ids | {version.id for version in versions if version.storage_mode == "managed"
+                    and str((settings.data_dir / version.storage_location).resolve()) in owned_paths}
+                calibration_dataset_ids = set(write.scalars(select(DatasetMember.dataset_version_id).where(
+                    DatasetMember.asset_version_id.in_(calibration_version_ids))).all())
+                if calibration_references(write, calibration_version_ids, calibration_dataset_ids, excluded_member_versions=version_ids):
+                    protect_calibration_targets(write, calibration_version_ids, calibration_dataset_ids, deleting_dataset_ids, version_ids)
+                    deferred_assets.add(asset_id)
+                    failed.append({"id": asset_id, "error": "校准目标保留原件和版本；待所选引用组清理后可重试此照片。"})
+                    continue
                 active_task_ids = set(write.scalars(select(AssetTask.id).join(
                     AssetTaskItem, AssetTaskItem.task_id == AssetTask.id
                 ).where(AssetTask.status.in_({"queued", "running", "cancelling", "interrupted"}),
@@ -544,7 +562,7 @@ def library_trash_delete(body: LibraryTrashDelete, request: Request, session: de
             continue
         if removal.entry_type == "dataset":
             remaining = set(removal.member_asset_ids or []) - success_assets
-            if remaining:
+            if remaining and not remaining.issubset(deferred_assets):
                 continue
             try:
                 with request.app.state.database.write_session() as write:
@@ -570,6 +588,7 @@ def library_trash_delete(body: LibraryTrashDelete, request: Request, session: de
                         raise ApiError(409, "TRASH_PREVIEW_STALE", "导入任务占用已变化，请重新预览。")
                     if dataset:
                         version_ids = [v.id for v in version_rows]
+                        protect_calibration_targets(write, set(), set(version_ids), {row.id})
                         write.execute(delete(DatasetMember).where(DatasetMember.dataset_version_id.in_(version_ids))) if version_ids else None
                         affected_project_ids = set()
                         for reference in write.scalars(select(ProjectDatasetReference).where(ProjectDatasetReference.dataset_id == row.id)).all():
@@ -583,6 +602,11 @@ def library_trash_delete(body: LibraryTrashDelete, request: Request, session: de
                         dataset.current_version_id = None
                         if dataset_removal:
                             write.delete(dataset_removal)
+                        # Deferred photos stay as independent trash entries after their container disappears.
+                        for retained_removal in write.scalars(select(LibraryEntryRemoval).where(
+                            LibraryEntryRemoval.entry_type == "asset", LibraryEntryRemoval.dataset_version_id.in_(version_ids)
+                        )).all():
+                            retained_removal.dataset_version_id = None
                         write.flush()
                         for task in write.scalars(select(AssetTask).where(AssetTask.dataset_id == row.id)).all():
                             task.dataset_id = None

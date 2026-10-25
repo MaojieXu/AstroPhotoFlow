@@ -36,6 +36,8 @@ const capabilityError = ref<ApiClientError>()
 const statusFilter = ref<'active' | 'archived' | 'all'>('active')
 const equipmentKindFilter = ref('')
 const setupDirty = ref(false)
+const calibrationDirty = ref(false)
+const libraryCategory = ref<'all'|'light'|'calibration'>('all')
 const roleFilter = ref('')
 const frameTypeFilter = ref('')
 type LibraryFilters = Record<string, string[] | string>
@@ -95,7 +97,7 @@ const relatedProfilesReady = ref(false)
 let searchTimer: ReturnType<typeof setTimeout> | undefined
 let recordsLoadPending = false
 
-const dirty = computed(() => setupDirty.value || (editorType.value !== undefined && JSON.stringify(draft.value) !== originalDraft.value))
+const dirty = computed(() => setupDirty.value || calibrationDirty.value || (editorType.value !== undefined && JSON.stringify(draft.value) !== originalDraft.value))
 const isAssetSection = computed(() =>
   store.section === 'calibration' || viewingProjectAssets.value ||
   (activeArea.value === 'library' && !viewingProjectDatasets.value)
@@ -326,11 +328,13 @@ async function loadRecords() {
       activeDataset.value={...dataset,version}
     } else if (store.section === 'library' && !viewingProjectAssets.value && !viewingProjectDatasets.value) {
       const page = await loadWorkspacePage('/library/items', libraryItemSchema, {
-        ...libraryFilterParams(activeFilters.value), sort_by: librarySort.value.by, order: librarySort.value.order
+        ...libraryFilterParams(activeFilters.value),
+        ...(libraryCategory.value==='light'?{frame_type:['light']}:libraryCategory.value==='calibration'?{role:['calibration']}:{}),
+        sort_by: librarySort.value.by, order: librarySort.value.order
       })
       loadedRows = page.items.map(item => item.entry_type === 'asset'
         ? {...item.asset, entry_type: 'asset', import_issue: item.import_issue}
-        : {...item.dataset, dataset: item.dataset, version: item.version, entry_type: 'dataset', import_issue: item.import_issue})
+        : {...item.dataset, dataset: item.dataset, version: item.version, entry_type: 'dataset', import_issue: item.import_issue, matching_member_count:item.matching_member_count})
       loadedTotal = page.total
     } else if (store.section === 'calibration' || addingProjectAssets.value) {
       const role = store.section === 'calibration' ? 'calibration' : roleFilter.value
@@ -475,6 +479,16 @@ async function selectSection(section: WorkspaceSection) {
   }
   selected.value = undefined
   loadRecords()
+}
+
+async function selectLibraryCategory(category:'all'|'light'|'calibration'){
+  if(category===libraryCategory.value)return
+  if(dirty.value&&!window.confirm('当前表单有未保存修改。放弃修改并切换吗？'))return
+  if(!await waitForInlineSave())return
+  leaveDatasetContext();selected.value=undefined
+  store.query='';store.offset=0;activeFilters.value=emptyFilters()
+  libraryCategory.value=category
+  await loadRecords()
 }
 
 async function selectArea(area: WorkspaceArea) {
@@ -787,6 +801,7 @@ async function saveParameterGroup(row:RecordData,parameters:RecordData){
 
 async function updateDatasetMembers(row:RecordData,changes:RecordData){
   const members:RecordData[]=row.version?.members??[]
+  if(!activeDataset.value&&row.matching_member_count<members.length)throw new Error('此筛选结果包含组内其他用途或条件的成员。请先打开图像组，在完整成员范围内编辑。')
   const dataset=row.dataset
   if(!dataset?.id||!row.version?.id||!members.length)throw new Error('此数据集没有可修改的成员。')
   const updated=await assetApi.send(
@@ -981,6 +996,7 @@ function leaveDatasetContext(){
   error.value=undefined
 }
 async function closeDataset(){
+  if(calibrationDirty.value&&!window.confirm('图像组说明或校准关联有未保存修改。放弃修改吗？'))return
   if (dirty.value && !window.confirm('当前表单有未保存修改。放弃修改并返回吗？')) return
   if(!await waitForInlineSave())return
   datasetRefreshGeneration++
@@ -1012,6 +1028,13 @@ async function datasetUpdated(){
     activeDataset.value={...dataset}
   }
   await loadRecords()
+}
+
+async function calibrationUpdated(dataset:RecordData){
+  if(activeDataset.value?.id===dataset.id){
+    activeDataset.value={...dataset}
+    await loadRecords()
+  }
 }
 
 function closeDatasetEditor(){
@@ -1530,7 +1553,7 @@ watch(
 const workspaceContext = {
   store, activeArea, lastManagementSection, capabilities, rows,
   selected, total, loading, error, capabilityError,
-  statusFilter, equipmentKindFilter, setupDirty, roleFilter, frameTypeFilter, emptyFilters, activeFilters,
+  statusFilter, equipmentKindFilter, setupDirty, calibrationDirty, libraryCategory, selectLibraryCategory, roleFilter, frameTypeFilter, emptyFilters, activeFilters,
   filterPanelOpen, filterButton, activeFilterCount, viewingProjectAssets, viewingProjectDatasets,
   addingProjectAssets, addingProjectDatasets, importDialogOpen, importFiles, filePicker,
   folderPicker, importMenuOpen, importCreatesDataset, importDatasetName, libraryViewMode,
@@ -1559,7 +1582,7 @@ const workspaceContext = {
   parameterModeDisplay, captureProfileModeDisplay, displayTemperature, datasetTemperature, inlineFailureKey,
   editorInlineFailureKey, setInlineSaveFailure, clearInlineSaveFailure, finishInlineSave, saveBin,
   performBinSave, editDataset, openDataset, leaveDatasetContext, closeDataset,
-  datasetSaved, datasetUpdated, closeDatasetEditor, addSelectedAsset, removeSelectedAssetReference,
+  datasetSaved, datasetUpdated, calibrationUpdated, closeDatasetEditor, addSelectedAsset, removeSelectedAssetReference,
   addSelectedDataset, removeSelectedDatasetReference, setQuery, bulkKey, clearBulkSelection,
   toggleLibrarySort, sortAria, sortArrow, toggleBulkSelection, togglePageSelection,
   enterBulkSelectMode, leaveBulkSelectMode, removeSelectedLibraryEntries, confirmRemoveSelectedLibraryEntries, onLibraryRowClick,
@@ -1626,6 +1649,9 @@ onBeforeUnmount(() => {
                 </template>
               </div>
             </div>
+            <nav v-if="activeArea==='library'&&!activeDataset" class="apf-library-categories" aria-label="素材用途">
+              <button v-for="(label,category) in {all:'全部素材',light:'亮场',calibration:'校准库'}" :key="category" type="button" :aria-current="libraryCategory===category?'page':undefined" @click="selectLibraryCategory(category)">{{label}}</button>
+            </nav>
             <div v-if="activeArea === 'settings' && !viewingProjectAssets && !viewingProjectDatasets" class="apf-management-tabs" aria-label="设置类别">
               <button v-for="(title, section) in { projects: '项目', equipment: '设备', 'equipment-setups': '使用组合' }"
                 :key="section" type="button" :aria-current="store.section === section || (section==='equipment-setups'&&store.section==='capture-profiles') ? 'page' : undefined"
@@ -1681,6 +1707,7 @@ onBeforeUnmount(() => {
 </template>
 
 <style>
+.apf-library-categories{display:flex;gap:8px;flex-wrap:wrap}
 .apf-workspace { position:relative; display:flex; flex:1 1 auto; width:100%; height:100%; min-height:0; font:inherit; color:var(--input-text,inherit); }
 .apf-workspace button { display:inline-flex; min-height:32px; align-items:center; justify-content:center; gap:8px; padding:8px; border:0; border-radius:8px; color:var(--input-text,#ddd); background:var(--comfy-menu-secondary-bg,#292929); font:inherit; font-size:12px; font-weight:500; line-height:1; white-space:nowrap; cursor:pointer; transition:background-color .1s ease; }
 .apf-workspace button:hover:not(:disabled) { background:var(--comfy-menu-bg,#353535); }

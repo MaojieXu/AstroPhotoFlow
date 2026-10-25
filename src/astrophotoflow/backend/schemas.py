@@ -39,6 +39,21 @@ class CalibrationTarget(StrictModel):
 CalibrationBindings = dict[Literal["bias", "dark", "flat", "dark_flat"], CalibrationTarget | None]
 
 
+class CalibrationTargetOption(StrictModel):
+    target: CalibrationTarget
+    name: str
+    frame_type: Literal["bias", "dark", "flat", "dark_flat"]
+    version_number: int
+    member_count: int
+
+
+class CalibrationTargetPage(StrictModel):
+    items: list[CalibrationTargetOption]
+    total: int
+    limit: int
+    offset: int
+
+
 def finite(value: float | None) -> float | None:
     if value is not None and not isfinite(value):
         raise ValueError("数值必须是有限值。")
@@ -577,6 +592,7 @@ class LibraryDatasetItemOut(StrictModel):
     dataset: DatasetOut
     version: DatasetVersionOut | None
     import_issue: str | None
+    matching_member_count: int
 
 
 LibraryItemOut = Annotated[LibraryAssetItemOut | LibraryDatasetItemOut, Field(discriminator="entry_type")]
@@ -623,7 +639,7 @@ class LibraryTrashPage(StrictModel):
 
 class LibraryTrashReferenceOut(StrictModel):
     id: UUID
-    kind: Literal["project_asset", "project_dataset", "dataset_member"]
+    kind: Literal["project_asset", "project_dataset", "dataset_member", "calibration"]
     name: str
     version: int
 

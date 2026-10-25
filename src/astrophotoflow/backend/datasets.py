@@ -5,6 +5,7 @@ from .dependencies import ERROR_RESPONSES
 from .common import _asset_version_scope, _dataset_out, _dataset_version_out
 from . import dependencies as deps
 from . import common as shared
+from .calibration import validate_bindings
 
 from typing import Literal
 from uuid import UUID, uuid4
@@ -13,13 +14,14 @@ from sqlalchemy import func, select, update
 from .errors import ApiError, invalid_reference, not_found
 from .models import Asset, AssetTaskItem, AssetVersion, Dataset, DatasetMember, DatasetVersion
 from .schemas import DatasetOut, DatasetPage, DatasetVersionOut, DatasetVersionPage, DatasetMemberParametersUpdateOut
-from .import_schemas import AssetClassification, AssetParameters, DatasetPatch, DatasetMemberParametersUpdate, DatasetMembersCreate
+from .import_schemas import AssetClassification, AssetParameters, DatasetCreate, DatasetPatch, DatasetMemberParametersUpdate, DatasetMembersCreate
 
 
 router = APIRouter(prefix="/api/v1", responses=ERROR_RESPONSES)
 
 
-def _publish_dataset_version(session, dataset: Dataset, submitted_ids: list[str], relative_paths: dict[str, str | None] | None = None) -> DatasetVersion:
+def _publish_dataset_version(session, dataset: Dataset, submitted_ids: list[str], relative_paths: dict[str, str | None] | None = None,
+                             calibration_defaults: dict | None = None, member_overrides: dict[str, dict] | None = None) -> DatasetVersion:
     if len(set(submitted_ids)) != len(submitted_ids):
         raise ApiError(422, "VALIDATION_ERROR", "数据集成员不能重复。", [{"path": "asset_version_ids", "message": "成员版本 ID 不能重复。"}])
     existing = []
@@ -40,29 +42,49 @@ def _publish_dataset_version(session, dataset: Dataset, submitted_ids: list[str]
         asset, _ = _asset_version_scope(session, None, UUID(version_id))
         if asset.scope != "shared":
             raise invalid_reference("共享数据集只能包含共享资产。")
-    if dataset.current_version_id and submitted_ids == old_ids:
-        return session.get(DatasetVersion, dataset.current_version_id)
-    latest_number = session.scalar(select(func.max(DatasetVersion.version_number)).where(DatasetVersion.dataset_id == dataset.id)) or 0
     previous_version = session.get(DatasetVersion, dataset.current_version_id) if dataset.current_version_id else None
+    previous_defaults = previous_version.calibration_defaults if previous_version else {}
+    defaults = dict(previous_defaults) if calibration_defaults is None else calibration_defaults
+    retained_overrides = {member.asset_version_id: dict(member.calibration_overrides) for member in existing}
+    overrides = member_overrides or {}
+    if set(overrides) - set(submitted_ids):
+        raise invalid_reference("成员校准覆盖必须属于本次完整成员列表。")
+    validate_bindings(session, defaults, previous_defaults)
+    for version_id, bindings in overrides.items():
+        validate_bindings(session, bindings, retained_overrides.get(version_id, {}))
+    next_overrides = {version_id: overrides.get(version_id, retained_overrides.get(version_id, {})) for version_id in submitted_ids}
+    if previous_version and submitted_ids == old_ids and defaults == previous_defaults and next_overrides == retained_overrides:
+        return previous_version
+    latest_number = session.scalar(select(func.max(DatasetVersion.version_number)).where(DatasetVersion.dataset_id == dataset.id)) or 0
     version = DatasetVersion(id=str(uuid4()), dataset_id=dataset.id, version_number=latest_number + 1,
-                             calibration_defaults=dict(previous_version.calibration_defaults) if previous_version else {})
+                             calibration_defaults=defaults)
     session.add(version)
     session.flush()
     path_map = relative_paths or {}
     retained = {member.asset_version_id: member.relative_path for member in existing}
-    retained_overrides = {member.asset_version_id: dict(member.calibration_overrides) for member in existing}
     for position, asset_version_id in enumerate(submitted_ids):
         relative = retained.get(asset_version_id) if asset_version_id in retained else path_map.get(asset_version_id)
         session.add(DatasetMember(
             id=str(uuid4()), dataset_version_id=version.id, asset_version_id=asset_version_id,
             position=position, relative_path=relative,
-            calibration_overrides=retained_overrides.get(asset_version_id, {}),
+            calibration_overrides=next_overrides[asset_version_id],
         ))
     dataset.current_version_id = version.id
     dataset.revision += 1
     dataset.updated_at = shared._now()
     session.flush()
     return version
+
+
+@router.post("/datasets", response_model=DatasetOut, status_code=201, dependencies=[Depends(deps.authenticate)])
+def create_dataset(body: DatasetCreate, session: deps.WriteSession):
+    dataset = Dataset(id=str(uuid4()), name=body.name, notes=body.notes, status="active", revision=1)
+    session.add(dataset)
+    session.flush()
+    _publish_dataset_version(session, dataset, [str(value) for value in body.asset_version_ids])
+    dataset.revision = 1
+    session.flush()
+    return _dataset_out(session, dataset)
 
 
 @router.get("/datasets", response_model=DatasetPage, dependencies=[Depends(deps.authenticate)])
@@ -208,5 +230,7 @@ def create_dataset_version(
         ).all()
         for version_id, source_path in source_rows:
             relative_paths.setdefault(version_id, source_path)
-    version = _publish_dataset_version(session, dataset, ids, relative_paths)
+    maps = body.model_dump(mode="json", exclude_unset=True)
+    version = _publish_dataset_version(session, dataset, ids, relative_paths,
+        calibration_defaults=maps.get("calibration_defaults"), member_overrides=maps.get("member_calibration_overrides"))
     return _dataset_version_out(session, version)
