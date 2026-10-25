@@ -327,15 +327,22 @@ async function loadRecords() {
       loadedRows=filtered.slice(store.offset,store.offset+pageSize)
       activeDataset.value={...dataset,version}
     } else if (store.section === 'library' && !viewingProjectAssets.value && !viewingProjectDatasets.value) {
-      const page = await loadWorkspacePage('/library/items', libraryItemSchema, {
-        ...libraryFilterParams(activeFilters.value),
-        ...(libraryCategory.value==='light'?{frame_type:['light']}:libraryCategory.value==='calibration'?{role:['calibration']}:{}),
-        sort_by: librarySort.value.by, order: librarySort.value.order
-      })
-      loadedRows = page.items.map(item => item.entry_type === 'asset'
-        ? {...item.asset, entry_type: 'asset', import_issue: item.import_issue}
-        : {...item.dataset, dataset: item.dataset, version: item.version, entry_type: 'dataset', import_issue: item.import_issue, matching_member_count:item.matching_member_count})
-      loadedTotal = page.total
+      const filters = libraryFilterParams(activeFilters.value)
+      const categoryFilters: Record<string,string[]> = libraryCategory.value==='light'
+        ? {frame_type:['light']} : libraryCategory.value==='calibration' ? {role:['calibration']} : {}
+      const emptyIntersection = Object.entries(categoryFilters).some(([key,values]) =>
+        filters[key] !== undefined && filters[key].length > 0 && !filters[key].includes(values[0]))
+      if (emptyIntersection) {
+        loadedRows = []; loadedTotal = 0
+      } else {
+        const page = await loadWorkspacePage('/library/items', libraryItemSchema, {
+          ...filters, ...categoryFilters, sort_by: librarySort.value.by, order: librarySort.value.order
+        })
+        loadedRows = page.items.map(item => item.entry_type === 'asset'
+          ? {...item.asset, entry_type: 'asset', import_issue: item.import_issue}
+          : {...item.dataset, dataset: item.dataset, version: item.version, entry_type: 'dataset', import_issue: item.import_issue, matching_member_count:item.matching_member_count})
+        loadedTotal = page.total
+      }
     } else if (store.section === 'calibration' || addingProjectAssets.value) {
       const role = store.section === 'calibration' ? 'calibration' : roleFilter.value
       const params: Record<string, string> = {}
@@ -430,7 +437,7 @@ function photoPreviewBase(row: RecordData, member: {asset: Asset; version: Recor
 }
 async function openPhotoPreview(row: RecordData) {
   const current = ++photoPreviewRequest
-  if (!await waitForInlineSave()) return
+  if (!await waitForInlineSave() || current !== photoPreviewRequest) return
   try {
     const member = await previewMember(row)
     if (current === photoPreviewRequest && member) photoPreview.value = {
@@ -440,6 +447,11 @@ async function openPhotoPreview(row: RecordData) {
   } catch (cause) { if (current === photoPreviewRequest) error.value = presentError(cause) }
 }
 function closePhotoPreview() { photoPreviewRequest++; photoPreview.value = undefined }
+watch(() => JSON.stringify([
+  activeArea.value, store.section, libraryCategory.value, activeDataset.value?.id, activeDataset.value?.current_version_id,
+  store.activeProjectId, viewingProjectAssets.value, viewingProjectDatasets.value, addingProjectAssets.value, addingProjectDatasets.value,
+  store.query, store.offset, store.pageSize, librarySort.value, libraryViewMode.value, activeFilters.value, selected.value?.id
+]), closePhotoPreview, {flush:'sync'})
 
 async function previewMember(row: RecordData): Promise<{asset: Asset; version: RecordData}|undefined> {
   if (row.version?.members) {

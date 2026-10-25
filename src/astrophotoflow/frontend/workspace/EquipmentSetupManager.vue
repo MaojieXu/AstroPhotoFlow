@@ -58,15 +58,21 @@ function changeInlineKind(component: SetupComponent) {
   if (component.source === 'inline') component.equipment.specs = {}
 }
 async function saveSetup() {
+  const generation = presetGeneration
+  const { section, query, offset } = context.store
+  const status = context.statusFilter.value
+  const currentView = () => generation === presetGeneration && context.store.section === section &&
+    context.store.query === query && context.store.offset === offset && context.statusFilter.value === status
   saving.value = true; error.value = ''
   try {
     const payload = {...setupDraft.value,notes:setupDraft.value.notes || null}
     const current = editingSetup.value
     const saved = await assetApi.send('/astrophotoflow/api/v1/equipment-setups' + (current ? '/' + current.id : ''),equipmentSetupSchema,current ? 'PATCH' : 'POST',
       current ? {...payload,base_revision:current.revision} : {name:payload.name,components:payload.components,notes:payload.notes})
+    if (!currentView()) return
     editingSetup.value = undefined
     await loadRecords()
-    selected.value = saved
+    if (currentView()) selected.value = saved
   } catch (cause) {error.value = cause instanceof Error ? cause.message : '组合保存失败。'}
   finally {saving.value = false}
 }
