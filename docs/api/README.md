@@ -11,14 +11,8 @@ uv run --locked --no-sync pytest tests/backend/test_service.py -k openapi
 
 CLI 保留 `apf init/start/status/stop`、`mcp-config`、`mcp`、`import-photo`、`task`、`assets list/get/parameters`。服务 CLI 保留 `apf-service serve`、`db status/upgrade` 和 `previews backfill`。
 
-MCP 通过 `apf mcp` 提供 stdio 服务，当前严格为以下五个工具：
+MCP 通过 `apf mcp` 提供 stdio 服务，现有五个名称保持兼容：`import_photo`、`get_import_task`、`list_assets`、`get_asset`、`update_asset_parameters`。结构化 HTTP 客户端、CLI 和 58 个 MCP 工具覆盖批量上传、配置根目录导入、任务、资产及逻辑组、项目固定版本引用、设备、使用组合／所属预设、校准关联、按需预览和回收站。
 
-| 工具 | 能力 |
-|---|---|
-| `import_photo` | 复制一张本地照片并创建导入任务 |
-| `get_import_task` | 查询任务状态和结果 |
-| `list_assets` | 分页查询共享资产 |
-| `get_asset` | 读取单个共享资产和当前参数 |
-| `update_asset_parameters` | 按当前 revision 修改或清空指定参数 |
+完整命令／工具清单、实际请求模型、配置与例子见[素材库 Agent 工具](../development/library-agent-tools.md)。项目内 [AstroPhotoFlow library Skill](../../.agents/skills/astrophotoflow-library/SKILL.md) 提供可复用工作流，无需全局安装。旧单图导入已去除 Light/subframe 强制分类，省略分类使用后端自动规则。
 
-未提供的 PATCH 字段保持原值，null 清空，0 是有效值；冲突明确失败。素材库 UI 的全部功能尚未映射为 MCP 工具，本轮不扩充工具集。配置方式见[工作台使用](../development/workbench.md)。
+未提供的 PATCH 字段保持原值，null 清空，0 是有效值；revision 冲突和错误 request ID 明确传回。数据集发布同时接受固定校准版本、组默认和成员覆盖；永久清理仍必须提交当前回收站预览 fingerprint 并遵循引用保护。配置记录删除采用归档。配置方式见[工作台使用](../development/workbench.md)。

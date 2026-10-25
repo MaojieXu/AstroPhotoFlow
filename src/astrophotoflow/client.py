@@ -4,6 +4,11 @@ from pathlib import Path
 from typing import Any
 
 import httpx
+from pydantic import BaseModel
+
+from .client_domains.imports import ImportOperations
+from .client_domains.library import LibraryOperations
+from .client_domains.organization import OrganizationOperations
 
 
 from .config import load_settings, resolve_config_path
@@ -20,7 +25,7 @@ class ServiceApiError(RuntimeError):
         super().__init__(f"{code} (HTTP {status}): {message}{field_text}{suffix}")
 
 
-class AssetClient:
+class AssetClient(ImportOperations, LibraryOperations, OrganizationOperations):
     def __init__(self, path: Path | None = None):
         self.config_path = resolve_config_path(path)
         settings = load_settings(self.config_path)
@@ -35,6 +40,10 @@ class AssetClient:
         )
 
     def request(self, method: str, path: str, *, params=None, json=None) -> Any:
+        if isinstance(json, BaseModel):
+            json = json.model_dump(mode="json", exclude_unset=True)
+        if params is not None:
+            params = {key: value for key, value in params.items() if value is not None}
         response = self.client.request(method, path, params=params, json=json)
         return self._result(response)
 
@@ -53,26 +62,6 @@ class AssetClient:
                 error.get("fields"),
             )
         return body
-
-    def import_photo(self, path: Path) -> dict[str, Any]:
-        path = path.expanduser().resolve(strict=True)
-        if not path.is_file():
-            raise ValueError(f"不是文件：{path}")
-        create = self.request(
-            "POST", "/uploads",
-            json={"files": [{"name": path.name, "size": path.stat().st_size}],
-                  "classification": {"frame_class": "subframe", "frame_type": "light"}},
-        )
-        task_id = str(create["task_id"])
-        with path.open("rb") as stream:
-            def chunks():
-                while chunk := stream.read(1024 * 1024):
-                    yield chunk
-
-            response = self.client.put(f"/uploads/{task_id}/0", content=chunks(), timeout=None)
-        self._result(response)
-        self.request("POST", f"/uploads/{task_id}/start")
-        return {"task_id": task_id, "status": "queued"}
 
     def close(self) -> None:
         self.client.close()

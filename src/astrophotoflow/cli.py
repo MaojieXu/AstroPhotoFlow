@@ -10,6 +10,8 @@ import httpx
 from astrophotoflow.backend.import_schemas import AssetParametersPatch
 
 from .client import AssetClient, ServiceApiError
+from . import cli_commands
+from .client_domains.imports import PhotoImportOptions
 from .config import ConfigurationError, resolve_config_path
 from .workbench import WorkbenchError, initialize, start, status, stop
 
@@ -67,6 +69,7 @@ def _parser() -> argparse.ArgumentParser:
     mcp_config.add_argument("--workspace", type=Path)
     photo = commands.add_parser("import-photo", help="Copy and ingest one local photograph")
     photo.add_argument("path", type=Path)
+    photo.add_argument("--data", help="Optional upload metadata JSON or @file; omitted classification is automatic")
     task = commands.add_parser("task", help="Query an import task")
     task.add_argument("task_id")
     assets = commands.add_parser("assets")
@@ -74,31 +77,35 @@ def _parser() -> argparse.ArgumentParser:
     listing = asset_commands.add_parser("list")
     listing.add_argument("--limit", type=int, default=50)
     listing.add_argument("--offset", type=int, default=0)
+    for field in ("q", "status", "frame_type", "role", "sort_by", "order"):
+        listing.add_argument("--" + field.replace("_", "-"), default=argparse.SUPPRESS)
     get_asset = asset_commands.add_parser("get")
     get_asset.add_argument("asset_id")
     patch = asset_commands.add_parser("parameters")
     _parameters_parser(patch)
+    cli_commands.register(commands, asset_commands)
     commands.add_parser("mcp", help="Run the stdio MCP server")
     return parser
 
 
 def _run_asset_command(args):
     with AssetClient() as client:
+        if hasattr(args, "api_method"):
+            return cli_commands.run(client, args)
         if args.command == "import-photo":
-            return client.import_photo(args.path)
+            options = cli_commands.read_body(args.data, PhotoImportOptions) if args.data is not None else None
+            return client.import_photo(args.path, options)
         if args.command == "task":
-            return client.request("GET", f"/asset-tasks/{args.task_id}")
+            return client.get_import_task(args.task_id)
         if args.asset_command == "list":
-            return client.request("GET", "/library/assets", params={"limit": args.limit, "offset": args.offset})
+            keys = ("limit", "offset", "q", "status", "frame_type", "role", "sort_by", "order")
+            return client.list_assets(**{key: getattr(args, key) for key in keys if hasattr(args, key)})
         if args.asset_command == "get":
-            return client.request("GET", f"/library/assets/{args.asset_id}")
+            return client.get_asset(args.asset_id)
         parameters = {name: getattr(args, name) for name in PARAMETER_OPTIONS if hasattr(args, name)}
         parameters.update({name: None for name in args.clear})
-        patch = AssetParametersPatch.model_validate(parameters).model_dump(mode="json", exclude_unset=True)
-        return client.request(
-            "PATCH", f"/library/assets/{args.asset_id}",
-            json={"base_revision": args.base_revision, "parameters": patch},
-        )
+        patch = AssetParametersPatch.model_validate(parameters)
+        return client.update_asset_parameters(args.asset_id, args.base_revision, patch)
 
 
 def _workspace_config(workspace: Path | None) -> Path:

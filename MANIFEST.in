@@ -8,6 +8,8 @@ recursive-include src/astrophotoflow/frontend *.ts *.vue *.css
 recursive-include src/astrophotoflow/vendor *.zip *.json *.lock
 recursive-include build/frontend *.js *.css
 include scripts/build_release.py
+include .agents/skills/astrophotoflow-library/SKILL.md
+include docs/development/library-agent-tools.md
 global-exclude *.py[cod]
 prune web
 prune tests
