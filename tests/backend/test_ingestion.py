@@ -447,7 +447,7 @@ def test_project_asset_and_dataset_reference_deletes_check_revision_without_dele
         app.state.database.close()
 
 
-def test_import_without_classification_keeps_it_unspecified(tmp_path):
+def test_import_without_override_uses_explicit_fits_classification(tmp_path):
     root=tmp_path/'science'
     write_fits(root/'unclassified.fits')
     settings,app,client=make_client(tmp_path,(ImportRoot('science',root),))
@@ -459,7 +459,7 @@ def test_import_without_classification_keeps_it_unspecified(tmp_path):
         task_id=response.json()['task_id']
         task=client.get(f'/api/v1/asset-tasks/{task_id}',headers=AUTH).json()
         asset=client.get(f"/api/v1/library/assets/{task['items'][0]['asset_id']}",headers=AUTH).json()
-        assert asset['classification']=={'frame_class':None,'frame_type':None}
+        assert asset['classification']=={'frame_class':'subframe','frame_type':'light'}
         assert asset['current_version']['scientific_metadata']['observed_parameters']['file_classification_header']['value']=='Light Frame'
     finally:
         client.__exit__(None,None,None)

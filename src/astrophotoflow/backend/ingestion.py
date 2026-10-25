@@ -1,9 +1,11 @@
 from __future__ import annotations
 import json
+from contextlib import contextmanager
+from concurrent.futures import ThreadPoolExecutor, wait
+from copy import deepcopy
 import logging
 import os
 import tempfile
-import time
 from io import BytesIO
 from datetime import datetime, timezone
 from pathlib import Path
@@ -63,7 +65,7 @@ def validate_import_equipment(session, parameters: dict) -> None:
 def _role(classification: dict) -> tuple[str, str | None]:
     frame_type = classification.get("frame_type")
     if frame_type in CALIBRATION_TYPES:
-        level = "master" if classification.get("frame_class") == "masterframe" else "individual"
+        level = {"masterframe": "master", "subframe": "individual"}.get(classification.get("frame_class"))
         return "calibration", level
     return "raw", None
 
@@ -213,21 +215,39 @@ def _read_hash_and_copy(path: Path, stage_path: Path | None, cancelled) -> tuple
     return f"blake3:{hasher.hexdigest()}", total
 
 
-def _current_asset_parameters(request_values: dict, file_values: dict) -> tuple[dict, dict]:
+def _current_asset_parameters(request_values: dict, file_values: dict, defaults: dict | None = None) -> tuple[dict, dict]:
     values, sources = {}, {}
     for key in PARAMETER_KEYS:
-        requested = request_values.get(key)
-        parsed = file_values.get(key)
-        if requested is not None:
-            values[key] = requested
-            sources[key] = "manual"
-        elif parsed is not None:
-            values[key] = parsed
-            sources[key] = "file"
+        for candidate, source in ((request_values, "manual"), (file_values, "file"), (defaults or {}, "preset")):
+            if candidate.get(key) is not None:
+                values[key], sources[key] = candidate[key], source
+                break
         else:
-            values[key] = None if key != "parameter_mode" else request_values.get(key, "standard")
-            sources[key] = "unknown" if key != "parameter_mode" else "manual"
+            values[key] = "standard" if key == "parameter_mode" else None
+            sources[key] = "unknown"
     return values, sources
+
+
+def _current_classification(request_values: dict, file_values: dict, defaults: dict) -> tuple[dict, dict]:
+    if request_values:
+        return ({key: request_values.get(key) for key in ("frame_class", "frame_type")},
+                {"classification.frame_class": "manual", "classification.frame_type": "manual"})
+    values, sources = {}, {}
+    for key in ("frame_class", "frame_type"):
+        observed, preset = file_values.get(key), defaults.get(key)
+        values[key] = observed if observed is not None else preset
+        sources[f"classification.{key}"] = "file" if observed is not None else "preset" if preset is not None else "unknown"
+    if values["frame_class"] == "video":
+        values["frame_type"] = None
+    return values, sources
+
+
+@contextmanager
+def import_workers(settings: Settings):
+    # One pair per service; direct maintenance/test callers own their pair.
+    with ThreadPoolExecutor(max_workers=settings.file_workers, thread_name_prefix="asset-file") as files, \
+            ThreadPoolExecutor(max_workers=settings.preview_workers, thread_name_prefix="asset-preview") as previews:
+        yield files, previews
 
 
 def _fit_preview_rows(database: Database, settings: Settings, version_id: str, hdu_rows: list[dict], parameters: dict, path: Path, missing_only: bool = False, stretch: tuple[float, float] | None = None, group_key: str | None = None, reference_version_id: str | None = None) -> tuple[str, str | None, dict | None]:
@@ -415,10 +435,14 @@ def _backfill_stretch(database: Database, version_id: str, layout: str) -> tuple
     with database.read_session() as session:
         version = session.get(AssetVersion, version_id)
         asset = session.get(Asset, version.asset_id)
-        task_id = session.scalar(select(AssetTaskItem.task_id).where(AssetTaskItem.asset_version_id == version_id).limit(1))
+        task_ids = session.scalars(select(AssetTaskItem.task_id).join(AssetTask, AssetTask.id == AssetTaskItem.task_id)
+            .where(AssetTaskItem.asset_version_id == version_id).order_by(AssetTask.created_at, AssetTask.id)).all()
         group_key = _preview_group_key(version, asset, layout)
-    stretch, reference_id = _task_stretch(database, task_id, group_key) if task_id else (None, None)
-    return task_id, group_key, stretch, reference_id
+    for task_id in task_ids:
+        stretch, reference_id = _task_stretch(database, task_id, group_key)
+        if stretch is not None:
+            return task_id, group_key, stretch, reference_id
+    return (task_ids[0] if task_ids else None), group_key, None, None
 
 
 def _raw_image(path: Path) -> Image.Image:
@@ -443,7 +467,7 @@ def _raw_image(path: Path) -> Image.Image:
 def backfill_missing_previews(database: Database, settings: Settings) -> dict[str, int]:
     with database.read_session() as session:
         versions = session.scalars(select(AssetVersion).join(Asset, Asset.id == AssetVersion.asset_id)
-            .where(Asset.scope == "shared")).all()
+            .where(Asset.scope == "shared", AssetVersion.availability == "available")).all()
         rows = [(row.id, row.storage_mode, row.storage_location, row.scientific_metadata or {}) for row in versions]
     generated = failed = 0
     for version_id, mode, location, metadata in rows:
@@ -563,6 +587,13 @@ def _refresh_fits_metadata(database: Database, settings: Settings, item_id: str,
             if key in PARAMETER_KEYS and sources.get(key) != "manual":
                 parameters[key] = value
                 sources[key] = "file"
+        classification = dict(asset.classification or {})
+        for key, value in (parsed.get("classification") or {}).items():
+            if value is not None and sources.get(f"classification.{key}") != "manual":
+                classification[key] = value
+                sources[f"classification.{key}"] = "file"
+        asset.classification = classification
+        asset.role = _role(classification)[0]
         asset.parameters, asset.value_sources = parameters, sources
         version.scientific_metadata = {
             **(version.scientific_metadata or {}),
@@ -576,127 +607,129 @@ def _refresh_fits_metadata(database: Database, settings: Settings, item_id: str,
     return error
 
 
-def _create_asset_content(
-    database: Database, settings: Settings, task_data: dict, item_id: str
-) -> str | None:
+def _register_asset(database: Database, settings: Settings, task_data: dict, item_id: str) -> None:
     with database.read_session() as session:
         item = session.get(AssetTaskItem, item_id)
-        if item.content_status == "available" and item.asset_id and item.asset_version_id:
-            asset_id, version_id = item.asset_id, item.asset_version_id
-            refresh_metadata = item.metadata_status == "failed"
-            if not refresh_metadata:
-                return None
-        else:
-            asset_id, version_id, refresh_metadata = None, None, False
-        item_snapshot = {
-            "root_id": item.root_id, "source_path": item.source_path, "source_identity": item.source_identity,
-            "position": item.position,
-        }
-        task_snapshot = dict(task_data)
-
-    if refresh_metadata:
-        return _refresh_fits_metadata(database, settings, item_id, asset_id, version_id)
-
-    asset_name = Path(item_snapshot["source_path"]).stem or Path(item_snapshot["source_path"]).name
-    if item_snapshot["root_id"] == "__upload__":
-        upload_file = next(file for file in task_snapshot["upload_files"] if file["stored_name"] == item_snapshot["source_path"])
-        asset_name = upload_file["name"]
-        original = settings.data_dir / "upload-staging" / task_snapshot["upload_source_task_id"] / item_snapshot["source_path"]
-        root_spec = None
+        if item.asset_version_id is not None:
+            return
+        root_id, source_path = item.root_id, item.source_path
+    if root_id == "__upload__":
+        upload = next(file for file in task_data["upload_files"] if file["stored_name"] == source_path)
+        asset_name = upload["name"]
+        original = settings.data_dir / "upload-staging" / task_data["upload_source_task_id"] / source_path
+        location = ""
     else:
-        root_spec, root = find_root(settings, item_snapshot["root_id"])
-        original = resolve_relative(root, item_snapshot["source_path"])
+        root_spec, root = find_root(settings, root_id)
+        original = resolve_relative(root, source_path)
+        asset_name = Path(source_path).name
+        location = f"roots/{root_spec.id}/{source_path}"
     if not original.is_file():
         raise IngestionError("SOURCE_UNAVAILABLE", "所选来源不是可读文件。")
     category = format_for_path(original)
     if category not in SUPPORTED_EXTENSIONS.values():
         raise IngestionError("UNSUPPORTED_FORMAT", "该文件格式不在本阶段入库清单中。")
-
-    version_id = str(uuid4())
-    asset_id = str(uuid4())
-    stage_path = None
-    final_path = None
-    relative_location = f"roots/{root_spec.id}/{item_snapshot['source_path']}" if root_spec else ""
-    if task_snapshot["storage_mode"] == "managed":
+    parsed, hdu_rows, parse_error = {}, [], None
+    defaults = task_data.get("import_defaults_snapshot") or {}
+    if category == "fits":
+        try:
+            inspected = inspect_fits(original, task_data["parameters"].get("cfa_pattern"))
+            parsed, hdu_rows = inspected["parsed_parameters"], inspected["hdus"]
+        except Exception:
+            parse_error = "FITS 元数据解析失败；原始文件仍将继续内容入库。"
+    parameters, value_sources = _current_asset_parameters(task_data["parameters"], parsed, defaults.get("parameters"))
+    if category == "fits" and not parse_error and parameters.get("cfa_pattern") and not parsed.get("cfa_pattern") and not task_data["parameters"].get("cfa_pattern"):
+        hdu_rows = inspect_fits(original, parameters["cfa_pattern"])["hdus"]
+    classification, classification_sources = _current_classification(
+        task_data["classification"], parsed.get("classification") or {}, defaults.get("classification") or {})
+    value_sources.update(classification_sources)
+    role, calibration_level = _role(classification)
+    version_id, asset_id = str(uuid4()), str(uuid4())
+    if task_data["storage_mode"] == "managed":
         suffix = "".join(original.suffixes[-2:]) if original.name.lower().endswith((".fits.fz", ".fit.fz")) else original.suffix
-        relative_location = (Path("objects") / version_id / f"source{suffix.lower()}").as_posix()
-        stage_path = settings.data_dir / "staging" / task_snapshot["id"] / f"{item_id}.part"
-        final_path = settings.data_dir / relative_location
-        stage_path.parent.mkdir(parents=True, exist_ok=True)
-        stage_path.unlink(missing_ok=True)
+        location = (Path("objects") / version_id / f"source{suffix.lower()}").as_posix()
+    metadata_status = "failed" if parse_error else "available" if category == "fits" else "unsupported"
+    with database.write_session() as session:
+        item = session.get(AssetTaskItem, item_id)
+        asset = Asset(id=asset_id, name=Path(asset_name).stem or asset_name, scope="shared", owner_project_id=None,
+                      role=role, current_version_id=None, classification=classification, parameters=parameters,
+                      value_sources=value_sources, notes=task_data["notes"] if task_data["target_dataset_id"] is None else None,
+                      status="active", revision=1)
+        session.add(asset)
+        session.flush()
+        session.add(AssetVersion(
+            id=version_id, asset_id=asset_id, version_number=1, storage_mode=task_data["storage_mode"],
+            storage_location=location, byte_size=None, content_hash=None, availability="unknown",
+            camera_id=parameters.get("camera_id"), optical_system_id=parameters.get("optical_system_id"),
+            filter_id=parameters.get("filter_id"), capture_profile_id=None, frame_type=classification.get("frame_type"),
+            calibration_level=calibration_level,
+            capture_snapshot={**{key: parameters.get(key) for key in PARAMETER_KEYS}, "import_provenance": {
+                "value_sources": deepcopy(value_sources), "observed_parameters": deepcopy(parsed),
+                "defaults_snapshot": deepcopy(defaults),
+            }},
+            scientific_metadata={"format": category, "metadata_status": metadata_status,
+                                 "parse_error": parse_error, "observed_parameters": parsed},
+        ))
+        session.flush()
+        asset.current_version_id = version_id
+        item.asset_id, item.asset_version_id = asset_id, version_id
+        item.metadata_status, item.status = metadata_status, "running"
+        item.error = {"code": "FITS_PARSE_FAILED", "message": parse_error} if parse_error else None
+        item.updated_at = datetime.now(timezone.utc)
+        for row in hdu_rows:
+            session.add(FitsHduMetadata(id=str(uuid4()), asset_version_id=version_id, **row))
+
+
+def _create_asset_content(database: Database, settings: Settings, task_data: dict, item_id: str) -> str | None:
+    # Retain this entry point for recovery and direct maintenance callers.
+    _register_asset(database, settings, task_data, item_id)
+    with database.read_session() as session:
+        item = session.get(AssetTaskItem, item_id)
+        if item.content_status == "available":
+            refresh = item.metadata_status == "failed"
+            asset_id, version_id = item.asset_id, item.asset_version_id
+            if not refresh:
+                return None
+        else:
+            refresh = False
+        version = session.get(AssetVersion, item.asset_version_id)
+        root_id, source_path = item.root_id, item.source_path
+        mode, location = version.storage_mode, version.storage_location
+    if refresh:
+        return _refresh_fits_metadata(database, settings, item_id, asset_id, version_id)
+    if _cancelled(database, task_data["id"]):
+        return "CANCELLED"
+    final = settings.data_dir / location if mode == "managed" else None
+    # Only complete files reach the allocated object path. A crash after rename
+    # can leave the database pending; resume hashes that object without recopying.
+    if final is not None and final.is_file():
+        original = final
+    elif root_id == "__upload__":
+        original = settings.data_dir / "upload-staging" / task_data["upload_source_task_id"] / source_path
+    else:
+        _, root = find_root(settings, root_id)
+        original = resolve_relative(root, source_path)
+    stage = None
+    if final is not None and original != final and root_id != "__upload__":
+        stage = settings.data_dir / "staging" / task_data["id"] / f"{item_id}.part"
+        stage.parent.mkdir(parents=True, exist_ok=True)
+        stage.unlink(missing_ok=True)
     try:
-        content_hash, byte_size = _read_hash_and_copy(original, stage_path, lambda: _cancelled(database, task_snapshot["id"]))
-        processing_path = stage_path if stage_path is not None else original
-        is_fits = category == "fits"
-        request_parameters = task_snapshot["parameters"]
-        parsed, hdu_rows, parse_error = {}, [], None
-        if is_fits:
-            try:
-                result = inspect_fits(processing_path, request_parameters.get("cfa_pattern"))
-                hdu_rows = result["hdus"]
-                parsed = result["parsed_parameters"]
-            except Exception:
-                parse_error = "FITS 元数据解析失败；原始文件已完成内容入库。"
-        if _cancelled(database, task_snapshot["id"]):
+        content_hash, byte_size = _read_hash_and_copy(original, stage, lambda: _cancelled(database, task_data["id"]))
+        if _cancelled(database, task_data["id"]):
             return "CANCELLED"
-        if final_path is not None:
-            final_path.parent.mkdir(parents=True, exist_ok=True)
-            os.replace(stage_path, final_path)
-        classification = task_snapshot["classification"]
-        role, calibration_level = _role(classification)
-        current_parameters, value_sources = _current_asset_parameters(request_parameters, parsed)
-        value_sources["classification.frame_class"] = "manual"
-        value_sources["classification.frame_type"] = "manual"
-        version_snapshot = {key: current_parameters.get(key) for key in PARAMETER_KEYS}
-        version_science = {
-            "format": category,
-            "metadata_status": "failed" if parse_error else "unsupported" if not is_fits else "available",
-            "parse_error": parse_error,
-            "observed_parameters": parsed,
-        }
+        if final is not None and original != final:
+            final.parent.mkdir(parents=True, exist_ok=True)
+            os.replace(stage if stage is not None else original, final)
         with database.write_session() as session:
             item = session.get(AssetTaskItem, item_id)
-            asset = Asset(
-                id=asset_id, name=Path(asset_name).stem or asset_name,
-                scope="shared", owner_project_id=None, role=role, current_version_id=None,
-                classification=classification, parameters=current_parameters, value_sources=value_sources,
-                notes=task_snapshot["notes"] if task_snapshot["target_dataset_id"] is None else None,
-                status="active", revision=1,
-            )
-            version = AssetVersion(
-                id=version_id, asset_id=asset_id, version_number=1, storage_mode=task_snapshot["storage_mode"],
-                storage_location=relative_location, byte_size=byte_size, content_hash=content_hash,
-                availability="available", camera_id=current_parameters.get("camera_id"),
-                optical_system_id=current_parameters.get("optical_system_id"),
-                filter_id=current_parameters.get("filter_id"), capture_profile_id=None,
-                frame_type=classification.get("frame_type"), calibration_level=calibration_level,
-                capture_snapshot=version_snapshot, scientific_metadata=version_science,
-            )
-            session.add(asset)
-            session.flush()
-            session.add(version)
-            session.flush()
-            asset.current_version_id = version_id
-            item.asset_id = asset_id
-            item.asset_version_id = version_id
+            version = session.get(AssetVersion, item.asset_version_id)
+            version.content_hash, version.byte_size, version.availability = content_hash, byte_size, "available"
             item.content_status = "available"
-            item.metadata_status = "failed" if parse_error else "unsupported" if not is_fits else "available"
-            item.status = "completed_with_errors" if parse_error else "running"
-            item.error = {"code": "FITS_PARSE_FAILED", "message": parse_error} if parse_error else None
             item.updated_at = datetime.now(timezone.utc)
-            for row in hdu_rows:
-                row_id = str(uuid4())
-                session.add(FitsHduMetadata(id=row_id, asset_version_id=version_id, **row))
-        return parse_error
-    except Exception:
-        if final_path is not None and final_path.exists():
-            final_path.unlink()
-        raise
+        return None
     finally:
-        if stage_path is not None and stage_path.exists():
-            stage_path.unlink()
-        if item_snapshot["root_id"] == "__upload__" and final_path is not None and final_path.exists():
-            original.unlink(missing_ok=True)
+        if stage is not None:
+            stage.unlink(missing_ok=True)
 
 
 def _publish_dataset(database: Database, task_data: dict, task_id: str) -> dict | None:
@@ -709,7 +742,6 @@ def _publish_dataset(database: Database, task_data: dict, task_id: str) -> dict 
             successes = session.scalars(
                 select(AssetTaskItem).where(
                     AssetTaskItem.task_id == task_id,
-                    AssetTaskItem.content_status == "available",
                     AssetTaskItem.asset_version_id.is_not(None),
                 ).order_by(AssetTaskItem.position)
             ).all()
@@ -734,9 +766,6 @@ def _publish_dataset(database: Database, task_data: dict, task_id: str) -> dict 
                     select(DatasetMember).where(DatasetMember.dataset_version_id == dataset.current_version_id)
                     .order_by(DatasetMember.position)
                 ).all()
-                expected = task.dataset_base_revision
-                if expected is None or dataset.revision != expected:
-                    raise RuntimeError(f"DATASET_REVISION_CONFLICT:{expected}:{dataset.revision}")
             existing_versions = {member.asset_version_id for member in base_members}
             additions = []
             for item in successes:
@@ -745,6 +774,10 @@ def _publish_dataset(database: Database, task_data: dict, task_id: str) -> dict 
                     existing_versions.add(item.asset_version_id)
             if not additions and dataset.current_version_id is not None:
                 return None
+            if dataset.current_version_id is not None:
+                expected = task.dataset_base_revision
+                if expected is None or dataset.revision != expected:
+                    raise RuntimeError(f"DATASET_REVISION_CONFLICT:{expected}:{dataset.revision}")
             version_id = str(uuid4())
             previous_version = session.get(DatasetVersion, dataset.current_version_id) if dataset.current_version_id else None
             version = DatasetVersion(id=version_id, dataset_id=target_id, version_number=version_number,
@@ -779,7 +812,6 @@ def _publish_dataset(database: Database, task_data: dict, task_id: str) -> dict 
             successful = session.scalars(
                 select(AssetTaskItem.asset_version_id).where(
                     AssetTaskItem.task_id == task_id,
-                    AssetTaskItem.content_status == "available",
                     AssetTaskItem.asset_version_id.is_not(None),
                 ).order_by(AssetTaskItem.position)
             ).all()
@@ -805,6 +837,8 @@ def _publish_dataset(database: Database, task_data: dict, task_id: str) -> dict 
 def _finish_task(database: Database, task_id: str, was_cancelled: bool) -> None:
     with database.write_session() as session:
         task = session.get(AssetTask, task_id)
+        if task.status == "interrupted":
+            return
         items = session.scalars(select(AssetTaskItem).where(AssetTaskItem.task_id == task_id)).all()
         successes = sum(item.content_status == "available" for item in items)
         errors = any(item.status in {"failed", "completed_with_errors"} or item.metadata_status == "failed" or item.preview_status == "failed" for item in items)
@@ -834,7 +868,192 @@ def _finish_task(database: Database, task_id: str, was_cancelled: bool) -> None:
         task.updated_at = datetime.now(timezone.utc)
 
 
-def process_task(database: Database, settings: Settings, task_id: str) -> None:
+def _process_preview(database: Database, settings: Settings, task_data: dict, item_id: str) -> None:
+    task_id = task_data["id"]
+    if _cancelled(database, task_id):
+        with database.write_session() as session:
+            session.get(AssetTaskItem, item_id).status = "cancelled"
+        return
+    with database.read_session() as session:
+        item = session.get(AssetTaskItem, item_id)
+        version = session.get(AssetVersion, item.asset_version_id) if item.asset_version_id else None
+        item_data = {
+            "format": (version.scientific_metadata or {}).get("format") if version else format_for_path(Path(item.source_path)),
+            "root_id": item.root_id,
+            "asset_id": item.asset_id, "asset_version_id": item.asset_version_id,
+            "content_status": item.content_status,
+        }
+    if item_data["content_status"] != "available":
+        return
+    if item_data["format"] in {"image", "raw", "xisf", "video"}:
+        with database.read_session() as session:
+            version = session.get(AssetVersion, item_data["asset_version_id"])
+            source_location, source_mode = version.storage_location, version.storage_mode
+            asset = session.get(Asset, item_data["asset_id"])
+            group_asset = asset
+            group_version = version
+        try:
+            if source_mode == "managed":
+                image_path = settings.data_dir / source_location
+            else:
+                _, root_path = find_root(settings, item_data["root_id"])
+                image_path = resolve_relative(root_path, item.source_path)
+            if item_data["format"] == "video":
+                image, display = first_video_frame(image_path, 100)
+            elif item_data["format"] == "raw":
+                image, display = _raw_image(image_path), {"algorithm": PREVIEW_ALGORITHM_VERSION}
+            elif item_data["format"] == "xisf":
+                group_key = _preview_group_key(group_version, group_asset, _xisf_layout(image_path))
+                stretch, reference_id = _task_stretch(database, task_id, group_key)
+                image, display = _xisf_image(image_path, stretch)
+            else:
+                with Image.open(image_path) as source:
+                    layout = source.mode
+                group_key = _preview_group_key(group_version, group_asset, layout) if layout in {"I;16", "I;16B", "I;16L", "I", "F"} else None
+                stretch, reference_id = _task_stretch(database, task_id, group_key) if group_key else (None, None)
+                image, stretch_display = _ordinary_image(image_path, stretch)
+                display = {"algorithm": PREVIEW_ALGORITHM_VERSION, **(stretch_display or {})}
+            if item_data["format"] in {"xisf", "image"} and group_key is not None:
+                display.update(stretch_group=group_key, stretch_reference_version_id=reference_id or item_data["asset_version_id"])
+            _save_preview(database, settings, item_data["asset_version_id"], 0, "thumbnail", 100, image, display)
+            if item_data["format"] in {"xisf", "image"} and group_key is not None and reference_id is None:
+                _save_task_stretch(database, task_id, group_key, display, item_data["asset_version_id"])
+            with database.write_session() as session:
+                item = session.get(AssetTaskItem, item_id)
+                item.preview_status, item.status, item.error = "available", "completed", None
+                item.updated_at = datetime.now(timezone.utc)
+        except Exception as exc:
+            logger.exception("image preview failed task_id=%s item_id=%s", task_id, item_id)
+            with database.write_session() as session:
+                item = session.get(AssetTaskItem, item_id)
+                item.preview_status, item.status = "failed", "completed_with_errors"
+                label = {"video": "视频首帧", "raw": "RAW", "xisf": "XISF"}.get(item_data["format"], "常规图像")
+                item.error = {"code": "PREVIEW_FAILED", "message": f"{label}预览生成失败：{exc}"}
+                item.updated_at = datetime.now(timezone.utc)
+        return
+    if item_data["format"] not in {"fits", "video"}:
+        with database.write_session() as session:
+            item = session.get(AssetTaskItem, item_id)
+            item.preview_status, item.status = "unsupported", "completed"
+            item.updated_at = datetime.now(timezone.utc)
+        return
+    if item_data["format"] != "fits":
+        return
+    with database.read_session() as session:
+        hdu = session.scalar(select(FitsHduMetadata).where(
+            FitsHduMetadata.asset_version_id == item_data["asset_version_id"],
+            FitsHduMetadata.is_selected.is_(True),
+        ))
+        version = session.get(AssetVersion, item_data["asset_version_id"])
+        asset = session.get(Asset, item_data["asset_id"])
+        hdu_index = hdu.hdu_index if hdu else None
+        parameters = dict(asset.parameters or {})
+        source_location = version.storage_location
+        source_mode = version.storage_mode
+        root_id, source_path = item_data.get("root_id"), item.source_path
+    if hdu_index is None:
+        with database.write_session() as session:
+            item = session.get(AssetTaskItem, item_id)
+            version = session.get(AssetVersion, item.asset_version_id)
+            parse_error = (version.scientific_metadata or {}).get("parse_error")
+            item.metadata_status = "failed" if parse_error else "unsupported"
+            item.preview_status = "unsupported"
+            item.status = "completed_with_errors" if parse_error else "completed"
+            item.error = {"code": "FITS_PARSE_FAILED", "message": parse_error} if parse_error else None
+        return
+    try:
+        if source_mode == "managed":
+            image_path = settings.data_dir / source_location
+        else:
+            root_obj, root_path = find_root(settings, root_id)
+            image_path = resolve_relative(root_path, source_path)
+        if _cancelled(database, task_id):
+            raise IngestionError("CANCELLED", "文件处理已取消。")
+        with database.read_session() as session:
+            version_for_parse = session.get(AssetVersion, item_data["asset_version_id"])
+            hdu_for_parse = session.scalar(select(FitsHduMetadata).where(
+                FitsHduMetadata.asset_version_id == item_data["asset_version_id"],
+                FitsHduMetadata.is_selected.is_(True),
+            ))
+            current_version = version_for_parse
+        group_key = _preview_group_key(current_version, asset, f"{hdu_for_parse.supported_kind}:{hdu_for_parse.bitpix}")
+        stretch, reference_id = _task_stretch(database, task_id, group_key)
+        preview_state, preview_error, display = _fit_preview_rows(
+            database, settings, current_version.id,
+            [{"hdu_index": hdu_index, "is_selected": True, "supported_kind": hdu_for_parse.supported_kind}],
+            parameters, image_path, stretch=stretch, group_key=group_key, reference_version_id=reference_id,
+        )
+        if display is not None and reference_id is None:
+            _save_task_stretch(database, task_id, group_key, display, current_version.id)
+        with database.write_session() as session:
+            item = session.get(AssetTaskItem, item_id)
+            item.preview_status = preview_state
+            item.metadata_status = "available"
+            item.status = "completed_with_errors" if preview_error else "completed"
+            item.error = {"code": "PREVIEW_FAILED", "message": preview_error} if preview_error else None
+            item.updated_at = datetime.now(timezone.utc)
+    except IngestionError as exc:
+        if exc.code == "CANCELLED":
+            with database.write_session() as session:
+                item = session.get(AssetTaskItem, item_id)
+                item.status = "cancelled"
+            return
+        with database.write_session() as session:
+            item = session.get(AssetTaskItem, item_id)
+            item.preview_status = "failed"
+            item.status = "completed_with_errors"
+            item.error = {"code": exc.code, "message": exc.message}
+    except Exception:
+        logger.exception("preview failed task_id=%s item_id=%s", task_id, item_id)
+        with database.write_session() as session:
+            item = session.get(AssetTaskItem, item_id)
+            item.preview_status = "failed"
+            item.status = "completed_with_errors"
+            item.error = {"code": "PREVIEW_FAILED", "message": "预览生成失败；已入库内容保留。"}
+
+def _content_item(database: Database, settings: Settings, task_data: dict, item_id: str) -> None:
+    try:
+        with database.write_session() as session:
+            item = session.get(AssetTaskItem, item_id)
+            item.status = "running"
+            item.updated_at = datetime.now(timezone.utc)
+        error = _create_asset_content(database, settings, task_data, item_id)
+        if error == "CANCELLED":
+            with database.write_session() as session:
+                session.get(AssetTaskItem, item_id).status = "cancelled"
+    except Exception as exc:
+        logger.exception("asset content failed task_id=%s item_id=%s", task_data["id"], item_id)
+        code = exc.code if isinstance(exc, IngestionError) else "CONTENT_READ_FAILED"
+        message = exc.message if isinstance(exc, IngestionError) else "文件读取、散列或复制失败；已登记资料保留。"
+        with database.write_session() as session:
+            item = session.get(AssetTaskItem, item_id)
+            item.status = "cancelled" if code == "CANCELLED" else "failed"
+            item.content_status = "pending" if code == "CANCELLED" else "failed"
+            item.error = None if code == "CANCELLED" else {"code": code, "message": message}
+            item.updated_at = datetime.now(timezone.utc)
+
+
+def _registration_progress(database: Database, task_id: str, total: int, registered: int, completed: bool = False) -> None:
+    with database.write_session() as session:
+        task = session.get(AssetTask, task_id)
+        task.report = {**(task.report or {}), "registration": {
+            "total": total,
+            "registered": registered,
+            "completed": completed,
+        }}
+        task.updated_at = datetime.now(timezone.utc)
+
+
+def _preview_group(database: Database, settings: Settings, task_data: dict, item_ids: list[str]) -> None:
+    # A group is a single executor job: reference selection always follows position.
+    for item_id in item_ids:
+        _process_preview(database, settings, task_data, item_id)
+
+
+def process_task(database: Database, settings: Settings, task_id: str, workers=None) -> None:
+    if workers is None:
+        with import_workers(settings) as owned_workers:
+            return process_task(database, settings, task_id, owned_workers)
     try:
         with database.write_session() as session:
             task = session.get(AssetTask, task_id)
@@ -845,6 +1064,7 @@ def process_task(database: Database, settings: Settings, task_id: str) -> None:
             task_data = {
                 "id": task.id, "sources": list(task.sources), "storage_mode": task.storage_mode,
                 "classification": dict(task.classification), "parameters": dict(task.parameters),
+                "import_defaults_snapshot": deepcopy(task.import_defaults_snapshot),
                 "notes": task.notes, "dataset_name": task.dataset_name,
                 "target_dataset_id": task.target_dataset_id, "dataset_base_revision": task.dataset_base_revision,
                 "retry_of_task_id": task.retry_of_task_id,
@@ -852,216 +1072,67 @@ def process_task(database: Database, settings: Settings, task_id: str) -> None:
                 "upload_files": (task.report or {}).get("upload_files", []),
                 "upload_source_task_id": (task.report or {}).get("upload_source_task_id", task.id),
             }
-        last_poll = [0.0]
-        cancelled_cache = [False]
-
-        def stopped() -> bool:
-            now = time.monotonic()
-            if now - last_poll[0] >= 0.15:
-                cancelled_cache[0] = _cancelled(database, task_id)
-                last_poll[0] = now
-            return cancelled_cache[0]
-
         if not task_data["retry_of_task_id"]:
             _enumerate_task(database, settings, task_id, task_data)
         with database.read_session() as session:
-            items = session.scalars(
-                select(AssetTaskItem).where(AssetTaskItem.task_id == task_id)
-                .order_by(AssetTaskItem.position)
-            ).all()
+            items = session.scalars(select(AssetTaskItem).where(AssetTaskItem.task_id == task_id)
+                                    .order_by(AssetTaskItem.position)).all()
             item_ids = [item.id for item in items if item.status in {"queued", "interrupted", "running"}]
+            counted = {item.id for item in items if item.asset_id is not None or item.status in {"failed", "skipped"}}
+        _registration_progress(database, task_id, len(items), len(counted))
+        registered_ids = []
         for item_id in item_ids:
-            if stopped():
+            if _cancelled(database, task_id):
                 with database.write_session() as session:
-                    item = session.get(AssetTaskItem, item_id)
-                    if item.status != "skipped":
-                        item.status = "cancelled"
-                        item.updated_at = datetime.now(timezone.utc)
-                continue
-            with database.write_session() as session:
-                item = session.get(AssetTaskItem, item_id)
-                if item.status not in {"queued", "interrupted", "running"}:
-                    continue
-                item.status = "running"
-                item.updated_at = datetime.now(timezone.utc)
-            try:
-                error = _create_asset_content(database, settings, task_data, item_id)
-            except IngestionError as exc:
-                with database.write_session() as session:
-                    item = session.get(AssetTaskItem, item_id)
-                    item.status = "cancelled" if exc.code == "CANCELLED" else "failed"
-                    item.content_status = "pending" if exc.code == "CANCELLED" else "failed"
-                    item.error = None if exc.code == "CANCELLED" else {"code": exc.code, "message": exc.message}
-                    item.updated_at = datetime.now(timezone.utc)
-                continue
-            except Exception:
-                logger.exception("asset content failed task_id=%s item_id=%s", task_id, item_id)
-                with database.write_session() as session:
-                    item = session.get(AssetTaskItem, item_id)
-                    item.status = "failed"
-                    item.content_status = "failed"
-                    item.error = {"code": "CONTENT_READ_FAILED", "message": "文件读取、散列、复制或登记失败。"}
-                    item.updated_at = datetime.now(timezone.utc)
-                continue
-            if error == "CANCELLED":
-                with database.write_session() as session:
-                    item = session.get(AssetTaskItem, item_id)
-                    item.status = "cancelled"
-                    item.updated_at = datetime.now(timezone.utc)
-                continue
-            with database.read_session() as session:
-                item = session.get(AssetTaskItem, item_id)
-                version = session.get(AssetVersion, item.asset_version_id) if item.asset_version_id else None
-                item_data = {
-                    "format": (version.scientific_metadata or {}).get("format") if version else format_for_path(Path(item.source_path)),
-                    "root_id": item.root_id,
-                    "asset_id": item.asset_id, "asset_version_id": item.asset_version_id,
-                    "content_status": item.content_status,
-                }
-            if item_data["content_status"] != "available":
-                continue
-            if item_data["format"] in {"image", "raw", "xisf", "video"}:
-                with database.read_session() as session:
-                    version = session.get(AssetVersion, item_data["asset_version_id"])
-                    source_location, source_mode = version.storage_location, version.storage_mode
-                    asset = session.get(Asset, item_data["asset_id"])
-                    group_asset = asset
-                    group_version = version
-                try:
-                    if source_mode == "managed":
-                        image_path = settings.data_dir / source_location
-                    else:
-                        _, root_path = find_root(settings, item_data["root_id"])
-                        image_path = resolve_relative(root_path, item.source_path)
-                    if item_data["format"] == "video":
-                        image, display = first_video_frame(image_path, 100)
-                    elif item_data["format"] == "raw":
-                        image, display = _raw_image(image_path), {"algorithm": PREVIEW_ALGORITHM_VERSION}
-                    elif item_data["format"] == "xisf":
-                        group_key = _preview_group_key(group_version, group_asset, _xisf_layout(image_path))
-                        stretch, reference_id = _task_stretch(database, task_id, group_key)
-                        image, display = _xisf_image(image_path, stretch)
-                    else:
-                        with Image.open(image_path) as source:
-                            layout = source.mode
-                        group_key = _preview_group_key(group_version, group_asset, layout) if layout in {"I;16", "I;16B", "I;16L", "I", "F"} else None
-                        stretch, reference_id = _task_stretch(database, task_id, group_key) if group_key else (None, None)
-                        image, stretch_display = _ordinary_image(image_path, stretch)
-                        display = {"algorithm": PREVIEW_ALGORITHM_VERSION, **(stretch_display or {})}
-                    if item_data["format"] in {"xisf", "image"} and group_key is not None:
-                        display.update(stretch_group=group_key, stretch_reference_version_id=reference_id or item_data["asset_version_id"])
-                    _save_preview(database, settings, item_data["asset_version_id"], 0, "thumbnail", 100, image, display)
-                    if item_data["format"] in {"xisf", "image"} and group_key is not None and reference_id is None:
-                        _save_task_stretch(database, task_id, group_key, display, item_data["asset_version_id"])
-                    with database.write_session() as session:
-                        item = session.get(AssetTaskItem, item_id)
-                        item.preview_status, item.status, item.error = "available", "completed", None
-                        item.updated_at = datetime.now(timezone.utc)
-                except Exception as exc:
-                    logger.exception("image preview failed task_id=%s item_id=%s", task_id, item_id)
-                    with database.write_session() as session:
-                        item = session.get(AssetTaskItem, item_id)
-                        item.preview_status, item.status = "failed", "completed_with_errors"
-                        label = {"video": "视频首帧", "raw": "RAW", "xisf": "XISF"}.get(item_data["format"], "常规图像")
-                        item.error = {"code": "PREVIEW_FAILED", "message": f"{label}预览生成失败：{exc}"}
-                        item.updated_at = datetime.now(timezone.utc)
-                continue
-            if item_data["format"] not in {"fits", "video"}:
-                with database.write_session() as session:
-                    item = session.get(AssetTaskItem, item_id)
-                    item.preview_status, item.status = "unsupported", "completed"
-                    item.updated_at = datetime.now(timezone.utc)
-                continue
-            if item_data["format"] != "fits":
-                continue
-            with database.read_session() as session:
-                hdu = session.scalar(select(FitsHduMetadata).where(
-                    FitsHduMetadata.asset_version_id == item_data["asset_version_id"],
-                    FitsHduMetadata.is_selected.is_(True),
-                ))
-                version = session.get(AssetVersion, item_data["asset_version_id"])
-                asset = session.get(Asset, item_data["asset_id"])
-                hdu_index = hdu.hdu_index if hdu else None
-                parameters = dict(asset.parameters or {})
-                source_location = version.storage_location
-                source_mode = version.storage_mode
-                root_id, source_path = item_data.get("root_id"), item.source_path
-            if hdu_index is None:
-                with database.write_session() as session:
-                    item = session.get(AssetTaskItem, item_id)
-                    version = session.get(AssetVersion, item.asset_version_id)
-                    parse_error = (version.scientific_metadata or {}).get("parse_error")
-                    item.metadata_status = "failed" if parse_error else "unsupported"
-                    item.preview_status = "unsupported"
-                    item.status = "completed_with_errors" if parse_error else "completed"
-                    item.error = {"code": "FITS_PARSE_FAILED", "message": parse_error} if parse_error else None
+                    session.get(AssetTaskItem, item_id).status = "cancelled"
                 continue
             try:
-                if source_mode == "managed":
-                    image_path = settings.data_dir / source_location
-                else:
-                    root_obj, root_path = find_root(settings, root_id)
-                    image_path = resolve_relative(root_path, source_path)
-                if stopped():
-                    raise IngestionError("CANCELLED", "文件处理已取消。")
-                with database.read_session() as session:
-                    version_for_parse = session.get(AssetVersion, item_data["asset_version_id"])
-                    hdu_for_parse = session.scalar(select(FitsHduMetadata).where(
-                        FitsHduMetadata.asset_version_id == item_data["asset_version_id"],
-                        FitsHduMetadata.is_selected.is_(True),
-                    ))
-                    current_version = version_for_parse
-                group_key = _preview_group_key(current_version, asset, f"{hdu_for_parse.supported_kind}:{hdu_for_parse.bitpix}")
-                stretch, reference_id = _task_stretch(database, task_id, group_key)
-                preview_state, preview_error, display = _fit_preview_rows(
-                    database, settings, current_version.id,
-                    [{"hdu_index": hdu_index, "is_selected": True, "supported_kind": hdu_for_parse.supported_kind}],
-                    parameters, image_path, stretch=stretch, group_key=group_key, reference_version_id=reference_id,
-                )
-                if display is not None and reference_id is None:
-                    _save_task_stretch(database, task_id, group_key, display, current_version.id)
+                _register_asset(database, settings, task_data, item_id)
+                registered_ids.append(item_id)
+            except Exception as exc:
+                logger.exception("asset registration failed task_id=%s item_id=%s", task_id, item_id)
                 with database.write_session() as session:
                     item = session.get(AssetTaskItem, item_id)
-                    item.preview_status = preview_state
-                    item.metadata_status = "available"
-                    item.status = "completed_with_errors" if preview_error else "completed"
-                    item.error = {"code": "PREVIEW_FAILED", "message": preview_error} if preview_error else None
-                    item.updated_at = datetime.now(timezone.utc)
-            except IngestionError as exc:
-                if exc.code == "CANCELLED":
-                    with database.write_session() as session:
-                        item = session.get(AssetTaskItem, item_id)
-                        item.status = "cancelled"
-                    continue
-                with database.write_session() as session:
-                    item = session.get(AssetTaskItem, item_id)
-                    item.preview_status = "failed"
-                    item.status = "completed_with_errors"
-                    item.error = {"code": exc.code, "message": exc.message}
-            except Exception:
-                logger.exception("preview failed task_id=%s item_id=%s", task_id, item_id)
-                with database.write_session() as session:
-                    item = session.get(AssetTaskItem, item_id)
-                    item.preview_status = "failed"
-                    item.status = "completed_with_errors"
-                    item.error = {"code": "PREVIEW_FAILED", "message": "预览生成失败；已入库内容保留。"}
-        was_cancelled = _cancelled(database, task_id)
-        if was_cancelled:
-            _finish_task(database, task_id, True)
-            _publish_dataset(database, task_data, task_id)
-            return
+                    item.status, item.content_status = "failed", "failed"
+                    item.metadata_status, item.preview_status = "unsupported", "unsupported"
+                    item.error = {"code": exc.code if isinstance(exc, IngestionError) else "REGISTRATION_FAILED",
+                                  "message": exc.message if isinstance(exc, IngestionError) else "文件资料登记失败。"}
+            counted.add(item_id)
+            _registration_progress(database, task_id, len(items), len(counted))
         _publish_dataset(database, task_data, task_id)
-        _finish_task(database, task_id, False)
+        _registration_progress(database, task_id, len(items), len(counted), not _cancelled(database, task_id))
+        file_workers, preview_workers = workers
+        futures = [file_workers.submit(_content_item, database, settings, task_data, item_id) for item_id in registered_ids]
+        wait(futures)
+        for future in futures:
+            future.result()
+        groups = {}
+        with database.read_session() as session:
+            for item_id in registered_ids:
+                item = session.get(AssetTaskItem, item_id)
+                if item.content_status != "available" or item.status == "cancelled":
+                    continue
+                version = session.get(AssetVersion, item.asset_version_id)
+                asset = session.get(Asset, item.asset_id)
+                category = (version.scientific_metadata or {}).get("format")
+                # FITS headers already supply the full homogeneous grouping key.
+                # Other formats run in their fixed order within one format job.
+                hdu = session.scalar(select(FitsHduMetadata).where(FitsHduMetadata.asset_version_id == version.id,
+                                                                 FitsHduMetadata.is_selected.is_(True)))
+                key = _preview_group_key(version, asset, f"{hdu.supported_kind}:{hdu.bitpix}") if hdu else category
+                groups.setdefault(key, []).append(item_id)
+        futures = [preview_workers.submit(_preview_group, database, settings, task_data, group) for group in groups.values()]
+        wait(futures)
+        for future in futures:
+            future.result()
+        _finish_task(database, task_id, _cancelled(database, task_id))
     except Exception:
         logger.exception("asset import task failed task_id=%s", task_id)
         with database.write_session() as session:
             task = session.get(AssetTask, task_id)
             if task is not None and task.status not in {"cancelled", "interrupted"}:
-                task.status = "completed_with_errors" if session.scalar(
-                    select(func.count()).select_from(AssetTaskItem).where(
-                        AssetTaskItem.task_id == task_id, AssetTaskItem.content_status == "available"
-                    )
-                ) else "failed"
+                task.status = "completed_with_errors" if session.scalar(select(func.count()).select_from(AssetTaskItem)
+                    .where(AssetTaskItem.task_id == task_id, AssetTaskItem.content_status == "available")) else "failed"
                 task.error = {"code": "INTERNAL_ERROR", "message": "后台处理失败；已完成的文件结果保留。"}
                 task.updated_at = datetime.now(timezone.utc)
 

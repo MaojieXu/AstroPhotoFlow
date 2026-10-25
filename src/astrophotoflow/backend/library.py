@@ -230,11 +230,8 @@ def library_items(
     removed_dataset_asset_ids = set()
     for removal in session.scalars(select(LibraryEntryRemoval).where(LibraryEntryRemoval.entry_type == "dataset")).all():
         removed_dataset_asset_ids.update(removal.member_asset_ids or [])
-    failed_tasks = session.scalars(select(AssetTask).where(AssetTask.status == "completed_with_errors")).all()
+    failed_tasks = session.scalars(select(AssetTask).where(AssetTask.status.in_({"completed_with_errors", "failed"}))).all()
     failed_task_ids = [task.id for task in failed_tasks]
-    pending_asset_ids = set(session.scalars(select(AssetTaskItem.asset_id).join(
-        AssetTask, AssetTask.id == AssetTaskItem.task_id
-    ).where(AssetTaskItem.asset_id.is_not(None), AssetTask.status.in_({"queued", "running", "interrupted", "cancelling"}))).all())
     issue_by_dataset = {
         task.dataset_id: "导入完成，但部分素材或预览存在错误。"
         for task in failed_tasks if task.dataset_id
@@ -312,7 +309,7 @@ def library_items(
                         "import_issue": issue_by_dataset.get(dataset.id),
                         "sort_created_at": dataset.created_at, "sort_name": dataset.name})
     for asset in assets:
-        if asset.id in dataset_asset_ids or asset.id in removed_dataset_asset_ids or asset.id in pending_asset_ids or asset.id in removed_asset_ids:
+        if asset.id in dataset_asset_ids or asset.id in removed_dataset_asset_ids or asset.id in removed_asset_ids:
             continue
         if q and q.casefold() not in asset.name.casefold():
             continue
@@ -339,9 +336,6 @@ def library_filter_options(session: deps.ReadSession):
     removed_dataset_asset_ids = set()
     for removal in session.scalars(select(LibraryEntryRemoval).where(LibraryEntryRemoval.entry_type == "dataset")).all():
         removed_dataset_asset_ids.update(removal.member_asset_ids or [])
-    pending_asset_ids = set(session.scalars(select(AssetTaskItem.asset_id).join(
-        AssetTask, AssetTask.id == AssetTaskItem.task_id
-    ).where(AssetTaskItem.asset_id.is_not(None), AssetTask.status.in_({"queued", "running", "interrupted", "cancelling"}))).all())
     grouped_ids = set()
     member_assets = []
     for dataset in datasets:
@@ -359,7 +353,7 @@ def library_filter_options(session: deps.ReadSession):
             member_assets.append(member["asset"])
     records = [shared._asset_out(session, row) for row in assets
                if row.id not in grouped_ids and row.id not in removed_dataset_asset_ids
-               and row.id not in pending_asset_ids and row.id not in removed_asset_ids]
+               and row.id not in removed_asset_ids]
     records.extend(member_assets)
     parameters = [(row.get("parameters") or {}) for row in records]
     classifications = [(row.get("classification") or {}) for row in records]

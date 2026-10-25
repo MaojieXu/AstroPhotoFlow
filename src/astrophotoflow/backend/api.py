@@ -1,4 +1,5 @@
 import logging
+from contextlib import asynccontextmanager
 from uuid import UUID, uuid4
 
 from fastapi import FastAPI, Request
@@ -15,7 +16,15 @@ logger = logging.getLogger("astrophotoflow.service")
 
 
 def create_app(settings: Settings, token: str) -> FastAPI:
-    app = FastAPI(title="AstroPhotoFlow Asset Service", version="1.0.0", docs_url=None, redoc_url=None)
+    from .ingestion import import_workers
+
+    @asynccontextmanager
+    async def lifespan(app):
+        with import_workers(settings) as workers:
+            app.state.import_workers = workers
+            yield
+
+    app = FastAPI(lifespan=lifespan, title="AstroPhotoFlow Asset Service", version="1.0.0", docs_url=None, redoc_url=None)
     app.state.settings = settings
     app.state.token = token
     app.state.database = Database(settings.database_path)

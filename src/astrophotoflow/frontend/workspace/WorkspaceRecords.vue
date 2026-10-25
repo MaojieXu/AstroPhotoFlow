@@ -44,7 +44,7 @@ export default {
                 <template v-else-if="activeArea!=='library'"><th>成像系统</th><th>滤镜</th><th>存储</th><th>状态</th><th>备注</th></template></tr></thead>
               <tbody>
                 <ImportTasks v-if="activeArea === 'library' && !viewingProjectAssets && !viewingProjectDatasets"
-                  :refresh-token="progressRefreshToken" :watch-task-ids="watchedTaskIds" :upload-progress="uploadProgress" @completed="importTaskCompleted" v-slot="{tasks,resume,busyTaskId,error:taskError}">
+                  :refresh-token="progressRefreshToken" :watch-task-ids="watchedTaskIds" :upload-progress="uploadProgress" @completed="importTaskCompleted" @registered="importRegistrationCompleted" v-slot="{tasks,resume,busyTaskId,error:taskError}">
                   <tr v-if="taskError"><td :colspan="(activeArea==='library'&&libraryViewMode==='detail'?15:activeArea==='library'?7:12)+(bulkSelectMode&&isLibraryItemsView?1:0)" class="apf-error" role="alert">{{taskError}}</td></tr>
                   <tr v-for="task in tasks" :key="'task-'+task.id" class="apf-import-row" :aria-disabled="true">
                     <td :colspan="(activeArea==='library'&&libraryViewMode==='detail'?15:activeArea==='library'?7:12)+(bulkSelectMode&&isLibraryItemsView?1:0)"><div class="apf-import-row__content">

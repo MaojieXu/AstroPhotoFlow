@@ -549,6 +549,14 @@ function importSubmitted(taskId: string) {
   void loadRecords()
 }
 
+const registeredImportTaskIds = new Set<string>()
+function importRegistrationCompleted(taskId: string) {
+  if (registeredImportTaskIds.has(taskId)) return
+  registeredImportTaskIds.add(taskId)
+  clearBulkSelection()
+  void loadRecords()
+}
+
 function importTaskCompleted(taskId: string) {
   watchedTaskIds.value=watchedTaskIds.value.filter(id=>id!==taskId)
   clearBulkSelection()
@@ -574,13 +582,15 @@ function uploadTaskProgress(task: ImportTask) {
     const received = report.upload_files.reduce((sum: number, file: { received: number }) => sum + file.received, 0)
     return totalBytes ? Math.round(received * 100 / totalBytes) : 0
   }
-  return task.items_total ? Math.min(100, Math.round(task.items_completed * 100 / task.items_total)) : 0
+  const registration = report.registration
+  return registration ? (registration.total ? Math.round(registration.registered * 100 / registration.total) : 100) : task.items_total ? Math.min(100, Math.round(task.items_completed * 100 / task.items_total)) : 0
 }
 
 function uploadTaskLabel(task: ImportTask) {
   const report = task.report as Record<string, any>
   if (task.status === 'failed') return String(task.error?.message ?? '导入失败。')
   if (report.upload_manifest && !report.upload_complete) return '上传中 · ' + task.items_total + ' 个文件'
+  if (report.registration) return (task.status === 'interrupted' ? '已暂停，进度已保存 · ' : '登记中 · ') + report.registration.registered + ' / ' + report.registration.total + ' 项已登记'
   if (task.status === 'interrupted') return '已暂停，进度已保存 · ' + task.items_completed + ' / ' + task.items_total + ' 项'
   return '处理中 · ' + task.items_completed + ' / ' + task.items_total + ' 项'
 }
@@ -1524,7 +1534,7 @@ const workspaceContext = {
   equipmentChoices, profileChoices, profileChoiceMessage, loadRelatedProfiles, loadCapabilities,
   loadRecords, loadThumbnails, previewMember, presentError, errorText,
   waitForInlineSave, selectSection, selectArea, startImport, applyFilters,
-  filesChosen, foldersChosen, importSubmitted, importTaskCompleted, datasetInlineSaving,
+  filesChosen, foldersChosen, importSubmitted, importTaskCompleted, importRegistrationCompleted, datasetInlineSaving,
   datasetInlineFailure, updateUploadProgress, uploadTaskProgress, uploadTaskLabel, refreshLibrary,
   saveInlineField, selectedFieldSave, selectedParameterSave, selectedBinSave, selectedProfileSave,
   syncEditingDraft, editorRow, saveEditorInline, saveEditorBin, saveEditorParameterGroup,
