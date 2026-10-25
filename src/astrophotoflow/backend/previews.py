@@ -17,7 +17,7 @@ from .errors import ApiError, not_found
 from .files import find_root, resolve_relative
 from .fits_preview import PREVIEW_ALGORITHM_VERSION, create_preview
 from .ingestion import _ordinary_image, _raw_image, _xisf_image
-from .models import AssetTaskItem, AssetVersion, FitsHduMetadata, LibraryEntryRemoval, Preview, ProjectAssetReference
+from .models import AssetVersion, FitsHduMetadata, LibraryEntryRemoval, Preview, ProjectAssetReference
 from .schemas import StrictModel
 from .video_preview import first_video_frame
 
@@ -97,10 +97,6 @@ class DisplayPreviews:
                row.entry_type == "asset" and row.entry_id == version.asset_id or
                row.entry_type == "dataset" and version.asset_id in (row.member_asset_ids or [])) for row in removals):
             return display, None, _issue("not_ready", "SOURCE_CLEANUP_ACTIVE", "原件正在清理，暂不能生成大图。")
-        latest_item = session.scalar(select(AssetTaskItem).where(AssetTaskItem.asset_version_id == version_id)
-            .order_by(AssetTaskItem.created_at.desc(), AssetTaskItem.id.desc()).limit(1))
-        if latest_item is not None and latest_item.preview_status != "available":
-            return display, None, _issue("not_ready", "RECIPE_NOT_READY", "显示参数正在更新或尚未完成，请完成或重试导入。")
         thumbnail = session.scalar(select(Preview).where(*key, Preview.size == "thumbnail", Preview.status == "available"))
         if thumbnail is None:
             return display, None, _issue("not_ready", "RECIPE_NOT_READY", "缩略图及其显示参数尚未就绪，请稍后重试。")
