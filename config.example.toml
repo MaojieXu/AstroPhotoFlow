@@ -1,0 +1,21 @@
+[server]
+host = "127.0.0.1"
+port = 31390
+
+[storage]
+data_dir = "data"
+
+[comfyui]
+allowed_origins = [
+  "http://127.0.0.1:31388",
+  "http://localhost:31388"
+]
+
+[ingestion]
+file_workers = 2
+preview_workers = 1
+
+# Add only directories that the service is allowed to browse and read.
+# [[imports.roots]]
+# id = "astrodata"
+# path = "~/AstroData"

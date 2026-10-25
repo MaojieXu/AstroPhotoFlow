@@ -1,0 +1,2 @@
+# Frozen requirement checksums cover exact bytes, including line endings.
+docs/requirements/v1.0/** -text

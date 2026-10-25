@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
 set -eu
 
-comfyui_root=/home/maojiexu/Workshop/ComfyUI
+if [ "$#" -ne 1 ]; then
+  printf 'Usage: %s /path/to/ComfyUI\n' "$0" >&2
+  exit 1
+fi
+comfyui_root="$1"
 extension_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 extension_link="$comfyui_root/custom_nodes/ComfyUI-AstroPhotoFlow"
 

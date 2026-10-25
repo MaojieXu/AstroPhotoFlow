@@ -1,40 +1,48 @@
-# # GitHub CI build pipeline
-# name: cookiecutter-comfy-extension CI build
+name: Product checks
 
-# on:
-#   pull_request:
-#     branches:
-#       - master
-#       - main
-# jobs:
-#   build:
-#     strategy:
-#       matrix:
-#         os: [ubuntu-latest, windows-latest, macos-latest]
-#         python-version: ["3.9"]
-#     runs-on: ${{ matrix.os }}
-#     env:
-#       PYTHONIOENCODING: "utf8"
+on:
+  push:
+  pull_request:
 
-#     steps:
-#       - uses: actions/checkout@v4
-#       - name: Set up Python
-#         uses: actions/setup-python@v5
-#         with:
-#           python-version: ${{ matrix.python-version }}
-#       - name: Install dependencies
-#         run: |
-#           python -m pip install --upgrade pip
-#           pip install --upgrade build coverage twine wheel
-#           pip install .
-#       - name: Run Tests
-#         run: |
-#           pytest tests/
-#       # - name: Run package creation
-#       #   run: |
-#       #     python -m build
-#       # - name: Archive package
-#       #   uses: actions/upload-artifact@v2
-#       #   with:
-#       #     name: cookie-cutter
-# #       #     path: src/dist
+jobs:
+  product:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      UV_PROJECT_ENVIRONMENT: .artifacts/venvs/dev
+      UV_CACHE_DIR: .artifacts/cache/uv
+      PYTHONIOENCODING: utf-8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: '0.11.29'
+          enable-cache: false
+      - name: Build frontend
+        run: |
+          corepack pnpm install --frozen-lockfile
+          corepack pnpm build
+      - name: Prepare Python project
+        run: uv sync --locked --extra dev
+      - name: Python product tests
+        run: uv run --locked --no-sync pytest -q --junitxml=.artifacts/reports/python.xml
+      - name: Frontend product tests
+        run: corepack pnpm test
+      - name: Build and verify distributions
+        run: |
+          uv run --locked --no-sync python -m build --installer uv
+          uv run --locked --no-sync python scripts/verify_distribution.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: results-${{ matrix.os }}
+          path: .artifacts/reports/

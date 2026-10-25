@@ -1,14 +1,17 @@
 from __future__ import annotations
 
-import os
 from pathlib import Path
-import tomllib
 from typing import Any
 
 import httpx
+from pydantic import BaseModel
+
+from .client_domains.imports import ImportOperations
+from .client_domains.library import LibraryOperations
+from .client_domains.organization import OrganizationOperations
 
 
-CONFIG_PATH = Path.home() / ".config" / "astrophotoflow" / "config.toml"
+from .config import load_settings, resolve_config_path
 
 
 class ServiceApiError(RuntimeError):
@@ -22,30 +25,14 @@ class ServiceApiError(RuntimeError):
         super().__init__(f"{code} (HTTP {status}): {message}{field_text}{suffix}")
 
 
-def config_path() -> Path:
-    configured = os.environ.get("ASTROPHOTOFLOW_CONFIG")
-    pointer = CONFIG_PATH.parent / "active-workspace"
-    if configured:
-        return Path(configured).expanduser()
-    if pointer.is_file():
-        return Path(pointer.read_text(encoding="utf-8").strip()).expanduser()
-    return CONFIG_PATH
-
-
-class AssetClient:
+class AssetClient(ImportOperations, LibraryOperations, OrganizationOperations):
     def __init__(self, path: Path | None = None):
-        self.config_path = (path or config_path()).resolve()
-        with self.config_path.open("rb") as stream:
-            config = tomllib.load(stream)
-        server = config["server"]
-        storage = config["storage"]
-        data_dir = Path(storage["data_dir"]).expanduser()
-        if not data_dir.is_absolute():
-            data_dir = self.config_path.parent / data_dir
-        token = (data_dir / "service.token").read_text(encoding="utf-8").strip()
+        self.config_path = resolve_config_path(path)
+        settings = load_settings(self.config_path)
+        token = settings.token_path.read_text(encoding="utf-8").strip()
         if not token:
             raise ValueError("AstroPhotoFlow 本机服务令牌为空。")
-        self.base_url = f"http://{server['host']}:{server['port']}/api/v1"
+        self.base_url = settings.service_url + "/api/v1"
         self.client = httpx.Client(
             base_url=self.base_url,
             headers={"Authorization": f"Bearer {token}", "Accept": "application/json"},
@@ -53,6 +40,10 @@ class AssetClient:
         )
 
     def request(self, method: str, path: str, *, params=None, json=None) -> Any:
+        if isinstance(json, BaseModel):
+            json = json.model_dump(mode="json", exclude_unset=True)
+        if params is not None:
+            params = {key: value for key, value in params.items() if value is not None}
         response = self.client.request(method, path, params=params, json=json)
         return self._result(response)
 
@@ -71,26 +62,6 @@ class AssetClient:
                 error.get("fields"),
             )
         return body
-
-    def import_photo(self, path: Path) -> dict[str, Any]:
-        path = path.expanduser().resolve(strict=True)
-        if not path.is_file():
-            raise ValueError(f"不是文件：{path}")
-        create = self.request(
-            "POST", "/uploads",
-            json={"files": [{"name": path.name, "size": path.stat().st_size}],
-                  "classification": {"frame_class": "subframe", "frame_type": "light"}},
-        )
-        task_id = str(create["task_id"])
-        with path.open("rb") as stream:
-            def chunks():
-                while chunk := stream.read(1024 * 1024):
-                    yield chunk
-
-            response = self.client.put(f"/uploads/{task_id}/0", content=chunks(), timeout=None)
-        self._result(response)
-        self.request("POST", f"/uploads/{task_id}/start")
-        return {"task_id": task_id, "status": "queued"}
 
     def close(self) -> None:
         self.client.close()

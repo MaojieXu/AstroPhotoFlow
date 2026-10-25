@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "astrophotoflow"
 version = "0.1.0"
 description = "AstroPhotoFlow local CPU workstation and asset service"
-readme = "service/README.md"
+readme = "README.md"
 license = "GPL-3.0-or-later"
 license-files = ["LICENSE"]
 requires-python = ">=3.12"
@@ -21,49 +21,52 @@ dependencies = [
     "mcp==2.3.0",
     "numpy>=2.4.6",
     "pillow>=13.0.0",
+    "pillow-heif==1.1.1",
     "psutil>=6,<8",
+    "rawpy==0.27.1",
     "sqlalchemy>=2.0,<3",
     "uv>=0.8,<1",
     "uvicorn>=0.32,<1",
+    "xisf==0.9.7",
 ]
 
 [project.optional-dependencies]
-dev = ["build>=1.2,<2", "pytest>=8,<9"]
+dev = ["aiohttp>=3.10,<4", "build>=1.2,<2", "pytest>=8,<9"]
 
 [project.scripts]
 apf = "astrophotoflow.cli:main"
-apf-service = "astrophotoflow_service.cli:main"
+apf-service = "astrophotoflow.backend.cli:main"
 
 [project.urls]
 bugs = "https://github.com/MaojieXu/ComfyUI-AstroPhotoFlow/issues"
 homepage = "https://github.com/MaojieXu/ComfyUI-AstroPhotoFlow"
 
 [tool.pytest.ini_options]
-minversion = "6.0"
-# addopts = "-ra -q"
+minversion = "8.0"
+addopts = "--confcutdir=tests --basetemp=.artifacts/pytest"
+cache_dir = ".artifacts/cache/pytest"
 testpaths = [
     "tests",
 ]
 
 [tool.ruff]
-# extend-exclude = ["static", "ci/templates"]
 line-length = 140
 src = ["src", "tests"]
-target-version = "py39"
-exclude = ["*cookiecutter.project_slug*"]
+target-version = "py312"
 
 [tool.setuptools]
-include-package-data = true
-package-dir = {"" = "src", "astrophotoflow_service" = "service/src/astrophotoflow_service"}
+include-package-data = false
+package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
-where = ["src", "service/src"]
-include = ["astrophotoflow", "astrophotoflow.*", "astrophotoflow_service", "astrophotoflow_service.*"]
-exclude = ["astrophotoflow.comfy_node.__pycache__"]
+where = ["src"]
+include = ["astrophotoflow", "astrophotoflow.*"]
+exclude = ["astrophotoflow.frontend", "astrophotoflow.frontend.*"]
+namespaces = false
 
 [tool.setuptools.package-data]
-astrophotoflow = ["vendor/*.zip", "vendor/*.lock", "comfy_node/web/*"]
-astrophotoflow_service = ["alembic.ini", "alembic/**/*"]
+astrophotoflow = ["vendor/*.zip", "vendor/*.json", "vendor/*.lock"]
+"astrophotoflow.backend" = ["alembic.ini", "alembic/*.py", "alembic/versions/*.py"]
 
 [tool.ruff.lint.flake8-quotes]
 inline-quotes = "double"

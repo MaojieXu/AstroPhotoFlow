@@ -1,0 +1,81 @@
+{
+  "baseline_commit": "3f72b71",
+  "files": 8,
+  "shape": [
+    2048,
+    2048
+  ],
+  "dtype": "float32",
+  "source_bytes": 134254080,
+  "poll_interval_seconds": 0.005,
+  "baseline": [
+    {
+      "registration_seconds": 1.7375678999960655,
+      "dataset_visible_seconds": 1.9483837000007043,
+      "total_seconds": 1.9483837000007043,
+      "read_bytes": 451185233,
+      "write_bytes": 135452342,
+      "peak_rss_mb": 137.3984375
+    },
+    {
+      "registration_seconds": 1.6675246999948286,
+      "dataset_visible_seconds": 1.8723355999973137,
+      "total_seconds": 1.8723355999973137,
+      "read_bytes": 450825828,
+      "write_bytes": 135257572,
+      "peak_rss_mb": 139.71875
+    },
+    {
+      "registration_seconds": 1.6735052000003634,
+      "dataset_visible_seconds": 1.8791747000068426,
+      "total_seconds": 1.8842513999989023,
+      "read_bytes": 450969188,
+      "write_bytes": 135257572,
+      "peak_rss_mb": 140.609375
+    }
+  ],
+  "candidate": [
+    {
+      "registration_seconds": 0.06981119999545626,
+      "dataset_visible_seconds": 0.07547270000213757,
+      "total_seconds": 1.958010699992883,
+      "read_bytes": 452429722,
+      "write_bytes": 135372932,
+      "peak_rss_mb": 120.92578125
+    },
+    {
+      "registration_seconds": 0.06329949999053497,
+      "dataset_visible_seconds": 0.06964689999585971,
+      "total_seconds": 1.9817516000039177,
+      "read_bytes": 452382408,
+      "write_bytes": 135372932,
+      "peak_rss_mb": 118.609375
+    },
+    {
+      "registration_seconds": 0.061660700011998415,
+      "dataset_visible_seconds": 0.07255340000847355,
+      "total_seconds": 2.0594228000118164,
+      "read_bytes": 452292296,
+      "write_bytes": 135372932,
+      "peak_rss_mb": 125.85546875
+    }
+  ],
+  "medians": {
+    "baseline": {
+      "registration_seconds": 1.6735052000003634,
+      "dataset_visible_seconds": 1.8791747000068426,
+      "total_seconds": 1.8842513999989023,
+      "read_bytes": 450969188,
+      "write_bytes": 135257572,
+      "peak_rss_mb": 139.71875
+    },
+    "candidate": {
+      "registration_seconds": 0.06329949999053497,
+      "dataset_visible_seconds": 0.07255340000847355,
+      "total_seconds": 1.9817516000039177,
+      "read_bytes": 452382408,
+      "write_bytes": 135372932,
+      "peak_rss_mb": 120.92578125
+    }
+  }
+}
