@@ -89,13 +89,19 @@ class LibraryOperations:
         return self.request("GET", f"/library/assets/{asset_id}/versions/{version_id}/previews/display/status")
 
     def read_display_preview(self, asset_id: str, version_id: str) -> bytes:
+        from ..client import ServiceApiError
+
         response = self.client.get(f"/library/assets/{asset_id}/versions/{version_id}/previews/display")
         if not response.is_success:
             self._result(response)
+        if response.headers.get("Content-Type", "").split(";", 1)[0].strip().lower() != "image/jpeg":
+            raise ServiceApiError(response.status_code, "INVALID_RESPONSE", "Preview response is not image/jpeg.",
+                                  response.headers.get("X-Request-ID"))
         return response.content
 
     def export_display_preview(self, asset_id: str, version_id: str, output: Path) -> dict[str, Any]:
         data = self.read_display_preview(asset_id, version_id)
         output = output.expanduser().resolve()
-        output.write_bytes(data)
+        with output.open("xb") as stream:
+            stream.write(data)
         return {"path": str(output), "byte_size": len(data)}

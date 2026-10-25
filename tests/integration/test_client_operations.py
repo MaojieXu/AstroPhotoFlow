@@ -22,6 +22,8 @@ def client():
         calls.append(request)
         if request.url.path == "/api/v1/uploads":
             return httpx.Response(202, json={"task_id": "upload-task", "status": "queued"})
+        if request.url.path.endswith("/previews/display"):
+            return httpx.Response(200, content=b"jpeg", headers={"Content-Type": "image/jpeg"})
         return httpx.Response(200, json={"ok": True})
 
     client = AssetClient.__new__(AssetClient)
@@ -151,10 +153,40 @@ def test_mcp_display_image_uses_sdk_content_conversion(monkeypatch):
 
     jpeg = b"\xff\xd8jpeg\xff\xd9"
     api = AssetClient.__new__(AssetClient)
-    api.client = httpx.Client(base_url="http://service/api/v1", transport=httpx.MockTransport(lambda request: httpx.Response(200, content=jpeg)))
+    api.client = httpx.Client(base_url="http://service/api/v1", transport=httpx.MockTransport(lambda request: httpx.Response(200, content=jpeg, headers={"Content-Type": "image/jpeg"})))
     monkeypatch.setattr(mcp_server, "AssetClient", lambda: api)
     tool = mcp_server.server._tool_manager.get_tool("read_display_preview")
     result = asyncio.run(tool.run({"asset_id": "asset", "version_id": "version"}, None, convert_result=True))
     assert result.structured_content is None and len(result.content) == 1
     assert result.content[0].type == "image" and result.content[0].mime_type == "image/jpeg"
     assert b64decode(result.content[0].data) == jpeg
+
+
+def test_preview_export_preserves_existing_destination_and_cli_fails(client, tmp_path, monkeypatch, capsys):
+    from astrophotoflow import cli
+
+    api, _ = client
+    output = tmp_path / "original.fits"
+    original = b"original scientific photo bytes"
+    output.write_bytes(original)
+    with pytest.raises(FileExistsError):
+        api.export_display_preview("asset", "version", output)
+    assert output.read_bytes() == original
+
+    monkeypatch.setattr(cli, "AssetClient", lambda: api)
+    monkeypatch.setattr("sys.argv", ["apf", "previews", "export", "asset", "version", str(output)])
+    with pytest.raises(SystemExit) as caught:
+        cli.main()
+    assert caught.value.code == 1 and output.name in capsys.readouterr().err
+    assert output.read_bytes() == original
+
+
+def test_display_preview_rejects_successful_wrong_mime_with_request_id():
+    api = AssetClient.__new__(AssetClient)
+    api.client = httpx.Client(base_url="http://service/api/v1", transport=httpx.MockTransport(
+        lambda request: httpx.Response(200, json={"not": "a jpeg"}, headers={"X-Request-ID": "mime-request"})
+    ))
+    with api, pytest.raises(ServiceApiError) as caught:
+        api.read_display_preview("asset", "version")
+    assert caught.value.code == "INVALID_RESPONSE" and caught.value.status == 200
+    assert caught.value.request_id == "mime-request" and "image/jpeg" in str(caught.value)

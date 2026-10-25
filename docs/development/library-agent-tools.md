@@ -45,7 +45,7 @@ List commands accept `--limit/--offset`. Searchable registries accept `--q/--sta
 | `previews schedule/status/export` | `schedule_display_preview`, `get_display_preview_status`, `read_display_preview` |
 | `trash list/restore/delete-preview/delete` | `list_trash`, `restore_trash`, `preview_trash_delete`, `delete_trash` |
 
-There are 58 tools. All five original names remain: `import_photo`, `get_import_task`, `list_assets`, `get_asset`, `update_asset_parameters`. `read_display_preview` is an explicit native MCP `ImageContent` response; ordinary import/task/asset responses contain metadata without embedded base64 JPEGs. The CLI export writes the cached JPEG to the requested local output file and returns its absolute path and byte count.
+There are 58 tools. All five original names remain: `import_photo`, `get_import_task`, `list_assets`, `get_asset`, `update_asset_parameters`. `read_display_preview` is an explicit native MCP `ImageContent` response; ordinary import/task/asset responses contain metadata without embedded base64 JPEGs. The CLI export exclusively creates the requested local output file and returns its absolute path and byte count. An existing destination fails clearly without changing its bytes; choose a new output path on collision.
 
 ## Night import and automatic/manual classification
 
@@ -177,11 +177,11 @@ Tests use the tools worktree's private Python environment, synthetic PNG/FITS or
 
 ### Acceptance evidence
 
-Implementation base: `bda6047a89da55f50f28cc70db0d366f9bf553e6`. Worktree: `C:/Users/Administrator/.codex/worktrees/apf-library-agent-tools/ComfyUI-AstroPhotoFlow`; all generated environments, configs, databases, reports, dependencies and assets remained private to it. The source identity check resolves `astrophotoflow.__file__` inside this worktree. No global profile, active-workspace pointer or MCP registration was changed.
+Implementation base: `bda6047a89da55f50f28cc70db0d366f9bf553e6`; synchronized the exact integrated preview source `b6370979669ceb3bc15d2b58272c33753bb5ed2c` before final protocol verification. Worktree: `C:/Users/Administrator/.codex/worktrees/apf-library-agent-tools/ComfyUI-AstroPhotoFlow`; all generated environments, configs, databases, reports, dependencies and assets remained private to it. The source identity check resolves `astrophotoflow.__file__` inside this worktree. No global profile, active-workspace pointer or MCP registration was changed.
 
 ```powershell
 .artifacts/venvs/dev/Scripts/python.exe -m pytest tests/backend tests/comfyui/test_proxy.py tests/integration/test_client_operations.py tests/integration/test_cli_mcp_protocol.py tests/workbench tests/packaging -q --basetemp=.artifacts/pytest-tools-full --junitxml=.artifacts/reports/tools-full.xml
-.artifacts/venvs/dev/Scripts/python.exe -m pytest tests/integration/test_client_operations.py -q --basetemp=.artifacts/pytest-client-preview
+.artifacts/venvs/dev/Scripts/python.exe -m pytest tests/integration/test_client_operations.py tests/integration/test_cli_mcp_protocol.py -q --basetemp=.artifacts/pytest-tools-preview-integrated --junitxml=.artifacts/reports/tools-preview-integrated.xml
 .artifacts/venvs/dev/Scripts/python.exe C:/Users/Administrator/.codex/skills/.system/skill-creator/scripts/quick_validate.py .agents/skills/astrophotoflow-library
 corepack pnpm install --frozen-lockfile
 corepack pnpm build
@@ -190,13 +190,14 @@ corepack pnpm build
 
 | Check | Result |
 |---|---|
-| Backend/proxy/client/CLI/real stdio/workbench/package regression | 202 passed, 1 skipped in 98.58s; existing SQLAlchemy cyclic-FK comparison warning |
-| Request building and CLI bodies, plus binary export/native SDK image conversion | 9 passed in 0.84s |
+| Backend/proxy/client/CLI/real stdio/workbench/package regression before preview synchronization | 202 passed, 1 skipped in 98.58s; existing SQLAlchemy cyclic-FK comparison warning |
+| Final synchronized client/CLI/real stdio regression | 16 passed in 41.85s (11 client checks and 5 real-process workflows), including wrong-MIME rejection with request ID and exclusive export preserving original bytes |
 | Real stdio workflow | Six equipment kinds, inline/registered setups, frozen presets, bulk upload, automatic FITS Master Dark, configured-root folder import and selected repaired retry, fixed groups/calibration maps/member edits, project references, trash restore and fresh-fingerprint cleanup; terminal cancel/resume errors preserve request IDs |
+| Real display preview protocol | Initial DISPLAY_NOT_GENERATED, explicit schedule/poll, available 1080×540 JPEG from a 1600×800 source, native SDK ImageContent, cached reschedule, CLI export of exact cached bytes, actual source-path collision exits 1 and retains all original bytes |
 | New structured CLI workflow | Equipment/setup/preset, multi-upload, paged task items, group versions, fixed project dataset references, archival, invalid-body exit status |
 | Skill validator | Passed |
 | Private frontend typecheck/production assets | Passed; used only to satisfy the existing wheel builder |
 | Wheel/sdist build and archive layout | Passed; domain client/CLI/MCP modules in wheel; Skill and reference in sdist; wheel CLI/MCP import exposes 58 tools |
 | Source/diff scope | No backend handler or frontend source changes; no new dependencies; whitespace check passed |
 
-The lazy-preview adapters have request-building and native SDK conversion coverage here; successful service-side preview generation/read is validated after synchronization with the separate preview implementation. Frontend behavior tests are unchanged and retain the integrated baseline evidence. No real photo batch, interactive host, or CUA run was performed.
+The final real-process preview verification uses the synchronized service implementation. Frontend behavior tests are unchanged by this branch and retain the integrated preview branch evidence. No real photo batch, interactive host, or CUA run was performed.
