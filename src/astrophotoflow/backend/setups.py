@@ -9,6 +9,7 @@ from .dependencies import ERROR_RESPONSES, Limit, Offset, Order, ReadSession, So
 from .errors import invalid_reference, not_found
 from .import_schemas import AssetClassification
 from .models import CapturePreset, Equipment, EquipmentSetup
+from .schemas import EquipmentKind
 from .setup_schemas import (
     CapturePresetCreate, CapturePresetOut, CapturePresetPage, CapturePresetPatch,
     EquipmentSetupCreate, EquipmentSetupOut, EquipmentSetupPage, EquipmentSetupPatch,
@@ -44,15 +45,26 @@ def _check_components(session, components: list[dict]) -> None:
 @router.get("/equipment-setups", response_model=EquipmentSetupPage, dependencies=[Depends(authenticate)])
 def list_setups(session: ReadSession, limit: Limit = 50, offset: Offset = 0,
                 sort_by: SortBy = "created_at", order: Order = "desc", q: str | None = None,
-                status: StatusFilter = "active"):
+                status: StatusFilter = "active", component_kind: EquipmentKind | None = None):
     filters = [] if status == "all" else [EquipmentSetup.status == status]
     if q:
         filters.append(EquipmentSetup.name.contains(q, autoescape=True))
-    total = session.scalar(select(func.count()).select_from(EquipmentSetup).where(*filters)) or 0
     column = EquipmentSetup.name if sort_by == "name" else EquipmentSetup.created_at
-    rows = session.scalars(select(EquipmentSetup).where(*filters)
-        .order_by(shared._order(column, order), EquipmentSetup.id.asc()).limit(limit).offset(offset)).all()
-    return shared._page([_setup_out(row) for row in rows], total, limit, offset)
+    statement = select(EquipmentSetup).where(*filters).order_by(shared._order(column, order), EquipmentSetup.id.asc())
+    if component_kind is None:
+        total = session.scalar(select(func.count()).select_from(EquipmentSetup).where(*filters)) or 0
+        rows = session.scalars(statement.limit(limit).offset(offset)).all()
+        return shared._page([_setup_out(row) for row in rows], total, limit, offset)
+    rows = session.scalars(statement).all()
+    registered_ids = {component["equipment_id"] for row in rows for component in (row.components or [])
+                      if component.get("source") == "registered"}
+    kinds = {item.id: item.kind for item in session.scalars(select(Equipment).where(Equipment.id.in_(registered_ids))).all()} if registered_ids else {}
+    matched = [row for row in rows if any(
+        component.get("equipment", {}).get("kind") == component_kind
+        if component.get("source") == "inline" else kinds.get(component.get("equipment_id")) == component_kind
+        for component in row.components or []
+    )]
+    return shared._page([_setup_out(row) for row in matched[offset:offset + limit]], len(matched), limit, offset)
 
 
 @router.post("/equipment-setups", response_model=EquipmentSetupOut, status_code=201, dependencies=[Depends(authenticate)])

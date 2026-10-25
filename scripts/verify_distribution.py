@@ -24,7 +24,8 @@ def check_wheel(path: Path) -> None:
         prefix = "astrophotoflow/"
         required = {
             "backend/cli.py", "backend/alembic.ini", "backend/alembic/env.py",
-            "backend/alembic/versions/0007_setups_and_calibration.py",
+            "backend/alembic/versions/0008_asset_equipment_snapshot.py",
+            "backend/alembic/versions/0009_remove_legacy_capture_profiles.py",
             "comfyui/extension/__init__.py", "comfyui/extension/assets/astrophotoflow.js",
             "comfyui/extension/assets/astrophotoflow.css", "vendor/comfyui-source.json",
             "vendor/comfyui-0.42.0.zip", "vendor/comfyui-0.42.0-windows-py312.lock",
@@ -32,6 +33,7 @@ def check_wheel(path: Path) -> None:
         assert {prefix + name for name in required} <= names, f"Missing product resources in {path.name}"
         assert not any(name.startswith(("astrophotoflow_service/", "tests/", "astrophotoflow/frontend/")) for name in names)
         assert not any("node_modules/" in name or "/__pycache__/" in name for name in names)
+        assert prefix + "backend/capture_profiles.py" not in names
         for extension in ("js", "css"):
             bundled = archive.read(f"{prefix}comfyui/extension/assets/astrophotoflow.{extension}")
             assert bundled == (ROOT / "build" / "frontend" / f"astrophotoflow.{extension}").read_bytes()
@@ -72,14 +74,21 @@ import importlib.util
 from importlib.resources import files
 from pathlib import Path
 import sys
+import astrophotoflow
 from astrophotoflow.backend.schema import SCHEMA_REVISION, upgrade_database, current_revision
 from astrophotoflow.config import Settings
 import astrophotoflow.comfyui
 import astrophotoflow.mcp_server
 assert 'server' not in sys.modules
+assert Path(astrophotoflow.__file__).resolve().is_relative_to(Path(sys.prefix).resolve())
 assert importlib.util.find_spec('astrophotoflow_service') is None
 plugin = files('astrophotoflow.comfyui').joinpath('extension')
 assert plugin.joinpath('assets/astrophotoflow.js').is_file()
+assert importlib.util.find_spec('astrophotoflow.backend.capture_profiles') is None
+from astrophotoflow.backend.models import Base
+assert 'capture_profile' not in Base.metadata.tables
+assert 'project_capture_profile' not in Base.metadata.tables
+assert 'capture_profile_id' not in Base.metadata.tables['asset_version'].c
 """
             script += "\ndata = Path('database'); data.mkdir(exist_ok=True)\nsettings = Settings('127.0.0.1', 8190, data.resolve(), ('http://127.0.0.1:8188',))\nupgrade_database(settings)\nassert current_revision(settings.database_path) == SCHEMA_REVISION\n"
             run([str(python), "-c", script], cwd=work, env=env)

@@ -4,7 +4,7 @@
 
 | 需求范围 | 当前实现 | 自动化证据 |
 |---|---|---|
-| FR-01 项目基础管理 | 创建、编辑、归档、引用及拍摄配置关联；完整托管工作流未实现 | `tests/backend/test_service.py`、前端 Workspace/Settings 测试 |
+| FR-01 项目基础管理 | 创建、编辑、回收站、素材及数据集固定版本引用；旧拍摄配置已移除，完整托管工作流未实现 | `tests/backend/test_service.py`、前端 Workspace/Settings 测试 |
 | FR-04 素材管理 | 分阶段异步导入、Header 分类、任务、预设快照、数据集、筛选排序与编辑 | backend ingestion/import_pipeline/service/library_sort；frontend Workspace/ImportDialog/ImportTasks；integration import_presets |
 | FR-04/11 删除与恢复 | 已接受的组／照片回收站、确认范围、部分清理、R4、身份和固定版本保留 | backend service 的 trash 回归；frontend LibraryTrashDialog |
 | FR-05 当前显示子集 | 100 px 缩略图、1080 px按需缓存、固定拉伸和项目固定成员浏览；完整比较未实现 | backend fits_preview/display_previews/video_preview；frontend PhotoPreviewDialog |
@@ -20,3 +20,5 @@
 待补的未来产品验收：FR-02/03/06/09/10/12，以及其他 FR 中未完成部分。AT-01 至 AT-28 保留在[冻结需求](../requirements/v1.0/07_实施路线与验收清单.md)，只有实际实现并取得对应证据后才能标记通过。
 
 新增回归聚焦本轮真实风险：模块入口、插件复制路径、CLI/MCP 进程协议和从源码目录外安装；不为假想业务或未来能力编写测试。FFmpeg 不可用导致的视频用例跳过需在报告中单列，不能当作通过。
+
+本轮设备任务快照、删除后重试／恢复及历史显示：`tests/backend/test_equipment_snapshots.py`；删除拉伸参考图：`test_display_previews.py`；组合／预设筛选草稿保护：`SettingsOrganization.test.ts`。实际结果见[最终修复验收](final-bugfix-acceptance.md)。

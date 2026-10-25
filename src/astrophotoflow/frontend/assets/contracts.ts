@@ -8,7 +8,7 @@ export const capabilitiesSchema = z.object({
   stage: z.literal('ingestion'),
   shared_library_read: z.boolean(), project_assets_read: z.boolean(),
   project_management: z.boolean(), equipment_management: z.boolean(),
-  capture_profile_management: z.boolean(), asset_import: z.boolean(),
+  asset_import: z.boolean(),
   asset_reference_write: z.boolean(), asset_preview: z.boolean(), asset_metadata_edit: z.boolean(),
   dataset_management: z.boolean(), asset_task_management: z.boolean(),
   calibration_matching: z.boolean(), asset_publish: z.boolean()
@@ -21,7 +21,7 @@ export const pageSchema = <T extends z.ZodType>(item: T) => z.object({
 
 export const projectSchema = z.object({
   id, name: z.string(), target_name: nullableText, notes: nullableText,
-  capture_profile_ids: z.array(id), status: z.enum(['active', 'archived']),
+  status: z.enum(['active', 'archived']),
   revision: z.number().int().positive(), created_at: timestamp, updated_at: timestamp
 }).strict()
 
@@ -61,15 +61,6 @@ export type EquipmentSetup = z.infer<typeof equipmentSetupSchema>
 export type SetupComponent = z.infer<typeof setupComponentSchema>
 export type CapturePreset = z.infer<typeof capturePresetSchema>
 
-export const captureProfileSchema = z.object({
-  id, name: z.string(), camera_id: id, optical_system_id: id.nullable(), filter_id: id.nullable(),
-  frame_type: z.enum(['light', 'bias', 'dark', 'flat', 'dark_flat']),
-  parameter_mode: z.enum(['iso','gain']).nullable(), iso: z.number().int().nullable(),
-  exposure_seconds: z.number().nullable(), gain: z.number().nullable(), offset: z.number().nullable(),
-  sensor_temperature_c: z.number().nullable(), binning_x: z.number().int().nullable(),
-  binning_y: z.number().int().nullable(), notes: nullableText, status: z.enum(['active', 'archived']),
-  revision: z.number().int().positive(), created_at: timestamp, updated_at: timestamp
-}).strict()
 
 export const assetVersionSchema = z.object({
   id, asset_id: id, version_number: z.number().int().positive(),
@@ -77,7 +68,7 @@ export const assetVersionSchema = z.object({
   byte_size: z.number().int().nonnegative().nullable(), content_hash: nullableText,
   availability: z.enum(['unknown', 'available', 'changed', 'missing']),
   camera_id: id.nullable(), optical_system_id: id.nullable(), filter_id: id.nullable(),
-  capture_profile_id: id.nullable(), frame_type: z.enum(['light', 'bias', 'dark', 'flat', 'dark_flat']).nullable(),
+  frame_type: z.enum(['light', 'bias', 'dark', 'flat', 'dark_flat']).nullable(),
   calibration_level: z.enum(['individual', 'master']).nullable(),
   capture_snapshot: z.record(z.string(), z.unknown()).nullable(),
   scientific_metadata: z.record(z.string(), z.unknown()).nullable(), created_at: timestamp
@@ -91,7 +82,8 @@ export const assetSchema = z.object({
     frame_class: z.enum(['subframe', 'masterframe', 'video']).nullable(),
     frame_type: z.enum(['light', 'bias', 'dark', 'flat', 'dark_flat']).nullable()
   }).strict().nullable(),
-  parameters: z.record(z.string(), z.unknown()), value_sources: z.record(z.string(), z.string()),
+  parameters: z.record(z.string(), z.unknown()), equipment_snapshot: z.record(z.string(), z.record(z.string(), z.unknown())),
+  value_sources: z.record(z.string(), z.string()),
   notes: nullableText, status: z.enum(['active', 'archived']), revision: z.number().int().positive(),
   created_at: timestamp, current_version: assetVersionSchema.nullable()
 }).strict()
@@ -112,7 +104,6 @@ export const errorSchema = z.object({
 export type Capabilities = z.infer<typeof capabilitiesSchema>
 export type Project = z.infer<typeof projectSchema>
 export type Equipment = z.infer<typeof equipmentSchema>
-export type CaptureProfile = z.infer<typeof captureProfileSchema>
 export type Asset = z.infer<typeof assetSchema>
 export type ProjectAssetReference = z.infer<typeof projectAssetReferenceSchema>
 

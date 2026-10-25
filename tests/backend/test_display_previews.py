@@ -145,18 +145,66 @@ def test_second_group_member_uses_saved_first_reference_and_not_ready_never_deco
     with app.state.database.write_session() as session:
         session.execute(delete(Preview).where(Preview.size == "display"))
         session.get(AssetVersion, first["asset_version_id"]).availability = "unknown"
-    def forbidden(*_args, **_kwargs):
-        raise AssertionError("unready recipe must not decode")
-    monkeypatch.setattr(previews, "create_preview", forbidden)
-    state = client.post(base(second) + "/display", headers=AUTH, json={}).json()
-    assert state["status"] == "not_ready" and state["error"]["code"] == "STRETCH_NOT_READY"
+    client.post(base(second) + "/display", headers=AUTH, json={})
+    assert finished(client, base(second))["status"] == "available"
     state = client.post(base(first) + "/display", headers=AUTH, json={}).json()
     assert state["status"] == "not_ready" and state["error"]["code"] == "SOURCE_NOT_READY"
     with app.state.database.write_session() as session:
         session.get(AssetVersion, first["asset_version_id"]).availability = "available"
+        session.execute(delete(Preview).where(Preview.asset_version_id == second["asset_version_id"], Preview.size == "display"))
         row = session.scalar(select(Preview).where(Preview.asset_version_id == second["asset_version_id"], Preview.size == "thumbnail"))
         row.display_parameters = {}
     assert client.post(base(second) + "/display", headers=AUTH, json={}).json()["error"]["code"] == "STRETCH_NOT_READY"
+
+
+@pytest.mark.parametrize("category", ["fits", "xisf"])
+def test_deleting_stretch_reference_keeps_surviving_display_reproducible(service, category):
+    settings, app, client, root = service
+    originals = {}
+    for index, name in enumerate(("a", "b")):
+        path = root / f"{name}.{category}"
+        pixels = np.arange(240 * 320, dtype=np.float32).reshape(240, 320) + index * 1000
+        if category == "fits":
+            fits.PrimaryHDU(pixels).writeto(path)
+        else:
+            XISF.write(str(path), pixels[..., None])
+        originals[path] = path.read_bytes()
+    accepted = client.post("/api/v1/imports", headers=AUTH, json={
+        "sources": [{"root_id": "science", "path": ""}], "storage_mode": "managed",
+    })
+    assert accepted.status_code == 202, accepted.text
+    task = client.get("/api/v1/asset-tasks/" + accepted.json()["task_id"], headers=AUTH).json()
+    assert task["status"] == "completed", task
+    first, second = task["items"]
+    with app.state.database.read_session() as session:
+        recipe = dict(session.scalar(select(Preview).where(
+            Preview.asset_version_id == second["asset_version_id"], Preview.size == "thumbnail",
+        )).display_parameters)
+    assert recipe["stretch_reference_version_id"] == first["asset_version_id"]
+    asset = client.get("/api/v1/library/assets/" + first["asset_id"], headers=AUTH).json()
+    removed = client.request("DELETE", "/api/v1/library/items", headers=AUTH, json={"items": [{
+        "entry_type": "asset", "id": asset["id"], "revision": asset["revision"],
+        "current_version_id": asset["current_version_id"],
+    }]})
+    assert removed.status_code == 200, removed.text
+    row = next(row for row in client.get("/api/v1/library/trash", headers=AUTH).json()["items"] if row["id"] == asset["id"])
+    selection = {"items": [{key: row[key] for key in ("entry_type", "id", "removed_at", "revision", "current_version_id")}]}
+    preview = client.post("/api/v1/library/trash/delete-preview", headers=AUTH, json=selection).json()
+    deleted = client.post("/api/v1/library/trash/delete", headers=AUTH, json={
+        **selection, "preview_fingerprint": preview["preview_fingerprint"],
+    })
+    assert deleted.status_code == 200, deleted.text
+    for _ in range(2):
+        assert client.post(base(second) + "/display", headers=AUTH, json={}).status_code in {200, 202}
+        assert finished(client, base(second))["status"] == "available"
+        with app.state.database.write_session() as session:
+            display = session.scalar(select(Preview).where(Preview.asset_version_id == second["asset_version_id"], Preview.size == "display"))
+            assert display.display_parameters["stretch_low"] == recipe["stretch_low"]
+            assert display.display_parameters["stretch_high"] == recipe["stretch_high"]
+            # Force cache regeneration through the public endpoint on the next iteration.
+            (settings.data_dir / display.storage_path).unlink()
+    for path, content in originals.items():
+        assert path.read_bytes() == content
 
 
 def test_failure_retry_dedup_and_trash_block_active_job(service, monkeypatch):

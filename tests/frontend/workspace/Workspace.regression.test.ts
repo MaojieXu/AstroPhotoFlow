@@ -11,16 +11,14 @@ vi.mock('@frontend/assets/host-client', () => ({ assetApi: { get, getBlob, send 
 
 const capabilities = {
   stage: 'ingestion', shared_library_read: true, project_assets_read: true,
-  project_management: true, equipment_management: true, capture_profile_management: true,
-  asset_import: false, asset_reference_write: false, asset_preview: false,
+  project_management: true, equipment_management: true, asset_import: false, asset_reference_write: false, asset_preview: false,
   asset_metadata_edit: true, dataset_management: true, asset_task_management: true, calibration_matching: false, asset_publish: false
 }
 const emptyPage = { items: [], total: 0, limit: 50, offset: 0 }
 const createdAt = '2026-10-22T20:00:00Z'
 const project = {
   id: '1f740b2c-75f3-4f76-8f85-f08ade40a33f',
-  name: 'M31', target_name: null, notes: null, capture_profile_ids: [],
-  status: 'active', revision: 1, created_at: '2026-10-22T20:00:00Z', updated_at: '2026-10-22T20:00:00Z'
+  name: 'M31', target_name: null, notes: null, status: 'active', revision: 1, created_at: '2026-10-22T20:00:00Z', updated_at: '2026-10-22T20:00:00Z'
 }
 const idAt = (index: number) => '00000000-0000-4000-8000-' + String(index).padStart(12, '0')
 const libraryAsset = {
@@ -28,26 +26,15 @@ const libraryAsset = {
   classification:{frame_class:'subframe',frame_type:'light'},
   parameters:{camera_id:null,optical_system_id:null,filter_id:null,parameter_mode:'standard',iso:null,gain:null,offset:null,
     exposure_seconds:null,integration_seconds:null,sensor_temperature_c:null,binning_x:null,binning_y:null,cfa_pattern:null},
-  value_sources:{},notes:null,status:'active',revision:1,created_at:'2026-10-22T20:00:00Z',current_version:null
+  equipment_snapshot:{},value_sources:{},notes:null,status:'active',revision:1,created_at:'2026-10-22T20:00:00Z',current_version:null
 }
-const profileAt = (index: number) => ({
-  id: idAt(index), name: 'Profile ' + index, camera_id: idAt(index + 1000),
-  optical_system_id: null, filter_id: null, frame_type: 'light',
-  exposure_seconds: null, gain: null, offset: null, sensor_temperature_c: null,
-  binning_x: null, binning_y: null, notes: null, status: 'active', revision: 1,
-  created_at: '2026-10-22T20:00:00Z', updated_at: '2026-10-22T20:00:00Z'
-})
+
 const camera = {
   id:idAt(2500),kind:'camera',name:'Camera Alpha',model:'Alpha 1',serial_number:null,notes:null,
   specs:{sensor_mode:'color',sensor_width_px:2048,sensor_height_px:1536,pixel_size_x_um:3.76,pixel_size_y_um:3.76,native_bit_depth:14,cfa_pattern:'RGGB'},
   status:'active',revision:1,created_at:'2026-10-22T20:00:00Z',updated_at:'2026-10-22T20:00:00Z'
 }
-const captureProfile = (index:number) => ({
-  id:idAt(index),name:'Capture profile',camera_id:camera.id,optical_system_id:null,filter_id:null,frame_type:'light',
-  parameter_mode:'iso',iso:800,exposure_seconds:30,gain:42,offset:12,sensor_temperature_c:-10.129,
-  binning_x:1,binning_y:1,notes:null,status:'active',revision:1,
-  created_at:'2026-10-22T20:00:00Z',updated_at:'2026-10-22T20:00:00Z'
-})
+
 const page = (items: unknown[], total = items.length, offset = 0, limit = 50) => ({ items, total, limit, offset })
 const url = (path: string) => new URL(path, 'http://comfy.test')
 async function clickDetail(element:Element,detail:number){
@@ -82,6 +69,41 @@ async function openSettings() {
 }
 
 describe('first-stage regression fixes', () => {
+  it('renders each material equipment snapshot independently from the current registry',async()=>{
+    const materials=['Old camera name','Later camera name'].map((name,index)=>({
+      ...libraryAsset,id:idAt(510+index),name:'Photo '+index,
+      parameters:{...libraryAsset.parameters,camera_id:camera.id},
+      equipment_snapshot:{camera_id:{...camera,name}},
+    }))
+    get.mockImplementation(async(path:string)=>{
+      if(path.endsWith('/capabilities'))return capabilities
+      if(path.includes('/library/items'))return page(materials.map(asset=>({entry_type:'asset',asset,import_issue:null})))
+      if(url(path).pathname.endsWith('/equipment'))return page([{...camera,name:'Current registry name'}])
+      return emptyPage
+    })
+    wrapper=mount(App,{global:{plugins:[pinia]}});await flushPromises()
+    expect(wrapper.findAll('.apf-assets-table tbody tr td:nth-child(4)').map(cell=>cell.text())).toEqual(['Old camera name','Later camera name'])
+  })
+
+  it('uses the pinned equipment snapshot when viewing a project asset reference',async()=>{
+    const version={id:idAt(520),asset_id:libraryAsset.id,version_number:1,storage_mode:'managed',storage_location:'objects/source.png',
+      byte_size:1,content_hash:null,availability:'available',camera_id:camera.id,optical_system_id:null,filter_id:null,
+      frame_type:'light',calibration_level:null,capture_snapshot:{equipment_snapshot:{camera_id:{...camera,name:'Pinned camera name'}}},scientific_metadata:{},created_at:createdAt}
+    const asset={...libraryAsset,current_version_id:version.id,current_version:version,
+      parameters:{...libraryAsset.parameters,camera_id:camera.id},equipment_snapshot:{camera_id:{...camera,name:'Edited material name'}}}
+    get.mockImplementation(async(path:string)=>{
+      if(path.endsWith('/capabilities'))return capabilities
+      if(url(path).pathname.endsWith('/projects'))return page([project])
+      if(url(path).pathname.endsWith('/assets'))return page([{id:idAt(521),project_id:project.id,asset_version_id:version.id,added_at:createdAt,asset,version}])
+      if(url(path).pathname.endsWith('/equipment'))return page([{...camera,name:'Current registry name'}])
+      return emptyPage
+    })
+    wrapper=mount(App,{global:{plugins:[pinia]}});await flushPromises();await openSettings()
+    await wrapper.get('.apf-record').trigger('click');await flushPromises()
+    await wrapper.findAll('.apf-details button').find(button=>button.text()==='查看项目资产')!.trigger('click');await flushPromises()
+    expect(wrapper.get('.apf-assets-table tbody tr td:nth-child(4)').text()).toBe('Pinned camera name')
+  })
+
   it('loads the latest page after an inline save finishes',async()=>{
     let finishPatch!: (value: unknown) => void
     const pageOne={entry_type:'asset',asset:libraryAsset,import_issue:null}
@@ -263,72 +285,9 @@ describe('first-stage regression fixes', () => {
     })
   })
 
-  it('commits ISO/Gain as one capture-profile parameter patch',async()=>{
-    const profile=captureProfile(2600)
-    get.mockImplementation(async(path:string)=>{
-      if(path.endsWith('/capabilities'))return capabilities
-      if(path.includes('/capture-profiles?'))return page([profile])
-      if(path.includes('/equipment?'))return page([camera])
-      return emptyPage
-    })
-    send.mockResolvedValue({...profile,parameter_mode:'gain',gain:55,revision:2})
-    wrapper=mount(App,{global:{plugins:[pinia]}})
-    await flushPromises()
-    await openSettings()
-    await wrapper.findAll('.apf-management-tabs button')[2].trigger('click')
-    await flushPromises()
-    await wrapper.findAll('button').find(button=>button.text()==='旧版拍摄配置')!.trigger('click')
-    await flushPromises()
-    await wrapper.get('.apf-record').trigger('click')
-    await flushPromises()
-    const selector='.apf-details .apf-detail-fields .apf-mode-field .apf-inline-value'
-    await clickDetail(wrapper.get(selector).element,1)
-    await clickDetail(wrapper.get(selector).element,2)
-    const mode=wrapper.get('.apf-details .apf-detail-fields .apf-mode-field select')
-    await mode.setValue('gain')
-    const gain=wrapper.get('.apf-details .apf-detail-fields input[aria-label="Gain"]')
-    expect((gain.element as HTMLInputElement).value).toBe('42')
-    await gain.setValue('55')
-    await gain.trigger('keydown',{key:'Enter'})
-    await flushPromises()
-    expect(send).toHaveBeenCalledWith('/astrophotoflow/api/v1/capture-profiles/'+profile.id,expect.anything(),'PATCH',{
-      base_revision:1,parameter_mode:'gain',gain:55
-    })
-  })
 
-  it('keeps unset camera and frame type selectable on capture profiles',async()=>{
-    const profile={...captureProfile(2700),camera_id:null,frame_type:null}
-    get.mockImplementation(async(path:string)=>{
-      if(path.endsWith('/capabilities'))return capabilities
-      if(path.includes('/capture-profiles?'))return page([profile])
-      if(path.includes('/equipment?'))return emptyPage
-      return emptyPage
-    })
-    wrapper=mount(App,{global:{plugins:[pinia]}})
-    await flushPromises()
-    await openSettings()
-    await wrapper.findAll('.apf-management-tabs button')[2].trigger('click')
-    await flushPromises()
-    await wrapper.findAll('button').find(button=>button.text()==='旧版拍摄配置')!.trigger('click')
-    await flushPromises()
-    await wrapper.get('.apf-record').trigger('click')
-    await flushPromises()
 
-    const cameraButton=wrapper.findAll('.apf-details .apf-inline-value').find(button=>button.element.parentElement?.parentElement?.textContent?.includes('相机'))!
-    await clickDetail(cameraButton.element,1)
-    await clickDetail(wrapper.findAll('.apf-details .apf-inline-value').find(button=>button.element.parentElement?.parentElement?.textContent?.includes('相机'))!.element,2)
-    let selector=wrapper.get('.apf-details .apf-detail-fields label:nth-child(2) select')
-    expect((selector.element as HTMLSelectElement).value).toBe('')
-    expect(selector.find('option[value=""]').text()).toBe('未指定')
-    await selector.trigger('keydown',{key:'Escape'})
 
-    const frameButton=wrapper.findAll('.apf-details .apf-inline-value').find(button=>button.element.parentElement?.parentElement?.textContent?.includes('帧用途'))!
-    await clickDetail(frameButton.element,1)
-    await clickDetail(wrapper.findAll('.apf-details .apf-inline-value').find(button=>button.element.parentElement?.parentElement?.textContent?.includes('帧用途'))!.element,2)
-    selector=wrapper.findAll('.apf-details .apf-detail-fields select').find(select=>select.find('option[value="light"]').exists())!
-    expect((selector.element as HTMLSelectElement).value).toBe('')
-    expect(selector.find('option[value=""]').text()).toBe('未指定')
-  })
 
   it('keeps an existing non-square Bin until a new Bin is selected',async()=>{
     const asset={...libraryAsset,parameters:{...libraryAsset.parameters,binning_x:1,binning_y:2}}
@@ -367,8 +326,7 @@ describe('first-stage regression fixes', () => {
     const members=[1,2].map((bin,index)=>{
       const assetId=idAt(710+index),assetVersionId=idAt(720+index)
       const version={id:assetVersionId,asset_id:assetId,version_number:1,storage_mode:'reference',storage_location:'roots/science/'+index+'.fits',
-        byte_size:1,content_hash:null,availability:'available',camera_id:null,optical_system_id:null,filter_id:null,capture_profile_id:null,
-        frame_type:'light',calibration_level:null,capture_snapshot:null,scientific_metadata:null,created_at:createdAt}
+        byte_size:1,content_hash:null,availability:'available',camera_id:null,optical_system_id:null,filter_id:null,frame_type:'light',calibration_level:null,capture_snapshot:null,scientific_metadata:null,created_at:createdAt}
       const asset={...libraryAsset,id:assetId,name:'Member '+index+'.fits',current_version_id:assetVersionId,
         parameters:{...libraryAsset.parameters,binning_x:bin,binning_y:bin},current_version:version}
       return {id:idAt(730+index),dataset_version_id:versionId,asset_version_id:assetVersionId,position:index,relative_path:null,asset,version}
@@ -417,55 +375,7 @@ describe('first-stage regression fixes', () => {
     })
   })
 
-  it('loads every profile page before editing project associations', async () => {
-    const profiles = Array.from({ length: 201 }, (_, index) => profileAt(index))
-    const existingId = profiles[200].id
-    get.mockImplementation(async (path: string) => {
-      if (path.endsWith('/capabilities')) return capabilities
-      const request = url(path)
-      if (request.pathname.endsWith('/projects')) return page([{ ...project, capture_profile_ids: [existingId] }])
-      if (request.pathname.endsWith('/equipment')) return emptyPage
-      if (request.pathname.endsWith('/capture-profiles')) {
-        const offset = Number(request.searchParams.get('offset'))
-        return page(profiles.slice(offset, offset + 200), profiles.length, offset, 200)
-      }
-      return emptyPage
-    })
-    send.mockImplementation(async(path:string,_schema:unknown,_method:string,body:Record<string,any>)=>({
-      ...project,
-      name:body.name??project.name,
-      capture_profile_ids:body.capture_profile_ids??[existingId],
-      revision:2
-    }))
-    wrapper = mount(App, { global: { plugins: [pinia] } })
-    await flushPromises()
-    await openSettings()
-    await wrapper.get('.apf-record').trigger('click')
-    await flushPromises()
-    await wrapper.findAll('button').find(button => button.text() === '编辑项目')!.trigger('click')
-    await flushPromises()
 
-    const projectName=wrapper.findAll('.apf-editor .apf-inline-value').find(button=>button.element.parentElement?.parentElement?.textContent?.startsWith('名称'))!
-    await clickDetail(projectName.element,1)
-    await clickDetail(wrapper.findAll('.apf-editor .apf-inline-value').find(button=>button.element.parentElement?.parentElement?.textContent?.startsWith('名称'))!.element,2)
-    await wrapper.get('.apf-editor input[type="text"]').setValue('M42')
-    await wrapper.get('.apf-editor input[type="text"]').trigger('keydown',{key:'Enter'})
-    await flushPromises()
-
-    const profileButton=wrapper.get('.apf-editor .apf-inline-multi-select .apf-inline-value').element
-    await clickDetail(profileButton,1)
-    await clickDetail(wrapper.get('.apf-editor .apf-inline-multi-select .apf-inline-value').element,2)
-    const choices = wrapper.get('.apf-editor select[multiple]')
-    expect(choices.find('option[value="' + existingId + '"]').exists()).toBe(true)
-    await choices.setValue([existingId, profiles[0].id])
-    await choices.trigger('keydown',{key:'Enter'})
-    await flushPromises()
-
-    expect(send.mock.calls[0][3]).toMatchObject({base_revision:1,name:'M42'})
-    const savedIds = send.mock.calls.at(-1)![3].capture_profile_ids as string[]
-    expect(new Set(savedIds)).toEqual(new Set([existingId, profiles[0].id]))
-    expect(get.mock.calls.some(([path]) => url(path).searchParams.get('offset') === '200')).toBe(true)
-  })
 
   it('keeps a failed inline draft when a create action is requested',async()=>{
     get.mockImplementation(async(path:string)=>{
@@ -705,7 +615,7 @@ describe('first-stage regression fixes', () => {
     expect(wrapper.text()).not.toContain('此处目前没有记录')
   })
 
-  it('resets filtered pages and search pages to offset zero', async () => {
+  it('resets search pages to offset zero', async () => {
     get.mockImplementation(async (path: string) => {
       if (path.endsWith('/capabilities')) return capabilities
       const request = url(path)
@@ -719,10 +629,6 @@ describe('first-stage regression fixes', () => {
     store.offset = 50
     await flushPromises()
     expect(url(get.mock.calls.at(-1)![0]).searchParams.get('offset')).toBe('50')
-
-    await wrapper.get('select[aria-label="状态筛选"]').setValue('archived')
-    await flushPromises()
-    expect(url(get.mock.calls.at(-1)![0]).searchParams.get('offset')).toBe('0')
 
     store.offset = 50
     await flushPromises()
@@ -825,11 +731,10 @@ describe('first-stage regression fixes', () => {
     const versionId = idAt(501)
     const datasetId = idAt(503)
     const datasetVersionId = idAt(504)
-    const profile = profileAt(650)
     const version = {
       id:versionId,asset_id:libraryAsset.id,version_number:1,storage_mode:'reference',storage_location:'raw/M31.fit',
       byte_size:100,content_hash:null,availability:'available',camera_id:null,optical_system_id:null,filter_id:null,
-      capture_profile_id:null,frame_type:'light',calibration_level:null,capture_snapshot:null,scientific_metadata:null,created_at:createdAt
+      frame_type:'light',calibration_level:null,capture_snapshot:null,scientific_metadata:null,created_at:createdAt
     }
     const addableAsset = {...libraryAsset,current_version_id:versionId,current_version:version}
     const datasetVersion = {id:datasetVersionId,dataset_id:datasetId,version_number:1,created_at:createdAt,members:[]}
@@ -837,7 +742,7 @@ describe('first-stage regression fixes', () => {
       member_count:0,created_at:createdAt,updated_at:createdAt}
     const assetReference = {id:idAt(502),project_id:project.id,asset_version_id:versionId,added_at:createdAt,asset:addableAsset,version}
     const datasetReference = {id:idAt(505),project_id:project.id,dataset_id:datasetId,dataset_version_id:datasetVersionId,
-      base_revision:5,added_at:createdAt,dataset,version:datasetVersion}
+      base_revision:4,added_at:createdAt,dataset,version:datasetVersion}
     let currentProject=project
     let assetReferenced=false
     let datasetReferenced=false
@@ -847,15 +752,13 @@ describe('first-stage regression fixes', () => {
       if (request.pathname === '/astrophotoflow/api/v1/projects') return page([currentProject])
       if (request.pathname === '/astrophotoflow/api/v1/library/assets') return page([addableAsset])
       if (request.pathname === '/astrophotoflow/api/v1/datasets') return page([dataset])
-      if (request.pathname === '/astrophotoflow/api/v1/capture-profiles') return page([profile])
       if (request.pathname === '/astrophotoflow/api/v1/projects/'+project.id+'/assets') return assetReferenced?page([assetReference]):emptyPage
       if (request.pathname === '/astrophotoflow/api/v1/projects/'+project.id+'/datasets') return datasetReferenced?page([datasetReference]):emptyPage
       return emptyPage
     })
     send.mockImplementation(async (path: string, _schema: unknown, method: string, body: Record<string, any>) => {
       if (path === '/astrophotoflow/api/v1/projects/'+project.id&&method==='PATCH') {
-        currentProject={...currentProject,name:body.name??currentProject.name,
-          capture_profile_ids:body.capture_profile_ids??currentProject.capture_profile_ids,revision:currentProject.revision+1}
+        currentProject={...currentProject,name:body.name??currentProject.name,revision:currentProject.revision+1}
         return currentProject
       }
       if (path === '/astrophotoflow/api/v1/projects/'+project.id+'/asset-references'&&method==='POST') {
@@ -890,13 +793,6 @@ describe('first-stage regression fixes', () => {
     await wrapper.get('.apf-details input[type="text"]').setValue('M42')
     await wrapper.get('.apf-details input[type="text"]').trigger('keydown', {key:'Enter'})
     await flushPromises()
-    const profileButton=wrapper.get('.apf-details .apf-inline-multi-select .apf-inline-value')
-    await clickDetail(profileButton.element,2)
-    const profiles=wrapper.get('.apf-details select[multiple]')
-    await profiles.setValue([profile.id])
-    await profiles.trigger('keydown',{key:'Enter'})
-    await flushPromises()
-
     await wrapper.findAll('.apf-details button').find(button=>button.text()==='查看项目资产')!.trigger('click')
     await flushPromises()
     await wrapper.findAll('.apf-toolbar button').find(button=>button.text()==='添加素材')!.trigger('click')
@@ -927,11 +823,10 @@ describe('first-stage regression fixes', () => {
     await flushPromises()
 
     expect(send.mock.calls[0][3]).toMatchObject({base_revision:1,name:'M42'})
-    expect(send.mock.calls[1][3]).toMatchObject({base_revision:2,capture_profile_ids:[profile.id]})
-    expect(send.mock.calls[2][3]).toMatchObject({base_revision:3,asset_version_id:versionId})
-    expect(send.mock.calls[3][3]).toMatchObject({base_revision:4})
-    expect(send.mock.calls[4][3]).toMatchObject({base_revision:5,dataset_id:datasetId,dataset_version_id:datasetVersionId})
-    expect(send.mock.calls[5][3]).toMatchObject({base_revision:6})
+    expect(send.mock.calls[1][3]).toMatchObject({base_revision:2,asset_version_id:versionId})
+    expect(send.mock.calls[2][3]).toMatchObject({base_revision:3})
+    expect(send.mock.calls[3][3]).toMatchObject({base_revision:4,dataset_id:datasetId,dataset_version_id:datasetVersionId})
+    expect(send.mock.calls[4][3]).toMatchObject({base_revision:5})
   })
 
   it('removes selected library rows while retaining a clear non-destructive explanation', async () => {

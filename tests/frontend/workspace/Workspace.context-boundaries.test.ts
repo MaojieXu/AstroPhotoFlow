@@ -7,11 +7,11 @@ const {get,send,getBlob}=vi.hoisted(()=>({get:vi.fn(),send:vi.fn(),getBlob:vi.fn
 vi.mock('@frontend/assets/host-client',()=>({assetApi:{get,send,getBlob}}))
 const id=(n:number)=>'00000000-0000-4000-8000-'+String(n).padStart(12,'0')
 const timestamp='2026-10-25T06:00:00Z'
-const cap={stage:'ingestion',shared_library_read:true,project_assets_read:true,project_management:true,equipment_management:true,capture_profile_management:true,asset_import:true,asset_reference_write:true,asset_preview:false,asset_metadata_edit:true,dataset_management:true,asset_task_management:true,calibration_matching:false,asset_publish:false}
+const cap={stage:'ingestion',shared_library_read:true,project_assets_read:true,project_management:true,equipment_management:true,asset_import:true,asset_reference_write:true,asset_preview:false,asset_metadata_edit:true,dataset_management:true,asset_task_management:true,calibration_matching:false,asset_publish:false}
 const camera={id:id(1),kind:'camera',name:'Camera',model:null,serial_number:null,notes:null,specs:{},status:'active',revision:1,created_at:timestamp,updated_at:timestamp}
 const setup={id:id(2),name:'Saved rig',components:[],notes:null,status:'active',revision:1,created_at:timestamp,updated_at:timestamp}
-const assetVersion={id:id(10),asset_id:id(9),version_number:1,storage_mode:'reference',storage_location:'root/photo.png',byte_size:10,content_hash:null,availability:'available',camera_id:null,optical_system_id:null,filter_id:null,capture_profile_id:null,frame_type:'light',calibration_level:'individual',capture_snapshot:{},scientific_metadata:{},created_at:timestamp}
-const asset={id:id(9),name:'Photo.png',scope:'shared',owner_project_id:null,role:'raw',calibration_level:'individual',current_version_id:assetVersion.id,classification:{frame_class:'subframe',frame_type:'light'},parameters:{parameter_mode:'standard'},value_sources:{},notes:null,status:'active',revision:1,created_at:timestamp,current_version:assetVersion}
+const assetVersion={id:id(10),asset_id:id(9),version_number:1,storage_mode:'reference',storage_location:'root/photo.png',byte_size:10,content_hash:null,availability:'available',camera_id:null,optical_system_id:null,filter_id:null,frame_type:'light',calibration_level:'individual',capture_snapshot:{},scientific_metadata:{},created_at:timestamp}
+const asset={id:id(9),name:'Photo.png',scope:'shared',owner_project_id:null,role:'raw',calibration_level:'individual',current_version_id:assetVersion.id,classification:{frame_class:'subframe',frame_type:'light'},parameters:{parameter_mode:'standard'},equipment_snapshot:{},value_sources:{},notes:null,status:'active',revision:1,created_at:timestamp,current_version:assetVersion}
 const page=(items:unknown[])=>({items,total:items.length,limit:200,offset:0})
 let wrapper:ReturnType<typeof mount>
 async function click(text:string){await wrapper.findAll('button').find(button=>button.text()===text)!.trigger('click');await flushPromises()}

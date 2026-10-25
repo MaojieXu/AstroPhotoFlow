@@ -64,7 +64,6 @@ class ProjectCreate(StrictModel):
     name: str
     target_name: str | None = None
     notes: str | None = None
-    capture_profile_ids: list[UuidInput] = Field(default_factory=list)
 
     _name = field_validator("name")(check_name)
 
@@ -75,7 +74,6 @@ class ProjectPatch(StrictModel):
     target_name: str | None = None
     notes: str | None = None
     status: Literal["active", "archived"] | None = None
-    capture_profile_ids: list[UuidInput] | None = None
 
     @field_validator("name")
     @classmethod
@@ -262,50 +260,8 @@ class AccessoryPatch(EquipmentPatchBase):
 EquipmentPatch = Annotated[CameraPatch | OpticalSystemPatch | FilterPatch | TelescopePatch | MountPatch | AccessoryPatch, Field(discriminator="kind")]
 
 
-class CaptureProfileCreate(StrictModel):
-    name: str
-    camera_id: UuidInput
-    optical_system_id: UuidInput | None = None
-    filter_id: UuidInput | None = None
-    frame_type: Literal["light", "bias", "dark", "flat", "dark_flat"]
-    parameter_mode: Literal["iso", "gain"] | None = None
-    iso: int | None = Field(default=None, gt=0)
-    exposure_seconds: float | None = Field(default=None, ge=0)
-    gain: float | None = None
-    offset: float | None = None
-    sensor_temperature_c: float | None = None
-    binning_x: int | None = Field(default=None, gt=0)
-    binning_y: int | None = Field(default=None, gt=0)
-    notes: str | None = None
-
-    _name = field_validator("name")(check_name)
-    _finite = field_validator("exposure_seconds", "gain", "offset", "sensor_temperature_c")(finite)
 
 
-class CaptureProfilePatch(StrictModel):
-    base_revision: int = Field(ge=1)
-    name: str | None = None
-    camera_id: UuidInput | None = None
-    optical_system_id: UuidInput | None = None
-    filter_id: UuidInput | None = None
-    frame_type: Literal["light", "bias", "dark", "flat", "dark_flat"] | None = None
-    parameter_mode: Literal["iso", "gain"] | None = None
-    iso: int | None = Field(default=None, gt=0)
-    exposure_seconds: float | None = Field(default=None, ge=0)
-    gain: float | None = None
-    offset: float | None = None
-    sensor_temperature_c: float | None = None
-    binning_x: int | None = Field(default=None, gt=0)
-    binning_y: int | None = Field(default=None, gt=0)
-    notes: str | None = None
-    status: Literal["active", "archived"] | None = None
-
-    @field_validator("name")
-    @classmethod
-    def validate_name(cls, value):
-        return None if value is None else check_name(value)
-
-    _finite = field_validator("exposure_seconds", "gain", "offset", "sensor_temperature_c")(finite)
 
 
 class ProjectOut(StrictModel):
@@ -313,7 +269,6 @@ class ProjectOut(StrictModel):
     name: str
     target_name: str | None
     notes: str | None
-    capture_profile_ids: list[UuidInput]
     status: Literal["active", "archived"]
     revision: int
     created_at: datetime
@@ -334,26 +289,6 @@ class EquipmentOut(StrictModel):
     updated_at: datetime
 
 
-class CaptureProfileOut(StrictModel):
-    id: UUID
-    name: str
-    camera_id: UuidInput
-    optical_system_id: UuidInput | None
-    filter_id: UuidInput | None
-    frame_type: Literal["light", "bias", "dark", "flat", "dark_flat"]
-    parameter_mode: Literal["iso", "gain"] | None
-    iso: int | None
-    exposure_seconds: float | None
-    gain: float | None
-    offset: float | None
-    sensor_temperature_c: float | None
-    binning_x: int | None
-    binning_y: int | None
-    notes: str | None
-    status: Literal["active", "archived"]
-    revision: int
-    created_at: datetime
-    updated_at: datetime
 
 
 class AssetVersionOut(StrictModel):
@@ -368,7 +303,6 @@ class AssetVersionOut(StrictModel):
     camera_id: UuidInput | None
     optical_system_id: UuidInput | None
     filter_id: UuidInput | None
-    capture_profile_id: UUID | None
     frame_type: Literal["light", "bias", "dark", "flat", "dark_flat"] | None
     calibration_level: Literal["individual", "master"] | None
     capture_snapshot: dict | None
@@ -386,6 +320,7 @@ class AssetOut(StrictModel):
     current_version_id: UUID | None
     classification: dict | None
     parameters: dict
+    equipment_snapshot: dict
     value_sources: dict
     notes: str | None
     status: Literal["active", "archived"]
@@ -418,11 +353,6 @@ class EquipmentPage(StrictModel):
     offset: int
 
 
-class CaptureProfilePage(StrictModel):
-    items: list[CaptureProfileOut]
-    total: int
-    limit: int
-    offset: int
 
 
 class AssetPage(StrictModel):

@@ -82,7 +82,6 @@
             "camera_id": null,
             "optical_system_id": null,
             "filter_id": null,
-            "capture_profile_id": null,
             "frame_type": null,
             "calibration_level": null,
             "capture_snapshot": {
@@ -133,7 +132,6 @@
           "camera_id": null,
           "optical_system_id": null,
           "filter_id": null,
-          "capture_profile_id": null,
           "frame_type": null,
           "calibration_level": null,
           "capture_snapshot": {
@@ -238,7 +236,6 @@
             "camera_id": null,
             "optical_system_id": null,
             "filter_id": null,
-            "capture_profile_id": null,
             "frame_type": null,
             "calibration_level": null,
             "capture_snapshot": {
@@ -289,7 +286,6 @@
           "camera_id": null,
           "optical_system_id": null,
           "filter_id": null,
-          "capture_profile_id": null,
           "frame_type": null,
           "calibration_level": null,
           "capture_snapshot": {
@@ -394,7 +390,6 @@
             "camera_id": null,
             "optical_system_id": null,
             "filter_id": null,
-            "capture_profile_id": null,
             "frame_type": null,
             "calibration_level": null,
             "capture_snapshot": {
@@ -444,7 +439,6 @@
           "camera_id": null,
           "optical_system_id": null,
           "filter_id": null,
-          "capture_profile_id": null,
           "frame_type": null,
           "calibration_level": null,
           "capture_snapshot": {
@@ -548,7 +542,6 @@
             "camera_id": null,
             "optical_system_id": null,
             "filter_id": null,
-            "capture_profile_id": null,
             "frame_type": null,
             "calibration_level": null,
             "capture_snapshot": {
@@ -587,7 +580,6 @@
           "camera_id": null,
           "optical_system_id": null,
           "filter_id": null,
-          "capture_profile_id": null,
           "frame_type": null,
           "calibration_level": null,
           "capture_snapshot": {
@@ -680,7 +672,6 @@
             "camera_id": null,
             "optical_system_id": null,
             "filter_id": null,
-            "capture_profile_id": null,
             "frame_type": null,
             "calibration_level": null,
             "capture_snapshot": {
@@ -719,7 +710,6 @@
           "camera_id": null,
           "optical_system_id": null,
           "filter_id": null,
-          "capture_profile_id": null,
           "frame_type": null,
           "calibration_level": null,
           "capture_snapshot": {
@@ -812,7 +802,6 @@
             "camera_id": null,
             "optical_system_id": null,
             "filter_id": null,
-            "capture_profile_id": null,
             "frame_type": null,
             "calibration_level": null,
             "capture_snapshot": {
@@ -851,7 +840,6 @@
           "camera_id": null,
           "optical_system_id": null,
           "filter_id": null,
-          "capture_profile_id": null,
           "frame_type": null,
           "calibration_level": null,
           "capture_snapshot": {
@@ -944,7 +932,6 @@
             "camera_id": null,
             "optical_system_id": null,
             "filter_id": null,
-            "capture_profile_id": null,
             "frame_type": null,
             "calibration_level": null,
             "capture_snapshot": {
@@ -983,7 +970,6 @@
           "camera_id": null,
           "optical_system_id": null,
           "filter_id": null,
-          "capture_profile_id": null,
           "frame_type": null,
           "calibration_level": null,
           "capture_snapshot": {
@@ -1076,7 +1062,6 @@
             "camera_id": null,
             "optical_system_id": null,
             "filter_id": null,
-            "capture_profile_id": null,
             "frame_type": null,
             "calibration_level": null,
             "capture_snapshot": {
@@ -1115,7 +1100,6 @@
           "camera_id": null,
           "optical_system_id": null,
           "filter_id": null,
-          "capture_profile_id": null,
           "frame_type": null,
           "calibration_level": null,
           "capture_snapshot": {
@@ -1208,7 +1192,6 @@
             "camera_id": null,
             "optical_system_id": null,
             "filter_id": null,
-            "capture_profile_id": null,
             "frame_type": null,
             "calibration_level": null,
             "capture_snapshot": {
@@ -1247,7 +1230,6 @@
           "camera_id": null,
           "optical_system_id": null,
           "filter_id": null,
-          "capture_profile_id": null,
           "frame_type": null,
           "calibration_level": null,
           "capture_snapshot": {
@@ -1340,7 +1322,6 @@
             "camera_id": null,
             "optical_system_id": null,
             "filter_id": null,
-            "capture_profile_id": null,
             "frame_type": null,
             "calibration_level": null,
             "capture_snapshot": {
@@ -1389,7 +1370,6 @@
           "camera_id": null,
           "optical_system_id": null,
           "filter_id": null,
-          "capture_profile_id": null,
           "frame_type": null,
           "calibration_level": null,
           "capture_snapshot": {
@@ -1492,7 +1472,6 @@
             "camera_id": null,
             "optical_system_id": null,
             "filter_id": null,
-            "capture_profile_id": null,
             "frame_type": null,
             "calibration_level": null,
             "capture_snapshot": {
@@ -1541,7 +1520,6 @@
           "camera_id": null,
           "optical_system_id": null,
           "filter_id": null,
-          "capture_profile_id": null,
           "frame_type": null,
           "calibration_level": null,
           "capture_snapshot": {
@@ -1644,7 +1622,6 @@
             "camera_id": null,
             "optical_system_id": null,
             "filter_id": null,
-            "capture_profile_id": null,
             "frame_type": null,
             "calibration_level": null,
             "capture_snapshot": {
@@ -1693,7 +1670,6 @@
           "camera_id": null,
           "optical_system_id": null,
           "filter_id": null,
-          "capture_profile_id": null,
           "frame_type": null,
           "calibration_level": null,
           "capture_snapshot": {
@@ -1796,7 +1772,6 @@
             "camera_id": null,
             "optical_system_id": null,
             "filter_id": null,
-            "capture_profile_id": null,
             "frame_type": null,
             "calibration_level": null,
             "capture_snapshot": {
@@ -1845,7 +1820,6 @@
           "camera_id": null,
           "optical_system_id": null,
           "filter_id": null,
-          "capture_profile_id": null,
           "frame_type": null,
           "calibration_level": null,
           "capture_snapshot": {
@@ -1948,7 +1922,6 @@
             "camera_id": null,
             "optical_system_id": null,
             "filter_id": null,
-            "capture_profile_id": null,
             "frame_type": null,
             "calibration_level": null,
             "capture_snapshot": {
@@ -1987,7 +1960,6 @@
           "camera_id": null,
           "optical_system_id": null,
           "filter_id": null,
-          "capture_profile_id": null,
           "frame_type": null,
           "calibration_level": null,
           "capture_snapshot": {
@@ -2080,7 +2052,6 @@
             "camera_id": null,
             "optical_system_id": null,
             "filter_id": null,
-            "capture_profile_id": null,
             "frame_type": null,
             "calibration_level": null,
             "capture_snapshot": {
@@ -2130,7 +2101,6 @@
           "camera_id": null,
           "optical_system_id": null,
           "filter_id": null,
-          "capture_profile_id": null,
           "frame_type": null,
           "calibration_level": null,
           "capture_snapshot": {
@@ -2234,7 +2204,6 @@
             "camera_id": null,
             "optical_system_id": null,
             "filter_id": null,
-            "capture_profile_id": null,
             "frame_type": null,
             "calibration_level": null,
             "capture_snapshot": {
@@ -2284,7 +2253,6 @@
           "camera_id": null,
           "optical_system_id": null,
           "filter_id": null,
-          "capture_profile_id": null,
           "frame_type": null,
           "calibration_level": null,
           "capture_snapshot": {
@@ -2388,7 +2356,6 @@
             "camera_id": null,
             "optical_system_id": null,
             "filter_id": null,
-            "capture_profile_id": null,
             "frame_type": null,
             "calibration_level": null,
             "capture_snapshot": {
@@ -2427,7 +2394,6 @@
           "camera_id": null,
           "optical_system_id": null,
           "filter_id": null,
-          "capture_profile_id": null,
           "frame_type": null,
           "calibration_level": null,
           "capture_snapshot": {
@@ -2520,7 +2486,6 @@
             "camera_id": null,
             "optical_system_id": null,
             "filter_id": null,
-            "capture_profile_id": null,
             "frame_type": null,
             "calibration_level": null,
             "capture_snapshot": {
@@ -2569,7 +2534,6 @@
           "camera_id": null,
           "optical_system_id": null,
           "filter_id": null,
-          "capture_profile_id": null,
           "frame_type": null,
           "calibration_level": null,
           "capture_snapshot": {
@@ -2672,7 +2636,6 @@
             "camera_id": null,
             "optical_system_id": null,
             "filter_id": null,
-            "capture_profile_id": null,
             "frame_type": null,
             "calibration_level": null,
             "capture_snapshot": {
@@ -2721,7 +2684,6 @@
           "camera_id": null,
           "optical_system_id": null,
           "filter_id": null,
-          "capture_profile_id": null,
           "frame_type": null,
           "calibration_level": null,
           "capture_snapshot": {
@@ -2824,7 +2786,6 @@
             "camera_id": null,
             "optical_system_id": null,
             "filter_id": null,
-            "capture_profile_id": null,
             "frame_type": null,
             "calibration_level": null,
             "capture_snapshot": {
@@ -2873,7 +2834,6 @@
           "camera_id": null,
           "optical_system_id": null,
           "filter_id": null,
-          "capture_profile_id": null,
           "frame_type": null,
           "calibration_level": null,
           "capture_snapshot": {
@@ -2976,7 +2936,6 @@
             "camera_id": null,
             "optical_system_id": null,
             "filter_id": null,
-            "capture_profile_id": null,
             "frame_type": null,
             "calibration_level": null,
             "capture_snapshot": {
@@ -3025,7 +2984,6 @@
           "camera_id": null,
           "optical_system_id": null,
           "filter_id": null,
-          "capture_profile_id": null,
           "frame_type": null,
           "calibration_level": null,
           "capture_snapshot": {
@@ -3128,7 +3086,6 @@
             "camera_id": null,
             "optical_system_id": null,
             "filter_id": null,
-            "capture_profile_id": null,
             "frame_type": null,
             "calibration_level": null,
             "capture_snapshot": {
@@ -3178,7 +3135,6 @@
           "camera_id": null,
           "optical_system_id": null,
           "filter_id": null,
-          "capture_profile_id": null,
           "frame_type": null,
           "calibration_level": null,
           "capture_snapshot": {
@@ -3282,7 +3238,6 @@
             "camera_id": null,
             "optical_system_id": null,
             "filter_id": null,
-            "capture_profile_id": null,
             "frame_type": null,
             "calibration_level": null,
             "capture_snapshot": {
@@ -3332,7 +3287,6 @@
           "camera_id": null,
           "optical_system_id": null,
           "filter_id": null,
-          "capture_profile_id": null,
           "frame_type": null,
           "calibration_level": null,
           "capture_snapshot": {
@@ -3436,7 +3390,6 @@
             "camera_id": null,
             "optical_system_id": null,
             "filter_id": null,
-            "capture_profile_id": null,
             "frame_type": null,
             "calibration_level": null,
             "capture_snapshot": {
@@ -3486,7 +3439,6 @@
           "camera_id": null,
           "optical_system_id": null,
           "filter_id": null,
-          "capture_profile_id": null,
           "frame_type": null,
           "calibration_level": null,
           "capture_snapshot": {
@@ -3590,7 +3542,6 @@
             "camera_id": null,
             "optical_system_id": null,
             "filter_id": null,
-            "capture_profile_id": null,
             "frame_type": null,
             "calibration_level": null,
             "capture_snapshot": {
@@ -3629,7 +3580,6 @@
           "camera_id": null,
           "optical_system_id": null,
           "filter_id": null,
-          "capture_profile_id": null,
           "frame_type": null,
           "calibration_level": null,
           "capture_snapshot": {
@@ -3722,7 +3672,6 @@
             "camera_id": null,
             "optical_system_id": null,
             "filter_id": null,
-            "capture_profile_id": null,
             "frame_type": null,
             "calibration_level": null,
             "capture_snapshot": {
@@ -3761,7 +3710,6 @@
           "camera_id": null,
           "optical_system_id": null,
           "filter_id": null,
-          "capture_profile_id": null,
           "frame_type": null,
           "calibration_level": null,
           "capture_snapshot": {
@@ -3854,7 +3802,6 @@
             "camera_id": null,
             "optical_system_id": null,
             "filter_id": null,
-            "capture_profile_id": null,
             "frame_type": null,
             "calibration_level": null,
             "capture_snapshot": {
@@ -3893,7 +3840,6 @@
           "camera_id": null,
           "optical_system_id": null,
           "filter_id": null,
-          "capture_profile_id": null,
           "frame_type": null,
           "calibration_level": null,
           "capture_snapshot": {
@@ -3986,7 +3932,6 @@
             "camera_id": null,
             "optical_system_id": null,
             "filter_id": null,
-            "capture_profile_id": null,
             "frame_type": null,
             "calibration_level": null,
             "capture_snapshot": {
@@ -4036,7 +3981,6 @@
           "camera_id": null,
           "optical_system_id": null,
           "filter_id": null,
-          "capture_profile_id": null,
           "frame_type": null,
           "calibration_level": null,
           "capture_snapshot": {
@@ -4140,7 +4084,6 @@
             "camera_id": null,
             "optical_system_id": null,
             "filter_id": null,
-            "capture_profile_id": null,
             "frame_type": null,
             "calibration_level": null,
             "capture_snapshot": {
@@ -4189,7 +4132,6 @@
           "camera_id": null,
           "optical_system_id": null,
           "filter_id": null,
-          "capture_profile_id": null,
           "frame_type": null,
           "calibration_level": null,
           "capture_snapshot": {
@@ -4292,7 +4234,6 @@
             "camera_id": null,
             "optical_system_id": null,
             "filter_id": null,
-            "capture_profile_id": null,
             "frame_type": null,
             "calibration_level": null,
             "capture_snapshot": {
@@ -4341,7 +4282,6 @@
           "camera_id": null,
           "optical_system_id": null,
           "filter_id": null,
-          "capture_profile_id": null,
           "frame_type": null,
           "calibration_level": null,
           "capture_snapshot": {
@@ -4444,7 +4384,6 @@
             "camera_id": null,
             "optical_system_id": null,
             "filter_id": null,
-            "capture_profile_id": null,
             "frame_type": null,
             "calibration_level": null,
             "capture_snapshot": {
@@ -4493,7 +4432,6 @@
           "camera_id": null,
           "optical_system_id": null,
           "filter_id": null,
-          "capture_profile_id": null,
           "frame_type": null,
           "calibration_level": null,
           "capture_snapshot": {

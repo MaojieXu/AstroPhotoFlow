@@ -7,8 +7,7 @@ const { get } = vi.hoisted(() => ({
   get: vi.fn(async (path: string) => path.endsWith('/capabilities')
     ? {
         stage: 'ingestion', shared_library_read: true, project_assets_read: true,
-        project_management: true, equipment_management: true, capture_profile_management: true,
-        asset_import: false, asset_reference_write: false, asset_preview: false,
+        project_management: true, equipment_management: true, asset_import: false, asset_reference_write: false, asset_preview: false,
         asset_metadata_edit: true, dataset_management: true, asset_task_management: true, calibration_matching: false, asset_publish: false
       }
     : { items: [], total: 0, limit: 50, offset: 0 })
@@ -60,9 +59,7 @@ describe('workspace panel', () => {
     await wrapper.findAll('.apf-management-tabs button').at(2)!.trigger('click')
     await flushPromises()
     expect(get.mock.calls.some(([path]) => path.includes('/equipment-setups?'))).toBe(true)
-    await wrapper.findAll('button').find(button=>button.text()==='旧版拍摄配置')!.trigger('click')
     await flushPromises()
-    expect(get.mock.calls.some(([path]) => path.includes('/capture-profiles?'))).toBe(true)
     await wrapper.get('.apf-nav button[aria-label="素材库"]').trigger('click')
     await flushPromises()
     expect(wrapper.get('h1').text()).toBe('素材库')

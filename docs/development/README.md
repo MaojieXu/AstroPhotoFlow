@@ -68,3 +68,7 @@ uv run --locked --no-sync python scripts/verify_distribution.py
 源码在 src/astrophotoflow，测试在 tests，维护脚本在 scripts。前端输出 build/frontend，Python 中间产物 build/python，发行物 dist，新报告与临时目录 .artifacts。实际运行配置、数据库及真实样本不进入发行包；sdist 包含配置示例和已构建前端资源。
 
 旧 service/、test/ 运行目录退役后不再作为启动入口。原始 Astro Dataset 保持原位，独立 RAW/HEIF 样本集中在 tests/data/reference-samples。完整安装和 workspace 迁移说明见[工作台使用](workbench.md)，当前状态见[开发上下文](current-context.md)。
+
+设置记录的搜索、筛选、批量回收、恢复、永久删除预览和设备快照规则见[设置记录管理](settings-management.md)。
+
+- [最终 bug 修复与设备资料解耦验收](final-bugfix-acceptance.md)

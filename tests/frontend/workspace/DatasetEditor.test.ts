@@ -14,12 +14,12 @@ const assetVersionId='00000000-0000-4000-8000-000000009103'
 const version={
   id:assetVersionId,asset_id:assetId,version_number:1,storage_mode:'reference',storage_location:'test/member.fits',
   byte_size:1,content_hash:null,availability:'available',camera_id:null,optical_system_id:null,filter_id:null,
-  capture_profile_id:null,frame_type:'light',calibration_level:null,capture_snapshot:null,scientific_metadata:null,created_at:createdAt
+  frame_type:'light',calibration_level:null,capture_snapshot:null,scientific_metadata:null,created_at:createdAt
 }
 const asset={
   id:assetId,name:'Member.fits',scope:'shared',owner_project_id:null,role:'raw',calibration_level:null,
   current_version_id:assetVersionId,classification:{frame_class:'subframe',frame_type:'light'},
-  parameters:{exposure_seconds:30},value_sources:{},notes:null,status:'active',revision:1,created_at:createdAt,current_version:version
+  parameters:{exposure_seconds:30},equipment_snapshot:{},value_sources:{},notes:null,status:'active',revision:1,created_at:createdAt,current_version:version
 }
 const member={id:'00000000-0000-4000-8000-000000009104',dataset_version_id:datasetVersionId,
   asset_version_id:assetVersionId,position:0,relative_path:null,asset,version}

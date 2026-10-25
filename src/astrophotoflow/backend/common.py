@@ -5,8 +5,8 @@ from fastapi import Request
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 from .errors import ApiError, invalid_reference, not_found
-from .models import Asset, AssetVersion, CaptureProfile, Dataset, DatasetMember, DatasetVersion, Equipment, FitsHduMetadata, Preview, Project, ProjectAssetReference, ProjectCaptureProfile, ProjectDatasetReference
-from .schemas import AssetOut, AssetVersionOut, CaptureProfileOut, EquipmentOut, ProjectAssetReferenceOut, ProjectOut, FitsHduOut
+from .models import Asset, AssetVersion, Dataset, DatasetMember, DatasetVersion, Equipment, FitsHduMetadata, Preview, Project, ProjectAssetReference, ProjectDatasetReference
+from .schemas import AssetOut, AssetVersionOut, EquipmentOut, ProjectAssetReferenceOut, ProjectOut, FitsHduOut
 from pathlib import Path
 from fastapi.responses import Response
 
@@ -39,16 +39,8 @@ def _status_clause(model, status: str):
     return None if status == "all" else model.status == status
 
 
-def _check_names(values: list[UUID]) -> list[str]:
-    ids = [str(value) for value in values]
-    if len(ids) != len(set(ids)):
-        raise ApiError(422, "VALIDATION_ERROR", "关联 ID 不能重复。", [{"path": "capture_profile_ids", "message": "关联 ID 不能重复。"}])
-    return ids
 
 
-def _check_profile_refs(session: Session, ids: list[str]) -> None:
-    if ids and len(session.scalars(select(CaptureProfile.id).where(CaptureProfile.id.in_(ids))).all()) != len(ids):
-        raise invalid_reference("一个或多个拍摄配置不存在。")
 
 
 def _check_equipment_ref(session: Session, value: str | None, kind: str, path: str) -> None:
@@ -59,21 +51,12 @@ def _check_equipment_ref(session: Session, value: str | None, kind: str, path: s
         raise invalid_reference(f"{path} 必须引用现存的 {kind} 设备。")
 
 
-def _check_profile_equipment(session: Session, camera_id: str, optical_id: str | None, filter_id: str | None) -> None:
-    _check_equipment_ref(session, camera_id, "camera", "camera_id")
-    _check_equipment_ref(session, optical_id, "optical_system", "optical_system_id")
-    _check_equipment_ref(session, filter_id, "filter", "filter_id")
 
 
 def _project_out(session: Session, row: Project) -> dict:
-    ids = session.scalars(
-        select(ProjectCaptureProfile.capture_profile_id)
-        .where(ProjectCaptureProfile.project_id == row.id)
-        .order_by(ProjectCaptureProfile.capture_profile_id)
-    ).all()
     return ProjectOut(
         id=UUID(row.id), name=row.name, target_name=row.target_name, notes=row.notes,
-        capture_profile_ids=[UUID(value) for value in ids], status=row.status, revision=row.revision,
+        status=row.status, revision=row.revision,
         created_at=_utc(row.created_at), updated_at=_utc(row.updated_at),
     ).model_dump()
 
@@ -86,15 +69,6 @@ def _equipment_out(row: Equipment) -> dict:
     ).model_dump()
 
 
-def _profile_out(row: CaptureProfile) -> dict:
-    return CaptureProfileOut(
-        id=UUID(row.id), name=row.name, camera_id=UUID(row.camera_id),
-        optical_system_id=_uuid(row.optical_system_id), filter_id=_uuid(row.filter_id),
-        frame_type=row.frame_type, parameter_mode=row.parameter_mode, iso=row.iso,
-        exposure_seconds=row.exposure_seconds, gain=row.gain, offset=row.offset,
-        sensor_temperature_c=row.sensor_temperature_c, binning_x=row.binning_x, binning_y=row.binning_y,
-        notes=row.notes, status=row.status, revision=row.revision, created_at=_utc(row.created_at), updated_at=_utc(row.updated_at),
-    ).model_dump()
 
 
 def _version_out(row: AssetVersion) -> dict:
@@ -103,7 +77,7 @@ def _version_out(row: AssetVersion) -> dict:
         storage_mode=row.storage_mode, storage_location=row.storage_location, byte_size=row.byte_size,
         content_hash=row.content_hash, availability=row.availability, camera_id=_uuid(row.camera_id),
         optical_system_id=_uuid(row.optical_system_id), filter_id=_uuid(row.filter_id),
-        capture_profile_id=_uuid(row.capture_profile_id), frame_type=row.frame_type,
+        frame_type=row.frame_type,
         calibration_level=row.calibration_level, capture_snapshot=row.capture_snapshot,
         scientific_metadata=row.scientific_metadata, created_at=_utc(row.created_at),
     ).model_dump()
@@ -129,11 +103,22 @@ def _asset_out(session: Session, row: Asset) -> dict:
     return AssetOut(
         id=UUID(row.id), name=row.name, scope=row.scope, owner_project_id=_uuid(row.owner_project_id),
         role=row.role, current_version_id=_uuid(row.current_version_id), created_at=_utc(row.created_at),
-        classification=row.classification, parameters=row.parameters or {}, value_sources=row.value_sources or {},
+        classification=row.classification, parameters=row.parameters or {}, equipment_snapshot=row.equipment_snapshot or {},
+        value_sources=row.value_sources or {},
         notes=row.notes, status=row.status, revision=row.revision,
         calibration_level=_current_calibration_level(row.classification, row.role),
         current_version=version,
     ).model_dump()
+
+
+def _equipment_snapshot(session: Session, equipment_id: str | None) -> dict | None:
+    if not equipment_id:
+        return None
+    row = session.get(Equipment, equipment_id)
+    if row is None:
+        return None
+    return {"id": row.id, "kind": row.kind, "name": row.name, "model": row.model,
+            "serial_number": row.serial_number, "specs": row.specs or {}, "notes": row.notes}
 
 
 def _reference_out(session: Session, ref: ProjectAssetReference, asset: Asset, version: AssetVersion) -> dict:

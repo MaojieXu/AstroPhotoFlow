@@ -127,11 +127,11 @@ it('keeps project dataset member browsing pinned to A while the current dataset 
   const page=(items:unknown[])=>({items,total:items.length,limit:50,offset:0})
   get.mockImplementation(async(path:string)=>{
     if(path.endsWith('/capabilities'))return {stage:'ingestion',shared_library_read:true,project_assets_read:true,
-      project_management:true,equipment_management:true,capture_profile_management:true,asset_import:true,
+      project_management:true,equipment_management:true,asset_import:true,
       asset_reference_write:true,asset_preview:true,asset_metadata_edit:true,dataset_management:true,
       asset_task_management:true,calibration_matching:false,asset_publish:false}
     if(path.includes('/projects/'+projectId+'/datasets'))return page([fixed])
-    if(path.includes('/projects?'))return page([{id:projectId,name:'Project',capture_profile_ids:[],revision:1,status:'active',created_at:created,updated_at:created}])
+    if(path.includes('/projects?'))return page([{id:projectId,name:'Project',revision:1,status:'active',created_at:created,updated_at:created}])
     if(path.includes('/datasets/'+datasetId+'/versions/'+datasetB))throw new Error('must not read the live B dataset')
     return page([])
   })

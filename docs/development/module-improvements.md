@@ -52,7 +52,7 @@
 `/equipment-setups/{id}/presets` 和 `/capture-presets/{id}`；需要跨组合查询时提供 GET `/capture-presets`。
 导入请求使用可选 `capture_preset_id`；接受时通过 `presets.capture_defaults_snapshot` 保存
 `AssetTask.import_defaults_snapshot`（parameters、classification、equipment_setup、capture_preset），重试复制该快照。
-导入 worker 不再读取可能已修改的预设。既有 CaptureProfile 和其接口保留，UI 组织在组合内。
+导入 worker 不再读取可能已修改的预设。后续最终修复已移除 CaptureProfile 及旧接口，配置统一使用组合和预设；任务设备快照规则见 [最终修复验收](final-bugfix-acceptance.md)。
 
 校准映射按 bias/dark/flat/dark_flat 存储；目标为 `{kind:"asset_version"|"dataset_version",id}`。
 DatasetVersion.calibration_defaults 和 DatasetMember.calibration_overrides 中缺失键表示无默认/继承，

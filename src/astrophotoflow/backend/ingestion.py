@@ -681,19 +681,30 @@ def _register_asset(database: Database, settings: Settings, task_data: dict, ite
     metadata_status = "failed" if parse_error else "available" if category in {"fits", "xisf"} else "unsupported"
     with database.write_session() as session:
         item = session.get(AssetTaskItem, item_id)
+        equipment_snapshot = {
+            key: deepcopy(defaults["equipment_snapshots"][str(parameters[key])])
+            for key in ("camera_id", "optical_system_id", "filter_id")
+            if parameters.get(key) is not None
+        }
+        equipment_links = {
+            key: value if value is not None and session.get(Equipment, str(value)) is not None else None
+            for key in ("camera_id", "optical_system_id", "filter_id")
+            for value in (parameters.get(key),)
+        }
         asset = Asset(id=asset_id, name=Path(asset_name).stem or asset_name, scope="shared", owner_project_id=None,
                       role=role, current_version_id=None, classification=classification, parameters=parameters,
-                      value_sources=value_sources, notes=task_data["notes"] if task_data["target_dataset_id"] is None else None,
+                      equipment_snapshot=equipment_snapshot, value_sources=value_sources,
+                      notes=task_data["notes"] if task_data["target_dataset_id"] is None else None,
                       status="active", revision=1)
         session.add(asset)
         session.flush()
         session.add(AssetVersion(
             id=version_id, asset_id=asset_id, version_number=1, storage_mode=task_data["storage_mode"],
             storage_location=location, byte_size=None, content_hash=None, availability="unknown",
-            camera_id=parameters.get("camera_id"), optical_system_id=parameters.get("optical_system_id"),
-            filter_id=parameters.get("filter_id"), capture_profile_id=None, frame_type=classification.get("frame_type"),
+            camera_id=equipment_links["camera_id"], optical_system_id=equipment_links["optical_system_id"],
+            filter_id=equipment_links["filter_id"], frame_type=classification.get("frame_type"),
             calibration_level=calibration_level,
-            capture_snapshot={**{key: parameters.get(key) for key in PARAMETER_KEYS}, "import_provenance": {
+            capture_snapshot={**{key: parameters.get(key) for key in PARAMETER_KEYS}, "equipment_snapshot": deepcopy(equipment_snapshot), "import_provenance": {
                 "value_sources": deepcopy(value_sources), "observed_parameters": deepcopy(parsed),
                 "defaults_snapshot": deepcopy(defaults),
             }},

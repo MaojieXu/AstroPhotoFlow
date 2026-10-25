@@ -23,9 +23,9 @@ def dataset_entry(record_id, members):
     }
 
 
-def ordered(entries, sort_by, order, equipment_names=None):
+def ordered(entries, sort_by, order):
     return sorted(entries, key=cmp_to_key(
-        lambda left, right: _compare_library_entries(left, right, sort_by, order, equipment_names or {})
+        lambda left, right: _compare_library_entries(left, right, sort_by, order)
     ))
 
 
@@ -112,6 +112,7 @@ def test_equipment_sorts_by_display_name_and_equal_values_use_stable_record_iden
     equal_asset = asset_entry("0000", name="same")
     equal_dataset = dataset_entry("0001", [asset_entry("member",name="same")])
     equal_dataset["dataset"]["name"]="same"
-    names = {"camera-a":"Zulu Camera", "camera-b":"alpha Camera"}
-    assert [row["id"] for row in ordered([zulu,alpha],"camera","asc",names)] == ["0002","0001"]
+    zulu["asset"]["equipment_snapshot"] = {"camera_id": {"id": "camera-a", "name": "Zulu Camera"}}
+    alpha["asset"]["equipment_snapshot"] = {"camera_id": {"id": "camera-b", "name": "alpha Camera"}}
+    assert [row["id"] for row in ordered([zulu,alpha],"camera","asc")] == ["0002","0001"]
     assert [row["entry_type"] for row in ordered([equal_dataset,equal_asset],"name","asc")] == ["asset","dataset"]

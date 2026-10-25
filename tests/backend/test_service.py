@@ -16,8 +16,8 @@ import astrophotoflow.backend as backend
 from astrophotoflow.backend.api import create_app
 from astrophotoflow.backend.db import Database
 from astrophotoflow.backend.models import (
-    Asset, AssetTask, AssetTaskItem, AssetVersion, Base, CaptureProfile, Dataset, DatasetMember, DatasetVersion, Equipment,
-    LibraryEntryRemoval, Preview, Project, ProjectAssetReference, ProjectCaptureProfile, ProjectDatasetReference,
+    Asset, AssetTask, AssetTaskItem, AssetVersion, Base, Dataset, DatasetMember, DatasetVersion, Equipment,
+    LibraryEntryRemoval, Preview, Project, ProjectAssetReference, ProjectDatasetReference,
 )
 from astrophotoflow.backend.schema import SCHEMA_REVISION, SchemaError, current_revision, database_lock, ensure_schema_for_serve, upgrade_database
 from astrophotoflow.backend.schemas import ErrorEnvelope
@@ -233,22 +233,8 @@ def test_config_crud_references_revision_and_persistence(service):
     duplicate=c.post("/api/v1/equipment",headers=auth(),json=b).json()
     assert camera["id"]!=duplicate["id"]
     optics=add_equipment(c,"optical_system","成像系统",{"native_focal_length_mm":600,"effective_focal_length_mm":400}).json()
-    bad=c.post("/api/v1/capture-profiles",headers=auth(),json={"name":"bad","camera_id":camera["id"],"optical_system_id":duplicate["id"],"frame_type":"light"})
-    missing=c.post("/api/v1/capture-profiles",headers=auth(),json={"name":"missing","camera_id":camera["id"],"optical_system_id":str(uuid4()),"frame_type":"light"})
-    assert bad.status_code==422 and bad.json()["error"]["code"]=="INVALID_REFERENCE"
-    assert missing.status_code==422 and missing.json()["error"]["code"]=="INVALID_REFERENCE"
-    assert c.get("/api/v1/capture-profiles",headers=auth()).json()["total"]==0
-    profile=c.post("/api/v1/capture-profiles",headers=auth(),json={"name":"bias","camera_id":camera["id"],"frame_type":"bias","parameter_mode":"iso","iso":800,"exposure_seconds":0,"gain":0,"offset":0,"sensor_temperature_c":-8,"binning_x":1,"binning_y":2})
-    assert profile.status_code==201 and profile.json()["binning_y"]==2 and profile.json()["parameter_mode"]=="iso" and profile.json()["iso"]==800
-    changed_profile=c.patch(f"/api/v1/capture-profiles/{profile.json()['id']}",headers=auth(),json={"base_revision":1,"parameter_mode":"gain","gain":24})
-    assert changed_profile.status_code==200 and changed_profile.json()["parameter_mode"]=="gain" and changed_profile.json()["iso"]==800
-    nan_body=("{\"name\":\"nonfinite\",\"camera_id\":\""+camera["id"]+"\",\"frame_type\":\"light\",\"gain\":NaN}").encode()
-    nonfinite=c.post("/api/v1/capture-profiles",headers={**auth(),"Content-Type":"application/json"},content=nan_body)
-    assert nonfinite.status_code==422
-    project=c.post("/api/v1/projects",headers=auth(),json={"name":"M31","capture_profile_ids":[profile.json()["id"]]})
+    project=c.post("/api/v1/projects",headers=auth(),json={"name":"M31"})
     assert project.status_code==201
-    dup=c.post("/api/v1/projects",headers=auth(),json={"name":"bad","capture_profile_ids":[profile.json()["id"],profile.json()["id"]]})
-    assert dup.status_code==422 and [x["id"] for x in c.get("/api/v1/projects",headers=auth()).json()["items"]]==[project.json()["id"]]
     update={"base_revision":1,"kind":"optical_system","specs":{"native_focal_length_mm":800}}
     first=c.patch(f"/api/v1/equipment/{optics['id']}",headers=auth(),json=update)
     stale=c.patch(f"/api/v1/equipment/{optics['id']}",headers=auth(),json={**update,"name":"stale"})
@@ -259,77 +245,11 @@ def test_config_crud_references_revision_and_persistence(service):
     assert archived.status_code==200 and c.get(f"/api/v1/equipment/{camera['id']}",headers=auth()).json()["status"]=="archived"
     restored=c.patch(f"/api/v1/equipment/{camera['id']}",headers=auth(),json={"base_revision":2,"kind":"camera","status":"active"})
     assert restored.status_code==200 and restored.json()["id"]==camera["id"]
-    assert c.get(f"/api/v1/projects/{project.json()['id']}",headers=auth()).json()["capture_profile_ids"]==[profile.json()["id"]]
     database.close()
     with TestClient(create_app(s,TOKEN)) as restarted:
         out=restarted.get(f"/api/v1/projects/{project.json()['id']}",headers=auth())
         assert out.status_code==200 and out.json()["created_at"].endswith("Z")
 
-def test_project_profile_patch_replaces_and_clears_associations(service):
-    _, c, _ = service
-    camera = c.post(
-        "/api/v1/equipment", headers=auth(),
-        json={"kind": "camera", "name": "association camera"},
-    ).json()
-    profiles = [
-        c.post(
-            "/api/v1/capture-profiles", headers=auth(),
-            json={"name": "profile " + str(index), "camera_id": camera["id"], "frame_type": "light"},
-        ).json()
-        for index in range(3)
-    ]
-    project = c.post(
-        "/api/v1/projects", headers=auth(),
-        json={"name": "association project", "capture_profile_ids": [profiles[0]["id"]]},
-    ).json()
-    assert project["capture_profile_ids"] == [profiles[0]["id"]]
-    assert project["revision"] == 1
-
-    replacement = sorted([profiles[1]["id"], profiles[2]["id"]], reverse=True)
-    expected_replacement = sorted(replacement)
-    assert replacement != expected_replacement
-    updated = c.patch(
-        f"/api/v1/projects/{project['id']}", headers=auth(),
-        json={"base_revision": 1, "capture_profile_ids": replacement},
-    )
-    assert updated.status_code == 200
-    assert updated.json()["revision"] == 2
-    assert updated.json()["capture_profile_ids"] == expected_replacement
-    persisted = c.get(f"/api/v1/projects/{project['id']}", headers=auth()).json()
-    assert persisted["revision"] == 2
-    assert persisted["capture_profile_ids"] == expected_replacement
-
-    cleared = c.patch(
-        f"/api/v1/projects/{project['id']}", headers=auth(),
-        json={"base_revision": 2, "capture_profile_ids": []},
-    )
-    assert cleared.status_code == 200
-    assert cleared.json()["revision"] == 3
-    assert cleared.json()["capture_profile_ids"] == []
-    persisted = c.get(f"/api/v1/projects/{project['id']}", headers=auth()).json()
-    assert persisted["revision"] == 3
-    assert persisted["capture_profile_ids"] == []
-
-    invalid_reference = c.patch(
-        f"/api/v1/projects/{project['id']}", headers=auth(),
-        json={"base_revision": 3, "name": "must not persist", "capture_profile_ids": [str(uuid4())]},
-    )
-    assert invalid_reference.status_code == 422
-    assert invalid_reference.json()["error"]["code"] == "INVALID_REFERENCE"
-    after_invalid_reference = c.get(f"/api/v1/projects/{project['id']}", headers=auth()).json()
-    assert after_invalid_reference["name"] == "association project"
-    assert after_invalid_reference["revision"] == 3
-    assert after_invalid_reference["capture_profile_ids"] == []
-
-    stale_revision = c.patch(
-        f"/api/v1/projects/{project['id']}", headers=auth(),
-        json={"base_revision": 2, "name": "stale", "capture_profile_ids": [profiles[0]["id"]]},
-    )
-    assert stale_revision.status_code == 409
-    after_stale_revision = c.get(f"/api/v1/projects/{project['id']}", headers=auth()).json()
-    assert after_stale_revision["name"] == "association project"
-    assert after_stale_revision["revision"] == 3
-    assert after_stale_revision["capture_profile_ids"] == []
 
 
 def test_shared_and_project_version_scope(service):
@@ -1035,7 +955,7 @@ def test_openapi_snapshot_matches_service_and_proxy_allowlist(service):
 
 
 
-def test_status_filters_for_projects_equipment_and_profiles(service):
+def test_status_filters_for_projects_and_equipment(service):
     _, c, _ = service
 
     def assert_filters(path, active_id, archived_id, kind=None):
@@ -1069,14 +989,6 @@ def test_status_filters_for_projects_equipment_and_profiles(service):
     ]
     assert_filters("/api/v1/equipment", cameras[0]["id"], cameras[1]["id"], "camera")
 
-    profiles = [
-        c.post(
-            "/api/v1/capture-profiles", headers=auth(),
-            json={"name": name, "camera_id": camera["id"], "frame_type": "light"},
-        ).json()
-        for name, camera in zip(("active profile", "archived profile"), cameras)
-    ]
-    assert_filters("/api/v1/capture-profiles", profiles[0]["id"], profiles[1]["id"])
 
 def test_datetime_serialization_preserves_text_and_snapshots(service):
     _, c, database = service

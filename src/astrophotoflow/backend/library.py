@@ -79,7 +79,7 @@ def _entry_members(entry: dict) -> list[dict]:
     return [{"asset": entry["asset"], "version": entry["asset"].get("current_version")}]
 
 
-def _asset_sort_value(member: dict, sort_by: str, equipment_names: dict[str, str]):
+def _asset_sort_value(member: dict, sort_by: str):
     asset, version = member["asset"], member["version"] or {}
     parameters, classification = asset.get("parameters") or {}, asset.get("classification") or {}
     if sort_by == "classification":
@@ -87,7 +87,7 @@ def _asset_sort_value(member: dict, sort_by: str, equipment_names: dict[str, str
     if sort_by in {"camera", "optical_system", "filter"}:
         key = {"camera": "camera_id", "optical_system": "optical_system_id", "filter": "filter_id"}[sort_by]
         record_id = parameters.get(key)
-        return equipment_names.get(record_id) if record_id else None
+        return (asset.get("equipment_snapshot", {}).get(key) or {}).get("name") if record_id else None
     if sort_by == "parameter_mode":
         mode = parameters.get("parameter_mode")
         if mode == "iso":
@@ -131,12 +131,12 @@ def _value_state(value, sort_by: str) -> int:
     return 0
 
 
-def _entry_sort_value(entry: dict, sort_by: str, equipment_names: dict[str, str]):
+def _entry_sort_value(entry: dict, sort_by: str):
     if entry["entry_type"] == "dataset" and sort_by in {"name", "status", "notes"}:
         value = entry["dataset"].get(sort_by)
         return (2, None) if value is None else (0, value)
     members = _entry_members(entry)
-    values = [_asset_sort_value(member, sort_by, equipment_names) for member in members]
+    values = [_asset_sort_value(member, sort_by) for member in members]
     if sort_by == "parameter_mode":
         modes = {value[0] for value in values}
         if not values or modes == {2}:
@@ -175,13 +175,13 @@ def _compare_values(left, right, sort_by: str) -> int:
     return _cmp(left, right)
 
 
-def _compare_library_entries(left: dict, right: dict, sort_by: str, order: str, equipment_names: dict[str, str]) -> int:
+def _compare_library_entries(left: dict, right: dict, sort_by: str, order: str) -> int:
     direction = -1 if order == "desc" else 1
     if sort_by == "created_at":
         result = _cmp(left["sort_created_at"], right["sort_created_at"]) * direction
     else:
-        left_value = _entry_sort_value(left, sort_by, equipment_names)
-        right_value = _entry_sort_value(right, sort_by, equipment_names)
+        left_value = _entry_sort_value(left, sort_by)
+        right_value = _entry_sort_value(right, sort_by)
         if sort_by == "parameter_mode":
             result = _cmp(left_value[0], right_value[0])
             if not result:
@@ -319,8 +319,7 @@ def library_items(
         entries.append({"entry_type": "asset", "id": asset.id, "asset": shared._asset_out(session, asset),
                         "import_issue": issue_by_asset.get(asset.id),
                         "sort_created_at": asset.created_at, "sort_name": asset.name})
-    equipment_names = {row.id: row.name for row in session.scalars(select(Equipment)).all()}
-    entries.sort(key=cmp_to_key(lambda left, right: _compare_library_entries(left, right, sort_by, order, equipment_names)))
+    entries.sort(key=cmp_to_key(lambda left, right: _compare_library_entries(left, right, sort_by, order)))
     page = [{key: value for key, value in entry.items() if not key.startswith("sort_") and key != "id"} for entry in entries[offset:offset + limit]]
     return shared._page(page, len(entries), limit, offset)
 
@@ -364,11 +363,15 @@ def library_filter_options(session: deps.ReadSession):
 
     equipment_ids = {key: {parameter[key] for parameter in parameters if parameter.get(key) is not None}
                       for key in ("camera_id", "optical_system_id", "filter_id")}
+    equipment_names = {key: {} for key in equipment_ids}
+    for record in records:
+        for key, snapshot in record["equipment_snapshot"].items():
+            equipment_names[key].setdefault(snapshot["id"], set()).add(snapshot["name"])
     equipment_options = {}
     for key, ids in equipment_ids.items():
-        equipment_options[key] = [{"id": UUID(row.id), "name": row.name} for row in session.scalars(
-            select(Equipment).where(Equipment.id.in_(ids)).order_by(Equipment.name, Equipment.id)
-        ).all()] if ids else []
+        names = {value: " / ".join(sorted(equipment_names[key][value], key=str.casefold)) for value in ids}
+        equipment_options[key] = [{"id": UUID(value), "name": names[value]}
+                                  for value in sorted(ids, key=lambda value: (names[value].casefold(), value))]
     numeric_ranges = {}
     for key in ("exposure_seconds", "integration_seconds", "sensor_temperature_c", "iso", "gain", "offset"):
         known = [row[key] for row in parameters if row.get(key) is not None]
@@ -404,6 +407,7 @@ def patch_asset(asset_id: UUID, body: AssetPatch, session: deps.WriteSession):
     shared._assert_patch_values(changes, {"name", "status"})
     classification = dict(asset.classification or {})
     parameters = dict(asset.parameters or {})
+    equipment_snapshot = dict(asset.equipment_snapshot or {})
     value_sources = dict(asset.value_sources or {})
     if body.classification is not None:
         patch = body.classification.model_dump(exclude_unset=True)
@@ -428,9 +432,19 @@ def patch_asset(asset_id: UUID, body: AssetPatch, session: deps.WriteSession):
         for key in patch:
             value_sources[key] = "manual"
         for key, kind in (("camera_id", "camera"), ("optical_system_id", "optical_system"), ("filter_id", "filter")):
-            if parameters.get(key) is not None:
-                shared._check_equipment_ref(session, parameters[key], kind, f"parameters.{key}")
+            if key not in patch:
+                continue
+            equipment_id = parameters.get(key)
+            if equipment_id is None:
+                equipment_snapshot.pop(key, None)
+            else:
+                current_snapshot = equipment_snapshot.get(key)
+                if session.get(Equipment, str(equipment_id)) is None and str(parameters.get(key)) == str((asset.parameters or {}).get(key)) and current_snapshot and current_snapshot.get("id") == str(equipment_id):
+                    continue
+                shared._check_equipment_ref(session, equipment_id, kind, f"parameters.{key}")
+                equipment_snapshot[key] = shared._equipment_snapshot(session, str(equipment_id))
         changes["parameters"] = parameters
+        changes["equipment_snapshot"] = equipment_snapshot
     if body.classification is not None or body.parameters is not None:
         changes["value_sources"] = value_sources
     result = session.execute(update(Asset).where(

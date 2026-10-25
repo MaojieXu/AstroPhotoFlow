@@ -7,8 +7,7 @@ const { get, send } = vi.hoisted(() => ({ get: vi.fn(), send: vi.fn() }))
 vi.mock('@frontend/assets/host-client', () => ({ assetApi: { get, send } }))
 const capabilities = {
   stage: 'ingestion', shared_library_read: true, project_assets_read: true,
-  project_management: true, equipment_management: true, capture_profile_management: true,
-  asset_import: true, asset_reference_write: false, asset_preview: false,
+  project_management: true, equipment_management: true, asset_import: true, asset_reference_write: false, asset_preview: false,
   asset_metadata_edit: true, dataset_management: true, asset_task_management: true,
   calibration_matching: false, asset_publish: false
 }

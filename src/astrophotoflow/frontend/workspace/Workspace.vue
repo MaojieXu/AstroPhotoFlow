@@ -2,7 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'
 import { z } from 'zod'
 import {
-  assetSchema, capabilitiesSchema, captureProfileSchema, datasetReferenceSchema, datasetSchema, libraryEntriesRemoveRequestSchema,
+  assetSchema, capabilitiesSchema, datasetReferenceSchema, datasetSchema, libraryEntriesRemoveRequestSchema,
   libraryEntriesRemoveSchema,
   datasetVersionSchema, datasetMemberParametersUpdateSchema, equipmentSchema, importAcceptedSchema, pageSchema, projectAssetReferenceSchema,
   projectSchema, libraryItemSchema, taskSchema, equipmentSetupSchema, type Asset
@@ -14,12 +14,13 @@ import { useWorkspaceStore, type WorkspaceSection } from './store'
 import PhotoPreviewDialog, { type PreviewPhoto } from './PhotoPreviewDialog.vue'
 import ImportDialog from './ImportDialog.vue'
 import LibraryTrashDialog from './LibraryTrashDialog.vue'
+import SettingsTrashDialog from './SettingsTrashDialog.vue'
 import { firstLevelImportFiles } from './folder-selection'
 import LibraryPage from './LibraryPage.vue'
 import SettingsPage from './SettingsPage.vue'
 
 type RecordData = Record<string, any>
-type EditorType = 'project' | 'equipment' | 'capture-profile'
+type EditorType = 'project' | 'equipment'
 type InputField = { key: string; label: string; type?: string; options?: string[]; integer?: boolean }
 type WorkspaceArea = 'library' | 'nodes' | 'software' | 'agent' | 'settings'
 
@@ -35,7 +36,15 @@ const error = ref<ApiClientError>()
 const capabilityError = ref<ApiClientError>()
 const statusFilter = ref<'active' | 'archived' | 'all'>('active')
 const equipmentKindFilter = ref('')
+const projectTargetFilter = ref('')
+const setupKindFilter = ref('')
+const equipmentKindFilterDraft = ref('')
+const projectTargetFilterDraft = ref('')
+const setupKindFilterDraft = ref('')
+const managementFilterOpen = ref(false)
+const managementFilterCount = computed(()=>Number(Boolean(equipmentKindFilter.value))+Number(Boolean(projectTargetFilter.value))+Number(Boolean(setupKindFilter.value)))
 const setupDirty = ref(false)
+const setupSaving = ref(false)
 const calibrationDirty = ref(false)
 const libraryCategory = ref<'all'|'light'|'calibration'>('all')
 const roleFilter = ref('')
@@ -68,6 +77,12 @@ const bulkDeleteNotice = ref('')
 const bulkConfirmOpen = ref(false)
 const bulkConfirmRows = ref<RecordData[]>([])
 const trashOpen = ref(false)
+const pendingManagementArchive = ref<{section:WorkspaceSection;row:RecordData;entry_type?:'project'|'equipment'|'equipment_setup'|'capture_preset'}>()
+const managementArchiveBusy = ref(false)
+const managementSelectMode = ref(false)
+const managementSelection = ref(new Map<string,{section:WorkspaceSection;row:RecordData}>())
+const managementTrashOpen = ref(false)
+const managementChangeToken = ref(0)
 const progressRefreshToken = ref(0)
 const uploadProgress = ref<Record<string, { loaded: number; total: number }>>({})
 const watchedTaskIds = ref<string[]>([])
@@ -90,13 +105,14 @@ const relatedEquipment = ref<RecordData[]>([])
 const relatedEquipmentLoading = ref(false)
 const relatedEquipmentError = ref('')
 const relatedEquipmentReady = ref(false)
-const relatedProfiles = ref<RecordData[]>([])
-const relatedProfilesLoading = ref(false)
-const relatedProfilesError = ref('')
-const relatedProfilesReady = ref(false)
+
+
+
+
 let searchTimer: ReturnType<typeof setTimeout> | undefined
 let recordsLoadPending = false
 
+const managementFilterBlocked = computed(() => dirty.value || setupSaving.value || saving.value || savingInline.value > 0)
 const dirty = computed(() => setupDirty.value || calibrationDirty.value || (editorType.value !== undefined && JSON.stringify(draft.value) !== originalDraft.value))
 const isAssetSection = computed(() =>
   store.section === 'calibration' || viewingProjectAssets.value ||
@@ -162,7 +178,7 @@ const cfaChoices=[
   {value:'RGGB',label:'RGGB'},{value:'BGGR',label:'BGGR'},{value:'GRBG',label:'GRBG'},{value:'GBRG',label:'GBRG'},
   {value:'XTRANS',label:'X-Trans 6×6'},{value:'QUAD_BAYER',label:'Quad Bayer'}
 ]
-const equipmentKinds = ['camera', 'telescope', 'filter', 'mount', 'accessory', 'optical_system']
+const equipmentKinds = ['camera', 'telescope', 'filter', 'mount', 'accessory']
 const equipmentKindLabels:Record<string,string> = {camera:'相机',telescope:'望远镜',filter:'滤镜',mount:'赤道仪',accessory:'配件',optical_system:'成像系统（既有）'}
 function specKind(field:InputField):'number'|'select'|'text'{
   return field.key==='cfa_pattern'||field.options?'select':field.type==='number'?'number':'text'
@@ -255,31 +271,24 @@ function equipmentChoiceMessage(kind:string){
 }
 
 function equipmentChoices(kind:string){
-  return relatedEquipment.value.filter(item=>item.kind===kind).map(item=>({
-    value:item.id,label:item.name+(item.status==='archived'?' · 已归档':''),disabled:relatedEquipmentLoading.value||Boolean(relatedEquipmentError.value)
+  const current=relatedEquipment.value.filter(item=>item.kind===kind).map(item=>({
+    value:item.id,label:item.name+(item.status==='archived'?' · 回收站':''),disabled:item.status==='archived'||relatedEquipmentLoading.value||Boolean(relatedEquipmentError.value)
   }))
+  const ids=new Set(current.map(item=>item.value))
+  for(const snapshot of historicalEquipmentSnapshots()){
+    if(snapshot.kind===kind&&typeof snapshot.id==='string'&&!ids.has(snapshot.id)){
+      current.push({value:snapshot.id,label:String(snapshot.name)+' · 已从设备库移除',disabled:true})
+      ids.add(snapshot.id)
+    }
+  }
+  return current
 }
 
-function profileChoices(){
-  return relatedProfiles.value.map(profile=>({
-    value:profile.id,label:profile.name+(profile.status==='archived'?' · 已归档':''),disabled:relatedProfilesLoading.value||Boolean(relatedProfilesError.value)
-  }))
-}
 
-function profileChoiceMessage(){
-  if(relatedProfilesLoading.value)return '正在读取拍摄设置…'
-  if(relatedProfilesError.value)return relatedProfilesError.value
-  return relatedProfiles.value.length?'':'尚未创建拍摄设置。'
-}
 
-async function loadRelatedProfiles(force=false){
-  if(relatedProfilesLoading.value||(!force&&relatedProfilesReady.value))return
-  relatedProfilesLoading.value=true
-  relatedProfilesError.value=''
-  try{relatedProfiles.value=await loadAll('/capture-profiles',captureProfileSchema);relatedProfilesReady.value=true}
-  catch(cause){relatedProfilesError.value=errorText(presentError(cause));relatedProfilesReady.value=false}
-  finally{relatedProfilesLoading.value=false}
-}
+
+
+
 
 async function loadCapabilities() {
   try {
@@ -311,7 +320,7 @@ async function loadRecords() {
       const members=version.members.map(member=>({...member.asset,asset:member.asset,version:member.version,entry_type:'asset',member_position:member.position}))
       const needle=store.query.trim().toLocaleLowerCase()
       const filtered=members.filter(row=>!needle||String(row.name??'').toLocaleLowerCase().includes(needle))
-      const value=(row:RecordData,by:string)=>({name:row.name,classification:row.classification?.frame_class,camera:row.parameters?.camera_id,parameter_mode:row.parameters?.iso??row.parameters?.gain,exposure_seconds:row.parameters?.exposure_seconds,sensor_temperature_c:row.parameters?.sensor_temperature_c,binning:row.parameters?.binning_x,cfa_pattern:row.parameters?.cfa_pattern,optical_system:row.parameters?.optical_system_id,filter:row.parameters?.filter_id,integration_seconds:row.parameters?.integration_seconds,storage_mode:row.version?.storage_mode,status:row.status,notes:row.notes,member_position:row.member_position} as Record<string,unknown>)[by]
+      const value=(row:RecordData,by:string)=>({name:row.name,classification:row.classification?.frame_class,camera:materialEquipmentValue(row,'camera_id'),parameter_mode:row.parameters?.iso??row.parameters?.gain,exposure_seconds:row.parameters?.exposure_seconds,sensor_temperature_c:row.parameters?.sensor_temperature_c,binning:row.parameters?.binning_x,cfa_pattern:row.parameters?.cfa_pattern,optical_system:materialEquipmentValue(row,'optical_system_id'),filter:materialEquipmentValue(row,'filter_id'),integration_seconds:row.parameters?.integration_seconds,storage_mode:row.version?.storage_mode,status:row.status,notes:row.notes,member_position:row.member_position} as Record<string,unknown>)[by]
       filtered.sort((a,b)=>{
         const left=value(a,librarySort.value.by),right=value(b,librarySort.value.by)
         const direction=librarySort.value.order==='asc'?1:-1
@@ -366,19 +375,15 @@ async function loadRecords() {
       loadedRows = page.items
       loadedTotal = page.total
     } else if (store.section === 'projects') {
-      const page = await loadWorkspacePage('/projects', projectSchema, {status: statusFilter.value})
+      const page = await loadWorkspacePage('/projects', projectSchema, {status: statusFilter.value,target_name:projectTargetFilter.value||undefined})
       loadedRows = page.items
       loadedTotal = page.total
     } else if (store.section === 'equipment') {
       const page = await loadWorkspacePage('/equipment', equipmentSchema, {status: statusFilter.value,kind:equipmentKindFilter.value})
       loadedRows = page.items
       loadedTotal = page.total
-    } else if (store.section === 'equipment-setups') {
-      const page = await loadWorkspacePage('/equipment-setups', equipmentSetupSchema, {status:statusFilter.value})
-      loadedRows = page.items
-      loadedTotal = page.total
     } else {
-      const page = await loadWorkspacePage('/capture-profiles', captureProfileSchema, {status: statusFilter.value})
+      const page = await loadWorkspacePage('/equipment-setups', equipmentSetupSchema, {status:statusFilter.value,component_kind:setupKindFilter.value||undefined})
       loadedRows = page.items
       loadedTotal = page.total
     }
@@ -475,6 +480,87 @@ function presentError(cause: unknown): ApiClientError {
   return new ApiClientError('请求失败。', 'contract')
 }
 
+function managementEntryType(section:WorkspaceSection){
+  if(section==='projects')return 'project' as const
+  if(section==='equipment')return 'equipment' as const
+  if(section==='equipment-setups')return 'equipment_setup' as const
+  return undefined
+}
+function requestManagementArchive(row:RecordData,entryType?:'capture_preset') {
+  if (!['projects','equipment','equipment-setups'].includes(store.section)) return
+  pendingManagementArchive.value = {section:store.section,row,entry_type:entryType??managementEntryType(store.section)}
+}
+
+async function updateManagementStatus(row:RecordData,status:'active'|'archived',section:WorkspaceSection=store.section) {
+  if (!await waitForInlineSave()) return
+  let path:string
+  let schema:ZodType<any>
+  let payload:RecordData={base_revision:row.revision,status}
+  if (section==='projects') {path='/projects/'+row.id;schema=projectSchema}
+  else if (section==='equipment') {path='/equipment/'+row.id;schema=equipmentSchema;payload.kind=row.kind}
+  else if (section==='equipment-setups') {path='/equipment-setups/'+row.id;schema=equipmentSetupSchema}
+  else return
+  error.value=undefined
+  managementArchiveBusy.value=true
+  try {
+    await assetApi.send('/astrophotoflow/api/v1'+path,schema,'PATCH',payload)
+    managementChangeToken.value++
+    pendingManagementArchive.value=undefined
+    await loadRecords()
+  } catch (cause) {error.value=presentError(cause)}
+  finally {managementArchiveBusy.value=false}
+}
+
+async function confirmManagementArchive() {
+  const pending=pendingManagementArchive.value
+  if (!pending||managementArchiveBusy.value) return
+  if(managementSelectMode.value){await confirmSelectedManagementArchive();return}
+  if (!await waitForInlineSave()) return
+  const body={items:[{entry_type:pending.entry_type??managementEntryType(pending.section),id:pending.row.id,revision:pending.row.revision}]}
+  managementArchiveBusy.value=true;error.value=undefined
+  try{
+    await assetApi.send('/astrophotoflow/api/v1/settings/trash/archive',z.object({archived_count:z.number().int()}).strict(),'POST',body)
+    pendingManagementArchive.value=undefined;selected.value=undefined;managementChangeToken.value++;await loadRecords()
+  }catch(cause){error.value=presentError(cause)}
+  finally{managementArchiveBusy.value=false}
+}
+
+function managementSelectionKey(section:WorkspaceSection,row:RecordData){return section+':'+row.id}
+function toggleManagementSelection(row:RecordData){
+  const key=managementSelectionKey(store.section,row),next=new Map(managementSelection.value)
+  if(next.has(key))next.delete(key);else next.set(key,{section:store.section,row})
+  managementSelection.value=next
+}
+function toggleManagementPage(event:Event){
+  const checked=(event.target as HTMLInputElement).checked,next=new Map(managementSelection.value)
+  for(const row of rows.value){const key=managementSelectionKey(store.section,row);if(checked)next.set(key,{section:store.section,row});else next.delete(key)}
+  managementSelection.value=next
+}
+const managementPageAllSelected=computed(()=>rows.value.length>0&&rows.value.every(row=>managementSelection.value.has(managementSelectionKey(store.section,row))))
+const managementPagePartiallySelected=computed(()=>rows.value.some(row=>managementSelection.value.has(managementSelectionKey(store.section,row)))&&!managementPageAllSelected.value)
+async function enterManagementSelectMode(){
+  if(!await waitForInlineSave())return
+  managementSelection.value=new Map();managementSelectMode.value=true;selected.value=undefined
+}
+function leaveManagementSelectMode(){managementSelectMode.value=false;managementSelection.value=new Map();pendingManagementArchive.value=undefined}
+function requestSelectedManagementArchive(){
+  if(!managementSelection.value.size)return
+  const first=managementSelection.value.values().next().value as {section:WorkspaceSection;row:RecordData}
+  if([...managementSelection.value.values()].some(item=>item.section!==first.section))return
+  pendingManagementArchive.value={section:first.section,row:{...first.row,name:`${managementSelection.value.size} 条设置`}}
+}
+async function confirmSelectedManagementArchive(){
+  if(!managementSelection.value.size||managementArchiveBusy.value)return
+  if(!await waitForInlineSave())return
+  const items=[...managementSelection.value.values()].map(({section,row})=>({entry_type:managementEntryType(section),id:row.id,revision:row.revision}))
+  managementArchiveBusy.value=true;error.value=undefined
+  try{
+    await assetApi.send('/astrophotoflow/api/v1/settings/trash/archive',z.object({archived_count:z.number().int()}).strict(),'POST',{items})
+    pendingManagementArchive.value=undefined;managementSelection.value=new Map();managementSelectMode.value=false;selected.value=undefined;managementChangeToken.value++;await loadRecords()
+  }catch(cause){error.value=presentError(cause)}
+  finally{managementArchiveBusy.value=false}
+}
+
 function errorText(value: ApiClientError) {
   if (value.kind === 'network') return '资产服务未连接，请检查服务是否运行。'
   if (value.kind === 'contract') return value.message
@@ -501,8 +587,12 @@ async function selectSection(section: WorkspaceSection) {
   viewingProjectDatasets.value = false
   addingProjectAssets.value = false
   addingProjectDatasets.value = false
+  managementFilterOpen.value=false
+  managementSelectMode.value=false
+  managementSelection.value=new Map()
+  equipmentKindFilter.value='';projectTargetFilter.value='';setupKindFilter.value=''
   store.selectSection(section)
-  if (section === 'projects' || section === 'equipment' || section === 'equipment-setups' || section === 'capture-profiles') {
+  if (section === 'projects' || section === 'equipment' || section === 'equipment-setups') {
     lastManagementSection.value = section
   }
   selected.value = undefined
@@ -531,6 +621,9 @@ async function selectArea(area: WorkspaceArea) {
   addingProjectDatasets.value = false
   selected.value = undefined
   filterPanelOpen.value = false
+  managementFilterOpen.value=false
+  managementSelectMode.value=false
+  managementSelection.value=new Map()
   store.query = ''
   store.offset = 0
   store.activeProjectId = null
@@ -538,6 +631,7 @@ async function selectArea(area: WorkspaceArea) {
   statusFilter.value = 'active'
   roleFilter.value = ''
   frameTypeFilter.value = ''
+  equipmentKindFilter.value='';projectTargetFilter.value='';setupKindFilter.value=''
   activeFilters.value = emptyFilters()
   activeArea.value = area
   if (area === 'library') {
@@ -676,10 +770,7 @@ function selectedBinSave(){
   const row=selected.value!
   return (value:string|number|null)=>saveBin(row,value)
 }
-function selectedProfileSave(){
-  const row=selected.value!
-  return (profileIds:string[])=>saveProjectProfilesInline(row,profileIds)
-}
+
 
 function syncEditingDraft(row:RecordData,updated:RecordData){
   if(editingId.value!==row.id||!editorType.value)return
@@ -694,7 +785,7 @@ function syncEditingDraft(row:RecordData,updated:RecordData){
     Object.assign(draft.value,updated,{specs:{...draft.value.specs,...updated.specs},revision:updated.revision})
   }else{
     Object.assign(draft.value,updated,{revision:updated.revision})
-    if(store.section==='capture-profiles'&&('binning_x' in updated||'binning_y' in updated))draft.value.binning_value=binEditValue(updated)
+
   }
   originalDraft.value=JSON.stringify(draft.value)
 }
@@ -721,11 +812,7 @@ async function saveEditorParameterGroup(changes:RecordData){
   await saveParameterGroup(row,changes)
 }
 
-async function saveEditorProjectProfiles(profileIds:string[]){
-  const row=editorRow()
-  if(!row)throw new Error('当前编辑记录已不存在。')
-  await saveProjectProfilesInline(row,profileIds)
-}
+
 
 async function performInlineFieldSave(row: RecordData, field: string, value: string | number | null) {
   if(field==='parameter_mode'&&value==='')value=row.asset||row.scope==='shared'||row.entry_type==='dataset'?'standard':null
@@ -747,15 +834,13 @@ async function performInlineFieldSave(row: RecordData, field: string, value: str
     path='/datasets/'+row.dataset.id;schema=datasetSchema;payload={base_revision:row.dataset.revision,[field]:value}
   } else if (store.section==='projects') {
     path='/projects/'+row.id;schema=projectSchema;payload={base_revision:row.revision,[field]:value}
-  } else if (store.section==='equipment') {
+  } else {
     path='/equipment/'+row.id;schema=equipmentSchema
     const spec=field.startsWith('specs.')?specFields[row.kind]?.find(item=>item.key===field.slice(6)):undefined
     const fieldValue=spec?.type==='number'?(value==null||value===''?null:Number(value)):value
     payload=field.startsWith('specs.')
       ? {base_revision:row.revision,kind:row.kind,specs:{[field.slice(6)]:fieldValue}}
       : {base_revision:row.revision,kind:row.kind,[field]:value}
-  } else {
-    path='/capture-profiles/'+row.id;schema=captureProfileSchema;payload={base_revision:row.revision,[field]:value}
   }
   const updated=await assetApi.send('/astrophotoflow/api/v1'+path,schema,'PATCH',payload)
   const replace=(item:RecordData)=>{
@@ -804,15 +889,7 @@ async function saveParameterGroup(row:RecordData,parameters:RecordData){
       if(editingId.value===row.id){Object.assign(draft.value,updated.parameters,{revision:updated.revision});originalDraft.value=JSON.stringify(draft.value)}
       return
     }
-    if(store.section==='capture-profiles'){
-      const updated=await assetApi.send('/astrophotoflow/api/v1/capture-profiles/'+row.id,captureProfileSchema,'PATCH',{
-        base_revision:row.revision,...parameters
-      })
-      rows.value=rows.value.map(item=>item.id===row.id?updated:item)
-      if(selected.value?.id===row.id)selected.value=updated
-      if(editingId.value===row.id){Object.assign(draft.value,updated,{revision:updated.revision});originalDraft.value=JSON.stringify(draft.value)}
-      return
-    }
+
     throw new Error('当前记录不支持拍摄参数编辑。')
   }catch(cause){setInlineSaveFailure(failureKey,cause instanceof Error?cause.message:'参数保存失败。');throw cause}
   finally{finishInlineSave()}
@@ -879,9 +956,7 @@ function parameterModeValue(row:RecordData):ParameterModeFieldValue{
       iso:datasetParameterRaw(row,'iso'),gain:datasetParameterRaw(row,'gain'),offset:datasetParameterRaw(row,'offset')
     }
   }
-  if(!row.asset&&store.section==='capture-profiles')return {
-    parameter_mode:row.parameter_mode,iso:row.iso,gain:row.gain,offset:row.offset
-  }
+
   const parameters=rowParameters(row)
   return {parameter_mode:parameters.parameter_mode,iso:parameters.iso,gain:parameters.gain,offset:parameters.offset}
 }
@@ -898,11 +973,7 @@ function parameterModeDisplay(row:RecordData){
   }
   return '未指定'
 }
-function captureProfileModeDisplay(row:RecordData){
-  if(row.parameter_mode==='iso')return 'ISO · '+captureValue(row.iso)
-  if(row.parameter_mode==='gain')return 'Gain · '+captureValue(row.gain)+' / Offset · '+captureValue(row.offset)
-  return '未指定'
-}
+
 function displayTemperature(value:unknown){
   if(value===null||value===undefined||value==='')return '—'
   const n=Number(value)
@@ -966,14 +1037,6 @@ async function performBinSave(row: RecordData, value: string | number | null) {
     rows.value=rows.value.map(item=>item.id===row.id?replace(item):item)
     const current=selected.value
     if(current&&current.id===row.id)selected.value=replace(current)
-    syncEditingDraft(row,updated)
-  }else if(store.section==='capture-profiles'){
-    const updated=await assetApi.send('/astrophotoflow/api/v1/capture-profiles/'+row.id,captureProfileSchema,'PATCH',{
-      base_revision:row.revision,binning_x:number,binning_y:number
-    })
-    rows.value=rows.value.map(item=>item.id===row.id?updated:item)
-    const current=selected.value
-    if(current&&current.id===row.id)selected.value=updated
     syncEditingDraft(row,updated)
   }else if(row.entry_type==='dataset'){
     await saveDatasetParameters(row,{binning_x:number,binning_y:number})
@@ -1116,6 +1179,26 @@ function setQuery(event: Event) {
   store.setQuery((event.target as HTMLInputElement).value)
 }
 
+function openManagementFilter(){
+  if(managementFilterBlocked.value)return
+  equipmentKindFilterDraft.value=equipmentKindFilter.value
+  projectTargetFilterDraft.value=projectTargetFilter.value
+  setupKindFilterDraft.value=setupKindFilter.value
+  managementFilterOpen.value=true
+}
+function applyManagementFilter(){
+  if(managementFilterBlocked.value)return
+  equipmentKindFilter.value=equipmentKindFilterDraft.value
+  projectTargetFilter.value=projectTargetFilterDraft.value.trim()
+  setupKindFilter.value=setupKindFilterDraft.value
+  store.offset=0
+  managementFilterOpen.value=false
+}
+function clearManagementFilter(){
+  equipmentKindFilterDraft.value='';projectTargetFilterDraft.value='';setupKindFilterDraft.value=''
+}
+async function managementTrashChanged(){managementChangeToken.value++;await loadRecords()}
+
 function bulkKey(row:RecordData){return row.entry_type+':'+row.id}
 function clearBulkSelection(){bulkSelection.value=new Set()}
 function toggleLibrarySort(by:string){
@@ -1208,10 +1291,7 @@ async function selectRow(row: RecordData) {
   if(setupDirty.value&&!window.confirm('当前组合或预设有未保存修改。放弃修改吗？'))return
   if(!await waitForInlineSave())return
   selected.value = row
-  if(store.section==='projects'&&!viewingProjectAssets.value&&!viewingProjectDatasets.value){
-    void loadRelatedProfiles(true)
-  }
-  if(row.asset||row.scope==='shared'||row.entry_type==='dataset'||store.section==='capture-profiles')
+  if(row.asset||row.scope==='shared'||row.entry_type==='dataset')
     void loadRelatedEquipment(true)
   if (store.section === 'projects' && !viewingProjectAssets.value && !viewingProjectDatasets.value) {
     store.activeProjectId = row.id
@@ -1219,22 +1299,7 @@ async function selectRow(row: RecordData) {
   }
 }
 
-async function saveProjectProfilesInline(row:RecordData,profileIds:string[]){
-  const current=row.capture_profile_ids??[]
-  if(current.length===profileIds.length&&current.every((id:string)=>profileIds.includes(id)))return
-  const failureKey=inlineFailureKey(row,'capture_profile_ids')
-  savingInline.value++
-  clearInlineSaveFailure(failureKey)
-  try{
-    const updated=await assetApi.send('/astrophotoflow/api/v1/projects/'+row.id,projectSchema,'PATCH',{
-      base_revision:row.revision,capture_profile_ids:profileIds
-    })
-    selected.value=updated;rows.value=rows.value.map(item=>item.id===row.id?updated:item)
-    if(store.activeProjectId===row.id)store.activeProjectRevision=updated.revision
-    syncEditingDraft(row,updated)
-  }catch(cause){setInlineSaveFailure(failureKey,cause instanceof Error?cause.message:'拍摄设置关联保存失败。');throw cause}
-  finally{finishInlineSave()}
-}
+
 
 async function openProjectAssets() {
   if(!await waitForInlineSave())return
@@ -1313,15 +1378,11 @@ async function openCreate(type: EditorType) {
   if(!await waitForInlineSave())return
   editorType.value = type
   editingId.value = undefined
-  if (type === 'project') draft.value = { name: '', target_name: '', notes: '', capture_profile_ids: [] }
+  if (type === 'project') draft.value = { name: '', target_name: '', notes: '' }
   if (type === 'equipment') draft.value = { kind: 'camera', name: '', model: '', serial_number: '', notes: '', specs: emptySpecs('camera') }
-  if (type === 'capture-profile') draft.value = {
-    name: '', camera_id: '', optical_system_id: '', filter_id: '', frame_type: 'light',
-    parameter_mode: '', iso: '', exposure_seconds: '', gain: '', offset: '', sensor_temperature_c: '', binning_value: '', binning_x: '', binning_y: '', notes: ''
-  }
+
   originalDraft.value = JSON.stringify(draft.value)
   selected.value = undefined
-  loadRelated()
 }
 
 function textInput(value: unknown) {
@@ -1333,11 +1394,7 @@ function inputNumber(value: unknown) {
   const number = Number(value)
   return Number.isFinite(number) ? number : null
 }
-function binChoiceNumber(value:unknown){
-  if(value===''||value==null)return null
-  const match=String(value).match(/^Bin(\d+)$/)
-  return match?Number(match[1]):Number.NaN
-}
+
 
 function nullableString(value: unknown) {
   return value === '' ? null : value
@@ -1355,38 +1412,20 @@ function editEquipment(row: RecordData) {
 function editProject(row: RecordData) {
   draft.value = {
     name: row.name, target_name: textInput(row.target_name), notes: textInput(row.notes),
-    capture_profile_ids: [...row.capture_profile_ids], status: row.status, revision: row.revision
+    status: row.status, revision: row.revision
   }
   beginEdit('project', row.id)
 }
 
-function editProfile(row: RecordData) {
-  draft.value = {
-    name: row.name, camera_id: row.camera_id, optical_system_id: textInput(row.optical_system_id),
-    filter_id: textInput(row.filter_id), frame_type: row.frame_type, parameter_mode: row.parameter_mode??'', iso:textInput(row.iso),
-    exposure_seconds: textInput(row.exposure_seconds), gain: textInput(row.gain), offset: textInput(row.offset),
-    sensor_temperature_c: textInput(row.sensor_temperature_c), binning_x: textInput(row.binning_x),
-    binning_y: textInput(row.binning_y), binning_value:binEditValue(row), notes: textInput(row.notes), status: row.status, revision: row.revision
-  }
-  beginEdit('capture-profile', row.id)
-}
+
 
 function beginEdit(type: EditorType, id: string) {
   editorType.value = type
   editingId.value = id
   originalDraft.value = JSON.stringify(draft.value)
-  loadRelated()
 }
 
-async function loadRelated() {
-  relatedProfilesError.value=''
-  if (editorType.value === 'project' || editorType.value === 'capture-profile') {
-    await loadRelatedEquipment(true)
-  }
-  if (editorType.value === 'project') {
-    await loadRelatedProfiles(true)
-  }
-}
+
 
 function closeEditor() {
   if(saving.value||savingInline.value||inlineSaveFailure.value)return
@@ -1404,7 +1443,7 @@ function buildPayload() {
   if (editorType.value === 'project') {
     const payload: RecordData = {
       name: draft.value.name, target_name: nullableString(draft.value.target_name),
-      notes: nullableString(draft.value.notes), capture_profile_ids: draft.value.capture_profile_ids
+      notes: nullableString(draft.value.notes)
     }
     if (editingId.value) Object.assign(payload, { base_revision: draft.value.revision, status: draft.value.status })
     return payload
@@ -1420,19 +1459,7 @@ function buildPayload() {
     if (editingId.value) Object.assign(payload, { base_revision: draft.value.revision, status: draft.value.status })
     return payload
   }
-  const payload: RecordData = {
-    name: draft.value.name, camera_id: draft.value.camera_id,
-    optical_system_id: nullableString(draft.value.optical_system_id),
-    filter_id: nullableString(draft.value.filter_id), frame_type: draft.value.frame_type,
-    parameter_mode:nullableString(draft.value.parameter_mode), iso:draft.value.parameter_mode==='iso'?inputNumber(draft.value.iso):inputNumber(draft.value.iso),
-    exposure_seconds: inputNumber(draft.value.exposure_seconds), gain: inputNumber(draft.value.gain),
-    offset: inputNumber(draft.value.offset), sensor_temperature_c: inputNumber(draft.value.sensor_temperature_c),
-    binning_x: draft.value.binning_value===binEditValue(draft.value)?inputNumber(draft.value.binning_x):binChoiceNumber(draft.value.binning_value),
-    binning_y: draft.value.binning_value===binEditValue(draft.value)?inputNumber(draft.value.binning_y):binChoiceNumber(draft.value.binning_value),
-    notes: nullableString(draft.value.notes)
-  }
-  if (editingId.value) Object.assign(payload, { base_revision: draft.value.revision, status: draft.value.status })
-  return payload
+
 }
 
 async function saveEditor() {
@@ -1440,10 +1467,10 @@ async function saveEditor() {
   saving.value = true
   error.value = undefined
   const paths: Record<EditorType, string> = {
-    project: '/projects', equipment: '/equipment', 'capture-profile': '/capture-profiles'
+    project: '/projects', equipment: '/equipment'
   }
   const schemas: Record<EditorType, any> = {
-    project: projectSchema, equipment: equipmentSchema, 'capture-profile': captureProfileSchema
+    project: projectSchema, equipment: equipmentSchema
   }
   const path = paths[editorType.value] + (editingId.value ? '/' + editingId.value : '')
   try {
@@ -1461,13 +1488,14 @@ async function saveEditor() {
 
 const itemTitle = (row: RecordData) => row.asset?.name ?? row.dataset?.name ?? row.name ?? '未命名记录'
 const itemSubtitle = (row: RecordData) => {
+  if ('target_name' in row) return row.target_name || ''
   if (row.entry_type === 'dataset') return (row.member_count ?? 0) + ' 个成员'
   if (row.version) return '固定版本 · ' + (row.version.frame_type ?? '未分类')
   if (row.current_version) return row.current_version.frame_type ?? '未分类'
   if (row.kind) return equipmentKindLabels[row.kind] + (row.model ? ' · ' + row.model : '')
-  if (row.components) return row.components.length + ' 个设备 · ' + (row.status==='active'?'启用':'已归档')
+  if (row.components) return row.components.length + ' 个设备'
   if (row.camera_id) return row.frame_type + ' · 相机 ' + row.camera_id
-  return row.status ?? ''
+  return ''
 }
 const rowAsset = (row: RecordData) => row.asset ?? row
 const rowParameters = (row: RecordData) => rowAsset(row).parameters ?? {}
@@ -1475,6 +1503,23 @@ const rowClassification = (row: RecordData) => rowAsset(row).classification ?? {
 function equipmentName(id: string | null | undefined) {
   if (!id) return '未指定'
   return relatedEquipment.value.find(item => item.id === id)?.name ?? id.slice(0, 8)
+}
+function materialEquipmentValue(row:RecordData,key:string,fixed=false):string|undefined {
+  const snapshot=fixed||row.project_id?row.version?.capture_snapshot?.equipment_snapshot:rowAsset(row).equipment_snapshot
+  return snapshot?.[key]?.name
+}
+function materialEquipmentName(row:RecordData,key:string) {
+  return materialEquipmentValue(row,key)??'未指定'
+}
+function historicalEquipmentSnapshots():RecordData[]{
+  const snapshots:RecordData[]=[]
+  for(const row of rows.value){
+    const assets=[row.asset??row,...(row.version?.members??[]).map((member:RecordData)=>member.asset).filter(Boolean)]
+    for(const asset of assets)for(const snapshot of Object.values(asset.equipment_snapshot??{})){
+      if(snapshot&&typeof snapshot==='object')snapshots.push(snapshot as RecordData)
+    }
+  }
+  return snapshots
 }
 function captureValue(value: unknown) { return value === null || value === undefined || value === '' ? '—' : String(value) }
 function modeValue(parameters:RecordData){return parameters.parameter_mode==='standard'?'':parameters.parameter_mode??''}
@@ -1519,12 +1564,13 @@ function datasetClassification(row: RecordData) {
 }
 
 watch(
-  [() => store.query, () => store.offset, () => store.pageSize, statusFilter, roleFilter, frameTypeFilter, equipmentKindFilter],
-  ([query, offset, pageSize, status, role, frameType, kind], [previousQuery, previousOffset, previousPageSize, previousStatus, previousRole, previousFrameType, previousKind]) => {
+  [() => store.query, () => store.offset, () => store.pageSize, statusFilter, roleFilter, frameTypeFilter, equipmentKindFilter, projectTargetFilter, setupKindFilter],
+  ([query, offset, pageSize, status, role, frameType, kind, target, componentKind], [previousQuery, previousOffset, previousPageSize, previousStatus, previousRole, previousFrameType, previousKind, previousTarget, previousComponentKind]) => {
     if(restoringOuterLibraryState.value)return
     const queryChanged = query !== previousQuery
-    const filtersChanged = pageSize !== previousPageSize || status !== previousStatus || role !== previousRole || frameType !== previousFrameType || kind !== previousKind
+    const filtersChanged = pageSize !== previousPageSize || status !== previousStatus || role !== previousRole || frameType !== previousFrameType || kind !== previousKind || target !== previousTarget || componentKind !== previousComponentKind
     if(offset!==previousOffset||queryChanged||filtersChanged)clearBulkSelection()
+    if(offset!==previousOffset||queryChanged||filtersChanged)managementSelection.value=new Map()
     if (queryChanged || filtersChanged) {
       loadGeneration++
       clearTimeout(searchTimer)
@@ -1544,45 +1590,47 @@ watch(
 const workspaceContext = {
   store, activeArea, lastManagementSection, capabilities, rows,
   selected, total, loading, error, capabilityError,
-  statusFilter, equipmentKindFilter, setupDirty, calibrationDirty, libraryCategory, selectLibraryCategory, roleFilter, frameTypeFilter, emptyFilters, activeFilters,
+  statusFilter, equipmentKindFilter, setupDirty, setupSaving, calibrationDirty, libraryCategory, selectLibraryCategory, roleFilter, frameTypeFilter, emptyFilters, activeFilters,
   filterPanelOpen, filterButton, activeFilterCount, viewingProjectAssets, viewingProjectDatasets,
   addingProjectAssets, addingProjectDatasets, importDialogOpen, importFiles, filePicker,
   folderPicker, importMenuOpen, importCreatesDataset, importDatasetName, libraryViewMode,
   librarySort, bulkSelectMode, bulkSelection, bulkDeleteBusy, bulkDeleteNotice,
-  bulkConfirmOpen, bulkConfirmRows, trashOpen, progressRefreshToken, uploadProgress,
+  bulkConfirmOpen, bulkConfirmRows, trashOpen, managementTrashOpen, progressRefreshToken, uploadProgress,
   watchedTaskIds, activeDataset, outerLibraryState,
   restoringOuterLibraryState, previewUrls, editorType, editingId, draft,
   originalDraft, saving, savingInline, inlineSaveFailures, inlineSaveFailure,
-  relatedEquipment, relatedEquipmentLoading, relatedEquipmentError, relatedEquipmentReady, relatedProfiles,
-  relatedProfilesLoading, relatedProfilesError, relatedProfilesReady, dirty, isAssetSection,
+  relatedEquipment, relatedEquipmentLoading, relatedEquipmentError, relatedEquipmentReady,
+     dirty, isAssetSection,
   isAssetTable, isDatasetTable, isLibraryItemsView, isLibraryTableView, isDatasetMembersView,
   pageSelectionKeys, pageAllSelected, pagePartiallySelected, areaTitles, areaMessages,
   specFields, frameTypes, frameClasses, cfaChoices, equipmentKinds, equipmentKindLabels,
   specKind, specChoices, specDisplay, apiPath, loadWorkspacePage,
   libraryFilterParams, formListPath, loadAll, loadRelatedEquipment, equipmentChoiceMessage,
-  equipmentChoices, profileChoices, profileChoiceMessage, loadRelatedProfiles, loadCapabilities,
+  equipmentChoices,    loadCapabilities,
   loadRecords, loadThumbnails, previewMember, openPhotoPreview, presentError, errorText,
   waitForInlineSave, selectSection, selectArea, startImport, applyFilters,
   filesChosen, foldersChosen, importSubmitted, importTaskCompleted, importRegistrationCompleted,
   updateUploadProgress, uploadTaskProgress, uploadTaskLabel, refreshLibrary,
-  saveInlineField, selectedFieldSave, selectedParameterSave, selectedBinSave, selectedProfileSave,
+  saveInlineField, selectedFieldSave, selectedParameterSave, selectedBinSave,
   syncEditingDraft, editorRow, saveEditorInline, saveEditorBin, saveEditorParameterGroup,
-  saveEditorProjectProfiles, performInlineFieldSave, saveRowField, saveDatasetParameter, saveDatasetClassification,
+   performInlineFieldSave, saveRowField, saveDatasetParameter, saveDatasetClassification,
   saveDatasetParameters, saveParameterGroup, updateDatasetMembers, binValue, binEditValue,
   binEditChoices, datasetBinChoices, datasetRawValue, datasetParameterRaw, parameterModeValue,
-  parameterModeDisplay, captureProfileModeDisplay, displayTemperature, datasetTemperature, inlineFailureKey,
+  parameterModeDisplay,  displayTemperature, datasetTemperature, inlineFailureKey,
   editorInlineFailureKey, setInlineSaveFailure, clearInlineSaveFailure, finishInlineSave, saveBin,
   performBinSave, openDataset, leaveDatasetContext, closeDataset,
   calibrationUpdated, addSelectedAsset, removeSelectedAssetReference,
   addSelectedDataset, removeSelectedDatasetReference, setQuery, bulkKey, clearBulkSelection,
   toggleLibrarySort, sortAria, sortArrow, toggleBulkSelection, togglePageSelection,
   enterBulkSelectMode, leaveBulkSelectMode, removeSelectedLibraryEntries, confirmRemoveSelectedLibraryEntries, onLibraryRowClick,
-  selectRow, saveProjectProfilesInline, openProjectAssets, openProjectDatasets, openAvailableAssets,
+  selectRow,  openProjectAssets, openProjectDatasets, openAvailableAssets,
   toggleProjectAssetMode, openAvailableDatasets, toggleProjectDatasetMode, leaveProjectAssets, emptySpecs,
-  openCreate, textInput, inputNumber, binChoiceNumber, nullableString,
-  editEquipment, editProject, editProfile, beginEdit, loadRelated,
+  openCreate, textInput, inputNumber,  nullableString, requestManagementArchive, updateManagementStatus, managementArchiveBusy,
+  managementSelectMode, managementSelection, managementPageAllSelected, managementPagePartiallySelected, managementChangeToken,
+  toggleManagementSelection, toggleManagementPage, leaveManagementSelectMode,
+  editEquipment, editProject,  beginEdit,
   closeEditor, onEquipmentKindChange, buildPayload, saveEditor, itemTitle,
-  itemSubtitle, rowAsset, rowParameters, rowClassification, equipmentName,
+  itemSubtitle, rowAsset, rowParameters, rowClassification, equipmentName, materialEquipmentName, materialEquipmentValue,
   captureValue, modeValue, datasetParameterMode, cfaLabel, frameClassLabel,
   frameTypeLabel, rowFrame, datasetMembers, datasetValue, datasetClassification
 }
@@ -1644,33 +1692,46 @@ onBeforeUnmount(() => {
             </nav>
             <div v-if="activeArea === 'settings' && !viewingProjectAssets && !viewingProjectDatasets" class="apf-management-tabs" aria-label="设置类别">
               <button v-for="(title, section) in { projects: '项目', equipment: '设备', 'equipment-setups': '使用组合' }"
-                :key="section" type="button" :aria-current="store.section === section || (section==='equipment-setups'&&store.section==='capture-profiles') ? 'page' : undefined"
+                :key="section" type="button" :aria-current="store.section === section ? 'page' : undefined"
                 @click="selectSection(section as WorkspaceSection)">{{ title }}</button>
             </div>
             <label class="apf-search">
               <i class="pi pi-search" aria-hidden="true"></i>
               <input :value="store.query" aria-label="搜索" placeholder="搜索名称" :disabled="bulkDeleteBusy||setupDirty" @input="setQuery" />
             </label>
-            <select v-if="store.section === 'projects' || store.section === 'equipment' || store.section === 'equipment-setups' || store.section === 'capture-profiles'"
+            <select v-if="activeArea !== 'settings' && (store.section === 'projects' || store.section === 'equipment' || store.section === 'equipment-setups')"
               v-model="statusFilter" :disabled="setupDirty" aria-label="状态筛选">
               <option value="active">启用</option><option value="archived">已归档</option><option value="all">全部</option>
             </select>
-            <label v-if="store.section==='equipment'">设备类别<select v-model="equipmentKindFilter" aria-label="设备类别筛选"><option value="">全部设备</option><option v-for="kind in equipmentKinds" :key="kind" :value="kind">{{equipmentKindLabels[kind]}}</option></select></label>
+            <div v-if="activeArea==='settings' && ['projects','equipment','equipment-setups'].includes(store.section) && !viewingProjectAssets && !viewingProjectDatasets" class="apf-management-filter-control">
+              <button ref="managementFilterButton" type="button" :disabled="managementFilterBlocked" :aria-expanded="managementFilterOpen" @click="managementFilterOpen?managementFilterOpen=false:openManagementFilter()">筛选<span v-if="managementFilterCount">（{{managementFilterCount}}）</span></button>
+              <div v-if="managementFilterOpen" class="apf-management-filter-panel">
+                <label v-if="store.section==='projects'">拍摄目标<input v-model="projectTargetFilterDraft" placeholder="按目标筛选" /></label>
+                <label v-if="store.section==='equipment'">设备类别<select v-model="equipmentKindFilterDraft"><option value="">全部设备</option><option v-for="kind in equipmentKinds" :key="kind" :value="kind">{{equipmentKindLabels[kind]}}</option></select></label>
+                <label v-if="store.section==='equipment-setups'">组合设备类别<select v-model="setupKindFilterDraft"><option value="">全部类别</option><option v-for="kind in equipmentKinds" :key="kind" :value="kind">{{equipmentKindLabels[kind]}}</option></select></label>
+                <div><button type="button" @click="clearManagementFilter">清除</button><button type="button" @click="applyManagementFilter" :disabled="managementFilterBlocked">应用</button></div>
+              </div>
+            </div>
             <button v-if="isLibraryItemsView" ref="filterButton" type="button" :disabled="bulkDeleteBusy" :aria-expanded="filterPanelOpen" @click="filterPanelOpen=!filterPanelOpen">
               筛选<span v-if="activeFilterCount">（{{activeFilterCount}}）</span>
             </button>
-            <div v-if="activeArea==='settings'" class="apf-layout">
-              <button type="button" :aria-pressed="store.layout === 'grid'" @click="store.layout = 'grid'">网格</button>
-              <button type="button" :aria-pressed="store.layout === 'list'" @click="store.layout = 'list'">列表</button>
-            </div>
             <div v-if="isLibraryTableView" class="apf-library-view" aria-label="素材显示方式">
               <button type="button" :aria-pressed="libraryViewMode==='simple'" @click="libraryViewMode='simple'">简约</button>
               <button type="button" :aria-pressed="libraryViewMode==='detail'" @click="libraryViewMode='detail'">细节</button>
             </div>
             <button v-if="activeArea !== 'library' || viewingProjectAssets || viewingProjectDatasets" type="button" :disabled="setupDirty" @click="loadRecords"><i class="pi pi-refresh" aria-hidden="true"></i><span>刷新</span></button>
-            <button v-if="store.section === 'projects' && !viewingProjectAssets && !viewingProjectDatasets" type="button" @click="openCreate('project')">新建项目</button>
-            <button v-if="store.section === 'equipment'" type="button" @click="openCreate('equipment')">添加设备</button>
-            <button v-if="store.section === 'capture-profiles'" type="button" @click="openCreate('capture-profile')">新建配置</button>
+            <template v-if="activeArea==='settings' && ['projects','equipment','equipment-setups'].includes(store.section) && !viewingProjectAssets && !viewingProjectDatasets">
+              <template v-if="managementSelectMode">
+                <button type="button" :disabled="!managementSelection.size||managementArchiveBusy" @click="requestSelectedManagementArchive">移入回收站（{{managementSelection.size}}）</button>
+                <button type="button" :disabled="managementArchiveBusy" @click="leaveManagementSelectMode">取消</button>
+              </template>
+              <template v-else>
+                <button type="button" :disabled="loading||savingInline>0||Boolean(inlineSaveFailure)" @click="enterManagementSelectMode">批量删除</button>
+                <button type="button" :disabled="setupDirty||dirty||savingInline>0||Boolean(inlineSaveFailure)" @click="managementTrashOpen=true">回收站</button>
+              </template>
+            </template>
+            <button v-if="store.section === 'projects' && statusFilter!=='archived' && !managementSelectMode && !viewingProjectAssets && !viewingProjectDatasets" type="button" @click="openCreate('project')">新建项目</button>
+            <button v-if="store.section === 'equipment' && statusFilter!=='archived' && !managementSelectMode" type="button" @click="openCreate('equipment')">添加设备</button>
             <button v-if="store.section==='projects' && viewingProjectAssets" type="button" @click="toggleProjectAssetMode">{{addingProjectAssets?'查看已选资产':'添加素材'}}</button>
             <button v-if="store.section==='projects' && viewingProjectDatasets" type="button" @click="toggleProjectDatasetMode">{{addingProjectDatasets?'查看已选数据集':'添加数据集'}}</button>
           </div>
@@ -1684,12 +1745,22 @@ onBeforeUnmount(() => {
     </main>
       <PhotoPreviewDialog :photo="photoPreview" @close="closePhotoPreview" />
       <LibraryTrashDialog :open="trashOpen" @close="trashOpen=false" @changed="refreshLibrary" />
+      <SettingsTrashDialog :open="managementTrashOpen" @close="managementTrashOpen=false" @changed="managementTrashChanged" />
       <div v-if="bulkConfirmOpen" class="apf-trash-confirm-backdrop" role="presentation" @click.self="bulkConfirmOpen=false">
         <section class="apf-trash-confirm" role="alertdialog" aria-modal="true" aria-labelledby="bulk-trash-confirm-title">
           <h2 id="bulk-trash-confirm-title">确认移入垃圾桶</h2>
           <p>将移入垃圾桶 {{bulkConfirmRows.length}} 条素材库记录。原文件保留，可恢复。</p>
           <ul><li v-for="row in bulkConfirmRows" :key="row.entry_type+':'+row.id">{{itemTitle(row)}}<span v-if="row.entry_type==='dataset'">（数据集，{{row.version?.members?.length??row.dataset?.member_count??0}} 张照片）</span><span v-else>（照片）</span></li></ul>
           <button type="button" @click="bulkConfirmOpen=false">取消</button><button type="button" @click="confirmRemoveSelectedLibraryEntries">移入垃圾桶</button>
+        </section>
+      </div>
+      <div v-if="pendingManagementArchive" class="apf-trash-confirm-backdrop" role="presentation" @click.self="pendingManagementArchive=undefined">
+        <section class="apf-trash-confirm" role="alertdialog" aria-modal="true" aria-labelledby="management-archive-title">
+          <h2 id="management-archive-title">移入回收站</h2>
+          <p v-if="managementSelectMode">将 {{managementSelection.size}} 条设置移入回收站。关联素材及其设备快照会保留，可在回收站恢复。</p>
+          <p v-else>将“{{itemTitle(pendingManagementArchive.row)}}”移入回收站。记录、关联素材和历史预设会保留，可随时恢复。</p>
+          <button type="button" :disabled="managementArchiveBusy" @click="pendingManagementArchive=undefined">取消</button>
+          <button type="button" :disabled="managementArchiveBusy" @click="confirmManagementArchive">{{managementArchiveBusy?'处理中…':'确认移入回收站'}}</button>
         </section>
       </div>
       <ImportDialog :open="importDialogOpen" :files="importFiles" :create-dataset="importCreatesDataset" :dataset-name="importDatasetName" @close="importDialogOpen=false" @submitted="importSubmitted" @upload-progress="updateUploadProgress" @upload-failed="progressRefreshToken++" />
@@ -1754,17 +1825,24 @@ onBeforeUnmount(() => {
 .apf-workspace .apf-management-tabs button { background:transparent; color:var(--descrip-text,#999); }
 .apf-workspace .apf-management-tabs button:hover:not(:disabled), .apf-workspace .apf-management-tabs button[aria-current="page"] { color:var(--input-text,#ddd); background:var(--comfy-menu-secondary-bg,#292929); }
 .apf-toolbar select { max-width:100%; height:32px; padding:0 10px; border:1px solid var(--border-color,#4e4e4e); border-radius:8px; color:var(--input-text,#ddd); background:var(--comfy-input-bg,#222); font:inherit; font-size:12px; }
+.apf-toolbar-filter { display:flex; flex:0 0 auto; align-items:center; gap:6px; white-space:nowrap; }
+.apf-management-filter-control { position:relative; }
+.apf-management-filter-panel { position:absolute; z-index:12; top:calc(100% + 6px); left:0; display:grid; min-width:230px; gap:10px; padding:12px; border:1px solid var(--border-color,#555); border-radius:8px; background:var(--comfy-menu-bg,#292929); box-shadow:0 6px 24px #0008; }
+.apf-management-filter-panel label { display:flex; flex-direction:column; gap:5px; color:var(--descrip-text,#aaa); font-size:12px; }
+.apf-management-filter-panel input { height:30px; padding:0 8px; border:1px solid var(--border-color,#555); border-radius:7px; color:var(--input-text,#ddd); background:var(--comfy-input-bg,#222); font:inherit; }
+.apf-management-filter-panel>div { display:flex; justify-content:flex-end; gap:6px; }
 .apf-search { display:flex; flex:1 1 145px; min-width:0; height:36px; align-items:center; gap:8px; padding:0 10px; border:1px solid var(--border-color,#4e4e4e); border-radius:9px; color:var(--descrip-text,#999); background:var(--comfy-input-bg,#222); }
 .apf-search:focus-within { border-color:var(--input-text,#ddd); }
 .apf-search input { width:100%; min-width:0; border:0; outline:0; color:var(--input-text,#ddd); background:transparent; font:inherit; font-size:12px; }
 .apf-search input::placeholder { color:var(--descrip-text,#999); }
-.apf-layout { display:flex; gap:2px; padding:2px; border-radius:9px; background:var(--comfy-input-bg,#222); }
-.apf-workspace .apf-layout button { min-height:28px; padding:6px 8px; border-radius:7px; background:transparent; color:var(--descrip-text,#999); }
-.apf-workspace .apf-layout button:hover:not(:disabled), .apf-workspace .apf-layout button[aria-pressed="true"] { color:var(--input-text,#ddd); background:var(--comfy-menu-secondary-bg,#292929); }
 .apf-workspace button.apf-inline-value { min-height:25px; justify-content:flex-start; padding:2px 4px; background:transparent; white-space:pre-wrap; }
 .apf-workspace .apf-member-open { min-height:22px; padding:2px 4px; background:transparent; color:var(--descrip-text,#999); }
 .apf-records.grid { display:grid; grid-template-columns:1fr; gap:8px; }
 .apf-records.list { display:flex; flex-direction:column; gap:6px; }
+.apf-management-select-page,.apf-management-record-select { display:flex; align-items:center; gap:12px; padding:10px; border:1px solid var(--border-color,#4e4e4e); border-radius:8px; background:var(--comfy-menu-secondary-bg,#292929); }
+.apf-management-select-page { width:max-content; padding:6px 10px; }
+.apf-management-record-select span:last-child { display:flex; min-width:0; flex-direction:column; gap:4px; }
+.apf-management-record-select small { color:var(--descrip-text,#999); }
 .apf-workspace .apf-record { display:flex; width:100%; min-height:68px; justify-content:flex-start; gap:12px; padding:10px; border:1px solid var(--border-color,#4e4e4e); text-align:left; white-space:normal; background:var(--comfy-menu-secondary-bg,#292929); }
 .apf-record span:last-child { display:flex; flex-direction:column; gap:4px; min-width:0; }
 .apf-record small { color:var(--descrip-text,#999); }

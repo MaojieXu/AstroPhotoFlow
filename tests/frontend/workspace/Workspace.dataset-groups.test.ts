@@ -13,18 +13,18 @@ vi.mock('@frontend/assets/host-client',()=>({assetApi:{get,getBlob,send}}))
 const createdAt='2026-10-22T20:00:00Z'
 const idAt=(index:number)=>'00000000-0000-4000-8000-'+String(index).padStart(12,'0')
 const capabilities={stage:'ingestion',shared_library_read:true,project_assets_read:true,project_management:true,equipment_management:true,
-  capture_profile_management:true,asset_import:false,asset_reference_write:false,asset_preview:true,asset_metadata_edit:true,
+  asset_import:false,asset_reference_write:false,asset_preview:true,asset_metadata_edit:true,
   dataset_management:true,asset_task_management:true,calibration_matching:false,asset_publish:false}
 const page=(items:unknown[])=>({items,total:items.length,limit:50,offset:0})
 const versionFor=(assetId:string,index:number):NonNullable<Asset['current_version']>=>({id:idAt(index),asset_id:assetId,version_number:1,storage_mode:'reference',
   storage_location:'test/'+index+'.fits',byte_size:100,content_hash:null,availability:'available',camera_id:null,optical_system_id:null,
-  filter_id:null,capture_profile_id:null,frame_type:'light',calibration_level:null,capture_snapshot:null,scientific_metadata:null,created_at:createdAt})
+  filter_id:null,frame_type:'light',calibration_level:null,capture_snapshot:null,scientific_metadata:null,created_at:createdAt})
 const assetFor=(index:number,name:string,revision=1):Asset=>{
   const version=versionFor(idAt(index),index+1000)
   return {id:idAt(index),name,scope:'shared',owner_project_id:null,role:'raw',calibration_level:null,current_version_id:version.id,
     classification:{frame_class:'subframe',frame_type:'light'},parameters:{camera_id:null,optical_system_id:null,filter_id:null,
       parameter_mode:'standard',iso:null,gain:null,offset:null,exposure_seconds:30,integration_seconds:null,sensor_temperature_c:null,
-      binning_x:1,binning_y:1,cfa_pattern:null},value_sources:{},notes:'Initial note',status:'active',revision,created_at:createdAt,current_version:version}
+      binning_x:1,binning_y:1,cfa_pattern:null},equipment_snapshot:{},value_sources:{},notes:'Initial note',status:'active',revision,created_at:createdAt,current_version:version}
 }
 const member=(asset:ReturnType<typeof assetFor>,datasetVersionId:number,position:number,fixedVersionNumber?:number)=>{
   const fixedVersion=fixedVersionNumber===undefined?asset.current_version!:versionFor(asset.id,fixedVersionNumber)

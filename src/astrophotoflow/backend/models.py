@@ -84,45 +84,8 @@ class CapturePreset(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.current_timestamp())
 
 
-class CaptureProfile(Base):
-    __tablename__ = "capture_profile"
-    __table_args__ = (
-        CheckConstraint("frame_type IN ('light', 'bias', 'dark', 'flat', 'dark_flat')", name="ck_capture_profile_frame_type"),
-        CheckConstraint("exposure_seconds IS NULL OR exposure_seconds >= 0", name="ck_capture_profile_exposure"),
-        CheckConstraint("binning_x IS NULL OR binning_x > 0", name="ck_capture_profile_binning_x"),
-        CheckConstraint("binning_y IS NULL OR binning_y > 0", name="ck_capture_profile_binning_y"),
-        CheckConstraint("status IN ('active', 'archived')", name="ck_capture_profile_status"),
-        CheckConstraint("revision >= 1", name="ck_capture_profile_revision"),
-        Index("ix_capture_profile_camera_status", "camera_id", "status"),
-    )
-
-    id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    name: Mapped[str] = mapped_column(String, nullable=False)
-    camera_id: Mapped[str] = mapped_column(ForeignKey("equipment.id"), nullable=False)
-    optical_system_id: Mapped[str | None] = mapped_column(ForeignKey("equipment.id"))
-    filter_id: Mapped[str | None] = mapped_column(ForeignKey("equipment.id"))
-    frame_type: Mapped[str] = mapped_column(String(16), nullable=False)
-    parameter_mode: Mapped[str | None] = mapped_column(String(16))
-    iso: Mapped[int | None] = mapped_column(Integer)
-    exposure_seconds: Mapped[float | None] = mapped_column(Float)
-    gain: Mapped[float | None] = mapped_column(Float)
-    offset: Mapped[float | None] = mapped_column(Float)
-    sensor_temperature_c: Mapped[float | None] = mapped_column(Float)
-    binning_x: Mapped[int | None] = mapped_column(Integer)
-    binning_y: Mapped[int | None] = mapped_column(Integer)
-    notes: Mapped[str | None] = mapped_column(String)
-    status: Mapped[str] = mapped_column(String(16), nullable=False, default="active")
-    revision: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.current_timestamp())
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.current_timestamp())
 
 
-class ProjectCaptureProfile(Base):
-    __tablename__ = "project_capture_profile"
-    __table_args__ = (UniqueConstraint("project_id", "capture_profile_id", name="uq_project_capture_profile"),)
-
-    project_id: Mapped[str] = mapped_column(ForeignKey("project.id", ondelete="CASCADE"), primary_key=True)
-    capture_profile_id: Mapped[str] = mapped_column(ForeignKey("capture_profile.id", ondelete="CASCADE"), primary_key=True)
 
 
 class Asset(Base):
@@ -144,6 +107,7 @@ class Asset(Base):
     current_version_id: Mapped[str | None] = mapped_column(ForeignKey("asset_version.id"))
     classification: Mapped[dict | None] = mapped_column(JSON)
     parameters: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict, server_default=text("'{}'"))
+    equipment_snapshot: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict, server_default=text("'{}'"))
     value_sources: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict, server_default=text("'{}'"))
     notes: Mapped[str | None] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="active", server_default="active")
@@ -173,7 +137,6 @@ class AssetVersion(Base):
     camera_id: Mapped[str | None] = mapped_column(ForeignKey("equipment.id"))
     optical_system_id: Mapped[str | None] = mapped_column(ForeignKey("equipment.id"))
     filter_id: Mapped[str | None] = mapped_column(ForeignKey("equipment.id"))
-    capture_profile_id: Mapped[str | None] = mapped_column(ForeignKey("capture_profile.id"))
     frame_type: Mapped[str | None] = mapped_column(String(16))
     calibration_level: Mapped[str | None] = mapped_column(String(16))
     capture_snapshot: Mapped[dict | None] = mapped_column(JSON)

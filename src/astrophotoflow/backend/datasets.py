@@ -12,7 +12,7 @@ from uuid import UUID, uuid4
 from fastapi import Depends
 from sqlalchemy import func, select, update
 from .errors import ApiError, invalid_reference, not_found
-from .models import Asset, AssetTaskItem, AssetVersion, Dataset, DatasetMember, DatasetVersion
+from .models import Asset, AssetTaskItem, AssetVersion, Dataset, DatasetMember, DatasetVersion, Equipment
 from .schemas import DatasetOut, DatasetPage, DatasetVersionOut, DatasetVersionPage, DatasetMemberParametersUpdateOut
 from .import_schemas import AssetClassification, AssetParameters, DatasetCreate, DatasetPatch, DatasetMemberParametersUpdate, DatasetMembersCreate
 
@@ -179,14 +179,27 @@ def update_dataset_member_parameters(
     for asset_id, asset in asset_by_id.items():
         if parameter_patch:
             values = dict(asset.parameters or {})
+            previous_values = dict(values)
             values.update(parameter_patch)
             try:
                 asset.parameters = AssetParameters.model_validate(values).model_dump(mode="json")
             except Exception as exc:
                 raise ApiError(422, "VALIDATION_ERROR", "拍摄参数无效。", [{"path": "parameters", "message": "请检查参数值及设备 ID。"}]) from exc
+            equipment_snapshot = dict(asset.equipment_snapshot or {})
             for key, kind in (("camera_id", "camera"), ("optical_system_id", "optical_system"), ("filter_id", "filter")):
-                if asset.parameters.get(key) is not None:
-                    shared._check_equipment_ref(session, asset.parameters[key], kind, f"parameters.{key}")
+                if key not in parameter_patch:
+                    continue
+                equipment_id = asset.parameters.get(key)
+                if equipment_id is None:
+                    equipment_snapshot.pop(key, None)
+                else:
+                    current_snapshot = equipment_snapshot.get(key)
+                    if (session.get(Equipment, str(equipment_id)) is None and
+                        str(equipment_id) == str(previous_values.get(key)) and current_snapshot and current_snapshot.get("id") == str(equipment_id)):
+                        continue
+                    shared._check_equipment_ref(session, equipment_id, kind, f"parameters.{key}")
+                    equipment_snapshot[key] = shared._equipment_snapshot(session, str(equipment_id))
+            asset.equipment_snapshot = equipment_snapshot
         if classification_patch:
             classification = {**(asset.classification or {}), **classification_patch}
             if classification.get("frame_class") == "video":

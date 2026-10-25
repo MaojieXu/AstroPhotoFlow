@@ -4,8 +4,7 @@ import { pageSchema, projectSchema } from '@frontend/assets/contracts'
 
 const project = {
   id: '1f740b2c-75f3-4f76-8f85-f08ade40a33f',
-  name: 'M31', target_name: null, notes: null, capture_profile_ids: [],
-  status: 'active', revision: 1, created_at: '2026-10-22T20:00:00Z', updated_at: '2026-10-22T20:00:00Z'
+  name: 'M31', target_name: null, notes: null, status: 'active', revision: 1, created_at: '2026-10-22T20:00:00Z', updated_at: '2026-10-22T20:00:00Z'
 }
 const response = (value: unknown, status = 200) =>
   new Response(JSON.stringify(value), { status, headers: { 'Content-Type': 'application/json' } })

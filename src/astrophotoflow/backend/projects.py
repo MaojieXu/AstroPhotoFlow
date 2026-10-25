@@ -3,7 +3,7 @@ from fastapi import APIRouter
 
 from .dependencies import ERROR_RESPONSES
 from .dependencies import Limit, Offset, Order, ReadSession, SortBy, StatusFilter, WriteSession, authenticate
-from .common import _assert_patch_values, _asset_version_scope, _check_names, _check_profile_refs, _dataset_reference_out, _fits_hdu_out, _header_out, _id, _now, _order, _page, _project_out, _read_preview, _reference_out, _status_clause, _update_config
+from .common import _assert_patch_values, _asset_version_scope, _dataset_reference_out, _fits_hdu_out, _header_out, _id, _now, _order, _page, _project_out, _read_preview, _reference_out, _status_clause, _update_config
 from . import dependencies as deps
 from . import common as shared
 
@@ -12,7 +12,7 @@ from uuid import UUID, uuid4
 from fastapi import Depends, Request
 from sqlalchemy import and_, func, or_, select, update
 from .errors import ApiError, invalid_reference, not_found
-from .models import Asset, AssetVersion, Dataset, DatasetVersion, FitsHduMetadata, Project, ProjectAssetReference, ProjectCaptureProfile, ProjectDatasetReference
+from .models import Asset, AssetVersion, Dataset, DatasetVersion, FitsHduMetadata, Project, ProjectAssetReference, ProjectDatasetReference
 from .schemas import ProjectAssetReferenceOut, ProjectAssetReferencePage, ProjectCreate, ProjectOut, ProjectPage, ProjectPatch, FitsHeaderOut, FitsHduPage, ProjectDatasetReferenceOut, ProjectDatasetReferencePage
 from .import_schemas import ProjectDatasetReferenceCreate, ProjectReferenceCreate, ProjectReferenceDelete
 
@@ -24,7 +24,7 @@ router = APIRouter(prefix="/api/v1", responses=ERROR_RESPONSES)
 def list_projects(
     session: ReadSession, limit: Limit = 50, offset: Offset = 0,
     sort_by: SortBy = "created_at", order: Order = "desc", q: str | None = None,
-    status: StatusFilter = "active",
+    status: StatusFilter = "active", target_name: str | None = None,
 ):
     filters = []
     status_clause = _status_clause(Project, status)
@@ -32,6 +32,8 @@ def list_projects(
         filters.append(status_clause)
     if q:
         filters.append(Project.name.contains(q, autoescape=True))
+    if target_name:
+        filters.append(Project.target_name.contains(target_name, autoescape=True))
     total = session.scalar(select(func.count()).select_from(Project).where(*filters)) or 0
     column = Project.name if sort_by == "name" else Project.created_at
     rows = session.scalars(select(Project).where(*filters).order_by(_order(column, order), Project.id.asc()).limit(limit).offset(offset)).all()
@@ -40,14 +42,10 @@ def list_projects(
 
 @router.post("/projects", response_model=ProjectOut, status_code=201, dependencies=[Depends(authenticate)])
 def create_project(body: ProjectCreate, session: WriteSession):
-    profile_ids = _check_names(body.capture_profile_ids)
-    _check_profile_refs(session, profile_ids)
     now = _now()
     row = Project(id=str(uuid4()), name=body.name, target_name=body.target_name, notes=body.notes,
                   status="active", revision=1, created_at=now, updated_at=now)
     session.add(row)
-    for profile_id in profile_ids:
-        session.add(ProjectCaptureProfile(project_id=row.id, capture_profile_id=profile_id))
     session.flush()
     return _project_out(session, row)
 
@@ -63,14 +61,8 @@ def get_project(project_id: UUID, session: ReadSession):
 @router.patch("/projects/{project_id}", response_model=ProjectOut, dependencies=[Depends(authenticate)])
 def patch_project(project_id: UUID, body: ProjectPatch, session: WriteSession):
     row_id = _id(project_id)
-    changes = body.model_dump(exclude_unset=True, exclude={"base_revision", "capture_profile_ids"})
+    changes = body.model_dump(exclude_unset=True, exclude={"base_revision"})
     _assert_patch_values(changes, {"name", "status"})
-    profile_ids = None
-    if "capture_profile_ids" in body.model_fields_set:
-        if body.capture_profile_ids is None:
-            raise ApiError(422, "VALIDATION_ERROR", "capture_profile_ids 不能为 null。", [{"path": "capture_profile_ids", "message": "请提供数组。"}])
-        profile_ids = _check_names(body.capture_profile_ids)
-        _check_profile_refs(session, profile_ids)
     if changes:
         _update_config(session, Project, row_id, body.base_revision, changes)
     elif session.get(Project, row_id) is None:
@@ -79,9 +71,6 @@ def patch_project(project_id: UUID, body: ProjectPatch, session: WriteSession):
         raise ApiError(409, "REVISION_CONFLICT", "配置已被其他窗口修改，请重新读取后保存。")
     else:
         _update_config(session, Project, row_id, body.base_revision, {})
-    if profile_ids is not None:
-        session.query(ProjectCaptureProfile).filter_by(project_id=row_id).delete(synchronize_session=False)
-        session.add_all(ProjectCaptureProfile(project_id=row_id, capture_profile_id=value) for value in profile_ids)
     session.flush()
     session.expire_all()
     return _project_out(session, session.get(Project, row_id))

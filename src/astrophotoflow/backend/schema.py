@@ -10,7 +10,7 @@ from sqlalchemy.engine import URL
 from ..config import Settings, ensure_data_dir
 
 
-SCHEMA_REVISION = "0007_setups_and_calibration"
+SCHEMA_REVISION = "0009_remove_legacy_capture_profiles"
 _PACKAGE_ALEMBIC_INI = Path(__file__).resolve().parent / "alembic.ini"
 ALEMBIC_INI = _PACKAGE_ALEMBIC_INI
 

@@ -1,12 +1,12 @@
 # 当前开发上下文
 
-更新时间：2026-10-25。当前分支 feature/remake，工程标准化基线为 `4cc317d`，本轮完成运行配置统一和历史目录收尾。
+更新时间：2026-10-25。本轮开发分支 feature/remake，按用户指令交付至 dev；工程标准化基线为 `4cc317d`，本轮完成最终 bug 修复、设备资料解耦及旧 CaptureProfile 移除。
 
 ## 唯一开发入口
 
 - 项目 Python：`.artifacts/venvs/dev`，依赖沿用根 uv.lock。
 - 本机变量：根 `.env`，模板 `.env.example`；由 uv 显式加载。
-- 当前 workspace：`.artifacts/workspaces/dev`，创建时使用新数据库，现保留用户手动导入的数据；配置为该目录的 config.toml。
+- 当前 workspace：`.artifacts/workspaces/dev`，本轮按用户授权清空测试数据并重建为空库；配置为该目录的 config.toml。
 - 前端／服务：`http://127.0.0.1:31388/` 和 `127.0.0.1:31390`。
 - CPU runtime：复用正常用户 LocalAppData 下的 AstroPhotoFlow/runtime/0.1.0，不再依赖旧 test/ 中的解释器或 ComfyUI 源码。
 - MCP：开发环境 uv 加载项目 `.env` 后运行 `apf mcp`；其他 Codex/MCP 设置保持不变。
@@ -17,9 +17,11 @@
 
 ## 产品边界
 
-开发及31388展示实例的schema均为 `0007_setups_and_calibration`。MCP为58工具，保留原五工具；已用原全局注册命令验证新会话，全局注册未改，既有客户端连接可能需重连刷新工具清单。素材行为见[架构说明](../architecture/assets.md)，CLI/MCP 见[接口说明](../api/README.md)。新功能按[五分支约定](module-improvements.md)推进；完整 Agent、软件适配、工作流和结果比较仍未实现。
+开发及31388展示实例的schema现为 `0009_remove_legacy_capture_profiles`。任务接受时冻结全部引用设备资料，重试和恢复沿用原快照；素材当前资料及固定版本分别保存独立设备快照，设备库变化不会改写历史显示。旧 CaptureProfile 接口、项目字段和表已移除。项目、设备、组合和预设使用共通回收站流程。MCP为58工具，保留原五工具；已用原全局注册命令验证新会话，全局注册未改，既有客户端连接可能需重连刷新工具清单。素材行为见[架构说明](../architecture/assets.md)，CLI/MCP 见[接口说明](../api/README.md)。新功能按[五分支约定](module-improvements.md)推进；完整 Agent、软件适配、工作流和结果比较仍未实现。
 
-原工程重构验收见[历史记录](remake-acceptance.md)，本轮配置和运行收尾的实际证据见[配置管理验收](config-management-acceptance.md)。不自动合并 dev/main 或推送远端，不进行前端自动点击。
+设置增删改查和设备快照语义见[设置记录管理](settings-management.md)。
+
+原工程重构验收见[历史记录](remake-acceptance.md)，本轮配置和运行收尾的实际证据见[配置管理验收](config-management-acceptance.md)。按用户指令合入并推送 dev；main 不变，不进行前端自动点击。
 
 最新预览修复：PixInsight 无 CTYPE3 的三平面 FITS 识别已补齐，已有库无需重导入即可回填预览；资产、版本、分组和人工参数保持。验证见 [PixInsight 预览修复](pixinsight-preview-fix.md)。
 
@@ -31,6 +33,9 @@
 后续交付文档不改变运行代码。验收、跳过项和实际散列见[矩阵](module-improvements-acceptance.md)，
 手动入口见[检查清单](module-improvements-manual-check.md)。
 
-31388/31390使用原workspace并已升级0007，原38张照片/参数/版本/成员/旧缩略图保持；未全量重导入。
-插件在workspace/comfyui-data中隔离，JS/CSS提供内容与build一致；原全局MCP命令能发现58工具及相同图片。
-默认workspace指针和全局MCP配置未变。双实例隔离测试环境已停止，当前仅保留主展示实例运行。
+31388/31390已使用同一 dev workspace 重启，数据库为新建 0009 空库；原测试记录、托管副本、预览、暂存及旧备份已清理，原始素材、ZIP、配置、服务令牌和 CPU runtime 保留。
+插件 JS/CSS 的实际 HTTP 内容与本次 build/frontend 完全一致；既有全局 MCP 注册命令仍能发现58工具，CLI、MCP及前端代理均查询同一空库。
+
+本轮实际验收：Windows Python 3.12，270 passed / 1 skipped（FFmpeg unavailable），已有 ORM 循环外键排序警告1条；前端138 passed，类型检查和构建通过。
+wheel源码目录外安装及无Node的sdist重建通过；Linux本轮未执行，不视为已通过。未重导入真实数据集、未自动点击前端、开发验收阶段未提交或推送，随后按用户指令交付至 dev。
+详细证据见[最终修复验收](final-bugfix-acceptance.md)。

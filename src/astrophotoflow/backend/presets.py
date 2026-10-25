@@ -4,9 +4,24 @@ from uuid import UUID
 
 from .errors import invalid_reference
 from .models import CapturePreset, Equipment, EquipmentSetup
+from .common import _equipment_snapshot
 
 
-def capture_defaults_snapshot(session, preset_id: UUID | None) -> dict:
+def capture_defaults_snapshot(session, preset_id: UUID | None, explicit_parameters: dict) -> dict:
+    snapshot = _preset_snapshot(session, preset_id)
+    equipment_ids = {str(value) for parameters in (explicit_parameters, snapshot.get("parameters", {}))
+                     for key in ("camera_id", "optical_system_id", "filter_id")
+                     if (value := parameters.get(key)) is not None}
+    equipment_ids.update(component["equipment_id"]
+                         for component in snapshot.get("equipment_setup", {}).get("components", [])
+                         if component["source"] == "registered")
+    snapshot["equipment_snapshots"] = {
+        equipment_id: deepcopy(_equipment_snapshot(session, equipment_id)) for equipment_id in equipment_ids
+    }
+    return snapshot
+
+
+def _preset_snapshot(session, preset_id: UUID | None) -> dict:
     if preset_id is None:
         return {}
     preset = session.get(CapturePreset, str(preset_id))

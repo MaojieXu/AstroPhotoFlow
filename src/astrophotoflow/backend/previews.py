@@ -103,12 +103,6 @@ class DisplayPreviews:
         recipe = dict(thumbnail.display_parameters or {})
         if category in {"fits", "xisf"} and not {"stretch_low", "stretch_high"} <= recipe.keys():
             return display, None, _issue("not_ready", "STRETCH_NOT_READY", "固定拉伸参数尚未就绪，请稍后重试。")
-        if "stretch_low" in recipe:
-            reference_id = recipe.get("stretch_reference_version_id")
-            if category != "video":
-                reference = session.get(AssetVersion, reference_id) if reference_id else None
-                if reference is None or reference.availability != "available":
-                    return display, None, _issue("not_ready", "STRETCH_NOT_READY", "同条件图像组的固定拉伸基准尚未就绪。")
         if version.storage_mode == "managed":
             path = self.settings.data_dir / version.storage_location
         else:

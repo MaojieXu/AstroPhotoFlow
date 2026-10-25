@@ -13,11 +13,11 @@ const {get,send}=vi.hoisted(()=>({get:vi.fn(),send:vi.fn()}))
 vi.mock('@frontend/assets/host-client',()=>({assetApi:{get,send}}))
 const id=(n:number)=>'00000000-0000-4000-8000-'+String(n).padStart(12,'0')
 const timestamp='2026-10-25T06:00:00Z'
-const cap={stage:'ingestion',shared_library_read:true,project_assets_read:true,project_management:true,equipment_management:true,capture_profile_management:true,asset_import:true,asset_reference_write:true,asset_preview:false,asset_metadata_edit:true,dataset_management:true,asset_task_management:true,calibration_matching:false,asset_publish:false}
+const cap={stage:'ingestion',shared_library_read:true,project_assets_read:true,project_management:true,equipment_management:true,asset_import:true,asset_reference_write:true,asset_preview:false,asset_metadata_edit:true,dataset_management:true,asset_task_management:true,calibration_matching:false,asset_publish:false}
 const page=(items:unknown[])=>({items,total:items.length,limit:200,offset:0})
 function photo(n:number,name:string,frame_type:string|null,master=false){
-  const current_version={id:id(n+100),asset_id:id(n),version_number:1,storage_mode:'reference',storage_location:name,byte_size:10,content_hash:null,availability:'available',camera_id:null,optical_system_id:null,filter_id:null,capture_profile_id:null,frame_type,calibration_level:master?'master':'individual',capture_snapshot:{},scientific_metadata:null,created_at:timestamp}
-  return {id:id(n),name,scope:'shared',owner_project_id:null,role:['bias','dark','flat','dark_flat'].includes(frame_type??'')?'calibration':'raw',calibration_level:master?'master':'individual',current_version_id:current_version.id,classification:{frame_class:master?'masterframe':'subframe',frame_type},parameters:{parameter_mode:'standard'},value_sources:{},notes:null,status:'active',revision:1,created_at:timestamp,current_version}
+  const current_version={id:id(n+100),asset_id:id(n),version_number:1,storage_mode:'reference',storage_location:name,byte_size:10,content_hash:null,availability:'available',camera_id:null,optical_system_id:null,filter_id:null,frame_type,calibration_level:master?'master':'individual',capture_snapshot:{},scientific_metadata:null,created_at:timestamp}
+  return {id:id(n),name,scope:'shared',owner_project_id:null,role:['bias','dark','flat','dark_flat'].includes(frame_type??'')?'calibration':'raw',calibration_level:master?'master':'individual',current_version_id:current_version.id,classification:{frame_class:master?'masterframe':'subframe',frame_type},parameters:{parameter_mode:'standard'},equipment_snapshot:{},value_sources:{},notes:null,status:'active',revision:1,created_at:timestamp,current_version}
 }
 const light=photo(1,'Master Light image','light',true)
 const dark=photo(2,'Dark master image','dark',true)

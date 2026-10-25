@@ -17,7 +17,7 @@ from astrophotoflow.backend.setup_schemas import EquipmentSetupCreate
 from astrophotoflow.config import Settings
 
 
-def test_shared_migration_preserves_existing_camera_dependants(tmp_path):
+def test_shared_migration_removes_replaced_profiles_and_keeps_equipment(tmp_path):
     settings = Settings("127.0.0.1", 8190, tmp_path, ())
     command.upgrade(_alembic_config(settings), "0006_library_trash_cleanup_state")
     camera, profile = str(uuid4()), str(uuid4())
@@ -27,10 +27,10 @@ def test_shared_migration_preserves_existing_camera_dependants(tmp_path):
                            (camera, "camera", "original camera", "{}", "active", 1))
         connection.execute("INSERT INTO capture_profile (id,name,camera_id,frame_type,status,revision) VALUES (?,?,?,?,?,?)",
                            (profile, "original preset", camera, "dark", "active", 1))
-        before = connection.execute("SELECT * FROM capture_profile").fetchall()
     assert upgrade_database(settings) is not None
     with sqlite3.connect(settings.database_path) as connection:
-        assert connection.execute("SELECT * FROM capture_profile").fetchall() == before
+        assert connection.execute("SELECT name FROM sqlite_master WHERE name='capture_profile'").fetchall() == []
+        assert connection.execute("SELECT name FROM equipment WHERE id=?", (camera,)).fetchone() == ("original camera",)
         assert connection.execute("SELECT version_num FROM alembic_version").fetchone()[0] == SCHEMA_REVISION
         assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
         connection.execute("INSERT INTO equipment (id,kind,name,specs,status,revision) VALUES (?,?,?,?,?,?)",
@@ -56,7 +56,7 @@ def test_import_snapshot_freezes_registered_and_inline_components(tmp_path):
         session.add(CapturePreset(id=preset, equipment_setup_id=setup, name="light 30s", classification={"frame_type": "light"},
                                   parameters={"gain": 0, "exposure_seconds": 30, "camera_id": None}, status="active", revision=1))
     with database.read_session() as session:
-        snapshot = capture_defaults_snapshot(session, UUID(preset))
+        snapshot = capture_defaults_snapshot(session, UUID(preset), {})
         assert snapshot["parameters"] == {"gain": 0, "exposure_seconds": 30, "camera_id": camera}
         assert len(session.scalars(select(Equipment)).all()) == 1
     app = create_app(settings, "test-token")

@@ -143,7 +143,7 @@ def test_proxy_whitelist_origin_headers_and_upstream_status(tmp_path, monkeypatc
                 blocked = await client.post("/api" + proxy.BASE_PATH + base, json={}, headers={"Origin": "http://evil.invalid"})
                 assert blocked.status == 403
 
-            assert len(proxy.ROUTES) == 75
+            assert len(proxy.ROUTES) == 76
             assert all(
                 method == "GET" or (method == "POST" and path == "/datasets/{dataset_id}/versions")
                 or (method == "PATCH" and path == "/datasets/{dataset_id}/member-parameters")

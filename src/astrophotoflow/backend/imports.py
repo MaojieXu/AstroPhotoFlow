@@ -26,7 +26,7 @@ router = APIRouter(prefix="/api/v1", responses=ERROR_RESPONSES)
 @router.post("/uploads", status_code=202, dependencies=[Depends(deps.authenticate)])
 def create_upload(body: UploadImportCreate, request: Request, session: deps.WriteSession):
     validate_import_equipment(session, body.parameters.model_dump(mode="json"))
-    defaults_snapshot = capture_defaults_snapshot(session, body.capture_preset_id)
+    defaults_snapshot = capture_defaults_snapshot(session, body.capture_preset_id, body.parameters.model_dump(mode="json", exclude_unset=True))
     task_id = str(uuid4())
     staging = request.app.state.settings.data_dir / "upload-staging" / task_id
     staging.mkdir(parents=True, exist_ok=True)
@@ -231,7 +231,7 @@ def create_import(body: ImportCreate, request: Request, background: BackgroundTa
         id=task_id, status="queued", sources=sources, storage_mode=body.storage_mode,
         classification=body.classification.model_dump(mode="json", exclude_unset=True),
         parameters=body.parameters.model_dump(mode="json", exclude_unset=True), notes=body.notes, dataset_name=dataset_name,
-        import_defaults_snapshot=capture_defaults_snapshot(session, body.capture_preset_id),
+        import_defaults_snapshot=capture_defaults_snapshot(session, body.capture_preset_id, body.parameters.model_dump(mode="json", exclude_unset=True)),
         target_dataset_id=target_dataset_id, dataset_base_revision=None, dataset_id=None,
         enumeration_completed=False, retry_of_task_id=None, report={}, error=None,
         created_at=shared._now(), updated_at=shared._now(),

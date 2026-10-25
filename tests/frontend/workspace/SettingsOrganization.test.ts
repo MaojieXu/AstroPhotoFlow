@@ -9,7 +9,7 @@ const {get,send,upload}=vi.hoisted(()=>({get:vi.fn(),send:vi.fn(),upload:vi.fn()
 vi.mock('@frontend/assets/host-client',()=>({assetApi:{get,send,upload}}))
 const id=(n:number)=>'00000000-0000-4000-8000-'+String(n).padStart(12,'0')
 const timestamp='2026-10-25T06:00:00Z'
-const cap={stage:'ingestion',shared_library_read:true,project_assets_read:true,project_management:true,equipment_management:true,capture_profile_management:true,asset_import:true,asset_reference_write:true,asset_preview:false,asset_metadata_edit:true,dataset_management:true,asset_task_management:true,calibration_matching:false,asset_publish:false}
+const cap={stage:'ingestion',shared_library_read:true,project_assets_read:true,project_management:true,equipment_management:true,asset_import:true,asset_reference_write:true,asset_preview:false,asset_metadata_edit:true,dataset_management:true,asset_task_management:true,calibration_matching:false,asset_publish:false}
 const camera={id:id(1),kind:'camera',name:'Registered camera',model:null,serial_number:null,notes:null,specs:{},status:'active',revision:1,created_at:timestamp,updated_at:timestamp}
 const setup=():EquipmentSetup=>({id:id(2),name:'Night rig',components:[{source:'registered',equipment_id:camera.id}],notes:null,status:'active',revision:1,created_at:timestamp,updated_at:timestamp})
 const preset=():CapturePreset=>({id:id(3),equipment_setup_id:id(2),name:'Light defaults',classification:{},parameters:{gain:42},notes:null,status:'active',revision:1,created_at:timestamp,updated_at:timestamp})
@@ -56,6 +56,37 @@ async function openSetups(){
 }
 
 describe('settings organization',()=>{
+  it.each(['组合','预设'])('preserves a dirty %s when a previously opened filter excludes its setup',async(editor)=>{
+    await openSetups();await wrapper!.get('.apf-record').trigger('click');await flushPromises()
+    await click('筛选')
+    await wrapper!.get('.apf-management-filter-panel select').setValue('filter')
+    await click(editor==='组合'?'编辑使用组合':'Light defaults')
+    const name=label(editor==='组合'?'组合名称':'预设名称').get('input')
+    await name.setValue('Unsaved draft');await flushPromises()
+    const apply=wrapper!.findAll('.apf-management-filter-panel button').find(button=>button.text()==='应用')!
+    expect(apply.attributes('disabled')).toBeDefined()
+    await apply.trigger('click');await flushPromises()
+    expect((name.element as HTMLInputElement).value).toBe('Unsaved draft')
+    expect(wrapper!.text()).toContain('Night rig')
+    expect(get.mock.calls.some(([path])=>path.includes('component_kind=filter'))).toBe(false)
+    vi.spyOn(window,'confirm').mockReturnValue(true)
+    await click('取消')
+    expect(apply.attributes('disabled')).toBeUndefined()
+    await apply.trigger('click');await flushPromises()
+    expect(get.mock.calls.some(([path])=>path.includes('component_kind=filter'))).toBe(true)
+  })
+
+  it('blocks management filtering during an unchanged setup save',async()=>{
+    await openSetups();await wrapper!.get('.apf-record').trigger('click');await flushPromises()
+    await click('编辑使用组合')
+    let complete!:(value:EquipmentSetup)=>void
+    send.mockImplementationOnce(()=>new Promise(resolve=>{complete=resolve}))
+    await wrapper!.get('form[aria-label="使用组合表单"]').trigger('submit');await flushPromises()
+    expect(wrapper!.get('.apf-management-filter-control>button').attributes('disabled')).toBeDefined()
+    complete({...setup(),revision:2});await flushPromises()
+    expect(wrapper!.get('.apf-management-filter-control>button').attributes('disabled')).toBeUndefined()
+  })
+
   it('creates registered/inline combinations and edits only their snapshot',async()=>{
     await openSetups()
     expect(wrapper!.get('.apf-management-tabs').text()).toBe('项目设备使用组合')
@@ -87,7 +118,8 @@ describe('settings organization',()=>{
     await label('预设名称').get('input').setValue('Zero gain')
     await label('Gain').get('input').setValue('0')
     expect(wrapper!.get('input[aria-label="搜索"]').attributes('disabled')).toBeDefined()
-    expect(wrapper!.get('select[aria-label="状态筛选"]').attributes('disabled')).toBeDefined()
+    expect(wrapper!.find('select[aria-label="状态筛选"]').exists()).toBe(false)
+    expect(wrapper!.find('.apf-layout').exists()).toBe(false)
     expect(wrapper!.get('select[aria-label="每页显示数量"]').attributes('disabled')).toBeDefined()
     const confirm=vi.spyOn(window,'confirm').mockReturnValue(false)
     await click('设备')
@@ -97,21 +129,19 @@ describe('settings organization',()=>{
     expect(send.mock.calls[0][0]).toBe('/astrophotoflow/api/v1/equipment-setups/'+id(2)+'/presets')
     expect(send.mock.calls[0][3].parameters).toEqual({gain:0})
     expect(wrapper!.text()).toContain('Zero gain')
-    await click('Zero gain · 启用')
+    await click('Zero gain')
     await label('Gain').get('input').setValue('')
     await wrapper!.get('form[aria-label="拍摄预设表单"]').trigger('submit');await flushPromises()
     expect(send.mock.calls[1][0]).toBe('/astrophotoflow/api/v1/capture-presets/'+id(5))
     expect(send.mock.calls[1][3]).toMatchObject({base_revision:1,parameters:{gain:null}})
-    await click('旧版拍摄配置')
-    expect(wrapper!.text()).toContain('旧版拍摄配置保留原有设备与项目关联')
-    expect(get.mock.calls.some(([path])=>path.includes('/capture-profiles?'))).toBe(true)
   })
 
-  it('offers all equipment categories and keeps optical_system available',async()=>{
+  it('offers only the current equipment categories',async()=>{
     await openSetups();await click('设备')
-    const filter=wrapper!.get('select[aria-label="设备类别筛选"]')
-    expect(filter.findAll('option').map(item=>item.text())).toEqual(['全部设备','相机','望远镜','滤镜','赤道仪','配件','成像系统（既有）'])
-    await filter.setValue('mount');await flushPromises()
+    await click('筛选')
+    const filter=wrapper!.get('.apf-management-filter-panel select')
+    expect(filter.findAll('option').map(item=>item.text())).toEqual(['全部设备','相机','望远镜','滤镜','赤道仪','配件'])
+    await filter.setValue('mount');await click('应用')
     expect(get.mock.calls.at(-1)![0]).toContain('kind=mount')
     await click('添加设备')
     await wrapper!.get('.apf-editor select').setValue('mount')
@@ -138,7 +168,7 @@ describe('settings organization',()=>{
   })
 
   it('makes adding either fixed-version reference discoverable from a selected project',async()=>{
-    const project={id:id(20),name:'M31 processing',target_name:'M31',notes:null,capture_profile_ids:[],status:'active',revision:1,created_at:timestamp,updated_at:timestamp}
+    const project={id:id(20),name:'M31 processing',target_name:'M31',notes:null,status:'active',revision:1,created_at:timestamp,updated_at:timestamp}
     const implementation=get.getMockImplementation()!
     get.mockImplementation(async(path:string)=>path.includes('/projects?')?page([project]):implementation(path))
     wrapper=mount(App,{global:{plugins:[createPinia()]}});await flushPromises()

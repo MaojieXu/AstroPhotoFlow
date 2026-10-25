@@ -30,7 +30,7 @@ def health(request: Request):
 def capabilities():
     return {
         "stage": "ingestion", "shared_library_read": True, "project_assets_read": True,
-        "project_management": True, "equipment_management": True, "capture_profile_management": True,
+        "project_management": True, "equipment_management": True,
         "asset_import": True, "asset_reference_write": True, "asset_preview": True,
         "asset_metadata_edit": True, "dataset_management": True, "asset_task_management": True,
         "calibration_matching": False, "asset_publish": False,
