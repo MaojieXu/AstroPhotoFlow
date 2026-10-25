@@ -67,7 +67,7 @@ function configureLibrary(groups:Array<{dataset:ReturnType<typeof dataset>;versi
     if(path.endsWith('/capabilities'))return capabilities
     if(path.endsWith('/library/filter-options'))return {frame_classes:[],frame_types:[],roles:['raw'],parameter_modes:[],bin_values:[],equipment:{camera_id:[],optical_system_id:[],filter_id:[]},numeric_ranges:{}}
     if(path.includes('/library/items'))return page([
-      ...groups.map(group=>({entry_type:'dataset',dataset:group.dataset,version:group.version,import_issue:null})),
+      ...groups.map(group=>({entry_type:'dataset',dataset:group.dataset,version:group.version,import_issue:null,matching_member_count:group.version.members.length})),
       {entry_type:'asset',asset:single,import_issue:null}
     ])
     const match=path.match(/\/datasets\/([^/]+)\/versions\/([^/?]+)/)
@@ -191,7 +191,7 @@ describe('dataset group member table',()=>{
     let resolveVersion!:(value:ReturnType<typeof version>)=>void
     get.mockImplementation((path:string)=>{
       if(path.endsWith('/capabilities'))return Promise.resolve(capabilities)
-      if(path.includes('/library/items'))return Promise.resolve(page([{entry_type:'dataset',dataset:group,version:groupVersion,import_issue:null}]))
+      if(path.includes('/library/items'))return Promise.resolve(page([{entry_type:'dataset',dataset:group,version:groupVersion,import_issue:null,matching_member_count:groupVersion.members.length}]))
       if(path.includes('/datasets/'+group.id+'/versions/'))return new Promise(resolve=>{resolveVersion=resolve})
       if(path.includes('/projects'))return Promise.resolve(page([]))
       return Promise.resolve(page([]))
@@ -212,7 +212,7 @@ describe('dataset group member table',()=>{
     let resolveVersion!:(value:ReturnType<typeof version>)=>void
     get.mockImplementation((path:string)=>{
       if(path.endsWith('/capabilities'))return Promise.resolve(capabilities)
-      if(path.includes('/library/items'))return Promise.resolve(page([{entry_type:'dataset',dataset:group,version:groupVersion,import_issue:null}]))
+      if(path.includes('/library/items'))return Promise.resolve(page([{entry_type:'dataset',dataset:group,version:groupVersion,import_issue:null,matching_member_count:groupVersion.members.length}]))
       if(path.includes('/datasets/'+group.id+'/versions/'))return new Promise(resolve=>{resolveVersion=resolve})
       return Promise.resolve(page([]))
     })
@@ -232,7 +232,7 @@ describe('dataset group member table',()=>{
     let resolveDataset!:(value:ReturnType<typeof dataset>)=>void
     get.mockImplementation((path:string)=>{
       if(path.endsWith('/capabilities'))return Promise.resolve(capabilities)
-      if(path.includes('/library/items'))return Promise.resolve(page([{entry_type:'dataset',dataset:group,version:groupVersion,import_issue:null}]))
+      if(path.includes('/library/items'))return Promise.resolve(page([{entry_type:'dataset',dataset:group,version:groupVersion,import_issue:null,matching_member_count:groupVersion.members.length}]))
       if(path==='/astrophotoflow/api/v1/datasets/'+group.id)return new Promise(resolve=>{resolveDataset=resolve})
       if(path.includes('/datasets/'+group.id+'/versions/'))return Promise.resolve(groupVersion)
       if(path.includes('/projects'))return Promise.resolve(page([]))
@@ -526,7 +526,7 @@ describe('dataset group member table',()=>{
     configureLibrary([{dataset:group,version:initialVersion}],single)
     get.mockImplementation(async(path:string)=>{
       if(path.endsWith('/capabilities'))return capabilities
-      if(path.includes('/library/items'))return page([{entry_type:'dataset',dataset:currentDataset,version:currentVersion,import_issue:null},
+      if(path.includes('/library/items'))return page([{entry_type:'dataset',dataset:currentDataset,version:currentVersion,import_issue:null,matching_member_count:currentVersion.members.length},
         {entry_type:'asset',asset:single,import_issue:null}])
       if(path==='/astrophotoflow/api/v1/datasets/'+group.id)return currentDataset
       if(path.includes('/datasets/'+group.id+'/versions/'))return currentVersion
@@ -571,7 +571,7 @@ describe('dataset group member table',()=>{
     assets.set(addedAsset.id,addedAsset)
     get.mockImplementation(async(path:string)=>{
       if(path.endsWith('/capabilities'))return capabilities
-      if(path.includes('/library/items'))return page([{entry_type:'dataset',dataset:currentDataset,version:currentVersion,import_issue:null}])
+      if(path.includes('/library/items'))return page([{entry_type:'dataset',dataset:currentDataset,version:currentVersion,import_issue:null,matching_member_count:currentVersion.members.length}])
       if(path==='/astrophotoflow/api/v1/datasets/'+group.id){datasetRequests++;return datasetRequests===3?new Promise(resolve=>{resolveDataset=resolve}):currentDataset}
       if(path.includes('/datasets/'+group.id+'/versions/'))return path.endsWith('/'+initialVersion.id)?initialVersion:currentVersion
       if(path.startsWith('/astrophotoflow/api/v1/library/assets?'))return page([existingAsset,addedAsset,single])
@@ -616,7 +616,7 @@ describe('dataset group member table',()=>{
     configureLibrary([{dataset:group,version:initialVersion}])
     get.mockImplementation(async(path:string)=>{
       if(path.endsWith('/capabilities'))return capabilities
-      if(path.includes('/library/items'))return page([{entry_type:'dataset',dataset:currentDataset,version:currentVersion,import_issue:null}])
+      if(path.includes('/library/items'))return page([{entry_type:'dataset',dataset:currentDataset,version:currentVersion,import_issue:null,matching_member_count:currentVersion.members.length}])
       if(path==='/astrophotoflow/api/v1/datasets/'+group.id)return new Promise(resolve=>{resolveDataset=resolve})
       if(path.includes('/datasets/'+group.id+'/versions/'))return path.endsWith('/'+initialVersion.id)?initialVersion:currentVersion
       return page([])
@@ -647,7 +647,7 @@ describe('dataset group member table',()=>{
     configureLibrary([{dataset:group,version:groupVersion}])
     get.mockImplementation(async(path:string)=>{
       if(path.endsWith('/capabilities'))return capabilities
-      if(path.includes('/library/items'))return page([{entry_type:'dataset',dataset:group,version:groupVersion,import_issue:null}])
+      if(path.includes('/library/items'))return page([{entry_type:'dataset',dataset:group,version:groupVersion,import_issue:null,matching_member_count:groupVersion.members.length}])
       if(path==='/astrophotoflow/api/v1/datasets/'+group.id)return new Promise(resolve=>{resolveDataset=resolve})
       if(path.includes('/datasets/'+group.id+'/versions/'))return groupVersion
       return page([])
@@ -671,7 +671,7 @@ describe('dataset group member table',()=>{
     configureLibrary([{dataset:group,version:groupVersion}])
     get.mockImplementation(async(path:string)=>{
       if(path.endsWith('/capabilities'))return capabilities
-      if(path.includes('/library/items'))return page([{entry_type:'dataset',dataset:group,version:groupVersion,import_issue:null}])
+      if(path.includes('/library/items'))return page([{entry_type:'dataset',dataset:group,version:groupVersion,import_issue:null,matching_member_count:groupVersion.members.length}])
       if(path==='/astrophotoflow/api/v1/datasets/'+group.id)return new Promise(resolve=>{resolvers.push(resolve)})
       if(path.includes('/datasets/'+group.id+'/versions/'))return groupVersion
       return page([])

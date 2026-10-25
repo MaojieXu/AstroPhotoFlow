@@ -5,7 +5,7 @@ from typing import Literal
 
 from pydantic import Field, field_validator, model_validator
 
-from .schemas import CfaPattern, StrictModel, UuidInput, check_name
+from .schemas import CalibrationBindings, CfaPattern, StrictModel, UuidInput, check_name
 
 
 FrameClass = Literal["subframe", "masterframe", "video"]
@@ -147,6 +147,23 @@ class AssetPatch(StrictModel):
 class DatasetMembersCreate(StrictModel):
     base_revision: int = Field(ge=1)
     asset_version_ids: list[UuidInput]
+    calibration_defaults: CalibrationBindings | None = None
+    member_calibration_overrides: dict[UuidInput, CalibrationBindings] | None = None
+
+    @model_validator(mode="after")
+    def maps_are_objects(self):
+        for field in ("calibration_defaults", "member_calibration_overrides"):
+            if field in self.model_fields_set and getattr(self, field) is None:
+                raise ValueError(f"{field} 必须是对象，清空请传空对象")
+        return self
+
+
+class DatasetCreate(StrictModel):
+    name: str
+    notes: str | None = None
+    asset_version_ids: list[UuidInput]
+
+    _name = field_validator("name")(check_name)
 
 
 class DatasetPatch(StrictModel):

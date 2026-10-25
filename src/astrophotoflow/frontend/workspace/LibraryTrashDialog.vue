@@ -149,7 +149,7 @@ async function requestPreview() {
     if (generation !== readGeneration || !props.open) return
     preview.value=result
     previewSelection.value=selection
-    if (!result.tasks.length) deleteConfirm.value=true
+    if (!result.tasks.length&&!result.references.some(reference=>reference.kind==='calibration')) deleteConfirm.value=true
   } catch(cause) {if (generation === readGeneration && props.open) error.value=cause instanceof Error?cause.message:'永久删除预览失败。'}
   finally {busy.value=false}
 }
@@ -161,7 +161,7 @@ async function permanentlyDelete() {
       ...previewSelection.value,preview_fingerprint:preview.value.preview_fingerprint
     })
     notice.value=`已清理 ${result.deleted_count} 张照片、${result.deleted_entry_count} 条记录；删除文件 ${result.deleted_file_count} 个（${bytes(result.deleted_bytes)}），缺失文件 ${result.missing_file_count} 个。`+
-      (result.failed.length?` ${result.failed.length} 项失败并保留在垃圾桶中。`:'')
+      (result.failed.length?` ${result.failed.length} 项保留在垃圾桶中。${result.failed.map(item=>item.error).join('；')}`:'')
     if (result.failed.length) error.value=result.failed.map(item=>`${item.id}：${item.error}`).join('；')
     emit('changed')
     await load()
@@ -227,7 +227,8 @@ const bytes = (value:number) => value < 1024 ? `${value} B` : value < 1024*1024 
         <section v-if="preview" class="trash-preview" aria-label="永久删除预览">
           <h3>删除范围</h3><p>照片 {{preview.photo_count}} 张；托管文件 {{preview.managed_file_count}} 个，共 {{bytes(preview.managed_bytes)}}。</p>
           <p v-if="preview.tasks.length" class="trash-error">导入任务仍占用：{{preview.tasks.join('、')}}。请先通过导入任务取消。</p>
-          <div v-if="preview.references.length"><h4>将一并清理 {{preview.references.length}} 条项目或组关联</h4><p v-for="reference in preview.references" :key="reference.id">{{reference.name}} · {{reference.kind==='project_asset'?'项目照片':reference.kind==='project_dataset'?'项目数据集':'数据集成员'}} · 第 {{reference.version}} 版</p></div>
+          <div v-if="preview.references.length"><h4>{{preview.references.some(reference=>reference.kind==='calibration')?'项目、组或校准关联':'将一并清理'}} {{preview.references.length}} 条项目或组关联</h4><p v-for="reference in preview.references" :key="reference.id">{{reference.name}} · {{reference.kind==='project_asset'?'项目照片':reference.kind==='project_dataset'?'项目数据集':reference.kind==='calibration'?'保留中的校准引用':'数据集成员'}} · 第 {{reference.version}} 版</p></div>
+          <p v-if="preview.references.some(reference=>reference.kind==='calibration')" role="alert">其他组的历史版本仍使用此校准目标，已阻止清理。先清理引用组；系统不会自动清空关联。</p>
         </section>
       </div>
       <footer class="trash-footer">

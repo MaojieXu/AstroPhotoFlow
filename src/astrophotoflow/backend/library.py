@@ -306,6 +306,7 @@ def library_items(
         if has_member_filters and not any(matches_member(asset) for asset in member_assets):
             continue
         entries.append({"entry_type": "dataset", "id": dataset.id, "dataset": _dataset_out(session, dataset), "version": version_out,
+                        "matching_member_count": sum(matches_member(asset) for asset in member_assets),
                         "import_issue": issue_by_dataset.get(dataset.id),
                         "sort_created_at": dataset.created_at, "sort_name": dataset.name})
     for asset in assets:

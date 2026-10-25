@@ -340,8 +340,7 @@ describe('first-stage regression fixes', () => {
     await flushPromises()
     await wrapper.findAll('button').find(button=>button.text()==='细节')!.trigger('click')
     const binSelector='.apf-assets-table tbody tr td:nth-child(8)'
-    await clickDetail(wrapper.get(binSelector+' .apf-inline-value').element,1)
-    await clickDetail(wrapper.get(binSelector+' .apf-inline-value').element,2)
+    await wrapper.get(binSelector+' .apf-inline-value').trigger('dblclick')
     let editor=wrapper.get(binSelector+' select')
     expect((editor.element as HTMLSelectElement).value).toBe('legacy:1x2')
     expect(editor.find('option[value="Bin16"]').exists()).toBe(true)
@@ -350,8 +349,7 @@ describe('first-stage regression fixes', () => {
     await flushPromises()
     expect(send).not.toHaveBeenCalled()
 
-    await clickDetail(wrapper.get(binSelector+' .apf-inline-value').element,1)
-    await clickDetail(wrapper.get(binSelector+' .apf-inline-value').element,2)
+    await wrapper.get(binSelector+' .apf-inline-value').trigger('dblclick')
     editor=wrapper.get(binSelector+' select')
     await editor.setValue('Bin3')
     await editor.trigger('keydown',{key:'Enter'})
@@ -379,7 +377,7 @@ describe('first-stage regression fixes', () => {
       equipment:{camera_id:[],optical_system_id:[],filter_id:[]},numeric_ranges:{}}
     get.mockImplementation(async(path:string)=>{
       if(path.endsWith('/capabilities'))return capabilities
-      if(path.includes('/library/items'))return page([{entry_type:'dataset',dataset,version,import_issue:null}])
+      if(path.includes('/library/items'))return page([{entry_type:'dataset',dataset,version,import_issue:null,matching_member_count:members.length}])
       if(path.endsWith('/library/filter-options'))return filterOptions
       return emptyPage
     })
@@ -545,7 +543,7 @@ describe('first-stage regression fixes', () => {
       member_count:0,created_at:createdAt,updated_at:createdAt}
     get.mockImplementation(async(path:string)=>{
       if(path.endsWith('/capabilities'))return capabilities
-      if(path.includes('/library/items'))return page([{entry_type:'dataset',dataset,version:datasetVersion,import_issue:null}])
+      if(path.includes('/library/items'))return page([{entry_type:'dataset',dataset,version:datasetVersion,import_issue:null,matching_member_count:datasetVersion.members.length}])
       if(path.endsWith('/datasets/'+dataset.id))return dataset
       if(path.endsWith('/versions/'+versionId))return datasetVersion
       return emptyPage
@@ -576,7 +574,7 @@ describe('first-stage regression fixes', () => {
     const version={id:versionId,dataset_id:datasetId,version_number:1,created_at:createdAt,members:[]}
     let dataset={id:datasetId,name:'Old name',notes:null,status:'active',revision:1,current_version_id:versionId,
       member_count:0,created_at:createdAt,updated_at:createdAt}
-    const item=()=>({entry_type:'dataset',dataset,version,import_issue:null})
+    const item=()=>({entry_type:'dataset',dataset,version,import_issue:null,matching_member_count:version.members.length})
     get.mockImplementation(async(path:string)=>{
       if(path.endsWith('/capabilities'))return capabilities
       if(path.includes('/library/items'))return page([item()])
@@ -608,7 +606,7 @@ describe('first-stage regression fixes', () => {
     let dataset={id:datasetId,name:'Old name',notes:null,status:'active',revision:1,current_version_id:versionId,
       member_count:0,created_at:createdAt,updated_at:createdAt}
     let removed=false
-    const item=()=>({entry_type:'dataset',dataset,version,import_issue:null})
+    const item=()=>({entry_type:'dataset',dataset,version,import_issue:null,matching_member_count:version.members.length})
     get.mockImplementation(async(path:string)=>{
       if(path.endsWith('/capabilities'))return capabilities
       if(path.includes('/library/items'))return removed?page([],0):page([item()])
@@ -653,7 +651,7 @@ describe('first-stage regression fixes', () => {
     const version={id:versionId,dataset_id:datasetId,version_number:1,created_at:createdAt,members:[]}
     let dataset={id:datasetId,name:'Old name',notes:null,status:'active',revision:1,current_version_id:versionId,
       member_count:0,created_at:createdAt,updated_at:createdAt}
-    const item=()=>({entry_type:'dataset',dataset,version,import_issue:null})
+    const item=()=>({entry_type:'dataset',dataset,version,import_issue:null,matching_member_count:version.members.length})
     get.mockImplementation(async(path:string)=>{
       if(path.endsWith('/capabilities'))return capabilities
       if(path.includes('/library/items'))return page([item()])
