@@ -303,7 +303,16 @@ async function loadRecords() {
       const needle=store.query.trim().toLocaleLowerCase()
       const filtered=members.filter(row=>!needle||String(row.name??'').toLocaleLowerCase().includes(needle))
       const value=(row:RecordData,by:string)=>({name:row.name,classification:row.classification?.frame_class,camera:row.parameters?.camera_id,parameter_mode:row.parameters?.iso??row.parameters?.gain,exposure_seconds:row.parameters?.exposure_seconds,sensor_temperature_c:row.parameters?.sensor_temperature_c,binning:row.parameters?.binning_x,cfa_pattern:row.parameters?.cfa_pattern,optical_system:row.parameters?.optical_system_id,filter:row.parameters?.filter_id,integration_seconds:row.parameters?.integration_seconds,storage_mode:row.version?.storage_mode,status:row.status,notes:row.notes,member_position:row.member_position} as Record<string,unknown>)[by]
-      filtered.sort((a,b)=>String(value(a,librarySort.value.by)??'').localeCompare(String(value(b,librarySort.value.by)??''),undefined,{numeric:true})*(librarySort.value.order==='asc'?1:-1))
+      filtered.sort((a,b)=>{
+        const left=value(a,librarySort.value.by),right=value(b,librarySort.value.by)
+        const direction=librarySort.value.order==='asc'?1:-1
+        if(['parameter_mode','exposure_seconds','sensor_temperature_c','integration_seconds'].includes(librarySort.value.by)){
+          if(left==null)return right==null?0:1
+          if(right==null)return -1
+          return (Number(left)-Number(right))*direction
+        }
+        return String(left??'').localeCompare(String(right??''),undefined,{numeric:true})*direction
+      })
       loadedTotal=filtered.length
       const pageSize=store.pageSize==='all'?filtered.length:store.pageSize
       loadedRows=filtered.slice(store.offset,store.offset+pageSize)
@@ -921,10 +930,15 @@ function editDataset(row: RecordData) {
   datasetPendingIds.value = []
 }
 
-function openDataset(row:RecordData){
+async function openDataset(row:RecordData){
+  const context={query:store.query,offset:store.offset,pageSize:store.pageSize,sort:{...librarySort.value},view:libraryViewMode.value}
+  if(!await waitForInlineSave())return
+  if(!isLibraryItemsView.value||store.query!==context.query||store.offset!==context.offset||store.pageSize!==context.pageSize||librarySort.value.by!==context.sort.by||librarySort.value.order!==context.sort.order||libraryViewMode.value!==context.view)return
+  const currentRow=rows.value.find(item=>item.id===row.id&&item.entry_type==='dataset')
+  if(!currentRow)return
   datasetRefreshGeneration++
   outerLibraryState.value={query:store.query,offset:store.offset,pageSize:store.pageSize,sort:{...librarySort.value},view:libraryViewMode.value}
-  activeDataset.value={...(row.dataset??row),id:row.dataset?.id??row.id,current_version_id:row.version?.id??row.dataset?.current_version_id??row.current_version_id,name:row.dataset?.name??row.name}
+  activeDataset.value={...(currentRow.dataset??currentRow),id:currentRow.dataset?.id??currentRow.id,current_version_id:currentRow.version?.id??currentRow.dataset?.current_version_id??currentRow.current_version_id,name:currentRow.dataset?.name??currentRow.name}
   store.query='';store.offset=0;store.pageSize=50;librarySort.value={by:'member_position',order:'asc'};libraryViewMode.value='detail'
   filterPanelOpen.value=false
   void loadRecords()
@@ -1674,14 +1688,14 @@ onBeforeUnmount(() => {
                   <td><InlineField :value="row.entry_type==='dataset'?datasetRawValue(row,member=>member.asset?.parameters?.integration_seconds):rowParameters(row).integration_seconds" :display="row.entry_type==='dataset'?datasetValue(row,member=>member.asset?.parameters?.integration_seconds,value=>value==null?'未指定':String(value)+' s'):captureValue(rowParameters(row).integration_seconds)+(rowParameters(row).integration_seconds==null?'':' s')" :edit-value="row.entry_type==='dataset'&&datasetRawValue(row,member=>member.asset?.parameters?.integration_seconds)==='mixed'?'':undefined" kind="number" :save="value=>saveRowField(row,'integration_seconds',value)" @cancelled="clearInlineSaveFailure(inlineFailureKey(row,'integration_seconds'))" /></td>
                   <td>{{row.entry_type==='dataset'?datasetValue(row,member=>member.version?.storage_mode):row.version?.storage_mode??row.current_version?.storage_mode??'—'}}</td>
                   <td><InlineField :value="rowAsset(row).status??'active'" kind="select" :choices="[{value:'active',label:'启用'},{value:'archived',label:'归档'}]" :save="value=>saveRowField(row,'status',value)" @cancelled="clearInlineSaveFailure(inlineFailureKey(row,'status'))" /><small>{{row.import_issue??row.version?.availability??row.current_version?.availability??''}}</small></td>
-                  <td class="apf-note-cell"><InlineField :value="row.entry_type==='dataset'?row.dataset?.notes:row.notes" kind="textarea" :save="value=>saveRowField(row,'notes',value)" @cancelled="clearInlineSaveFailure(inlineFailureKey(row,'notes'))" /></td>
+                  <td class="apf-note-cell"><InlineField :value="row.entry_type==='dataset'?row.dataset?.notes:rowAsset(row).notes" kind="textarea" :save="value=>saveRowField(row,'notes',value)" @cancelled="clearInlineSaveFailure(inlineFailureKey(row,'notes'))" /></td>
                 </template>
                 <template v-else-if="activeArea!=='library'">
                   <td><InlineField :value="row.entry_type==='dataset'?datasetRawValue(row,member=>member.asset?.parameters?.optical_system_id):rowParameters(row).optical_system_id" :display="row.entry_type==='dataset'?datasetValue(row,member=>member.asset?.parameters?.optical_system_id,value=>equipmentName(typeof value==='string'?value:null)):equipmentName(rowParameters(row).optical_system_id)" kind="select" :choices="[{value:'',label:'未指定'},{value:'mixed',label:'混合',disabled:true},...equipmentChoices('optical_system')]" :choices-message="equipmentChoiceMessage('optical_system')" :save="value=>saveRowField(row,'optical_system_id',value)" @cancelled="clearInlineSaveFailure(inlineFailureKey(row,'optical_system_id'))" /></td>
                   <td><InlineField :value="row.entry_type==='dataset'?datasetRawValue(row,member=>member.asset?.parameters?.filter_id):rowParameters(row).filter_id" :display="row.entry_type==='dataset'?datasetValue(row,member=>member.asset?.parameters?.filter_id,value=>equipmentName(typeof value==='string'?value:null)):equipmentName(rowParameters(row).filter_id)" kind="select" :choices="[{value:'',label:'未指定'},{value:'mixed',label:'混合',disabled:true},...equipmentChoices('filter')]" :choices-message="equipmentChoiceMessage('filter')" :save="value=>saveRowField(row,'filter_id',value)" @cancelled="clearInlineSaveFailure(inlineFailureKey(row,'filter_id'))" /></td>
                   <td>{{row.entry_type==='dataset'?datasetValue(row,member=>member.version?.storage_mode):row.version?.storage_mode??row.current_version?.storage_mode??'—'}}</td>
                   <td><InlineField :value="rowAsset(row).status??'active'" kind="select" :choices="[{value:'active',label:'启用'},{value:'archived',label:'归档'}]" :save="value=>saveRowField(row,'status',value)" @cancelled="clearInlineSaveFailure(inlineFailureKey(row,'status'))" /><small>{{row.import_issue??row.version?.availability??row.current_version?.availability??''}}</small></td>
-                  <td><InlineField :value="row.notes" :display="row.notes??'—'" kind="textarea" :save="value=>saveRowField(row,'notes',value)" @cancelled="clearInlineSaveFailure(inlineFailureKey(row,'notes'))" /></td>
+                  <td><InlineField :value="rowAsset(row).notes" :display="rowAsset(row).notes??'—'" kind="textarea" :save="value=>saveRowField(row,'notes',value)" @cancelled="clearInlineSaveFailure(inlineFailureKey(row,'notes'))" /></td>
                 </template>
               </tr></tbody>
             </table>

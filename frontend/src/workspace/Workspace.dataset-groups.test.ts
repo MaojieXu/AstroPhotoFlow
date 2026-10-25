@@ -350,11 +350,20 @@ describe('dataset group member table',()=>{
     await flushPromises()
     const notesButton=row.find('td:nth-child(15) .apf-inline-value')
     await notesButton.trigger('dblclick')
-    const notes=row.find('textarea')
+    let notes=row.find('textarea')
+    await notes.setValue('New saved note')
+    await notes.trigger('focusin')
+    notes.element.parentElement!.dispatchEvent(new FocusEvent('focusout',{bubbles:true,relatedTarget:null}))
+    await flushPromises()
+    expect(row.find('td:nth-child(15) .apf-inline-value').text()).toBe('New saved note')
+    await row.find('td:nth-child(15) .apf-inline-value').trigger('dblclick')
+    notes=row.find('textarea')
+    expect((notes.element as HTMLTextAreaElement).value).toBe('New saved note')
     await notes.setValue('')
     await notes.trigger('focusin')
     notes.element.parentElement!.dispatchEvent(new FocusEvent('focusout',{bubbles:true,relatedTarget:null}))
     await flushPromises()
+    expect(row.find('td:nth-child(15) .apf-inline-value').text()).toBe('未设置')
     const exposureButton=row.find('td:nth-child(6) .apf-inline-value')
     await exposureButton.trigger('dblclick')
     input=row.find('input[type="number"]')
@@ -362,14 +371,67 @@ describe('dataset group member table',()=>{
     await input.trigger('keydown',{key:'Enter'})
     await flushPromises()
 
-    expect(send).toHaveBeenCalledTimes(3)
+    expect(send).toHaveBeenCalledTimes(4)
     expect(send.mock.calls[0]).toMatchObject(['/astrophotoflow/api/v1/library/assets/'+asset.id,expect.anything(),'PATCH',{base_revision:1,name:'Renamed.fit'}])
-    expect(send.mock.calls[1][3]).toEqual({base_revision:2,notes:null})
-    expect(send.mock.calls[2][3]).toEqual({base_revision:3,parameters:{exposure_seconds:0}})
-    expect(send.mock.calls.map(([path])=>path)).toEqual(Array(3).fill('/astrophotoflow/api/v1/library/assets/'+asset.id))
+    expect(send.mock.calls[1][3]).toEqual({base_revision:2,notes:'New saved note'})
+    expect(send.mock.calls[2][3]).toEqual({base_revision:3,notes:null})
+    expect(send.mock.calls[3][3]).toEqual({base_revision:4,parameters:{exposure_seconds:0}})
+    expect(send.mock.calls.map(([path])=>path)).toEqual(Array(4).fill('/astrophotoflow/api/v1/library/assets/'+asset.id))
     const untouchedRow=wrapper.findAll('.apf-assets-table tbody tr').find(item=>item.text().includes('Untouched.fit'))!
     expect(untouchedRow.text()).toContain('30 s')
     expect(get.mock.calls.filter(([path])=>String(path).includes('/datasets/')&&String(path).includes('/versions/')).every(([path])=>path==='/astrophotoflow/api/v1/datasets/'+group.id+'/versions/'+fixed.dataset_version_id)).toBe(true)
+  })
+
+  it('sorts exposure and temperature numerically and keeps missing values last in either direction',async()=>{
+    const group=dataset(31,'Numeric group',41,4)
+    const numericMember=(index:number,name:string,exposure:number|null,temperature:number|null,position:number)=>{
+      const asset=assetFor(index,name)
+      asset.parameters.exposure_seconds=exposure
+      asset.parameters.sensor_temperature_c=temperature
+      return member(asset,41,position)
+    }
+    const groupVersion=version(group.id,41,[
+      numericMember(310,'Half.fit',0.5,-5,0),
+      numericMember(311,'Quarter.fit',0.25,-10,1),
+      numericMember(312,'Zero.fit',0,0,2),
+      numericMember(313,'Missing.fit',null,null,3)
+    ])
+    configureLibrary([{dataset:group,version:groupVersion}])
+    await mountLibrary();await enterGroup('Numeric group')
+    const names=()=>wrapper.findAll('.apf-assets-table tbody tr').map(row=>row.find('td:nth-child(2)').text().replace('固定版本 · light',''))
+    const exposure=wrapper.findAll('.apf-sort-button').find(button=>button.text().startsWith('曝光'))!
+    await exposure.trigger('click');await flushPromises()
+    expect(names()).toEqual(['Zero.fit','Quarter.fit','Half.fit','Missing.fit'])
+    await exposure.trigger('click');await flushPromises()
+    expect(names()).toEqual(['Half.fit','Quarter.fit','Zero.fit','Missing.fit'])
+    const temperature=wrapper.findAll('.apf-sort-button').find(button=>button.text().startsWith('温度'))!
+    await temperature.trigger('click');await flushPromises()
+    expect(names()).toEqual(['Quarter.fit','Half.fit','Zero.fit','Missing.fit'])
+    await temperature.trigger('click');await flushPromises()
+    expect(names()).toEqual(['Zero.fit','Half.fit','Quarter.fit','Missing.fit'])
+  })
+
+  it('sorts fractional gain numerically and keeps zero before missing in either direction',async()=>{
+    const group=dataset(32,'Gain group',42,4)
+    const gainMember=(index:number,name:string,gain:number|null,position:number)=>{
+      const asset=assetFor(index,name)
+      asset.parameters.parameter_mode='gain';asset.parameters.iso=null;asset.parameters.gain=gain
+      return member(asset,42,position)
+    }
+    const groupVersion=version(group.id,42,[
+      gainMember(320,'Half gain.fit',0.5,0),
+      gainMember(321,'Quarter gain.fit',0.25,1),
+      gainMember(322,'Zero gain.fit',0,2),
+      gainMember(323,'Missing gain.fit',null,3)
+    ])
+    configureLibrary([{dataset:group,version:groupVersion}])
+    await mountLibrary();await enterGroup('Gain group')
+    const names=()=>wrapper.findAll('.apf-assets-table tbody tr').map(row=>row.find('td:nth-child(2)').text().replace('固定版本 · light',''))
+    const parameterMode=wrapper.findAll('.apf-sort-button').find(button=>button.text().startsWith('ISO／Gain'))!
+    await parameterMode.trigger('click');await flushPromises()
+    expect(names()).toEqual(['Zero gain.fit','Quarter gain.fit','Half gain.fit','Missing gain.fit'])
+    await parameterMode.trigger('click');await flushPromises()
+    expect(names()).toEqual(['Half gain.fit','Quarter gain.fit','Zero gain.fit','Missing gain.fit'])
   })
 
   it('keeps a failed member edit draft and reports a revision conflict',async()=>{
@@ -389,6 +451,64 @@ describe('dataset group member table',()=>{
 
     expect((row.find('input').element as HTMLInputElement).value).toBe('Uncommitted name.fit')
     expect(wrapper.text()).toContain('记录已被其他窗口修改')
+  })
+
+  it('waits for an outer inline save before opening a group',async()=>{
+    const group=dataset(48,'Saving group',58,1)
+    const groupVersion=version(group.id,58,[member(assetFor(480,'Saving member.fit'),58,0)])
+    configureLibrary([{dataset:group,version:groupVersion}])
+    let resolveSave!:(value:ReturnType<typeof dataset>)=>void
+    send.mockImplementationOnce(()=>new Promise(resolve=>{resolveSave=resolve}))
+    await mountLibrary()
+    const row=wrapper.findAll('.apf-assets-table tbody tr').find(item=>item.text().includes('Saving group'))!
+    await row.find('.apf-inline-value').trigger('dblclick')
+    const input=row.find('input')
+    await input.setValue('Saved group')
+    await input.trigger('keydown',{key:'Enter'})
+    await flushPromises()
+    expect(send).toHaveBeenCalledTimes(1)
+
+    await row.find('.apf-thumb').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('h1').text()).toBe('素材库')
+    expect(wrapper.findAll('.apf-assets-table tbody tr')).toHaveLength(2)
+
+    resolveSave({...group,name:'Saved group',revision:2})
+    await new Promise(resolve=>setTimeout(resolve,40))
+    await flushPromises()
+    expect(wrapper.get('h1').text()).toBe('素材库 / Saved group')
+    expect(wrapper.text()).toContain('Saving member.fit')
+  })
+
+  it('keeps the outer list and failed draft when any group entry is attempted',async()=>{
+    const group=dataset(49,'Protected group',59,1)
+    const groupVersion=version(group.id,59,[member(assetFor(490,'Protected member.fit'),59,0)])
+    configureLibrary([{dataset:group,version:groupVersion}])
+    send.mockRejectedValueOnce(new ApiClientError('记录已被其他窗口修改','service',409,'REVISION_CONFLICT'))
+    const store=useWorkspaceStore(pinia)
+    store.query='outer query';store.offset=0
+    await mountLibrary()
+    const row=wrapper.findAll('.apf-assets-table tbody tr').find(item=>item.text().includes('Protected group'))!
+    await row.find('.apf-inline-value').trigger('dblclick')
+    const input=row.find('input')
+    await input.setValue('Uncommitted group')
+    await input.trigger('keydown',{key:'Enter'})
+    await flushPromises()
+    expect((row.find('input').element as HTMLInputElement).value).toBe('Uncommitted group')
+    expect(row.text()).toContain('记录已被其他窗口修改')
+
+    await row.find('.apf-thumb').trigger('click')
+    await row.findAll('.apf-member-open').find(button=>button.text().includes('张'))!.trigger('click')
+    await row.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.get('h1').text()).toBe('素材库')
+    expect(wrapper.findAll('.apf-assets-table tbody tr')).toHaveLength(2)
+    expect(wrapper.text()).not.toContain('Protected member.fit')
+    expect(store.query).toBe('outer query')
+    expect((row.find('input').element as HTMLInputElement).value).toBe('Uncommitted group')
+    expect(row.text()).toContain('记录已被其他窗口修改')
+    expect(send).toHaveBeenCalledTimes(1)
   })
 
   it('refreshes the group members after the manager saves a new member version',async()=>{
@@ -583,5 +703,36 @@ describe('dataset group member table',()=>{
     await flushPromises()
     expect(wrapper.find('.apf-preview-dialog').isVisible()).toBe(true)
     expect(getBlob).toHaveBeenCalledWith('/astrophotoflow/api/v1/library/assets/'+idAt(900)+'/versions/'+versionFor(idAt(900),1900).id+'/previews/detail')
+  })
+
+  it('cancels a pending group open when the search removes its row',async()=>{
+    const group=dataset(84,'Pending group',94,1)
+    const single=assetFor(900,'unrelated.fit')
+    configureLibrary([{dataset:group,version:version(group.id,94,[member(assetFor(840,'Member.fit'),94,0)])}],single)
+    const baseGet=get.getMockImplementation()!
+    get.mockImplementation(async(path:string)=>path.includes('/library/items')&&path.includes('q=unrelated')
+      ?page([{entry_type:'asset',asset:single,import_issue:null}]):baseGet(path))
+    let resolveSave!:(value:ReturnType<typeof dataset>)=>void
+    send.mockImplementationOnce(()=>new Promise(resolve=>{resolveSave=resolve}))
+    await mountLibrary()
+    const errors:unknown[]=[]
+    wrapper.vm.$.appContext.config.errorHandler=(error)=>{errors.push(error)}
+    const row=wrapper.findAll('.apf-assets-table tbody tr')[0]
+    await row.get('.apf-inline-value').trigger('dblclick')
+    await row.get('input').setValue('Saved pending group')
+    await row.get('input').trigger('keydown',{key:'Enter'});await flushPromises()
+    await row.get('.apf-thumb').trigger('click');await flushPromises()
+    await wrapper.get('input[aria-label="搜索"]').setValue('unrelated')
+    await new Promise(resolve=>setTimeout(resolve,300));await flushPromises()
+    resolveSave({...group,name:'Saved pending group',revision:2});await flushPromises()
+    await new Promise(resolve=>setTimeout(resolve,40));await flushPromises()
+
+    expect(wrapper.get('h1').text()).toBe('素材库')
+    expect(wrapper.findAll('.apf-assets-table tbody tr')).toHaveLength(1)
+    expect(wrapper.text()).toContain('unrelated.fit')
+    expect(wrapper.text()).not.toContain('Pending group')
+    expect(wrapper.text()).not.toContain('Member.fit')
+    expect(useWorkspaceStore(pinia).query).toBe('unrelated')
+    expect(errors.map(error=>String(error))).toEqual([])
   })
 })
