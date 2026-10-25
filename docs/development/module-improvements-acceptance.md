@@ -54,5 +54,16 @@
 
 ## 分支状态
 
-五个功能分支均已从公共基础创建。导入和设置在各自管理型 worktree 中实现；
-预览、校准和工具分支等待约定的领域接口稳定后推进。仅创建分支不计作功能完成。
+五个功能分支均已从公共基础创建。仅创建分支不计作功能完成。
+
+| 分支／集成 | 当前代码与验证 |
+|---|---|
+| settings-organization | `99cb13cde654a4ab8f91fc3481e40086e6ed0e50`，后端/代理 71 passed、前端 116 passed、构建/类型检查通过；见[设置验收](settings-organization.md) |
+| import-pipeline | `4448b3726aa922f07fd7d7020c55621029046d3a`，后端 136 passed/1 skipped、流水线 16 passed、前端 114 passed、构建/类型检查通过；见[导入验收](import-pipeline.md) |
+| 两分支集成 | `9a0706ef4566ff0fbb37b0e704b4c3f0b861200d`，解决上传接线和表单 ref 两处文本冲突，保留自动分类和预设选择；集成 Python 30 passed、前端 119 passed |
+| calibration-library | 从 9a0706e 在独立 worktree 开始，待冻结候选 |
+| library-preview / library-agent-tools | 等待前置接口，尚未实施 |
+
+公共上传/预设快照接受时序缺陷修复为 `7a8dd43`，补充 HTTP 接受回归通过。
+导入分支继续补充分阶段性能对照及真实样本明确 XISF Header 的分类/参数读取，
+不以最初登记速度结果代替总处理吞吐改善证据。现有原始基准记录保留。

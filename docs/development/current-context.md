@@ -22,3 +22,13 @@
 原工程重构验收见[历史记录](remake-acceptance.md)，本轮配置和运行收尾的实际证据见[配置管理验收](config-management-acceptance.md)。不自动合并 dev/main 或推送远端，不进行前端自动点击。
 
 最新预览修复：PixInsight 无 CTYPE3 的三平面 FITS 识别已补齐，已有库无需重导入即可回填预览；资产、版本、分组和人工参数保持。验证见 [PixInsight 预览修复](pixinsight-preview-fix.md)。
+
+## 当前 Goal 开发进度
+
+五分支共同基础为 `3f72b71`。设置组织和异步导入首版已经本地合入 feature/remake，
+两分支集成候选为 `9a0706e`（集成后 Python 30、前端 119 项通过）。校准库继续在独立
+worktree 开发；导入分支正在补充分阶段性能和 XISF 元数据观察。1080 px 预览及工具/Skill
+分支尚未交付，不能宣称整个 Goal 完成。实际证据和剩余验收见[矩阵](module-improvements-acceptance.md)。
+
+原 31388 展示进程尚未替换为本轮候选。工作区插件隔离已通过两套真实 CPU 实例验证，
+测试实例已退出，无受管子进程残留，四个端口均释放。全局 MCP 注册与默认 workspace 指针未改变。
