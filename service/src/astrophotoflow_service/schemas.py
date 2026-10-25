@@ -540,6 +540,60 @@ class LibraryEntriesRemoveOut(StrictModel):
     removed_count: int
 
 
+class LibraryTrashGroupOut(StrictModel):
+    id: UUID
+    name: str
+    in_trash: bool
+
+
+class LibraryTrashItemOut(StrictModel):
+    entry_type: Literal["asset", "dataset"]
+    id: UUID
+    name: str
+    removed_at: datetime
+    revision: int
+    current_version_id: UUID | None
+    cleanup_status: Literal["trash", "partial", "failed"]
+    cleanup_error: str | None
+    photo_count: int
+    member_asset_ids: list[UUID] = Field(default_factory=list)
+    groups: list[LibraryTrashGroupOut] = Field(default_factory=list)
+    source_dataset_id: UUID | None = None
+
+
+class LibraryTrashPage(StrictModel):
+    items: list[LibraryTrashItemOut]
+    total: int
+    limit: int
+    offset: int
+
+
+class LibraryTrashReferenceOut(StrictModel):
+    id: UUID
+    kind: Literal["project_asset", "project_dataset", "dataset_member"]
+    name: str
+    version: int
+
+
+class LibraryTrashPreviewOut(StrictModel):
+    items: list[LibraryTrashItemOut]
+    references: list[LibraryTrashReferenceOut]
+    tasks: list[str]
+    photo_count: int
+    managed_file_count: int
+    managed_bytes: int
+    preview_fingerprint: str
+
+
+class LibraryTrashDeleteOut(StrictModel):
+    deleted_count: int
+    deleted_entry_count: int
+    deleted_file_count: int
+    deleted_bytes: int
+    missing_file_count: int
+    failed: list[dict]
+
+
 class FilterEquipmentOption(StrictModel):
     id: UUID
     name: str

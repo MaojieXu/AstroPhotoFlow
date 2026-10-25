@@ -14,6 +14,7 @@ import { useWorkspaceStore, type WorkspaceSection } from './store'
 import DatasetEditor from './DatasetEditor.vue'
 import ImportDialog from './ImportDialog.vue'
 import ImportTasks from './ImportTasks.vue'
+import LibraryTrashDialog from './LibraryTrashDialog.vue'
 import LibraryFilterPanel from './LibraryFilterPanel.vue'
 import InlineField from './InlineField.vue'
 import InlineMultiSelect from './InlineMultiSelect.vue'
@@ -63,6 +64,9 @@ const bulkSelectMode = ref(false)
 const bulkSelection = ref<Set<string>>(new Set())
 const bulkDeleteBusy = ref(false)
 const bulkDeleteNotice = ref('')
+const bulkConfirmOpen = ref(false)
+const bulkConfirmRows = ref<RecordData[]>([])
+const trashOpen = ref(false)
 const progressRefreshToken = ref(0)
 const uploadProgress = ref<Record<string, { loaded: number; total: number }>>({})
 const watchedTaskIds = ref<string[]>([])
@@ -1122,15 +1126,21 @@ function leaveBulkSelectMode(){
   bulkDeleteNotice.value=''
   error.value=undefined
 }
-async function removeSelectedLibraryEntries(){
+function removeSelectedLibraryEntries(){
   if(bulkDeleteBusy.value||!bulkSelection.value.size)return
   const selectedRows=rows.value.filter(row=>bulkSelection.value.has(bulkKey(row)))
   if(!selectedRows.length)return
-  const items=libraryEntriesRemoveRequestSchema.parse({items:selectedRows.map(row=>({
+  bulkConfirmRows.value=selectedRows.map(row=>({...row,asset:row.asset?{...row.asset}:undefined,dataset:row.dataset?{...row.dataset}:undefined}))
+  bulkConfirmOpen.value=true
+}
+async function confirmRemoveSelectedLibraryEntries(){
+  if(bulkDeleteBusy.value||!bulkConfirmRows.value.length)return
+  const items=libraryEntriesRemoveRequestSchema.parse({items:bulkConfirmRows.value.map(row=>({
     entry_type:row.entry_type as 'asset'|'dataset',id:row.id,revision:row.revision,
-    current_version_id:row.current_version_id??null,
+    current_version_id:row.dataset?.current_version_id??row.asset?.current_version_id??row.current_version_id??null,
   }))}).items
   if(!items.length)return
+  bulkConfirmOpen.value=false
   bulkDeleteBusy.value=true
   bulkDeleteNotice.value=''
   error.value=undefined
@@ -1142,6 +1152,7 @@ async function removeSelectedLibraryEntries(){
     bulkSelectMode.value=false
     clearBulkSelection()
     bulkDeleteNotice.value='已移除'+result.removed_count+'条素材库记录，原始数据未删除。'
+    bulkConfirmRows.value=[]
     bulkDeleteBusy.value=false
     await loadRecords()
   }catch(cause){
@@ -1538,6 +1549,7 @@ onBeforeUnmount(() => {
                 </button>
                 <button type="button" aria-label="刷新" @click="refreshLibrary"><i class="pi pi-refresh" aria-hidden="true"></i><span>刷新</span></button>
                 <button type="button" :disabled="savingInline>0||Boolean(inlineSaveFailure)" @click="enterBulkSelectMode">批量删除</button>
+                <button type="button" aria-label="打开回收站" title="回收站" @click="trashOpen=true">回收站</button>
                 <div v-if="importMenuOpen" class="apf-import-menu">
                   <button type="button" @click="startImport('files')">选择文件</button>
                   <button type="button" @click="startImport('folder')">选择文件夹</button>
@@ -1872,6 +1884,15 @@ onBeforeUnmount(() => {
           <p>{{ areaMessages[activeArea] }}</p>
         </section>
       </main>
+      <LibraryTrashDialog :open="trashOpen" @close="trashOpen=false" @changed="refreshLibrary" />
+      <div v-if="bulkConfirmOpen" class="apf-trash-confirm-backdrop" role="presentation" @click.self="bulkConfirmOpen=false">
+        <section class="apf-trash-confirm" role="alertdialog" aria-modal="true" aria-labelledby="bulk-trash-confirm-title">
+          <h2 id="bulk-trash-confirm-title">确认移入垃圾桶</h2>
+          <p>将移入垃圾桶 {{bulkConfirmRows.length}} 条素材库记录。原文件保留，可恢复。</p>
+          <ul><li v-for="row in bulkConfirmRows" :key="row.entry_type+':'+row.id">{{itemTitle(row)}}<span v-if="row.entry_type==='dataset'">（数据集，{{row.version?.members?.length??row.dataset?.member_count??0}} 张照片）</span><span v-else>（照片）</span></li></ul>
+          <button type="button" @click="bulkConfirmOpen=false">取消</button><button type="button" @click="confirmRemoveSelectedLibraryEntries">移入垃圾桶</button>
+        </section>
+      </div>
       <ImportDialog :open="importDialogOpen" :files="importFiles" :create-dataset="importCreatesDataset" :dataset-name="importDatasetName" @close="importDialogOpen=false" @submitted="importSubmitted" @upload-progress="updateUploadProgress" @upload-failed="progressRefreshToken++" />
       <DatasetEditor v-if="datasetEditorId" :dataset-id="datasetEditorId" :pending-asset-version-ids="datasetPendingIds" @close="closeDatasetEditor" @saved="datasetSaved" @updated="datasetUpdated" @saving="datasetInlineSaving" @failure="datasetInlineFailure" />
   </section>
@@ -1918,6 +1939,11 @@ onBeforeUnmount(() => {
 .apf-heading { position:relative; display:flex; flex:1 0 100%; align-items:center; gap:8px; min-width:0; }
 .apf-heading h1 { flex:0 0 auto; margin:4px 0; color:var(--input-text,#ddd); font-size:16px; font-weight:600; line-height:1.25; white-space:nowrap; }
 .apf-heading-actions { position:relative; display:flex; flex-wrap:wrap; align-items:center; gap:5px; margin-left:auto; }
+.apf-trash-confirm-backdrop { position:fixed; inset:0; z-index:30; display:grid; place-items:center; padding:16px; background:#000a; }
+.apf-trash-confirm { max-width:560px; max-height:80vh; overflow:auto; padding:18px; border:1px solid var(--border-color,#555); border-radius:10px; background:var(--comfy-menu-bg,#292929); box-shadow:0 8px 40px #0009; }
+.apf-trash-confirm h2 { margin:0 0 10px; font-size:16px; }
+.apf-trash-confirm li { margin:4px 0; }
+.apf-trash-confirm button+button { margin-left:8px; }
 .apf-workspace .apf-heading-actions button { min-height:28px; gap:6px; padding:5px 7px; font-size:11px; }
 .apf-import-menu { position:absolute; z-index:8; top:calc(100% + 4px); right:38px; display:flex; min-width:120px; flex-direction:column; gap:4px; padding:5px; border:1px solid var(--border-color,#555); border-radius:7px; background:var(--comfy-menu-bg,#272727); box-shadow:0 6px 18px #0008; }
 .apf-workspace .apf-import-menu button { justify-content:flex-start; }

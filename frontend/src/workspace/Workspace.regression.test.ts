@@ -637,6 +637,7 @@ describe('first-stage regression fixes', () => {
     await wrapper.findAll('button').find(button=>button.text()==='批量删除')!.trigger('click')
     await wrapper.get('input[aria-label="选择 New name"]').setValue(true)
     await wrapper.findAll('button').find(button=>button.text()==='删除')!.trigger('click')
+    await wrapper.findAll('button').find(button=>button.text()==='移入垃圾桶')!.trigger('click')
     await flushPromises()
     expect(send.mock.calls.map(([, , method])=>method)).toEqual(['PATCH','DELETE'])
     expect(wrapper.text()).toContain('已移除1条素材库记录')
@@ -673,6 +674,7 @@ describe('first-stage regression fixes', () => {
     await wrapper.findAll('button').find(button=>button.text()==='批量删除')!.trigger('click')
     await wrapper.get('input[aria-label="选择 New name"]').setValue(true)
     await wrapper.findAll('button').find(button=>button.text()==='删除')!.trigger('click')
+    await wrapper.findAll('button').find(button=>button.text()==='移入垃圾桶')!.trigger('click')
     await flushPromises()
 
     expect(wrapper.text()).toContain('记录已被其他窗口修改。')
@@ -972,6 +974,8 @@ describe('first-stage regression fixes', () => {
     expect(wrapper.text()).not.toContain('已选')
     expect(wrapper.get('input[aria-label="全选当前页"]').attributes('aria-checked')).toBe('mixed')
     await wrapper.findAll('button').find(button => button.text() === '删除')!.trigger('click')
+    expect(send).not.toHaveBeenCalled()
+    await wrapper.findAll('button').find(button => button.text() === '移入垃圾桶')!.trigger('click')
     await flushPromises()
 
     expect(wrapper.text()).toContain('已移除1条素材库记录，原始数据未删除。')
@@ -993,11 +997,171 @@ describe('first-stage regression fixes', () => {
     await wrapper.findAll('button').find(button=>button.text()==='批量删除')!.trigger('click')
     await wrapper.get('input[aria-label="选择 M31.fit"]').setValue(true)
     await wrapper.findAll('button').find(button=>button.text()==='删除')!.trigger('click')
+    await wrapper.findAll('button').find(button=>button.text()==='移入垃圾桶')!.trigger('click')
     await flushPromises()
 
     expect(wrapper.text()).toContain('记录已被其他窗口修改。')
     expect((wrapper.get('input[aria-label="选择 M31.fit"]').element as HTMLInputElement).checked).toBe(true)
     expect(wrapper.get('.apf-assets-table tbody tr').text()).toContain('M31.fit')
+  })
+
+  it('cancelling the bulk confirmation sends no removal request', async()=>{
+    get.mockImplementation(async(path:string)=>path.endsWith('/capabilities')?capabilities:
+      path.includes('/library/items')?page([{entry_type:'asset',asset:libraryAsset,import_issue:null}]):emptyPage)
+    wrapper=mount(App,{global:{plugins:[pinia]}})
+    await flushPromises()
+    await wrapper.findAll('button').find(button=>button.text()==='批量删除')!.trigger('click')
+    await wrapper.get('input[aria-label="选择 M31.fit"]').setValue(true)
+    await wrapper.findAll('button').find(button=>button.text()==='删除')!.trigger('click')
+    expect(wrapper.text()).toContain('原文件保留，可恢复')
+    await wrapper.get('.apf-trash-confirm').findAll('button').find(button=>button.text()==='取消')!.trigger('click')
+    expect(send).not.toHaveBeenCalled()
+    expect((wrapper.get('input[aria-label="选择 M31.fit"]').element as HTMLInputElement).checked).toBe(true)
+  })
+
+  it('reads current-page trash records and restores their original identity', async()=>{
+    const item={entry_type:'asset',id:idAt(550),name:'Trash A.fit',removed_at:createdAt,revision:2,current_version_id:idAt(551),cleanup_status:'trash',cleanup_error:null,photo_count:1,member_asset_ids:[],groups:[]}
+    let restored=false
+    get.mockImplementation(async(path:string)=>{
+      if(path.endsWith('/capabilities'))return capabilities
+      if(path.includes('/library/trash'))return page(restored?[]:[item],restored?0:1,Number(url(path).searchParams.get('offset')))
+      return emptyPage
+    })
+    send.mockImplementation(async(path:string,_schema:unknown,method:string,body:Record<string,any>)=>{
+      expect(method).toBe('POST')
+      if(path.endsWith('/restore')){expect(body.items).toEqual([{entry_type:'asset',id:item.id,removed_at:createdAt,revision:2,current_version_id:item.current_version_id,source_dataset_id:null}]);restored=true;return {restored_count:1}}
+      throw new Error('unexpected request')
+    })
+    wrapper=mount(App,{global:{plugins:[pinia]}})
+    await flushPromises()
+    await wrapper.get('button[aria-label="打开回收站"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain('Trash A.fit')
+    expect(wrapper.find('nav[aria-label="垃圾桶分页"]').exists()).toBe(true)
+    await wrapper.get('input[aria-label="选择 Trash A.fit"]').setValue(true)
+    await wrapper.findAll('button').find(button=>button.text()==='恢复')!.trigger('click')
+    await flushPromises()
+    expect(send).toHaveBeenCalledTimes(1)
+    expect(wrapper.text()).toContain('垃圾桶为空。')
+  })
+
+  it('clears trash selection across pages and prevents restoring partial cleanups',async()=>{
+    const items=Array.from({length:21},(_,index)=>({entry_type:'asset',id:idAt(570+index),name:`Trash ${index}.fit`,removed_at:createdAt,
+      revision:1,current_version_id:null,cleanup_status:index===20?'partial':'trash',cleanup_error:index===20?'locked':null,photo_count:1,member_asset_ids:[],groups:[]}))
+    get.mockImplementation(async(path:string)=>{
+      if(path.endsWith('/capabilities'))return capabilities
+      if(path.includes('/library/trash')){
+        const offset=Number(url(path).searchParams.get('offset'))
+        return page(items.slice(offset,offset+20),items.length,offset,20)
+      }
+      return emptyPage
+    })
+    wrapper=mount(App,{global:{plugins:[pinia]}})
+    await flushPromises()
+    await wrapper.get('button[aria-label="打开回收站"]').trigger('click')
+    await flushPromises()
+    await wrapper.get('input[aria-label="选择 Trash 0.fit"]').setValue(true)
+    await wrapper.get('nav[aria-label="垃圾桶分页"]').findAll('button').find(button=>button.text()==='下一页')!.trigger('click')
+    await flushPromises()
+    expect((wrapper.get('input[aria-label="选择 Trash 20.fit"]').element as HTMLInputElement).checked).toBe(false)
+    expect((wrapper.findAll('button').find(button=>button.text()==='恢复')!.element as HTMLButtonElement).disabled).toBe(true)
+    await wrapper.get('nav[aria-label="垃圾桶分页"]').findAll('button').find(button=>button.text()==='上一页')!.trigger('click')
+    await flushPromises()
+    expect((wrapper.get('input[aria-label="选择 Trash 0.fit"]').element as HTMLInputElement).checked).toBe(false)
+    expect(send).not.toHaveBeenCalled()
+  })
+
+  it('refreshes the parent library after restoring an asset',async()=>{
+    const item={entry_type:'asset',id:idAt(560),name:'Trash B.fit',removed_at:createdAt,revision:1,current_version_id:null,cleanup_status:'trash',cleanup_error:null,photo_count:1,member_asset_ids:[],groups:[]}
+    let restored=false
+    let libraryReads=0
+    get.mockImplementation(async(path:string)=>{
+      if(path.endsWith('/capabilities'))return capabilities
+      if(path.includes('/library/trash'))return page(restored?[]:[item],restored?0:1)
+      if(path.includes('/library/items')){libraryReads++;return page([])}
+      return emptyPage
+    })
+    send.mockImplementation(async(path:string)=>{
+      if(path.endsWith('/restore')){restored=true;return {restored_count:1}}
+      throw new Error('unexpected request')
+    })
+    wrapper=mount(App,{global:{plugins:[pinia]}})
+    await flushPromises()
+    const initialLibraryReads=libraryReads
+    await wrapper.get('button[aria-label="打开回收站"]').trigger('click')
+    await flushPromises()
+    await wrapper.get('input[aria-label="选择 Trash B.fit"]').setValue(true)
+    await wrapper.findAll('button').find(button=>button.text()==='恢复')!.trigger('click')
+    await flushPromises()
+    expect(restored).toBe(true)
+    expect(libraryReads).toBeGreaterThan(initialLibraryReads)
+  })
+
+  it('shows group trash as a parent with individually removed members',async()=>{
+    const group={entry_type:'dataset',id:idAt(570),name:'Light frames',removed_at:createdAt,revision:2,current_version_id:idAt(572),cleanup_status:'trash',cleanup_error:null,photo_count:1,member_asset_ids:[idAt(571)],groups:[]}
+    const member={entry_type:'asset',id:idAt(571),name:'A.fit',removed_at:createdAt,revision:2,current_version_id:idAt(573),cleanup_status:'trash',cleanup_error:null,photo_count:1,member_asset_ids:[],groups:[{id:group.id,name:group.name,in_trash:true}]}
+    get.mockImplementation(async(path:string)=>{
+      if(path.endsWith('/capabilities'))return capabilities
+      if(path.includes('/library/trash'))return page([member,group])
+      return emptyPage
+    })
+    wrapper=mount(App,{global:{plugins:[pinia]}})
+    await flushPromises()
+    await wrapper.get('button[aria-label="打开回收站"]').trigger('click')
+    await flushPromises()
+    const names=wrapper.findAll('.trash-table-wrap tbody tr').map(row=>row.text())
+    expect(names[0]).toContain('组 · Light frames')
+    expect(names[1]).toContain('A.fit')
+    expect(wrapper.findAll('.trash-child-row')).toHaveLength(1)
+  })
+
+  it('loads and restores an implicit trash group member with its parent identity',async()=>{
+    const group={entry_type:'dataset',id:idAt(590),name:'All lights',removed_at:createdAt,revision:1,current_version_id:idAt(591),cleanup_status:'trash',cleanup_error:null,photo_count:1,member_asset_ids:[idAt(592)],groups:[],source_dataset_id:null}
+    const child={entry_type:'asset',id:idAt(592),name:'Implicit.fit',removed_at:createdAt,revision:2,current_version_id:idAt(593),cleanup_status:'trash',cleanup_error:null,photo_count:1,member_asset_ids:[],groups:[],source_dataset_id:group.id}
+    get.mockImplementation(async(path:string)=>{
+      if(path.endsWith('/capabilities'))return capabilities
+      if(path.includes('/library/trash'))return url(path).searchParams.has('group_id')?page([child]):page([group])
+      return emptyPage
+    })
+    send.mockImplementation(async(path:string,_schema:unknown,method:string,body:Record<string,any>)=>{
+      expect(path).toContain('/restore');expect(method).toBe('POST')
+      expect(body.items).toEqual([{entry_type:'asset',id:child.id,removed_at:createdAt,revision:2,current_version_id:child.current_version_id,source_dataset_id:group.id}])
+      return {restored_count:1}
+    })
+    wrapper=mount(App,{global:{plugins:[pinia]}})
+    await flushPromises()
+    await wrapper.get('button[aria-label="打开回收站"]').trigger('click')
+    await flushPromises()
+    await wrapper.findAll('.trash-table-wrap tbody button').find(button=>button.text()==='展开')!.trigger('click')
+    await flushPromises()
+    expect(get.mock.calls.some(([path])=>String(path).includes('group_id='+group.id))).toBe(true)
+    await wrapper.get('input[aria-label="选择 Implicit.fit"]').setValue(true)
+    await wrapper.findAll('.trash-dialog footer button').find(button=>button.text()==='恢复')!.trigger('click')
+    await flushPromises()
+    expect(send).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not delete when the final permanent-delete confirmation is cancelled',async()=>{
+    const item={entry_type:'asset',id:idAt(580),name:'Cancel.fit',removed_at:createdAt,revision:1,current_version_id:null,cleanup_status:'trash',cleanup_error:null,photo_count:1,member_asset_ids:[],groups:[]}
+    get.mockImplementation(async(path:string)=>{
+      if(path.endsWith('/capabilities'))return capabilities
+      if(path.includes('/library/trash'))return page([item])
+      return emptyPage
+    })
+    send.mockImplementation(async(path:string)=>{
+      if(path.endsWith('/delete-preview'))return {items:[item],references:[],tasks:[],photo_count:1,managed_file_count:0,managed_bytes:0,preview_fingerprint:'confirmed-range'}
+      throw new Error('delete must not run after cancellation')
+    })
+    wrapper=mount(App,{global:{plugins:[pinia]}})
+    await flushPromises()
+    await wrapper.get('button[aria-label="打开回收站"]').trigger('click')
+    await flushPromises()
+    await wrapper.get('input[aria-label="选择 Cancel.fit"]').setValue(true)
+    await wrapper.findAll('.trash-dialog footer button').find(button=>button.text()==='永久删除')!.trigger('click')
+    await flushPromises()
+    const confirm=wrapper.get('[role="alertdialog"]')
+    await confirm.findAll('button').find(button=>button.text()==='取消')!.trigger('click')
+    expect(send.mock.calls.some(([path])=>String(path).endsWith('/delete'))).toBe(false)
   })
 
   it('truncates displayed temperatures toward zero without changing saved precision', async () => {
