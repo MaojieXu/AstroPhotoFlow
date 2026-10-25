@@ -83,6 +83,30 @@ async function enterGroup(name:string){
   await flushPromises()
 }
 describe('dataset group member table',()=>{
+  it('clicks a group member thumbnail to preview its pinned version',async()=>{
+    const group=dataset(8001,'Preview group',8002,1)
+    const asset=assetFor(8003,'Pinned member.fit')
+    const pinned=member(asset,8002,0,9004)
+    configureLibrary([{dataset:group,version:version(group.id,8002,[pinned])}])
+    await mountLibrary();await enterGroup('Preview group')
+    send.mockResolvedValue({asset_version_id:pinned.version.id,size:'display',status:'available',width:1080,height:720,error:null})
+    await wrapper.get('button.apf-thumb').trigger('click');await flushPromises()
+    expect(send.mock.calls.at(-1)![0]).toBe('/astrophotoflow/api/v1/library/assets/'+asset.id+'/versions/'+pinned.version.id+'/previews/display')
+    expect(wrapper.get('[role="dialog"]').text()).toContain('Pinned member.fit')
+    expect(wrapper.get('[role="dialog"] img').attributes('src')).toContain('blob:')
+  })
+
+  it('removes redundant manager entries while keeping direct group browsing',async()=>{
+    const group=dataset(9001,'Direct group',9002,1)
+    configureLibrary([{dataset:group,version:version(group.id,9002,[member(assetFor(9003,'Direct member.fit'),9002,0)])}])
+    await mountLibrary()
+    expect(wrapper.text()).not.toMatch(/管理成员|编辑成员|编辑数据集成员/)
+    await enterGroup('Direct group')
+    expect(wrapper.text()).toContain('Direct member.fit')
+    expect(wrapper.text()).not.toMatch(/管理成员|编辑成员|编辑数据集成员/)
+    expect(wrapper.findComponent({name:'DatasetEditor'}).exists()).toBe(false)
+  })
+
   it('opens a group when its row is selected but preserves inline field clicks',async()=>{
     const group=dataset(9,'Selectable group',19,1)
     const groupVersion=version(group.id,19,[member(assetFor(90,'Selectable.fit'),19,0)])
@@ -225,31 +249,6 @@ describe('dataset group member table',()=>{
     expect(wrapper.text()).not.toContain('Return late member.fit')
   })
 
-  it('ignores a delayed dataset update after leaving the group',async()=>{
-    const group=dataset(15,'Late update group',25,1)
-    const groupVersion=version(group.id,25,[member(assetFor(150,'Current member.fit'),25,0)])
-    configureLibrary([{dataset:group,version:groupVersion}])
-    let resolveDataset!:(value:ReturnType<typeof dataset>)=>void
-    get.mockImplementation((path:string)=>{
-      if(path.endsWith('/capabilities'))return Promise.resolve(capabilities)
-      if(path.includes('/library/items'))return Promise.resolve(page([{entry_type:'dataset',dataset:group,version:groupVersion,import_issue:null}]))
-      if(path==='/astrophotoflow/api/v1/datasets/'+group.id)return new Promise(resolve=>{resolveDataset=resolve})
-      if(path.includes('/datasets/'+group.id+'/versions/'))return Promise.resolve(groupVersion)
-      if(path.includes('/projects'))return Promise.resolve(page([]))
-      return Promise.resolve(page([]))
-    })
-    await mountLibrary();await enterGroup('Late update group')
-    await wrapper.findAll('button').find(button=>button.text()==='管理成员')!.trigger('click');await flushPromises()
-    const editor=wrapper.findComponent({name:'DatasetEditor'})
-    expect(editor.exists()).toBe(true)
-    editor.vm.$emit('updated')
-    await flushPromises()
-    await wrapper.get('nav button[aria-label="设置"]').trigger('click');await flushPromises()
-    resolveDataset({...group,name:'Stale renamed group'});await flushPromises()
-    expect(wrapper.get('h1').text()).toBe('设置')
-    expect(wrapper.text()).not.toContain('Stale renamed group')
-  })
-
   it('searches, sorts, and paginates within the selected group',async()=>{
     const group=dataset(25,'Paged group',35,12)
     const members=Array.from({length:12},(_,position)=>member(assetFor(250+position,`Member ${String(12-position).padStart(2,'0')}.fit`),35,position))
@@ -337,11 +336,7 @@ describe('dataset group member table',()=>{
     configureLibrary([{dataset:group,version:groupVersion}])
     await mountLibrary();await enterGroup('Editing group')
 
-    const previewRequests=getBlob.mock.calls.length
-    await wrapper.get('.apf-assets-table tbody tr .apf-thumb').trigger('click')
-    await flushPromises()
-    expect(getBlob).toHaveBeenCalledTimes(previewRequests)
-    expect(wrapper.find('.apf-preview-overlay').exists()).toBe(false)
+    expect(wrapper.get('.apf-assets-table tbody tr button.apf-thumb').element.tagName).toBe('BUTTON')
     expect(getBlob).toHaveBeenCalledWith('/astrophotoflow/api/v1/library/assets/'+asset.id+'/versions/'+fixed.version.id+'/previews/thumbnail')
     expect(get.mock.calls.some(([path])=>String(path).includes('/datasets/'+group.id+'/versions/'))).toBe(true)
     const row=wrapper.findAll('.apf-assets-table tbody tr').find(item=>item.text().includes('Editable.fit'))!
@@ -512,182 +507,6 @@ describe('dataset group member table',()=>{
     expect((row.find('input').element as HTMLInputElement).value).toBe('Uncommitted group')
     expect(row.text()).toContain('记录已被其他窗口修改')
     expect(send).toHaveBeenCalledTimes(1)
-  })
-
-  it('refreshes the group members after the manager saves a new member version',async()=>{
-    const group=dataset(46,'Managed group',56,1)
-    const existingAsset=assetFor(460,'Existing.fit')
-    const addedAsset=assetFor(461,'Added from manager.fit')
-    const single=assetFor(900,'unrelated.fit')
-    const initialVersion=version(group.id,56,[member(existingAsset,56,0)])
-    const updatedVersion=version(group.id,57,[member(existingAsset,57,0),member(addedAsset,57,1)])
-    let currentDataset={...group}
-    let currentVersion=initialVersion
-    configureLibrary([{dataset:group,version:initialVersion}],single)
-    get.mockImplementation(async(path:string)=>{
-      if(path.endsWith('/capabilities'))return capabilities
-      if(path.includes('/library/items'))return page([{entry_type:'dataset',dataset:currentDataset,version:currentVersion,import_issue:null},
-        {entry_type:'asset',asset:single,import_issue:null}])
-      if(path==='/astrophotoflow/api/v1/datasets/'+group.id)return currentDataset
-      if(path.includes('/datasets/'+group.id+'/versions/'))return currentVersion
-      if(path.startsWith('/astrophotoflow/api/v1/library/assets?'))return page([existingAsset,addedAsset,single])
-      return page([])
-    })
-    send.mockImplementation(async(path:string,_schema:unknown,method:string)=>{
-      expect(method).toBe('POST')
-      expect(path).toBe('/astrophotoflow/api/v1/datasets/'+group.id+'/versions')
-      currentVersion=updatedVersion
-      currentDataset={...currentDataset,current_version_id:updatedVersion.id,member_count:2,revision:2}
-      return updatedVersion
-    })
-    await mountLibrary();await enterGroup('Managed group')
-    await wrapper.findAll('button').find(button=>button.text()==='管理成员')!.trigger('click')
-    await flushPromises()
-
-    const choices=wrapper.findAll('.apf-dataset-choice input[type="checkbox"]')
-    expect(choices).toHaveLength(3)
-    await choices[1].setValue(true)
-    await wrapper.findAll('button').find(button=>button.text()==='保存成员版本')!.trigger('click')
-    await flushPromises()
-
-    expect(wrapper.findAll('.apf-assets-table tbody tr')).toHaveLength(2)
-    expect(wrapper.text()).toContain('图像组 · 2 张')
-    expect(wrapper.text()).toContain('Added from manager.fit')
-    expect(get).toHaveBeenCalledWith('/astrophotoflow/api/v1/datasets/'+group.id+'/versions/'+updatedVersion.id,expect.anything())
-  })
-
-  it('keeps a delayed member update through a search in the same group',async()=>{
-    const group=dataset(47,'Search refresh group',57,1)
-    const existingAsset=assetFor(470,'Existing.fit')
-    const addedAsset=assetFor(471,'Added from manager.fit')
-    const single=assetFor(900,'unrelated.fit')
-    const initialVersion=version(group.id,57,[member(existingAsset,57,0)])
-    const updatedVersion=version(group.id,58,[member(existingAsset,58,0),member(addedAsset,58,1)])
-    let currentDataset={...group}
-    let currentVersion=initialVersion
-    let resolveDataset!:(value:ReturnType<typeof dataset>)=>void
-    let datasetRequests=0
-    configureLibrary([{dataset:group,version:initialVersion}],single)
-    assets.set(addedAsset.id,addedAsset)
-    get.mockImplementation(async(path:string)=>{
-      if(path.endsWith('/capabilities'))return capabilities
-      if(path.includes('/library/items'))return page([{entry_type:'dataset',dataset:currentDataset,version:currentVersion,import_issue:null}])
-      if(path==='/astrophotoflow/api/v1/datasets/'+group.id){datasetRequests++;return datasetRequests===3?new Promise(resolve=>{resolveDataset=resolve}):currentDataset}
-      if(path.includes('/datasets/'+group.id+'/versions/'))return path.endsWith('/'+initialVersion.id)?initialVersion:currentVersion
-      if(path.startsWith('/astrophotoflow/api/v1/library/assets?'))return page([existingAsset,addedAsset,single])
-      return page([])
-    })
-    send.mockImplementation(async(path:string,_schema:unknown,method:string)=>{
-      expect(method).toBe('POST')
-      expect(path).toBe('/astrophotoflow/api/v1/datasets/'+group.id+'/versions')
-      currentVersion=updatedVersion
-      currentDataset={...currentDataset,current_version_id:updatedVersion.id,member_count:2,revision:2}
-      return updatedVersion
-    })
-    await mountLibrary();await enterGroup('Search refresh group')
-    await wrapper.findAll('button').find(button=>button.text()==='管理成员')!.trigger('click');await flushPromises()
-    const choices=wrapper.findAll('.apf-dataset-choice input[type="checkbox"]')
-    await choices[1].setValue(true)
-    await wrapper.findAll('button').find(button=>button.text()==='保存成员版本')!.trigger('click')
-    await flushPromises()
-
-    const search=wrapper.get('input[aria-label="搜索"]')
-    await search.setValue('Added from manager')
-    await new Promise(resolve=>setTimeout(resolve,300));await flushPromises()
-    resolveDataset(currentDataset);await flushPromises()
-
-    expect((search.element as HTMLInputElement).value).toBe('Added from manager')
-    expect(wrapper.findAll('.apf-assets-table tbody tr')).toHaveLength(1)
-    expect(wrapper.text()).toContain('Added from manager.fit')
-    expect(wrapper.text()).toContain('图像组 · 2 张')
-    expect(get.mock.calls.some(([path])=>String(path).endsWith('/'+updatedVersion.id))).toBe(true)
-  })
-
-  it('keeps a delayed member update through pagination in the same group',async()=>{
-    const group=dataset(48,'Page refresh group',59,1)
-    const firstAsset=assetFor(480,'First.fit')
-    const addedAsset=assetFor(481,'Added from manager.fit')
-    const initialMembers=Array.from({length:11},(_,position)=>member(assetFor(482+position,`Existing ${position}.fit`),59,position))
-    const initialVersion=version(group.id,59,initialMembers)
-    const updatedVersion=version(group.id,60,[...Array.from({length:11},(_,position)=>member(assetFor(482+position,`Existing ${position}.fit`),60,position)),member(addedAsset,60,11)])
-    let currentDataset={...group}
-    let currentVersion=initialVersion
-    let resolveDataset!:(value:ReturnType<typeof dataset>)=>void
-    configureLibrary([{dataset:group,version:initialVersion}])
-    get.mockImplementation(async(path:string)=>{
-      if(path.endsWith('/capabilities'))return capabilities
-      if(path.includes('/library/items'))return page([{entry_type:'dataset',dataset:currentDataset,version:currentVersion,import_issue:null}])
-      if(path==='/astrophotoflow/api/v1/datasets/'+group.id)return new Promise(resolve=>{resolveDataset=resolve})
-      if(path.includes('/datasets/'+group.id+'/versions/'))return path.endsWith('/'+initialVersion.id)?initialVersion:currentVersion
-      return page([])
-    })
-    await mountLibrary();await enterGroup('Page refresh group')
-    await wrapper.findAll('button').find(button=>button.text()==='管理成员')!.trigger('click');await flushPromises()
-    currentVersion=updatedVersion
-    currentDataset={...group,current_version_id:updatedVersion.id,member_count:12,revision:2}
-    wrapper.findComponent({name:'DatasetEditor'}).vm.$emit('updated')
-    await flushPromises()
-
-    await wrapper.get('select[aria-label="每页显示数量"]').setValue('10');await flushPromises()
-    await wrapper.findAll('button').find(button=>button.text()==='下一页')!.trigger('click');await flushPromises()
-    resolveDataset(currentDataset);await flushPromises()
-
-    expect(wrapper.get('select[aria-label="每页显示数量"]').element).toHaveProperty('value','10')
-    expect(wrapper.findAll('.apf-assets-table tbody tr')).toHaveLength(2)
-    expect(wrapper.text()).toContain('Added from manager.fit')
-    expect(wrapper.text()).toContain('图像组 · 12 张')
-    expect(get.mock.calls.some(([path])=>String(path).endsWith('/'+updatedVersion.id))).toBe(true)
-  })
-
-  it('does not apply a delayed update after leaving and re-entering the same group',async()=>{
-    const group=dataset(49,'Re-enter group',61,1)
-    const asset=assetFor(490,'Current.fit')
-    const groupVersion=version(group.id,61,[member(asset,61,0)])
-    let resolveDataset!:(value:ReturnType<typeof dataset>)=>void
-    configureLibrary([{dataset:group,version:groupVersion}])
-    get.mockImplementation(async(path:string)=>{
-      if(path.endsWith('/capabilities'))return capabilities
-      if(path.includes('/library/items'))return page([{entry_type:'dataset',dataset:group,version:groupVersion,import_issue:null}])
-      if(path==='/astrophotoflow/api/v1/datasets/'+group.id)return new Promise(resolve=>{resolveDataset=resolve})
-      if(path.includes('/datasets/'+group.id+'/versions/'))return groupVersion
-      return page([])
-    })
-    await mountLibrary();await enterGroup('Re-enter group')
-    await wrapper.findAll('button').find(button=>button.text()==='管理成员')!.trigger('click');await flushPromises()
-    wrapper.findComponent({name:'DatasetEditor'}).vm.$emit('updated');await flushPromises()
-    await wrapper.findAll('button').find(button=>button.text()==='← 返回素材库')!.trigger('click');await flushPromises()
-    await enterGroup('Re-enter group')
-    resolveDataset({...group,name:'Stale name'});await flushPromises()
-
-    expect(wrapper.get('h1').text()).toBe('素材库 / Re-enter group')
-    expect(wrapper.get('h1').text()).not.toContain('Stale name')
-  })
-
-  it('keeps the newest result when dataset refreshes return out of order',async()=>{
-    const group=dataset(51,'Refresh race group',63,1)
-    const asset=assetFor(510,'Member.fit')
-    const groupVersion=version(group.id,63,[member(asset,63,0)])
-    let resolvers:Array<(value:ReturnType<typeof dataset>)=>void>=[]
-    configureLibrary([{dataset:group,version:groupVersion}])
-    get.mockImplementation(async(path:string)=>{
-      if(path.endsWith('/capabilities'))return capabilities
-      if(path.includes('/library/items'))return page([{entry_type:'dataset',dataset:group,version:groupVersion,import_issue:null}])
-      if(path==='/astrophotoflow/api/v1/datasets/'+group.id)return new Promise(resolve=>{resolvers.push(resolve)})
-      if(path.includes('/datasets/'+group.id+'/versions/'))return groupVersion
-      return page([])
-    })
-    await mountLibrary();await enterGroup('Refresh race group')
-    await wrapper.findAll('button').find(button=>button.text()==='管理成员')!.trigger('click');await flushPromises()
-    const editor=wrapper.findComponent({name:'DatasetEditor'})
-    editor.vm.$emit('updated');await flushPromises()
-    editor.vm.$emit('updated');await flushPromises()
-    expect(resolvers).toHaveLength(3)
-    resolvers[2]({...group,name:'Newest result'});await flushPromises()
-    expect(wrapper.get('h1').text()).toBe('素材库 / Newest result')
-    resolvers[1]({...group,name:'Older result'});await flushPromises()
-
-    expect(wrapper.get('h1').text()).toBe('素材库 / Newest result')
-    expect(wrapper.get('h1').text()).not.toContain('Older result')
   })
 
   it('keeps a single asset thumbnail on the existing preview path and presents an empty group state',async()=>{

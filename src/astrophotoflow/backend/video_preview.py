@@ -8,14 +8,14 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
-from .fits_preview import CFA_PATTERNS, _bayer_demosaic, _display
+from .fits_preview import CFA_PATTERNS, _bayer_demosaic, _display, stretch_bounds
 
 
 SER_HEADER_SIZE = 178
 SER_BAYER = {8: "RGGB", 9: "GRBG", 10: "GBRG", 11: "BGGR"}
 
 
-def _ser_preview(path: Path, max_edge: int) -> tuple[Image.Image, dict]:
+def _ser_preview(path: Path, max_edge: int, stretch: tuple[float, float] | None = None) -> tuple[Image.Image, dict]:
     with path.open("rb") as stream:
         header = stream.read(SER_HEADER_SIZE)
     if len(header) != SER_HEADER_SIZE or header[:14] != b"LUCAM-RECORDER":
@@ -51,14 +51,15 @@ def _ser_preview(path: Path, max_edge: int) -> tuple[Image.Image, dict]:
         kind = "bayer" if pattern else "mono"
         if pattern:
             sample = _bayer_demosaic(sample, pattern, 0, 0, stride)
-    image = _display(sample)
+    low, high = stretch if stretch is not None else stretch_bounds(sample)
+    image = _display(sample, (low, high))
     image.thumbnail((max_edge, max_edge), Image.Resampling.LANCZOS)
-    return image, {"video_frame_index": 0, "ser_color_id": color_id, "cfa_pattern": pattern, "algorithm": "ser-first-frame-1"}
+    return image, {"video_frame_index": 0, "ser_color_id": color_id, "cfa_pattern": pattern, "algorithm": "ser-first-frame-1", "stretch_low": low, "stretch_high": high}
 
 
-def first_video_frame(path: Path, max_edge: int) -> tuple[Image.Image, dict]:
+def first_video_frame(path: Path, max_edge: int, stretch: tuple[float, float] | None = None) -> tuple[Image.Image, dict]:
     if path.suffix.lower() == ".ser":
-        return _ser_preview(path, max_edge)
+        return _ser_preview(path, max_edge, stretch)
     ffmpeg = shutil.which("ffmpeg")
     if ffmpeg is None:
         raise RuntimeError("资产服务未找到 FFmpeg，无法生成视频首帧预览。")

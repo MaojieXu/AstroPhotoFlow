@@ -12,6 +12,7 @@ from uuid import UUID
 from fastapi import Depends, Request
 from sqlalchemy import delete, func, select
 from .errors import ApiError, not_found
+from .previews import assert_no_preview_jobs, owned_preview_locations
 from .models import Asset, AssetTask, AssetTaskItem, AssetVersion, Dataset, DatasetMember, DatasetVersion, FitsHduMetadata, Preview, Project, ProjectAssetReference, ProjectDatasetReference, LibraryEntryRemoval
 from pathlib import Path
 from .import_schemas import LibraryEntriesRemove, LibraryTrashDelete, LibraryTrashSelection
@@ -214,6 +215,7 @@ def _trash_scope(session, settings, records):
             asset_ids.update(removal.member_asset_ids or [])
     versions = session.scalars(select(AssetVersion).where(AssetVersion.asset_id.in_(asset_ids))).all() if asset_ids else []
     version_ids = {version.id for version in versions}
+    assert_no_preview_jobs(session, version_ids)
     deleting_dataset_ids = {row.id for removal, row in records if removal.entry_type == "dataset"}
     refs = []
     for ref, project in session.execute(select(ProjectAssetReference, Project).join(Project, Project.id == ProjectAssetReference.project_id).where(ProjectAssetReference.asset_version_id.in_(version_ids))).all() if version_ids else []:
@@ -267,12 +269,11 @@ def _trash_scope(session, settings, records):
             paths[str(path)] = path
     previews = session.scalars(select(Preview).where(Preview.asset_version_id.in_(version_ids))).all() if version_ids else []
     for preview in previews:
-        if not preview.storage_path:
-            continue
-        path = (settings.data_dir / preview.storage_path).resolve()
-        if not path.is_relative_to(settings.data_dir.resolve()):
-            raise ApiError(409, "FILE_SCOPE_INVALID", "预览文件路径不在服务数据目录中，已阻止清理。")
-        paths[str(path)] = path
+        for location in owned_preview_locations(preview, settings):
+            path = (settings.data_dir / location).resolve()
+            if not path.is_relative_to(settings.data_dir.resolve()):
+                raise ApiError(409, "FILE_SCOPE_INVALID", "预览文件路径不在服务数据目录中，已阻止清理。")
+            paths[str(path)] = path
     managed_locations = [version.storage_location for version in versions if version.storage_mode == "managed"]
     if managed_locations:
         other_locations = set(session.scalars(select(AssetVersion.storage_location).where(
@@ -287,6 +288,7 @@ def _trash_scope(session, settings, records):
         ).where(Preview.storage_path.in_(preview_locations), AssetVersion.asset_id.not_in(asset_ids))).all())
         for location in other_preview_locations:
             paths.pop(str((settings.data_dir / location).resolve()), None)
+            paths.pop(str((settings.data_dir / (location + ".tmp")).resolve()), None)
     managed_bytes = sum(path.stat().st_size for path in paths.values() if path.is_file())
     return asset_ids, versions, previews, refs, task_ids, paths, managed_bytes
 
@@ -338,8 +340,9 @@ def library_trash_delete(body: LibraryTrashDelete, request: Request, session: de
         for version in asset_versions:
             if version.storage_mode == "managed":
                 candidate_paths.append((settings.data_dir / version.storage_location).resolve())
-            candidate_paths.extend((settings.data_dir / preview.storage_path).resolve()
-                                   for preview in previews if preview.asset_version_id == version.id and preview.storage_path)
+            candidate_paths.extend((settings.data_dir / location).resolve()
+                                   for preview in previews if preview.asset_version_id == version.id
+                                   for location in owned_preview_locations(preview, settings))
         paths_by_asset[asset_id] = [path for path in candidate_paths if str(path) in original_paths]
     success_assets, success_datasets, failed = set(), set(), []
     deleted_file_count = deleted_bytes = missing_file_count = 0
@@ -407,6 +410,7 @@ def library_trash_delete(body: LibraryTrashDelete, request: Request, session: de
                 if {version.id for version in current_versions} != expected_versions:
                     raise ApiError(409, "TRASH_PREVIEW_STALE", "照片版本已变化，请重新预览。")
                 version_ids = expected_versions
+                assert_no_preview_jobs(write, version_ids)
                 current_refs = set(write.scalars(select(ProjectAssetReference.id).where(
                     ProjectAssetReference.asset_version_id.in_(version_ids)
                 )).all()) if version_ids else set()

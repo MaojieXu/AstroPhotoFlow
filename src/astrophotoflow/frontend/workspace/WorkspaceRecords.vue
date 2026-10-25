@@ -2,11 +2,12 @@
 import { inject } from 'vue'
 import type { WorkspaceContext } from './Workspace.vue'
 import ImportTasks from './ImportTasks.vue'
+import FixedDatasetMembers from './FixedDatasetMembers.vue'
 import InlineField from './InlineField.vue'
 import ParameterModeField from './ParameterModeField.vue'
 
 export default {
-  components: { ImportTasks, InlineField, ParameterModeField },
+  components: { FixedDatasetMembers, ImportTasks, InlineField, ParameterModeField },
   setup() { return inject<WorkspaceContext>('workspace')! }
 }
 </script>
@@ -58,11 +59,11 @@ export default {
                 </ImportTasks>
                 <tr v-for="row in rows" :key="row.entry_type+':'+row.id" :aria-selected="bulkSelectMode?bulkSelection.has(bulkKey(row)):selected?.id===row.id" @click="onLibraryRowClick(row,$event)" @dblclick.capture="bulkSelectMode?$event.stopPropagation():undefined">
                 <td v-if="bulkSelectMode&&isLibraryItemsView"><input type="checkbox" :aria-label="'选择 '+itemTitle(row)" :checked="bulkSelection.has(bulkKey(row))" :disabled="bulkDeleteBusy" @click.stop @change="toggleBulkSelection(row)" /></td>
-                <td><div class="apf-thumb" @click.stop>
+                <td><button type="button" class="apf-thumb" :aria-label="'查看 ' + itemTitle(row) + ' 大图'" @click.stop="openPhotoPreview(row)">
                   <img v-if="previewUrls[row.id]" :src="previewUrls[row.id]" alt="" />
                   <span v-else>100px</span>
-                </div></td>
-                <td><InlineField :value="itemTitle(row)" :save="value=>saveRowField(row,'name',value)" @cancelled="clearInlineSaveFailure(inlineFailureKey(row,'name'))" /><template v-if="row.entry_type==='dataset'"><button type="button" class="apf-member-open" @click.stop="editDataset(row)">管理成员</button><button type="button" class="apf-member-open" @click.stop="openDataset(row)">图像组 · {{row.version?.members?.length??row.member_count??0}} 张</button></template><small v-else>{{itemSubtitle(row)}}</small></td>
+                </button></td>
+                <td><InlineField :value="itemTitle(row)" :save="value=>saveRowField(row,'name',value)" @cancelled="clearInlineSaveFailure(inlineFailureKey(row,'name'))" /><template v-if="row.entry_type==='dataset'"><button type="button" class="apf-member-open" @click.stop="openDataset(row)">图像组 · {{row.version?.members?.length??row.member_count??0}} 张</button></template><small v-else>{{itemSubtitle(row)}}</small></td>
                 <td v-if="row.entry_type==='dataset'">
                   <InlineField :value="datasetRawValue(row,member=>member.asset?.classification?.frame_class)" :display="datasetValue(row,member=>member.asset?.classification?.frame_class,frameClassLabel)" kind="select" :choices="[{value:'',label:'未指定'},{value:'mixed',label:'混合',disabled:true},...frameClasses.map(value=>({value,label:value}))]" :save="value=>saveRowField(row,'frame_class',value)" @cancelled="clearInlineSaveFailure(inlineFailureKey(row,'frame_class'))" /><span class="apf-classification-separator" aria-hidden="true">/</span>
                   <InlineField :value="datasetRawValue(row,member=>member.asset?.classification?.frame_type)" :display="datasetValue(row,member=>member.asset?.classification?.frame_type,frameTypeLabel)" kind="select" :choices="[{value:'',label:'未指定'},{value:'mixed',label:'混合',disabled:true},...frameTypes.map(value=>({value,label:value}))]" :save="value=>saveRowField(row,'frame_type',value)" @cancelled="clearInlineSaveFailure(inlineFailureKey(row,'frame_type'))" />
@@ -99,9 +100,9 @@ export default {
           </div>
           <div v-else-if="!loading && rows.length && isDatasetTable" class="apf-table-scroll">
             <table class="apf-assets-table apf-dataset-table">
-              <thead><tr><th>封面</th><th>数据集</th><th>分类</th><th>成员数</th><th>相机</th><th>ISO／Gain</th><th>曝光</th><th>温度</th><th>成像系统</th><th>滤镜</th><th>存储</th><th>状态</th><th>备注</th><th>操作</th></tr></thead>
+              <thead><tr><th>封面</th><th>数据集</th><th>分类</th><th>成员数</th><th>相机</th><th>ISO／Gain</th><th>曝光</th><th>温度</th><th>成像系统</th><th>滤镜</th><th>存储</th><th>状态</th><th>备注</th><th>固定版本照片</th></tr></thead>
               <tbody><tr v-for="row in rows" :key="row.id" :aria-selected="selected?.id===row.id" @click="selectRow(row)">
-                <td><div class="apf-thumb" @click.stop><img v-if="previewUrls[row.id]" :src="previewUrls[row.id]" alt="" /><span v-else>100px</span></div></td>
+                <td><button type="button" class="apf-thumb" :aria-label="'查看 ' + itemTitle(row) + ' 大图'" @click.stop="openPhotoPreview(row)"><img v-if="previewUrls[row.id]" :src="previewUrls[row.id]" alt="" /><span v-else>100px</span></button></td>
                 <td><strong>{{row.dataset?.name??row.name}}</strong><small>{{row.dataset_version_id?'项目固定版本':'数据集'}}</small></td>
                 <td>{{datasetClassification(row)}}</td>
                 <td>{{row.version?.members?.length??row.member_count??'—'}}</td>
@@ -113,7 +114,7 @@ export default {
                 <td>{{datasetValue(row, member=>member.asset?.parameters?.filter_id, value=>equipmentName(typeof value==='string'?value:null))}}</td>
                 <td>{{datasetValue(row, member=>member.version?.storage_mode, value=>String(value))}}</td>
                 <td>{{row.dataset?.status??row.status}}</td><td class="apf-note-cell">{{row.dataset?.notes??row.notes??'—'}}</td>
-                <td><button type="button" @click.stop="editDataset(row)">{{row.dataset_version_id?'编辑当前数据集':'编辑成员'}}</button></td>
+                <td><FixedDatasetMembers :members="row.version?.members??[]" /></td>
               </tr></tbody>
             </table>
           </div>

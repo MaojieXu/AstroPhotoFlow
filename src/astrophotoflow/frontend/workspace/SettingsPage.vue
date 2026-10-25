@@ -132,7 +132,6 @@ export default {
             <button v-if="store.section === 'projects' && addingProjectAssets" type="button" @click="addSelectedAsset">选用此资产版本</button>
             <button v-if="store.section === 'projects' && addingProjectDatasets" type="button" @click="addSelectedDataset">选用此数据集版本</button>
             <p v-if="store.section==='projects'&&(viewingProjectAssets||viewingProjectDatasets)">{{addingProjectAssets||addingProjectDatasets?'将选用版本':'固定版本'}} v{{selected.version?.version_number??selected.current_version?.version_number??'—'}} · {{selected.asset_version_id??selected.dataset_version_id??selected.current_version_id}}</p>
-            <button v-if="selected.dataset || selected.dataset_id || selected.entry_type==='dataset'" type="button" @click="editDataset(selected)">编辑数据集成员</button>
             <div v-if="selected.asset || selected.scope==='shared'" class="apf-detail-fields">
               <label>名称<InlineField :value="itemTitle(selected)" :save="selectedFieldSave('name')" @cancelled="clearInlineSaveFailure(inlineFailureKey(selected,'name'))" /></label>
               <label>素材形态<InlineField :value="rowClassification(selected).frame_class??''" :display="frameClassLabel(rowClassification(selected).frame_class)" kind="select" :choices="[{value:'',label:'未指定'},...frameClasses.map(value=>({value,label:value}))]" :save="selectedFieldSave('frame_class')" @cancelled="clearInlineSaveFailure(inlineFailureKey(selected,'frame_class'))" /></label>
