@@ -228,6 +228,12 @@ class LibraryEntryRemoval(Base):
     entry_type: Mapped[str] = mapped_column(String(16), primary_key=True)
     entry_id: Mapped[str] = mapped_column(String(36), primary_key=True)
     dataset_version_id: Mapped[str | None] = mapped_column(ForeignKey("dataset_version.id"))
+    member_asset_ids: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    pending_paths: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    cleaned_paths: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    cleaned_asset_ids: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    cleanup_status: Mapped[str] = mapped_column(String(16), nullable=False, default="trash")
+    cleanup_error: Mapped[str | None] = mapped_column(Text)
     removed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.current_timestamp())
 
 

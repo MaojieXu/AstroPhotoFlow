@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { ApiClientError } from '../assets/client'
 import { assetApi } from '../assets/host-client'
-import { assetSchema, datasetSchema, datasetVersionSchema, pageSchema, type Asset } from '../assets/contracts'
+import { assetSchema, datasetSchema, datasetVersionSchema, libraryEntriesRemoveRequestSchema, libraryEntriesRemoveSchema, pageSchema, type Asset } from '../assets/contracts'
 import InlineField from './InlineField.vue'
 
 const props=defineProps<{datasetId:string;pendingAssetVersionIds?:string[]}>()
@@ -11,6 +11,8 @@ const dataset=ref<ReturnType<typeof datasetSchema.parse>>()
 const members=ref<ReturnType<typeof datasetVersionSchema.parse>['members']>([])
 const assets=ref<Asset[]>([])
 const selection=ref<string[]>([])
+const trashConfirmAsset=ref<Asset>()
+const trashedAssetIds=ref(new Set<string>())
 const busy=ref(false)
 const error=ref('')
 const inlineFailures=ref<Record<string,string>>({})
@@ -105,6 +107,20 @@ async function saveMembers(){
   }catch(cause){error.value=message(cause)}
   finally{busy.value=false}
 }
+async function moveMemberToTrash(){
+  const asset=trashConfirmAsset.value
+  if(!asset||busy.value)return
+  busy.value=true;error.value=''
+  try{
+    await assetApi.send('/astrophotoflow/api/v1/library/items',libraryEntriesRemoveSchema,'DELETE',libraryEntriesRemoveRequestSchema.parse({items:[{
+      entry_type:'asset',id:asset.id,revision:asset.revision,current_version_id:asset.current_version_id
+    }]}))
+    trashedAssetIds.value=new Set([...trashedAssetIds.value,asset.id])
+    trashConfirmAsset.value=undefined
+    emit('updated')
+  }catch(cause){error.value=message(cause)}
+  finally{busy.value=false}
+}
 onMounted(load)
 </script>
 
@@ -119,7 +135,8 @@ onMounted(load)
       <label>状态<InlineField :value="dataset.status" kind="select" :choices="[{value:'active',label:'启用'},{value:'archived',label:'归档'}]" :save="value=>saveDatasetField('status',value)" @cancelled="clearInlineFailure('dataset:status')" /></label>
       <h3>固定成员（{{selection.length}}）</h3>
       <p>移除或添加成员会产生新数据集版本；已有成员顺序保留，新成员追加。</p>
-      <label v-for="asset in assets" :key="asset.id" class="apf-dataset-choice">
+      <div v-for="asset in assets" :key="asset.id" class="apf-dataset-choice">
+      <label>
         <input v-model="selection" type="checkbox" :value="asset.current_version_id" :disabled="!asset.current_version_id" />
         <InlineField :value="asset.name" @click.stop :save="value=>saveAssetField(asset,'name',value)" @cancelled="clearInlineFailure('asset:'+asset.id+':name')" /> ·
         <InlineField v-if="asset.classification?.frame_class!=='video'" :value="asset.classification?.frame_type??''" :display="asset.classification?.frame_type??'未分类'" kind="select" @click.stop
@@ -129,7 +146,17 @@ onMounted(load)
         <InlineField :value="asset.parameters?.exposure_seconds as number|null|undefined" @click.stop kind="number" :save="value=>saveAssetField(asset,'exposure_seconds',value)" @cancelled="clearInlineFailure('asset:'+asset.id+':exposure_seconds')" />
         <InlineField :value="asset.status" kind="select" :choices="[{value:'active',label:'启用'},{value:'archived',label:'已归档'}]" :save="value=>saveAssetField(asset,'status',value)" @click.stop @cancelled="clearInlineFailure('asset:'+asset.id+':status')" />
       </label>
+      <button type="button" :disabled="busy||!asset.current_version_id||trashedAssetIds.has(asset.id)" @click="trashConfirmAsset=asset">{{trashedAssetIds.has(asset.id)?'已移入垃圾桶':'移入照片垃圾桶'}}</button>
+      </div>
       <div class="apf-form-actions"><button type="button" :disabled="busy" @click="close">取消</button><button type="button" :disabled="busy||Boolean(errorMessage)" @click="saveMembers">保存成员版本</button></div>
     </template>
+    <div v-if="trashConfirmAsset" class="apf-trash-confirm-backdrop" role="presentation" @click.self="trashConfirmAsset=undefined">
+      <section class="apf-trash-confirm" role="alertdialog" aria-modal="true" aria-labelledby="member-trash-title">
+        <h3 id="member-trash-title">移入照片垃圾桶？</h3>
+        <p>将移除“{{trashConfirmAsset.name}}”的正常展示。照片、版本和数据集成员关系保留，可从垃圾桶恢复。</p>
+        <button type="button" :disabled="busy" @click="trashConfirmAsset=undefined">取消</button>
+        <button type="button" :disabled="busy" @click="moveMemberToTrash">确认移入</button>
+      </section>
+    </div>
   </section>
 </template>

@@ -10,12 +10,12 @@ from alembic import command
 from alembic.config import Config
 from alembic.migration import MigrationContext
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, select
 from astrophotoflow_service.api import create_app
 from astrophotoflow_service.db import Database
 from astrophotoflow_service.models import (
-    Asset, AssetVersion, Base, CaptureProfile, Dataset, DatasetMember, DatasetVersion, Equipment,
-    LibraryEntryRemoval, Project, ProjectAssetReference, ProjectCaptureProfile,
+    Asset, AssetTask, AssetTaskItem, AssetVersion, Base, CaptureProfile, Dataset, DatasetMember, DatasetVersion, Equipment,
+    LibraryEntryRemoval, Preview, Project, ProjectAssetReference, ProjectCaptureProfile, ProjectDatasetReference,
 )
 from astrophotoflow_service.schema import SchemaError, current_revision, database_lock, ensure_schema_for_serve, upgrade_database
 from astrophotoflow_service.schemas import ErrorEnvelope
@@ -57,7 +57,7 @@ def test_init_lock_token_and_unknown_schema(tmp_path):
     with database_lock(s):
         with pytest.raises(SchemaError): database_lock(s)
         assert upgrade_database(s) is None
-    assert current_revision(s.database_path)=="0005_dataset_removal_version_snapshot"
+    assert current_revision(s.database_path)=="0006_library_trash_cleanup_state"
     token=ensure_service_token(s)
     assert s.token_path.stat().st_mode&0o777==0o600 and ensure_service_token(s)==token
     legacy=tmp_path/"legacy"; legacy.mkdir()
@@ -176,7 +176,7 @@ def test_stage_two_upgrade_preserves_stage_one_records_and_backs_up(tmp_path):
 
     backup = upgrade_database(settings)
     assert backup is not None and backup.is_file()
-    assert current_revision(settings.database_path) == "0005_dataset_removal_version_snapshot"
+    assert current_revision(settings.database_path) == "0006_library_trash_cleanup_state"
     with sqlite3.connect(settings.database_path) as db:
         assert db.execute("SELECT name,revision FROM project WHERE id=?", (project_id,)).fetchone() == ("pre-stage-two", 3)
         assert db.execute("SELECT name FROM equipment WHERE id=?", (equipment_id,)).fetchone() == ("preserved camera",)
@@ -208,7 +208,7 @@ def test_asset_fact_backfill_uses_current_version_and_preserves_manual_clears(tm
                    (edited_version_id, edited_asset_id, 1, "reference", "edited.fit", "available", "light", json.dumps({"gain": 12, "exposure_seconds": 30})))
 
     backup = upgrade_database(settings)
-    assert backup is not None and current_revision(settings.database_path) == "0005_dataset_removal_version_snapshot"
+    assert backup is not None and current_revision(settings.database_path) == "0006_library_trash_cleanup_state"
     with sqlite3.connect(settings.database_path) as db:
         legacy = db.execute("SELECT classification,parameters FROM asset WHERE id=?", (old_asset_id,)).fetchone()
         edited = db.execute("SELECT classification,parameters,value_sources FROM asset WHERE id=?", (edited_asset_id,)).fetchone()
@@ -468,6 +468,7 @@ def test_dataset_library_removal_freezes_current_version_members(service):
     with database.read_session() as session:
         snapshot = session.get(LibraryEntryRemoval, ("dataset", group_id))
         assert snapshot.dataset_version_id == current_version_id
+        assert snapshot.member_asset_ids == [assets["A.fit"][0]]
         original_snapshot = (snapshot.dataset_version_id, snapshot.removed_at)
 
     repeated = client.request("DELETE", "/api/v1/library/items", headers=auth(), json={"items": [remove_group]})
@@ -524,6 +525,462 @@ def test_dataset_library_removal_freezes_current_version_members(service):
         assert db.execute("SELECT status FROM asset WHERE id=?", (assets["B.fit"][0],)).fetchone() == ("active",)
         assert db.execute("SELECT COUNT(*) FROM asset_version WHERE asset_id IN (?,?)", (assets["A.fit"][0], assets["B.fit"][0])).fetchone() == (2,)
         assert db.execute("SELECT COUNT(*) FROM dataset_member WHERE dataset_version_id IN (?,?)", (old_version_id, current_version_id)).fetchone() == (3,)
+
+
+def test_trash_group_restore_also_restores_individually_removed_members(service):
+    settings, client, database = service
+    asset_id, asset_version_id = str(uuid4()), str(uuid4())
+    dataset_id, dataset_version_id = str(uuid4()), str(uuid4())
+    with database.write_session() as session:
+        asset = Asset(id=asset_id, name="A.fit", scope="shared", role="raw", status="active", revision=1,
+                      parameters={}, classification={})
+        session.add(asset)
+        session.flush()
+        session.add(AssetVersion(id=asset_version_id, asset_id=asset_id, version_number=1, storage_mode="reference",
+                                 storage_location="A.fit", availability="available"))
+        session.flush()
+        asset.current_version_id = asset_version_id
+        dataset = Dataset(id=dataset_id, name="Group", status="active", revision=1)
+        session.add(dataset)
+        session.flush()
+        session.add(DatasetVersion(id=dataset_version_id, dataset_id=dataset_id, version_number=1))
+        session.flush()
+        dataset.current_version_id = dataset_version_id
+        session.add(DatasetMember(id=str(uuid4()), dataset_version_id=dataset_version_id,
+                                  asset_version_id=asset_version_id, position=0))
+
+    remove_asset = {"entry_type":"asset", "id":asset_id, "revision":1, "current_version_id":asset_version_id}
+    remove_dataset = {"entry_type":"dataset", "id":dataset_id, "revision":1, "current_version_id":dataset_version_id}
+    assert client.request("DELETE", "/api/v1/library/items", headers=auth(), json={"items":[remove_asset]}).status_code == 200
+    assert client.request("DELETE", "/api/v1/library/items", headers=auth(), json={"items":[remove_dataset]}).status_code == 200
+    with database.read_session() as session:
+        dataset_removal = session.get(LibraryEntryRemoval, ("dataset", dataset_id))
+        assert dataset_removal.member_asset_ids == [asset_id]
+        assert session.get(Asset, asset_id).current_version_id == asset_version_id
+
+    trash = client.get("/api/v1/library/trash", headers=auth()).json()["items"]
+    dataset_item = next(row for row in trash if row["entry_type"] == "dataset")
+    assert dataset_item["removed_at"].endswith("Z")
+    restore_item = {key: dataset_item[key] for key in ("entry_type", "id", "removed_at", "revision", "current_version_id")}
+    restored = client.post("/api/v1/library/trash/restore", headers=auth(), json={"items":[restore_item]})
+    assert restored.status_code == 200 and restored.json()["restored_count"] == 1
+    library = client.get("/api/v1/library/items", headers=auth()).json()
+    group = next(row for row in library["items"] if row["entry_type"] == "dataset")
+    assert [member["asset"]["id"] for member in group["version"]["members"]] == [asset_id]
+    assert client.get("/api/v1/library/trash", headers=auth()).json()["total"] == 0
+    with database.read_session() as session:
+        assert session.get(Asset, asset_id).current_version_id == asset_version_id
+        assert session.get(AssetVersion, asset_version_id) is not None
+
+
+def test_trash_group_delete_uses_snapshot_including_previously_removed_member_only(service):
+    _, client, database = service
+    asset_a, version_a, asset_b, version_b, dataset_id, old_id, current_id = (str(uuid4()) for _ in range(7))
+    with database.write_session() as session:
+        for asset_id, version_id, name in ((asset_a, version_a, "A.fit"), (asset_b, version_b, "B.fit")):
+            asset = Asset(id=asset_id, name=name, scope="shared", role="raw", status="active", revision=1,
+                          parameters={}, classification={})
+            session.add(asset)
+            session.flush()
+            session.add(AssetVersion(id=version_id, asset_id=asset_id, version_number=1, storage_mode="reference",
+                                     storage_location=name, availability="available"))
+            session.flush()
+            asset.current_version_id = version_id
+        dataset = Dataset(id=dataset_id, name="Light group", status="active", revision=1)
+        session.add(dataset)
+        session.flush()
+        session.add_all((DatasetVersion(id=old_id, dataset_id=dataset_id, version_number=1),
+                         DatasetVersion(id=current_id, dataset_id=dataset_id, version_number=2)))
+        session.flush()
+        dataset.current_version_id = current_id
+        session.add_all((DatasetMember(id=str(uuid4()), dataset_version_id=old_id, asset_version_id=version_a, position=0),
+                         DatasetMember(id=str(uuid4()), dataset_version_id=old_id, asset_version_id=version_b, position=1),
+                         DatasetMember(id=str(uuid4()), dataset_version_id=current_id, asset_version_id=version_a, position=0)))
+    assert client.request("DELETE", "/api/v1/library/items", headers=auth(), json={"items":[
+        {"entry_type":"asset", "id":asset_a, "revision":1, "current_version_id":version_a}
+    ]}).status_code == 200
+    assert client.request("DELETE", "/api/v1/library/items", headers=auth(), json={"items":[
+        {"entry_type":"dataset", "id":dataset_id, "revision":1, "current_version_id":current_id}
+    ]}).status_code == 200
+    trash = client.get("/api/v1/library/trash", headers=auth()).json()["items"]
+    group = next(row for row in trash if row["entry_type"] == "dataset")
+    assert group["member_asset_ids"] == [asset_a]
+    selection = {"items":[{key:group[key] for key in ("entry_type", "id", "removed_at", "revision", "current_version_id")}]}
+    preview = client.post("/api/v1/library/trash/delete-preview", headers=auth(), json=selection).json()
+    assert preview["photo_count"] == 1
+    deleted = client.post("/api/v1/library/trash/delete", headers=auth(), json={
+        **selection, "preview_fingerprint":preview["preview_fingerprint"]
+    })
+    assert deleted.status_code == 200, deleted.text
+    assert deleted.json()["deleted_count"] == 1 and deleted.json()["deleted_entry_count"] == 2
+    with database.read_session() as session:
+        assert session.get(Asset, asset_a) is None
+        assert session.get(Dataset, dataset_id) is None
+        assert session.get(Asset, asset_b) is not None
+        assert session.get(AssetVersion, version_b) is not None
+        assert session.scalar(select(DatasetMember.id).where(DatasetMember.asset_version_id == version_b)) is None
+
+
+def test_trash_permanent_delete_removes_only_managed_files_and_reports_preview(service, monkeypatch):
+    settings, client, database = service
+    asset_ids, version_ids, expected_paths = [], [], []
+    with database.write_session() as session:
+        for index in range(2):
+            asset_id, version_id = str(uuid4()), str(uuid4())
+            asset_ids.append(asset_id)
+            version_ids.append(version_id)
+            content_path = settings.data_dir / "objects" / version_id / "source.fit"
+            preview_path = settings.data_dir / "previews" / version_id / f"{version_id}.jpg"
+            content_path.parent.mkdir(parents=True, exist_ok=True)
+            preview_path.parent.mkdir(parents=True, exist_ok=True)
+            content_path.write_bytes(b"managed" + bytes([index]))
+            preview_path.write_bytes(b"preview" + bytes([index]))
+            expected_paths.extend((content_path, preview_path))
+            asset = Asset(id=asset_id, name=f"A{index}.fit", scope="shared", role="raw", status="active",
+                          revision=1, parameters={}, classification={})
+            session.add(asset)
+            session.flush()
+            session.add(AssetVersion(id=version_id, asset_id=asset_id, version_number=1, storage_mode="managed",
+                                     storage_location=(Path("objects") / version_id / "source.fit").as_posix(),
+                                     availability="available", byte_size=8))
+            session.flush()
+            asset.current_version_id = version_id
+            session.add(Preview(id=str(uuid4()), asset_version_id=version_id, hdu_index=0, size="thumbnail",
+                                width=1, height=1, storage_path=(Path("previews") / version_id / f"{version_id}.jpg").as_posix(),
+                                mime_type="image/jpeg", display_parameters={}, algorithm_version="test",
+                                status="available"))
+    remove_items = [{"entry_type":"asset", "id":asset_id, "revision":1, "current_version_id":version_id}
+                    for asset_id, version_id in zip(asset_ids, version_ids)]
+    assert client.request("DELETE", "/api/v1/library/items", headers=auth(), json={"items":remove_items}).status_code == 200
+    trash = client.get("/api/v1/library/trash", headers=auth()).json()["items"]
+    selection = {"items":[{key:row[key] for key in ("entry_type", "id", "removed_at", "revision", "current_version_id")} for row in trash]}
+    preview = client.post("/api/v1/library/trash/delete-preview", headers=auth(), json=selection)
+    assert preview.status_code == 200, preview.text
+    assert (preview.json()["photo_count"], preview.json()["managed_file_count"], preview.json()["managed_bytes"]) == (2, 4, 32)
+    original_unlink = Path.unlink
+    failing_path = next(path for path in expected_paths if path.name.endswith(".jpg") and path.parent.name == version_ids[0])
+    def fail_one(path, *args, **kwargs):
+        if path == failing_path:
+            raise PermissionError("controlled file lock")
+        return original_unlink(path, *args, **kwargs)
+    monkeypatch.setattr(Path, "unlink", fail_one)
+    result = client.post("/api/v1/library/trash/delete", headers=auth(), json={**selection, "preview_fingerprint":preview.json()["preview_fingerprint"]})
+    assert result.status_code == 200, result.text
+    assert result.json()["deleted_count"] == 1 and result.json()["deleted_entry_count"] == 1 and len(result.json()["failed"]) == 1, result.json()
+    trash = client.get("/api/v1/library/trash", headers=auth()).json()["items"]
+    remaining = next(row for row in trash if row["id"] == asset_ids[0])
+    assert remaining["cleanup_status"] == "partial" and "controlled file lock" in remaining["cleanup_error"]
+    assert not next(path for path in expected_paths if path.name == "source.fit" and path.parent.name == version_ids[0]).exists()
+    assert failing_path.exists()
+    assert all(not path.exists() for path in expected_paths if path.parent.name == version_ids[1])
+    failed_item = {key:remaining[key] for key in ("entry_type", "id", "removed_at", "revision", "current_version_id")}
+    denied_restore = client.post("/api/v1/library/trash/restore", headers=auth(), json={"items":[failed_item]})
+    assert denied_restore.status_code == 409
+
+    monkeypatch.setattr(Path, "unlink", original_unlink)
+    retry_selection = {"items":[failed_item]}
+    retry_preview = client.post("/api/v1/library/trash/delete-preview", headers=auth(), json=retry_selection)
+    assert retry_preview.status_code == 200
+    retry = client.post("/api/v1/library/trash/delete", headers=auth(), json={
+        **retry_selection, "preview_fingerprint":retry_preview.json()["preview_fingerprint"]
+    })
+    assert retry.status_code == 200 and retry.json()["deleted_count"] == 1 and retry.json()["deleted_entry_count"] == 1 and retry.json()["failed"] == []
+    assert retry.json()["missing_file_count"] == 0 and retry.json()["deleted_file_count"] == 1
+    assert client.get("/api/v1/library/trash", headers=auth()).json()["total"] == 0
+    assert all(not path.exists() for path in expected_paths)
+
+
+def test_trash_asset_delete_preserves_a_managed_path_used_by_unselected_asset(service):
+    settings, client, database = service
+    selected_asset_id, selected_version_id = str(uuid4()), str(uuid4())
+    other_asset_id, other_version_id = str(uuid4()), str(uuid4())
+    path = settings.data_dir / "objects" / "shared" / "source.fit"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(b"shared managed content")
+    with database.write_session() as session:
+        for asset_id, version_id, name in ((selected_asset_id, selected_version_id, "Selected.fit"),
+                                           (other_asset_id, other_version_id, "Other.fit")):
+            asset = Asset(id=asset_id, name=name, scope="shared", role="raw", status="active", revision=1,
+                          parameters={}, classification={})
+            session.add(asset)
+            session.flush()
+            session.add(AssetVersion(id=version_id, asset_id=asset_id, version_number=1, storage_mode="managed",
+                                     storage_location="objects/shared/source.fit", availability="available"))
+            session.flush()
+            asset.current_version_id = version_id
+    remove_item = {"entry_type":"asset", "id":selected_asset_id, "revision":1, "current_version_id":selected_version_id}
+    assert client.request("DELETE", "/api/v1/library/items", headers=auth(), json={"items":[remove_item]}).status_code == 200
+    row = client.get("/api/v1/library/trash", headers=auth()).json()["items"][0]
+    selection = {"items":[{key:row[key] for key in ("entry_type", "id", "removed_at", "revision", "current_version_id")}]}
+    preview = client.post("/api/v1/library/trash/delete-preview", headers=auth(), json=selection).json()
+    assert (preview["photo_count"], preview["managed_file_count"], preview["managed_bytes"]) == (1, 0, 0)
+    deleted = client.post("/api/v1/library/trash/delete", headers=auth(), json={
+        **selection, "preview_fingerprint":preview["preview_fingerprint"]
+    })
+    assert deleted.status_code == 200 and deleted.json()["deleted_count"] == 1
+    assert deleted.json()["deleted_file_count"] == 0 and path.exists()
+    with database.read_session() as session:
+        assert session.get(Asset, selected_asset_id) is None
+        assert session.get(Asset, other_asset_id) is not None
+        assert session.get(AssetVersion, other_version_id) is not None
+
+
+def test_trash_first_unlink_failure_keeps_photo_recoverable(service, monkeypatch):
+    settings, client, database = service
+    asset_id, version_id = str(uuid4()), str(uuid4())
+    path = settings.data_dir / "objects" / version_id / "source.fit"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(b"managed")
+    with database.write_session() as session:
+        asset = Asset(id=asset_id, name="Recoverable.fit", scope="shared", role="raw", status="active",
+                      revision=1, parameters={}, classification={})
+        session.add(asset)
+        session.flush()
+        session.add(AssetVersion(id=version_id, asset_id=asset_id, version_number=1, storage_mode="managed",
+                                 storage_location=(Path("objects") / version_id / "source.fit").as_posix(),
+                                 availability="available"))
+        session.flush()
+        asset.current_version_id = version_id
+    remove_item = {"entry_type":"asset", "id":asset_id, "revision":1, "current_version_id":version_id}
+    assert client.request("DELETE", "/api/v1/library/items", headers=auth(), json={"items":[remove_item]}).status_code == 200
+    row = client.get("/api/v1/library/trash", headers=auth()).json()["items"][0]
+    selection = {"items":[{key:row[key] for key in ("entry_type", "id", "removed_at", "revision", "current_version_id")}]}
+    preview = client.post("/api/v1/library/trash/delete-preview", headers=auth(), json=selection).json()
+    original_unlink = Path.unlink
+    def fail_first(path_arg, *args, **kwargs):
+        if path_arg == path:
+            raise PermissionError("first unlink failed")
+        return original_unlink(path_arg, *args, **kwargs)
+    monkeypatch.setattr(Path, "unlink", fail_first)
+    result = client.post("/api/v1/library/trash/delete", headers=auth(), json={
+        **selection, "preview_fingerprint":preview["preview_fingerprint"]
+    })
+    assert result.status_code == 200 and result.json()["deleted_count"] == 0 and len(result.json()["failed"]) == 1
+    remaining = client.get("/api/v1/library/trash", headers=auth()).json()["items"][0]
+    assert remaining["cleanup_status"] == "trash" and path.exists()
+    restore = client.post("/api/v1/library/trash/restore", headers=auth(), json={"items":[selection["items"][0]]})
+    assert restore.status_code == 200 and client.get("/api/v1/library/assets/"+asset_id, headers=auth()).status_code == 200
+
+
+def test_trash_recovers_after_progress_write_failure_without_reenabling_restore(service, monkeypatch):
+    from sqlalchemy.orm import Session
+    settings, client, database = service
+    asset_id, version_id = str(uuid4()), str(uuid4())
+    path = settings.data_dir / "objects" / version_id / "source.fit"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(b"managed")
+    with database.write_session() as session:
+        asset = Asset(id=asset_id, name="Progress.fit", scope="shared", role="raw", status="active",
+                      revision=1, parameters={}, classification={})
+        session.add(asset)
+        session.flush()
+        session.add(AssetVersion(id=version_id, asset_id=asset_id, version_number=1, storage_mode="managed",
+                                 storage_location=(Path("objects") / version_id / "source.fit").as_posix(),
+                                 availability="available"))
+        session.flush()
+        asset.current_version_id = version_id
+    remove_item = {"entry_type":"asset", "id":asset_id, "revision":1, "current_version_id":version_id}
+    assert client.request("DELETE", "/api/v1/library/items", headers=auth(), json={"items":[remove_item]}).status_code == 200
+    row = client.get("/api/v1/library/trash", headers=auth()).json()["items"][0]
+    selection = {"items":[{key:row[key] for key in ("entry_type", "id", "removed_at", "revision", "current_version_id")}]}
+    preview = client.post("/api/v1/library/trash/delete-preview", headers=auth(), json=selection).json()
+    original_flush = Session.flush
+    state = {"unlinked":False, "failed":False}
+    original_unlink = Path.unlink
+    def unlink(path_arg, *args, **kwargs):
+        result = original_unlink(path_arg, *args, **kwargs)
+        if path_arg == path:
+            state["unlinked"] = True
+        return result
+    def fail_progress(session, *args, **kwargs):
+        if state["unlinked"] and not state["failed"]:
+            state["failed"] = True
+            raise RuntimeError("controlled cleanup progress write failure")
+        return original_flush(session, *args, **kwargs)
+    monkeypatch.setattr(Path, "unlink", unlink)
+    monkeypatch.setattr(Session, "flush", fail_progress)
+    result = client.post("/api/v1/library/trash/delete", headers=auth(), json={
+        **selection, "preview_fingerprint":preview["preview_fingerprint"]
+    })
+    assert result.status_code == 200 and result.json()["deleted_count"] == 0 and not path.exists()
+    remaining = client.get("/api/v1/library/trash", headers=auth()).json()["items"][0]
+    assert remaining["cleanup_status"] == "partial"
+    assert client.post("/api/v1/library/trash/restore", headers=auth(), json={"items":[selection["items"][0]]}).status_code == 409
+    monkeypatch.setattr(Path, "unlink", original_unlink)
+    retry_preview = client.post("/api/v1/library/trash/delete-preview", headers=auth(), json=selection).json()
+    retry = client.post("/api/v1/library/trash/delete", headers=auth(), json={
+        **selection, "preview_fingerprint":retry_preview["preview_fingerprint"]
+    })
+    assert retry.status_code == 200 and retry.json()["deleted_count"] == 1 and retry.json()["failed"] == []
+    assert retry.json()["missing_file_count"] == 0
+
+
+def test_trash_delete_cleans_confirmed_project_and_membership_references(service):
+    _, client, database = service
+    asset_id, asset_version_id = str(uuid4()), str(uuid4())
+    other_dataset_id, other_version_id = str(uuid4()), str(uuid4())
+    trash_dataset_id, trash_dataset_version_id = str(uuid4()), str(uuid4())
+    historical_task_id = str(uuid4())
+    with database.write_session() as session:
+        asset = Asset(id=asset_id, name="Referenced.fit", scope="shared", role="raw", status="active",
+                      revision=1, parameters={}, classification={})
+        session.add(asset)
+        session.flush()
+        session.add(AssetVersion(id=asset_version_id, asset_id=asset_id, version_number=1, storage_mode="reference",
+                                 storage_location="Referenced.fit", availability="available"))
+        session.flush()
+        asset.current_version_id = asset_version_id
+        other_dataset = Dataset(id=other_dataset_id, name="Other dataset", status="active", revision=1)
+        trash_dataset = Dataset(id=trash_dataset_id, name="Trash dataset", status="active", revision=1)
+        session.add_all((other_dataset, trash_dataset))
+        session.flush()
+        session.add_all((
+            DatasetVersion(id=other_version_id, dataset_id=other_dataset_id, version_number=1),
+            DatasetVersion(id=trash_dataset_version_id, dataset_id=trash_dataset_id, version_number=1),
+        ))
+        session.flush()
+        other_dataset.current_version_id = other_version_id
+        trash_dataset.current_version_id = trash_dataset_version_id
+        session.add(AssetTask(id=historical_task_id, status="completed", sources=[], storage_mode="managed",
+                              classification={}, parameters={}, dataset_base_revision=None,
+                              enumeration_completed=True, report={}, error=None, dataset_id=trash_dataset_id))
+        session.add(DatasetMember(id=str(uuid4()), dataset_version_id=other_version_id,
+                                  asset_version_id=asset_version_id, position=0))
+
+    project = client.post("/api/v1/projects", headers=auth(), json={"name":"External project"}).json()
+    project_asset_id, project_dataset_id = str(uuid4()), str(uuid4())
+    with database.write_session() as session:
+        session.add_all((
+            ProjectAssetReference(id=project_asset_id, project_id=project["id"], asset_version_id=asset_version_id),
+            ProjectDatasetReference(id=project_dataset_id, project_id=project["id"], dataset_id=trash_dataset_id,
+                                    dataset_version_id=trash_dataset_version_id, base_revision=1),
+        ))
+    remove_items = [
+        {"entry_type":"asset", "id":asset_id, "revision":1, "current_version_id":asset_version_id},
+        {"entry_type":"dataset", "id":trash_dataset_id, "revision":1, "current_version_id":trash_dataset_version_id},
+    ]
+    assert client.request("DELETE", "/api/v1/library/items", headers=auth(), json={"items":remove_items}).status_code == 200
+    trash = client.get("/api/v1/library/trash", headers=auth()).json()["items"]
+    selection = {"items":[{key:row[key] for key in ("entry_type", "id", "removed_at", "revision", "current_version_id")} for row in trash]}
+    preview = client.post("/api/v1/library/trash/delete-preview", headers=auth(), json=selection).json()
+    assert {ref["kind"] for ref in preview["references"]} == {"project_asset", "project_dataset", "dataset_member"}
+    late_project = client.post("/api/v1/projects", headers=auth(), json={"name":"Late project"}).json()
+    late_reference_id = str(uuid4())
+    with database.write_session() as session:
+        session.add(ProjectAssetReference(id=late_reference_id, project_id=late_project["id"], asset_version_id=asset_version_id))
+    stale = client.post("/api/v1/library/trash/delete", headers=auth(), json={
+        **selection, "preview_fingerprint":preview["preview_fingerprint"]
+    })
+    assert stale.status_code == 409, stale.text
+    preview = client.post("/api/v1/library/trash/delete-preview", headers=auth(), json=selection).json()
+    deleted = client.post("/api/v1/library/trash/delete", headers=auth(), json={
+        **selection, "preview_fingerprint":preview["preview_fingerprint"]
+    })
+    assert deleted.status_code == 200, deleted.text
+    assert deleted.json()["deleted_count"] == 1 and deleted.json()["deleted_entry_count"] == 2
+    with database.read_session() as session:
+        assert session.get(Asset, asset_id) is None
+        assert session.get(Dataset, trash_dataset_id) is None
+        assert session.get(ProjectAssetReference, project_asset_id) is None
+        assert session.get(ProjectAssetReference, late_reference_id) is None
+        assert session.get(ProjectDatasetReference, project_dataset_id) is None
+        assert session.get(Dataset, other_dataset_id).revision == 2
+        assert session.get(DatasetVersion, other_version_id) is not None
+        assert session.get(AssetTask, historical_task_id).dataset_id is None
+
+
+def test_trash_rechecks_new_reference_after_confirmation_before_file_io(service, monkeypatch):
+    from contextlib import contextmanager
+    _, client, database = service
+    asset_id, version_id = str(uuid4()), str(uuid4())
+    with database.write_session() as session:
+        asset = Asset(id=asset_id, name="Race.fit", scope="shared", role="raw", status="active",
+                      revision=1, parameters={}, classification={})
+        session.add(asset)
+        session.flush()
+        session.add(AssetVersion(id=version_id, asset_id=asset_id, version_number=1, storage_mode="reference",
+                                 storage_location="Race.fit", availability="available"))
+        session.flush()
+        asset.current_version_id = version_id
+    project = client.post("/api/v1/projects", headers=auth(), json={"name":"Concurrent project"}).json()
+    remove_item = {"entry_type":"asset", "id":asset_id, "revision":1, "current_version_id":version_id}
+    assert client.request("DELETE", "/api/v1/library/items", headers=auth(), json={"items":[remove_item]}).status_code == 200
+    row = client.get("/api/v1/library/trash", headers=auth()).json()["items"][0]
+    selection = {"items":[{key:row[key] for key in ("entry_type", "id", "removed_at", "revision", "current_version_id")}]}
+    preview = client.post("/api/v1/library/trash/delete-preview", headers=auth(), json=selection).json()
+    late_reference_id = str(uuid4())
+    original_write_session = Database.write_session
+    calls = 0
+    @contextmanager
+    def race_after_manifest(self):
+        nonlocal calls
+        with original_write_session(self) as write:
+            yield write
+        calls += 1
+        if calls == 1:
+            with original_write_session(self) as write:
+                write.add(ProjectAssetReference(id=late_reference_id, project_id=project["id"], asset_version_id=version_id))
+    monkeypatch.setattr(Database, "write_session", race_after_manifest)
+    result = client.post("/api/v1/library/trash/delete", headers=auth(), json={
+        **selection, "preview_fingerprint":preview["preview_fingerprint"]
+    })
+    assert result.status_code == 409
+    with original_write_session(database) as session:
+        assert session.get(Asset, asset_id) is not None
+        assert session.get(ProjectAssetReference, late_reference_id) is not None
+        assert session.get(LibraryEntryRemoval, ("asset", asset_id)).cleanup_status == "trash"
+
+
+def test_trash_active_import_blocks_and_terminal_task_pointers_are_cleared(service):
+    _, client, database = service
+    asset_id, version_id, task_id, item_id, retry_task_id, retry_item_id = (str(uuid4()) for _ in range(6))
+    with database.write_session() as session:
+        asset = Asset(id=asset_id, name="Tasked.fit", scope="shared", role="raw", status="active",
+                      revision=1, parameters={}, classification={})
+        session.add(asset)
+        session.flush()
+        session.add(AssetVersion(id=version_id, asset_id=asset_id, version_number=1, storage_mode="reference",
+                                 storage_location="Tasked.fit", availability="available"))
+        session.flush()
+        asset.current_version_id = version_id
+        session.add(AssetTask(id=task_id, status="interrupted", sources=[], storage_mode="managed",
+                              classification={}, parameters={}, dataset_base_revision=None, enumeration_completed=True,
+                              report={}, error=None))
+        session.add(AssetTaskItem(id=item_id, task_id=task_id, root_item_id=item_id, retry_of_item_id=None,
+                                  root_id="root", source_path="Tasked.fit", source_identity="identity", position=0,
+                                  status="interrupted", content_status="available", metadata_status="available",
+                                  preview_status="available", asset_id=asset_id, asset_version_id=version_id, error=None))
+        session.add(AssetTask(id=retry_task_id, status="completed_with_errors", sources=[], storage_mode="managed",
+                              classification={}, parameters={}, dataset_base_revision=None, enumeration_completed=True,
+                              report={}, error=None))
+        session.add(AssetTaskItem(id=retry_item_id, task_id=retry_task_id, root_item_id=retry_item_id, retry_of_item_id=None,
+                                  root_id="root", source_path="Tasked.fit", source_identity="identity-2", position=0,
+                                  status="completed_with_errors", content_status="available", metadata_status="available",
+                                  preview_status="failed", asset_id=asset_id, asset_version_id=version_id, error={"code":"PREVIEW_FAILED"}))
+    removal = {"entry_type":"asset", "id":asset_id, "revision":1, "current_version_id":version_id}
+    assert client.request("DELETE", "/api/v1/library/items", headers=auth(), json={"items":[removal]}).status_code == 200
+    trash = client.get("/api/v1/library/trash", headers=auth()).json()["items"][0]
+    selection = {"items":[{key:trash[key] for key in ("entry_type", "id", "removed_at", "revision", "current_version_id")}]}
+    preview = client.post("/api/v1/library/trash/delete-preview", headers=auth(), json=selection).json()
+    assert preview["tasks"] == [task_id]
+    denied = client.post("/api/v1/library/trash/delete", headers=auth(), json={
+        **selection, "preview_fingerprint":preview["preview_fingerprint"]
+    })
+    assert denied.status_code == 409
+    cancelled = client.post(f"/api/v1/asset-tasks/{task_id}/cancel", headers=auth())
+    assert cancelled.status_code == 202 and cancelled.json()["status"] == "cancelled"
+    retry_preview = client.post("/api/v1/library/trash/delete-preview", headers=auth(), json=selection).json()
+    assert retry_preview["tasks"] == []
+    deleted = client.post("/api/v1/library/trash/delete", headers=auth(), json={
+        **selection, "preview_fingerprint":retry_preview["preview_fingerprint"]
+    })
+    assert deleted.status_code == 200 and deleted.json()["deleted_count"] == 1
+    with database.read_session() as session:
+        item = session.get(AssetTaskItem, item_id)
+        assert item.asset_id is None and item.asset_version_id is None
+        retry_item = session.get(AssetTaskItem, retry_item_id)
+        assert retry_item.asset_id is None and retry_item.asset_version_id is None
+        assert session.get(AssetTask, task_id) is not None
 
 
 def test_gain_sort_applies_to_filtered_results_before_pagination(service):
@@ -659,3 +1116,242 @@ def test_datetime_serialization_preserves_text_and_snapshots(service):
     assert response["current_version"]["capture_snapshot"]["note"] == snapshot_text
     assert response["current_version"]["scientific_metadata"]["note"] == snapshot_text
     assert response["current_version"]["created_at"].endswith("Z")
+
+
+
+def test_trash_group_child_restore_shrinks_scope_and_preserves_dataset_membership(service):
+    _, client, database = service
+    asset_a, version_a, asset_b, version_b, dataset_id, dataset_version_id = (str(uuid4()) for _ in range(6))
+    with database.write_session() as session:
+        for asset_id, version_id, name in ((asset_a, version_a, "A.fit"), (asset_b, version_b, "B.fit")):
+            asset = Asset(id=asset_id, name=name, scope="shared", role="raw", status="active", revision=1,
+                          parameters={}, classification={})
+            session.add(asset); session.flush()
+            session.add(AssetVersion(id=version_id, asset_id=asset_id, version_number=1, storage_mode="reference",
+                                     storage_location=name, availability="available")); session.flush()
+            asset.current_version_id = version_id
+        dataset = Dataset(id=dataset_id, name="Light frames", status="active", revision=1)
+        session.add(dataset); session.flush()
+        session.add(DatasetVersion(id=dataset_version_id, dataset_id=dataset_id, version_number=1)); session.flush()
+        dataset.current_version_id = dataset_version_id
+        session.add_all((DatasetMember(id=str(uuid4()), dataset_version_id=dataset_version_id, asset_version_id=version_a, position=0),
+                         DatasetMember(id=str(uuid4()), dataset_version_id=dataset_version_id, asset_version_id=version_b, position=1)))
+    assert client.request("DELETE", "/api/v1/library/items", headers=auth(), json={"items":[
+        {"entry_type":"dataset", "id":dataset_id, "revision":1, "current_version_id":dataset_version_id}
+    ]}).status_code == 200
+    group = next(row for row in client.get("/api/v1/library/trash", headers=auth()).json()["items"] if row["id"] == dataset_id)
+    children = client.get(f"/api/v1/library/trash?group_id={dataset_id}&limit=1&offset=0", headers=auth()).json()
+    assert children["total"] == 2 and children["items"][0]["source_dataset_id"] == dataset_id
+    child = next(item for item in children["items"] if item["id"] == asset_a)
+    selection = {"items":[{key:child[key] for key in ("entry_type", "id", "removed_at", "revision", "current_version_id", "source_dataset_id")}]}
+    restored = client.post("/api/v1/library/trash/restore", headers=auth(), json=selection)
+    assert restored.status_code == 200, restored.text
+    with database.read_session() as session:
+        assert session.get(Asset, asset_a) is not None
+        assert session.scalar(select(DatasetMember.id).where(DatasetMember.dataset_version_id == dataset_version_id,
+                                                              DatasetMember.asset_version_id == version_a)) is not None
+    normal_page = client.get("/api/v1/library/items?limit=50&offset=0", headers=auth()).json()
+    assert any(item.get("asset", {}).get("id") == asset_a for item in normal_page["items"])
+    remaining = client.get(f"/api/v1/library/trash?group_id={dataset_id}", headers=auth()).json()
+    assert remaining["total"] == 1 and remaining["items"][0]["id"] == asset_b
+    group = next(row for row in client.get("/api/v1/library/trash", headers=auth()).json()["items"] if row["id"] == dataset_id)
+    group_selection = {"items":[{key:group[key] for key in ("entry_type", "id", "removed_at", "revision", "current_version_id")}]}
+    preview = client.post("/api/v1/library/trash/delete-preview", headers=auth(), json=group_selection)
+    assert preview.status_code == 200 and preview.json()["photo_count"] == 1
+    deleted = client.post("/api/v1/library/trash/delete", headers=auth(), json={
+        **group_selection, "preview_fingerprint":preview.json()["preview_fingerprint"]
+    })
+    assert deleted.status_code == 200, deleted.text
+    with database.read_session() as session:
+        assert session.get(Asset, asset_a) is not None and session.get(AssetVersion, version_a) is not None
+        assert session.get(Asset, asset_b) is None and session.get(Dataset, dataset_id) is None
+
+
+@pytest.mark.parametrize("late_dependency", ["project_reference", "group_task"])
+def test_trash_group_rechecks_project_dataset_reference_before_member_cleanup(service, monkeypatch, late_dependency):
+    from contextlib import contextmanager
+    settings, client, database = service
+    asset_id, version_id, dataset_id, dataset_version_id = (str(uuid4()) for _ in range(4))
+    path = settings.data_dir / "objects" / version_id / "source.fit"
+    path.parent.mkdir(parents=True, exist_ok=True); path.write_bytes(b"managed")
+    with database.write_session() as session:
+        asset = Asset(id=asset_id, name="GroupRace.fit", scope="shared", role="raw", status="active", revision=1,
+                      parameters={}, classification={}); session.add(asset); session.flush()
+        session.add(AssetVersion(id=version_id, asset_id=asset_id, version_number=1, storage_mode="managed",
+            storage_location=(Path("objects") / version_id / "source.fit").as_posix(), availability="available")); session.flush()
+        asset.current_version_id = version_id
+        dataset = Dataset(id=dataset_id, name="Race group", status="active", revision=1); session.add(dataset); session.flush()
+        session.add(DatasetVersion(id=dataset_version_id, dataset_id=dataset_id, version_number=1)); session.flush()
+        dataset.current_version_id = dataset_version_id
+        session.add(DatasetMember(id=str(uuid4()), dataset_version_id=dataset_version_id, asset_version_id=version_id, position=0))
+    project = client.post("/api/v1/projects", headers=auth(), json={"name":"Late group reference"}).json()
+    task_id = str(uuid4())
+    assert client.request("DELETE", "/api/v1/library/items", headers=auth(), json={"items":[
+        {"entry_type":"dataset", "id":dataset_id, "revision":1, "current_version_id":dataset_version_id}
+    ]}).status_code == 200
+    group = next(row for row in client.get("/api/v1/library/trash", headers=auth()).json()["items"] if row["id"] == dataset_id)
+    selection = {"items":[{key:group[key] for key in ("entry_type", "id", "removed_at", "revision", "current_version_id")}]}
+    preview = client.post("/api/v1/library/trash/delete-preview", headers=auth(), json=selection).json()
+    reference_id = str(uuid4())
+    original_write_session = Database.write_session
+    calls = 0
+    @contextmanager
+    def add_reference_after_manifest(self):
+        nonlocal calls
+        with original_write_session(self) as write:
+            yield write
+        calls += 1
+        if calls == 1:
+            with original_write_session(self) as write:
+                if late_dependency == "project_reference":
+                    write.add(ProjectDatasetReference(id=reference_id, project_id=project["id"], dataset_id=dataset_id,
+                        dataset_version_id=dataset_version_id, base_revision=1))
+                else:
+                    write.add(AssetTask(id=task_id, status="queued", sources=[], storage_mode="managed",
+                        classification={}, parameters={}, enumeration_completed=False, report={}, error=None,
+                        dataset_id=dataset_id))
+    monkeypatch.setattr(Database, "write_session", add_reference_after_manifest)
+    result = client.post("/api/v1/library/trash/delete", headers=auth(), json={
+        **selection, "preview_fingerprint":preview["preview_fingerprint"]
+    })
+    assert result.status_code == 409, result.text
+    with original_write_session(database) as session:
+        assert session.get(Asset, asset_id) is not None
+        assert session.get(DatasetMember, session.scalar(select(DatasetMember.id).where(DatasetMember.dataset_version_id == dataset_version_id))) is not None
+        if late_dependency == "project_reference":
+            assert session.get(ProjectDatasetReference, reference_id) is not None
+        else:
+            assert session.get(AssetTask, task_id) is not None
+        assert session.get(LibraryEntryRemoval, ("dataset", dataset_id)).cleanup_status == "trash"
+    assert path.exists()
+
+
+
+def test_trash_group_persists_database_cleanup_progress_and_retries_after_file_failure(service, monkeypatch):
+    settings, client, database = service
+    asset_a, version_a = "00000000-0000-0000-0000-000000000001", "00000000-0000-0000-0000-000000000011"
+    asset_b, version_b = "00000000-0000-0000-0000-000000000002", "00000000-0000-0000-0000-000000000012"
+    dataset_id, dataset_version_id = "00000000-0000-0000-0000-000000000003", "00000000-0000-0000-0000-000000000013"
+    path = settings.data_dir / "objects" / version_b / "source.fit"
+    path.parent.mkdir(parents=True, exist_ok=True); path.write_bytes(b"managed")
+    with database.write_session() as session:
+        for asset_id, version_id, name, mode, location in (
+            (asset_a, version_a, "A reference.fit", "reference", "A reference.fit"),
+            (asset_b, version_b, "B managed.fit", "managed", (Path("objects") / version_b / "source.fit").as_posix()),
+        ):
+            asset = Asset(id=asset_id, name=name, scope="shared", role="raw", status="active", revision=1,
+                          parameters={}, classification={}); session.add(asset); session.flush()
+            session.add(AssetVersion(id=version_id, asset_id=asset_id, version_number=1, storage_mode=mode,
+                storage_location=location, availability="available")); session.flush(); asset.current_version_id = version_id
+        dataset = Dataset(id=dataset_id, name="Partial database group", status="active", revision=1)
+        session.add(dataset); session.flush()
+        session.add(DatasetVersion(id=dataset_version_id, dataset_id=dataset_id, version_number=1)); session.flush()
+        dataset.current_version_id = dataset_version_id
+        session.add_all((DatasetMember(id=str(uuid4()), dataset_version_id=dataset_version_id, asset_version_id=version_a, position=0),
+                         DatasetMember(id=str(uuid4()), dataset_version_id=dataset_version_id, asset_version_id=version_b, position=1)))
+    assert client.request("DELETE", "/api/v1/library/items", headers=auth(), json={"items":[
+        {"entry_type":"dataset", "id":dataset_id, "revision":1, "current_version_id":dataset_version_id}
+    ]}).status_code == 200
+    group = next(row for row in client.get("/api/v1/library/trash", headers=auth()).json()["items"] if row["id"] == dataset_id)
+    selection = {"items":[{key:group[key] for key in ("entry_type", "id", "removed_at", "revision", "current_version_id")}]}
+    preview = client.post("/api/v1/library/trash/delete-preview", headers=auth(), json=selection).json()
+    original_unlink = Path.unlink
+    def fail_b(path_arg, *args, **kwargs):
+        if path_arg == path:
+            raise PermissionError("controlled B lock")
+        return original_unlink(path_arg, *args, **kwargs)
+    monkeypatch.setattr(Path, "unlink", fail_b)
+    result = client.post("/api/v1/library/trash/delete", headers=auth(), json={
+        **selection, "preview_fingerprint":preview["preview_fingerprint"]
+    })
+    assert result.status_code == 200 and result.json()["deleted_count"] == 1 and len(result.json()["failed"]) == 1
+    remaining = next(row for row in client.get("/api/v1/library/trash", headers=auth()).json()["items"] if row["id"] == dataset_id)
+    assert remaining["cleanup_status"] == "partial" and remaining["member_asset_ids"] == [asset_b]
+    with database.read_session() as session:
+        assert session.get(Asset, asset_a) is None
+        assert session.get(LibraryEntryRemoval, ("dataset", dataset_id)).cleaned_asset_ids == [asset_a]
+    assert client.post("/api/v1/library/trash/restore", headers=auth(), json=selection).status_code == 409
+    monkeypatch.setattr(Path, "unlink", original_unlink)
+    latest_group = next(row for row in client.get("/api/v1/library/trash", headers=auth()).json()["items"] if row["id"] == dataset_id)
+    retry_selection = {"items":[{key:latest_group[key] for key in ("entry_type", "id", "removed_at", "revision", "current_version_id")}]}
+    retry_response = client.post("/api/v1/library/trash/delete-preview", headers=auth(), json=retry_selection)
+    assert retry_response.status_code == 200, retry_response.text
+    retry = retry_response.json()
+    finished = client.post("/api/v1/library/trash/delete", headers=auth(), json={
+        **retry_selection, "preview_fingerprint":retry["preview_fingerprint"]
+    })
+    assert finished.status_code == 200 and finished.json()["deleted_count"] == 1
+    with database.read_session() as session:
+        assert session.get(Dataset, dataset_id) is None and session.get(Asset, asset_b) is None
+
+
+
+def test_trash_group_child_delete_only_removes_selected_asset_and_group_remains_restorable(service):
+    _, client, database = service
+    asset_a, version_a, asset_b, version_b, dataset_id, dataset_version_id = (str(uuid4()) for _ in range(6))
+    with database.write_session() as session:
+        for asset_id, version_id, name in ((asset_a, version_a, "A only.fit"), (asset_b, version_b, "B remains.fit")):
+            asset = Asset(id=asset_id, name=name, scope="shared", role="raw", status="active", revision=1,
+                          parameters={}, classification={}); session.add(asset); session.flush()
+            session.add(AssetVersion(id=version_id, asset_id=asset_id, version_number=1, storage_mode="reference",
+                                     storage_location=name, availability="available")); session.flush(); asset.current_version_id=version_id
+        dataset=Dataset(id=dataset_id,name="Single member removal",status="active",revision=1);session.add(dataset);session.flush()
+        session.add(DatasetVersion(id=dataset_version_id,dataset_id=dataset_id,version_number=1));session.flush()
+        dataset.current_version_id=dataset_version_id
+        session.add_all((DatasetMember(id=str(uuid4()),dataset_version_id=dataset_version_id,asset_version_id=version_a,position=0),
+                         DatasetMember(id=str(uuid4()),dataset_version_id=dataset_version_id,asset_version_id=version_b,position=1)))
+    assert client.request("DELETE","/api/v1/library/items",headers=auth(),json={"items":[
+        {"entry_type":"dataset","id":dataset_id,"revision":1,"current_version_id":dataset_version_id}
+    ]}).status_code==200
+    child_page=client.get(f"/api/v1/library/trash?group_id={dataset_id}&limit=1&offset=1",headers=auth()).json()
+    assert child_page["total"]==2 and child_page["items"][0]["id"]==asset_b
+    child=child_page["items"][0]
+    selection={"items":[{key:child[key] for key in ("entry_type","id","removed_at","revision","current_version_id","source_dataset_id")}]}
+    preview=client.post("/api/v1/library/trash/delete-preview",headers=auth(),json=selection).json()
+    assert preview["photo_count"]==1
+    deleted=client.post("/api/v1/library/trash/delete",headers=auth(),json={**selection,"preview_fingerprint":preview["preview_fingerprint"]})
+    assert deleted.status_code==200 and deleted.json()["deleted_count"]==1 and deleted.json()["deleted_entry_count"]==1
+    with database.read_session() as session:
+        group_removal=session.get(LibraryEntryRemoval,("dataset",dataset_id))
+        assert group_removal.member_asset_ids==[asset_a] and group_removal.cleaned_asset_ids==[]
+        assert group_removal.cleanup_status=="trash"
+        assert session.get(Asset,asset_a) is not None and session.get(Asset,asset_b) is None
+    group=next(row for row in client.get("/api/v1/library/trash",headers=auth()).json()["items"] if row["id"]==dataset_id)
+    restored=client.post("/api/v1/library/trash/restore",headers=auth(),json={"items":[{
+        key:group[key] for key in ("entry_type","id","removed_at","revision","current_version_id")
+    }]})
+    assert restored.status_code==200
+    with database.read_session() as session:
+        assert session.get(Asset,asset_a) is not None and session.get(Asset,asset_b) is None
+        assert session.get(Dataset,dataset_id) is not None
+
+
+
+def test_trash_group_deletes_multiple_members_without_self_revision_conflict(service):
+    _, client, database = service
+    dataset_id, dataset_version_id = str(uuid4()), str(uuid4())
+    asset_ids, version_ids = [str(uuid4()), str(uuid4())], [str(uuid4()), str(uuid4())]
+    with database.write_session() as session:
+        for index, (asset_id, version_id) in enumerate(zip(asset_ids, version_ids)):
+            asset=Asset(id=asset_id,name=f"Multi {index}.fit",scope="shared",role="raw",status="active",revision=1,
+                        parameters={},classification={});session.add(asset);session.flush()
+            session.add(AssetVersion(id=version_id,asset_id=asset_id,version_number=1,storage_mode="reference",
+                                     storage_location=f"Multi {index}.fit",availability="available"));session.flush()
+            asset.current_version_id=version_id
+        dataset=Dataset(id=dataset_id,name="Multi-member group",status="active",revision=1);session.add(dataset);session.flush()
+        session.add(DatasetVersion(id=dataset_version_id,dataset_id=dataset_id,version_number=1));session.flush()
+        dataset.current_version_id=dataset_version_id
+        session.add_all(DatasetMember(id=str(uuid4()),dataset_version_id=dataset_version_id,asset_version_id=version_id,position=index)
+                        for index,version_id in enumerate(version_ids))
+    assert client.request("DELETE","/api/v1/library/items",headers=auth(),json={"items":[
+        {"entry_type":"dataset","id":dataset_id,"revision":1,"current_version_id":dataset_version_id}
+    ]}).status_code==200
+    group=next(row for row in client.get("/api/v1/library/trash",headers=auth()).json()["items"] if row["id"]==dataset_id)
+    selection={"items":[{key:group[key] for key in ("entry_type","id","removed_at","revision","current_version_id")}]}
+    preview=client.post("/api/v1/library/trash/delete-preview",headers=auth(),json=selection).json()
+    assert preview["photo_count"]==2
+    deleted=client.post("/api/v1/library/trash/delete",headers=auth(),json={**selection,"preview_fingerprint":preview["preview_fingerprint"]})
+    assert deleted.status_code==200,deleted.text
+    assert deleted.json()["deleted_count"]==2 and deleted.json()["deleted_entry_count"]==3 and deleted.json()["failed"]==[]
+    with database.read_session() as session:
+        assert session.get(Dataset,dataset_id) is None and all(session.get(Asset,asset_id) is None for asset_id in asset_ids)

@@ -63,7 +63,7 @@ describe('workspace panel', () => {
     await flushPromises()
     expect(wrapper.get('h1').text()).toBe('素材库')
     expect(wrapper.find('.apf-library-tabs').exists()).toBe(false)
-    expect(wrapper.get('.apf-heading-actions').text()).toBe('导入刷新批量删除')
+    expect(wrapper.get('.apf-heading-actions').text()).toBe('导入刷新批量删除回收站')
     expect(wrapper.text()).not.toContain('后台任务')
     expect(wrapper.text()).not.toContain('数据集')
     expect(get.mock.calls.some(([path]) => path.includes('/projects?'))).toBe(true)

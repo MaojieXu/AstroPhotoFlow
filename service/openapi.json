@@ -3862,6 +3862,528 @@
         }
       }
     },
+    "/api/v1/library/trash": {
+      "get": {
+        "summary": "Library Trash",
+        "operationId": "library_trash_api_v1_library_trash_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          },
+          {
+            "name": "group_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Group Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LibraryTrashPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Origin not allowed by the ComfyUI proxy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found or outside the requested scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Method not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Revision conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error or invalid reference",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service not configured or unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Service timeout",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/library/trash/restore": {
+      "post": {
+        "summary": "Restore Library Trash",
+        "operationId": "restore_library_trash_api_v1_library_trash_restore_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LibraryTrashSelection"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Origin not allowed by the ComfyUI proxy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found or outside the requested scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Method not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Revision conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error or invalid reference",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service not configured or unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Service timeout",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/library/trash/delete-preview": {
+      "post": {
+        "summary": "Library Trash Delete Preview",
+        "operationId": "library_trash_delete_preview_api_v1_library_trash_delete_preview_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LibraryTrashSelection"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LibraryTrashPreviewOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Origin not allowed by the ComfyUI proxy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found or outside the requested scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Method not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Revision conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error or invalid reference",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service not configured or unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Service timeout",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/library/trash/delete": {
+      "post": {
+        "summary": "Library Trash Delete",
+        "operationId": "library_trash_delete_api_v1_library_trash_delete_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LibraryTrashDelete"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LibraryTrashDeleteOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Origin not allowed by the ComfyUI proxy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found or outside the requested scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Method not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Revision conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error or invalid reference",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service not configured or unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Service timeout",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/library/filter-options": {
       "get": {
         "summary": "Library Filter Options",
@@ -12284,6 +12806,403 @@
           "offset"
         ],
         "title": "LibraryItemPage"
+      },
+      "LibraryTrashDelete": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/LibraryTrashSelectionItem"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Items"
+          },
+          "preview_fingerprint": {
+            "type": "string",
+            "title": "Preview Fingerprint"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "items",
+          "preview_fingerprint"
+        ],
+        "title": "LibraryTrashDelete"
+      },
+      "LibraryTrashDeleteOut": {
+        "properties": {
+          "deleted_count": {
+            "type": "integer",
+            "title": "Deleted Count"
+          },
+          "deleted_entry_count": {
+            "type": "integer",
+            "title": "Deleted Entry Count"
+          },
+          "deleted_file_count": {
+            "type": "integer",
+            "title": "Deleted File Count"
+          },
+          "deleted_bytes": {
+            "type": "integer",
+            "title": "Deleted Bytes"
+          },
+          "missing_file_count": {
+            "type": "integer",
+            "title": "Missing File Count"
+          },
+          "failed": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Failed"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "deleted_count",
+          "deleted_entry_count",
+          "deleted_file_count",
+          "deleted_bytes",
+          "missing_file_count",
+          "failed"
+        ],
+        "title": "LibraryTrashDeleteOut"
+      },
+      "LibraryTrashGroupOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "in_trash": {
+            "type": "boolean",
+            "title": "In Trash"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "in_trash"
+        ],
+        "title": "LibraryTrashGroupOut"
+      },
+      "LibraryTrashItemOut": {
+        "properties": {
+          "entry_type": {
+            "type": "string",
+            "enum": [
+              "asset",
+              "dataset"
+            ],
+            "title": "Entry Type"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "removed_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Removed At"
+          },
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          },
+          "current_version_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Version Id"
+          },
+          "cleanup_status": {
+            "type": "string",
+            "enum": [
+              "trash",
+              "partial",
+              "failed"
+            ],
+            "title": "Cleanup Status"
+          },
+          "cleanup_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cleanup Error"
+          },
+          "photo_count": {
+            "type": "integer",
+            "title": "Photo Count"
+          },
+          "member_asset_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Member Asset Ids"
+          },
+          "groups": {
+            "items": {
+              "$ref": "#/components/schemas/LibraryTrashGroupOut"
+            },
+            "type": "array",
+            "title": "Groups"
+          },
+          "source_dataset_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Dataset Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "entry_type",
+          "id",
+          "name",
+          "removed_at",
+          "revision",
+          "current_version_id",
+          "cleanup_status",
+          "cleanup_error",
+          "photo_count"
+        ],
+        "title": "LibraryTrashItemOut"
+      },
+      "LibraryTrashPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/LibraryTrashItemOut"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit"
+          },
+          "offset": {
+            "type": "integer",
+            "title": "Offset"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "LibraryTrashPage"
+      },
+      "LibraryTrashPreviewOut": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/LibraryTrashItemOut"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "references": {
+            "items": {
+              "$ref": "#/components/schemas/LibraryTrashReferenceOut"
+            },
+            "type": "array",
+            "title": "References"
+          },
+          "tasks": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tasks"
+          },
+          "photo_count": {
+            "type": "integer",
+            "title": "Photo Count"
+          },
+          "managed_file_count": {
+            "type": "integer",
+            "title": "Managed File Count"
+          },
+          "managed_bytes": {
+            "type": "integer",
+            "title": "Managed Bytes"
+          },
+          "preview_fingerprint": {
+            "type": "string",
+            "title": "Preview Fingerprint"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "items",
+          "references",
+          "tasks",
+          "photo_count",
+          "managed_file_count",
+          "managed_bytes",
+          "preview_fingerprint"
+        ],
+        "title": "LibraryTrashPreviewOut"
+      },
+      "LibraryTrashReferenceOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "project_asset",
+              "project_dataset",
+              "dataset_member"
+            ],
+            "title": "Kind"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "name",
+          "version"
+        ],
+        "title": "LibraryTrashReferenceOut"
+      },
+      "LibraryTrashSelection": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/LibraryTrashSelectionItem"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Items"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "LibraryTrashSelection"
+      },
+      "LibraryTrashSelectionItem": {
+        "properties": {
+          "entry_type": {
+            "type": "string",
+            "enum": [
+              "asset",
+              "dataset"
+            ],
+            "title": "Entry Type"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "removed_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Removed At"
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Revision"
+          },
+          "current_version_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Version Id"
+          },
+          "source_dataset_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Dataset Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "entry_type",
+          "id",
+          "removed_at",
+          "revision",
+          "current_version_id"
+        ],
+        "title": "LibraryTrashSelectionItem"
       },
       "NumericRangeOut": {
         "properties": {

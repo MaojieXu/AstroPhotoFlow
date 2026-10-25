@@ -136,6 +136,22 @@ export const libraryEntriesRemoveRequestSchema = z.object({
     entry_type: z.enum(['asset','dataset']), id, revision: z.number().int().positive(), current_version_id: id.nullable()
   }).strict()).min(1)
 }).strict()
+export const libraryTrashItemSchema = z.object({
+  entry_type: z.enum(['asset','dataset']), id, name: z.string(), removed_at: timestamp,
+  revision: z.number().int().positive(), current_version_id: id.nullable(),
+  cleanup_status: z.enum(['trash','partial','failed']), cleanup_error: nullableText,
+  photo_count: z.number().int().nonnegative(), member_asset_ids:z.array(id).default([]),
+  groups:z.array(z.object({id,name:z.string(),in_trash:z.boolean()}).strict()).default([]), source_dataset_id:id.nullable().optional()
+}).strict()
+export const libraryTrashSelectionSchema = z.object({items:z.array(z.object({
+  entry_type:z.enum(['asset','dataset']),id,removed_at:timestamp,revision:z.number().int().positive(),current_version_id:id.nullable(),source_dataset_id:id.nullable().optional()
+}).strict()).min(1)}).strict()
+export const libraryTrashDeleteSchema = z.object({deleted_count:z.number().int().nonnegative(),deleted_entry_count:z.number().int().nonnegative(),deleted_file_count:z.number().int().nonnegative(),deleted_bytes:z.number().int().nonnegative(),missing_file_count:z.number().int().nonnegative(),failed:z.array(z.object({id:z.string(),error:z.string()}).strict())}).strict()
+export const libraryTrashPreviewSchema = z.object({
+  items:z.array(libraryTrashItemSchema),
+  references:z.array(z.object({id,kind:z.enum(['project_asset','project_dataset','dataset_member']),name:z.string(),version:z.number().int().positive()}).strict()),
+  tasks:z.array(z.string()),photo_count:z.number().int().nonnegative(),managed_file_count:z.number().int().nonnegative(),managed_bytes:z.number().int().nonnegative(),preview_fingerprint:z.string()
+}).strict()
 export const datasetMemberParametersUpdateSchema = z.object({
   dataset_id: id, revision: z.number().int().positive(), version_id: id, assets: z.array(assetSchema)
 }).strict()
