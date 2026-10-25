@@ -73,7 +73,7 @@ from importlib.resources import files
 from pathlib import Path
 import sys
 from astrophotoflow.backend.schema import upgrade_database, current_revision
-from astrophotoflow.backend.settings import Settings
+from astrophotoflow.config import Settings
 import astrophotoflow.comfyui
 import astrophotoflow.mcp_server
 assert 'server' not in sys.modules

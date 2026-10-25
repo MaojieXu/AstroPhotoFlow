@@ -21,7 +21,7 @@ from astrophotoflow.backend.models import (
 )
 from astrophotoflow.backend.schema import SchemaError, current_revision, database_lock, ensure_schema_for_serve, upgrade_database
 from astrophotoflow.backend.schemas import ErrorEnvelope
-from astrophotoflow.backend.settings import ConfigurationError, Settings, ensure_data_dir, ensure_service_token, load_settings
+from astrophotoflow.config import ConfigurationError, Settings, ensure_data_dir, ensure_service_token, load_settings
 
 from astrophotoflow.comfyui.proxy import ROUTES
 

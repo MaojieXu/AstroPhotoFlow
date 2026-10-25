@@ -1,13 +1,22 @@
 # 当前开发上下文
 
-更新时间：2026-10-25。当前工作为 `feature/remake` 工程标准化，继承 `material-setting-improvement` 的 `d40d6c496cbc16e29bd0d54f3cc1afaeabc5d3ef`。
+更新时间：2026-10-25。当前分支 feature/remake，工程标准化基线为 `4cc317d`，本轮完成运行配置统一和历史目录收尾。
 
-基线已通过用户手动检查并推送；R4、父子恢复、过期清理请求、分页响应和回收站布局修复已经包含在内，不重新打开其产品设计。
+## 唯一开发入口
 
-当前行为见[素材说明](../architecture/assets.md)，外部接口见[接口说明](../api/README.md)。schema 保持 `0006_library_trash_cleanup_state`，MCP 保持五工具。完整工作流／Agent／软件适配、增强数据库及结果比较未实现，不属于本次标准化。
+- 项目 Python：`.artifacts/venvs/dev`，依赖沿用根 uv.lock。
+- 本机变量：根 `.env`，模板 `.env.example`；由 uv 显式加载。
+- 当前 workspace：`.artifacts/workspaces/dev`，使用空的新数据库；配置为该目录的 config.toml。
+- 前端／服务：`http://127.0.0.1:31388/` 和 `127.0.0.1:31390`。
+- CPU runtime：复用正常用户 LocalAppData 下的 AstroPhotoFlow/runtime/0.1.0，不再依赖旧 test/ 中的解释器或 ComfyUI 源码。
+- MCP：开发环境 uv 加载项目 `.env` 后运行 `apf mcp`；其他 Codex/MCP 设置保持不变。
 
-迁移前产品测试清单见 [refactor-baseline.json](refactor-baseline.json)。已有证据：垃圾桶及相关后端 32 项通过、外部 reference 原图保护定向补验通过；最后一次 UI 增量的回收站组件 7 项通过、类型检查与构建通过。旧的 110 项前端记录属于此前候选，不替代重构后的完整验收。
+`astrophotoflow.config` 是共享配置事实源；后端、代理、CLI、MCP 和工作台不再各自解析 TOML。显式路径优先，其次环境中的配置位置，再其次当前 workspace 指针及默认位置；无效选定配置明确失败。服务令牌保持 workspace 内文件机制。
 
-原图、ZIP、旧虚拟环境与已有展示 workspace 不搬动；新运行产物统一 `.artifacts/`。当前展示地址沿用 `http://127.0.0.1:31388/`，通过 HTTP 和实际资源核对后交给用户手动点击，不运行 computer use。
+旧服务、编辑器格式化器和历史工作台已解除对 service/、test/ 的依赖。本机 VS Code 默认 Python 解释器、Black、Pylint 已配置为统一开发解释器。历史数据库不迁移，原图／ZIP及参考项目保留，独立 RAW/HEIF 样本和出处移入 tests/data/reference-samples。
 
-本次重构已完成本机自动验收和独立只读复审：Python 129 通过／1 跳过，前端 111 通过，wheel／sdist 安装验证通过；实际结果见[验收记录](remake-acceptance.md)。31388 已提供重构后的资源，交互由用户手动检查。本分支不自动合并到 dev/main，不更改全局 MCP 注册或默认 workspace。
+## 产品边界
+
+schema 仍为 `0006_library_trash_cleanup_state`，MCP 严格为五工具。素材行为见[架构说明](../architecture/assets.md)，CLI/MCP 见[接口说明](../api/README.md)。Agent、软件适配、完整工作流、增强数据库和结果比较仍未实现。
+
+原工程重构验收见[历史记录](remake-acceptance.md)，本轮配置和运行收尾的实际证据见[配置管理验收](config-management-acceptance.md)。不自动合并 dev/main 或推送远端，不进行前端自动点击。

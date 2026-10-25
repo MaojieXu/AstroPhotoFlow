@@ -5,7 +5,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from astrophotoflow.backend.api import create_app
-from astrophotoflow.backend.settings import Settings
+from astrophotoflow.config import Settings
 
 
 def main() -> None:

@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from astrophotoflow.backend.import_schemas import AssetParametersPatch
-from astrophotoflow.backend.settings import load_settings
+from astrophotoflow.config import load_settings
 
 
 def test_parameters_patch_keeps_omitted_null_and_zero_distinct():

@@ -8,7 +8,7 @@ from .api import create_app
 from .schema import SCHEMA_REVISION, SchemaError, database_status, database_lock, ensure_schema_for_serve, upgrade_database
 from .db import Database
 from .ingestion import backfill_missing_previews, mark_interrupted_tasks
-from .settings import ConfigurationError, ensure_service_token, load_settings
+from ..config import ConfigurationError, ensure_service_token, load_settings
 
 
 @contextmanager

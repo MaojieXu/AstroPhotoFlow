@@ -1,14 +1,14 @@
 [server]
 host = "127.0.0.1"
-port = 8190
+port = 31390
 
 [storage]
 data_dir = "data"
 
 [comfyui]
 allowed_origins = [
-  "http://127.0.0.1:8188",
-  "http://localhost:8188"
+  "http://127.0.0.1:31388",
+  "http://localhost:31388"
 ]
 
 # Add only directories that the service is allowed to browse and read.

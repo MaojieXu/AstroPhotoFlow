@@ -4,6 +4,7 @@
 
 | 模块 | 职责 |
 |---|---|
+| `config` | 纯 Python 的配置定位、TOML 解析、类型检查和 workspace 存储路径 |
 | `backend` | FastAPI、SQLAlchemy/SQLite、配置、导入、资产／数据集、回收站和 Alembic 迁移 |
 | `frontend` | Vue 3、TypeScript、Pinia、Zod；素材库与设置页面，共享现有工作区状态和保存流程 |
 | `comfyui` | 同源代理、checkout 服务管理、CPU 工作台的插件入口 |

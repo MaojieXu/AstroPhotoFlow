@@ -9,7 +9,8 @@ import sys
 import httpx
 from astrophotoflow.backend.import_schemas import AssetParametersPatch
 
-from .client import AssetClient, ServiceApiError, config_path
+from .client import AssetClient, ServiceApiError
+from .config import ConfigurationError, resolve_config_path
 from .workbench import WorkbenchError, initialize, start, status, stop
 
 
@@ -96,7 +97,7 @@ def _run_asset_command(args):
 
 
 def _workspace_config(workspace: Path | None) -> Path:
-    return (workspace.expanduser() / "config.toml").resolve() if workspace else config_path().resolve()
+    return (workspace.expanduser() / "config.toml").resolve() if workspace else resolve_config_path()
 
 
 def _mcp_registration(workspace_config: Path) -> None:
@@ -142,7 +143,7 @@ def main() -> None:
         else:
             result = _run_asset_command(args)
             print(json.dumps(result, ensure_ascii=False, indent=2))
-    except (ServiceApiError, WorkbenchError, httpx.HTTPError, OSError, ValueError, KeyError) as exc:
+    except (ConfigurationError, ServiceApiError, WorkbenchError, httpx.HTTPError, OSError, ValueError, KeyError) as exc:
         print(str(exc), file=sys.stderr)
         raise SystemExit(1) from exc
 

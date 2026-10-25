@@ -1,6 +1,7 @@
 include LICENSE
 include README.md
 include uv.lock
+include .env.example config.example.toml
 include package.json pnpm-lock.yaml vite.config.ts vitest.config.ts tsconfig.json
 recursive-include src/astrophotoflow/backend *.py *.ini
 recursive-include src/astrophotoflow/frontend *.ts *.vue *.css

@@ -21,7 +21,7 @@ from astrophotoflow.backend.models import Asset, AssetTask, AssetTaskItem, Previ
 from astrophotoflow.backend.ingestion import backfill_missing_previews, mark_interrupted_tasks, process_task
 from astrophotoflow.backend import ingestion
 from astrophotoflow.backend.schema import database_lock, upgrade_database
-from astrophotoflow.backend.settings import ImportRoot, Settings
+from astrophotoflow.config import ImportRoot, Settings
 from astrophotoflow.backend.library import _rounded_temperature
 
 

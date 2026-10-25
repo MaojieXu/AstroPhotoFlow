@@ -2,7 +2,7 @@ import os
 from pathlib import Path, PurePosixPath
 
 from .errors import ApiError
-from .settings import ImportRoot, Settings
+from ..config import ImportRoot, Settings
 
 
 SUPPORTED_EXTENSIONS = {

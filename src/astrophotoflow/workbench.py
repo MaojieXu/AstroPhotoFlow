@@ -9,14 +9,14 @@ import socket
 import subprocess
 import sys
 import time
-import tomllib
 import zipfile
 from urllib.parse import urlsplit
 
 import httpx
 import psutil
 
-from .client import CONFIG_PATH, config_path
+from . import config as app_config
+from .config import Settings, load_settings, resolve_config_path
 
 
 COMFY_COMMIT = "1a82e6d01f395b43275c77acd289af1eb7090bb9"
@@ -40,7 +40,7 @@ def _runtime_dir() -> Path:
 
 
 def _active_config() -> Path:
-    return config_path().resolve()
+    return resolve_config_path()
 
 
 def _workspace_for_config(path: Path) -> Path:
@@ -49,16 +49,12 @@ def _workspace_for_config(path: Path) -> Path:
     return path.parent
 
 
-def _load_config(path: Path) -> tuple[dict, int, str, int]:
-    with path.open("rb") as stream:
-        config = tomllib.load(stream)
-    host = config["server"]["host"]
-    service_port = config["server"]["port"]
-    origin = config["comfyui"]["allowed_origins"][0]
-    parsed = urlsplit(origin)
-    if not parsed.hostname or parsed.port is None or not 1 <= service_port <= 65535 or service_port == parsed.port:
-        raise WorkbenchError("workspace 配置中的 ComfyUI 来源无有效端口。")
-    return config, service_port, parsed.hostname, parsed.port
+def _load_config(path: Path) -> tuple[Settings, int, str, int]:
+    settings = load_settings(path)
+    parsed = urlsplit(settings.allowed_origins[0])
+    if settings.port == parsed.port:
+        raise WorkbenchError("资产服务与 ComfyUI 必须使用不同端口。")
+    return settings, settings.port, settings.host, parsed.port
 
 
 def _uv() -> str:
@@ -207,7 +203,7 @@ def _record(process: subprocess.Popen, role: str, workspace: Path, command: list
 
 
 def _activate_workspace(config_path: Path) -> None:
-    pointer = CONFIG_PATH.parent / "active-workspace"
+    pointer = app_config.CONFIG_PATH.parent / "active-workspace"
     pointer.parent.mkdir(parents=True, exist_ok=True)
     pointer.write_text(str(config_path), encoding="utf-8")
 
@@ -216,20 +212,17 @@ def _launch(command: list[str], cwd: Path, env: dict, log_path: Path) -> subproc
     with log_path.open("ab") as log:
         kwargs = {"stdin": subprocess.DEVNULL, "stdout": log, "stderr": subprocess.STDOUT, "cwd": str(cwd), "env": env}
         if os.name == "nt":
-            kwargs["creationflags"] = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
+            kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP
         else:
             kwargs["start_new_session"] = True
         return subprocess.Popen(command, **kwargs)
 
 
 def _health(config_path: Path) -> bool:
-    config, port, host, _comfy_port = _load_config(config_path)
-    data_dir = Path(config["storage"]["data_dir"])
-    if not data_dir.is_absolute():
-        data_dir = config_path.parent / data_dir
+    settings = load_settings(config_path)
     try:
-        token = (data_dir / "service.token").read_text(encoding="utf-8").strip()
-        response = httpx.get(f"http://{host}:{port}/api/v1/health", headers={"Authorization": f"Bearer {token}"}, timeout=1)
+        token = settings.token_path.read_text(encoding="utf-8").strip()
+        response = httpx.get(settings.service_url + "/api/v1/health", headers={"Authorization": f"Bearer {token}"}, timeout=1)
         return response.status_code == 200 and response.json().get("status") == "ok"
     except (OSError, httpx.HTTPError, ValueError):
         return False
@@ -323,11 +316,27 @@ def stop(workspace_config: Path | None = None) -> str:
         process = _identity(record)
         if process is None:
             continue
-        process.terminate()
-        try:
-            process.wait(timeout=10)
-        except psutil.TimeoutExpired:
-            process.kill()
-            process.wait(timeout=5)
+        family = []
+        for member in [process, *process.children(recursive=True)]:
+            try:
+                if member.environ().get("APF_WORKSPACE") != str(workspace):
+                    raise WorkbenchError(f"进程 {member.pid} 不属于当前 workspace，停止操作已中止。")
+            except psutil.NoSuchProcess:
+                continue
+            family.append(member)
+        for member in reversed(family):
+            try:
+                member.terminate()
+            except psutil.NoSuchProcess:
+                pass
+        _gone, alive = psutil.wait_procs(family, timeout=10)
+        for member in alive:
+            try:
+                member.kill()
+            except psutil.NoSuchProcess:
+                pass
+        _gone, alive = psutil.wait_procs(alive, timeout=5)
+        if alive:
+            raise WorkbenchError(f"工作台进程未能退出：{[member.pid for member in alive]}")
     _state_path(workspace).write_text('{"processes": []}\n', encoding="utf-8")
     return "AstroPhotoFlow 工作台已停止。"

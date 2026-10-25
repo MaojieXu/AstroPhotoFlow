@@ -5,6 +5,7 @@ from aiohttp import web
 from aiohttp.test_utils import TestClient, TestServer
 import pytest
 
+from astrophotoflow import config as app_config
 from astrophotoflow.comfyui import proxy
 
 
@@ -70,7 +71,7 @@ def test_proxy_whitelist_origin_headers_and_upstream_status(tmp_path, monkeypatc
         origin = str(client.make_url("/")).rstrip("/")
         config = tmp_path / "config.toml"
         config_file(config, upstream.port, data_dir, [origin], [("astrodata", str(tmp_path / "astrodata"))])
-        monkeypatch.setattr(proxy, "CONFIG_PATH", config)
+        monkeypatch.setattr(app_config, "CONFIG_PATH", config)
 
         try:
             response = await client.get(
@@ -167,7 +168,7 @@ def test_proxy_distinguishes_missing_config_and_unavailable_service(tmp_path, mo
         await client.start_server()
         origin = str(client.make_url("/")).rstrip("/")
         missing = tmp_path / "missing.toml"
-        monkeypatch.setattr(proxy, "CONFIG_PATH", missing)
+        monkeypatch.setattr(app_config, "CONFIG_PATH", missing)
         try:
             response = await client.get("/api" + proxy.BASE_PATH + "/health", headers={"Origin": origin})
             assert response.status == 503
@@ -178,7 +179,7 @@ def test_proxy_distinguishes_missing_config_and_unavailable_service(tmp_path, mo
             (data_dir / "service.token").write_text("token")
             config = tmp_path / "config.toml"
             config_file(config, 1, data_dir, [origin])
-            monkeypatch.setattr(proxy, "CONFIG_PATH", config)
+            monkeypatch.setattr(app_config, "CONFIG_PATH", config)
             response = await client.get("/api" + proxy.BASE_PATH + "/health", headers={"Origin": origin})
             assert response.status == 503
             assert (await response.json())["error"]["code"] == "SERVICE_UNAVAILABLE"
@@ -213,7 +214,7 @@ def test_proxy_rejects_relative_import_roots(tmp_path, monkeypatch):
     (data_dir / "service.token").write_text("token")
     config = tmp_path / "config.toml"
     config_file(config, 8190, data_dir, ["http://127.0.0.1:8188"], [("bad-root", "relative/path")])
-    monkeypatch.setattr(proxy, "CONFIG_PATH", config)
+    monkeypatch.setattr(app_config, "CONFIG_PATH", config)
     with pytest.raises(proxy.ProxyError) as error:
         proxy._configuration()
     assert error.value.message == "AstroPhotoFlow 本机服务配置或令牌不可用。"

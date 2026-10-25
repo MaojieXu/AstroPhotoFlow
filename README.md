@@ -17,6 +17,8 @@ uv run --locked --no-sync pytest -q
 corepack pnpm test
 ```
 
+开发运行采用 `.env + config.toml`：从 `.env.example` 创建本机 `.env`，从 `config.example.toml` 创建 `.artifacts/workspaces/dev/config.toml`。`.env` 由 uv 显式加载；工作区端口、数据目录和素材根目录统一写入 TOML。启动命令及首次准备步骤见[开发流程](docs/development/README.md)。
+
 所有实现位于 `src/astrophotoflow`，测试在 `tests`，维护脚本在 `scripts`。前端输出 `build/frontend`，发行包输出 `dist`，新测试报告、临时 workspace 和缓存放入忽略的 `.artifacts`。详细规则见[开发流程](docs/development/README.md)。
 
 ## 安装与使用

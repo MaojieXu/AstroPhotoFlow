@@ -22,7 +22,7 @@ from .models import (
     Asset, AssetTask, AssetTaskItem, AssetVersion, Dataset, DatasetMember,
     DatasetVersion, Equipment, FitsHduMetadata, Preview,
 )
-from .settings import Settings
+from ..config import Settings
 from .video_preview import first_video_frame
 from pillow_heif import register_heif_opener
 

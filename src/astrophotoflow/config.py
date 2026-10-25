@@ -28,6 +28,11 @@ class Settings:
     import_roots: tuple[ImportRoot, ...] = ()
 
     @property
+    def service_url(self) -> str:
+        host = f"[{self.host}]" if ":" in self.host else self.host
+        return f"http://{host}:{self.port}"
+
+    @property
     def database_path(self) -> Path:
         return self.data_dir / "astrophotoflow.sqlite3"
 
@@ -40,8 +45,20 @@ class Settings:
         return self.data_dir / ".database.lock"
 
 
+def resolve_config_path(path: Path | None = None) -> Path:
+    if path is not None:
+        return path.expanduser().resolve()
+    configured = os.environ.get("ASTROPHOTOFLOW_CONFIG")
+    if configured:
+        return Path(configured).expanduser().resolve()
+    pointer = CONFIG_PATH.parent / "active-workspace"
+    if pointer.is_file():
+        return Path(pointer.read_text(encoding="utf-8").strip()).expanduser().resolve()
+    return CONFIG_PATH.resolve()
+
+
 def load_settings(config_path: Path | None = None) -> Settings:
-    config_path = Path(os.environ.get("ASTROPHOTOFLOW_CONFIG", config_path or CONFIG_PATH)).expanduser()
+    config_path = resolve_config_path(config_path)
     if not config_path.is_file():
         raise ConfigurationError(f"配置文件不存在：{config_path}")
     try:
@@ -74,12 +91,12 @@ def load_settings(config_path: Path | None = None) -> Settings:
                     raise ValueError("素材根目录 path 必须为非空路径")
                 root_path = Path(root_path).expanduser()
                 if not root_path.is_absolute():
-                    raise ValueError("素材根目录 path 必须是绝对路径或以 ~ 开头的路径")
+                    raise ValueError("素材根目录路径必须为绝对路径（可使用 ~ 展开）")
                 seen_root_ids.add(root_id)
                 import_roots.append(ImportRoot(root_id, root_path))
 
         address = ipaddress.ip_address(host)
-        if not address.is_loopback:
+        if not isinstance(host, str) or not address.is_loopback:
             raise ValueError("server.host 必须是本机回环地址")
         if type(port) is not int or not 1 <= port <= 65535:
             raise ValueError("server.port 必须是 1–65535 的整数")

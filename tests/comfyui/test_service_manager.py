@@ -3,7 +3,7 @@ import os
 
 import pytest
 
-from astrophotoflow.comfyui import proxy
+from astrophotoflow import config as app_config
 from astrophotoflow.comfyui import service_manager as service_manager_module
 from astrophotoflow.comfyui.service_manager import ServiceManager
 
@@ -49,7 +49,7 @@ def test_manager_launches_locked_uv_service_and_stops_owned_process(tmp_path, mo
     config = tmp_path / "config.toml"
     data_dir = tmp_path / "data"
     config_file(config, data_dir)
-    monkeypatch.setattr(proxy, "CONFIG_PATH", config)
+    monkeypatch.setattr(app_config, "CONFIG_PATH", config)
     if uv_from_path:
         expected_uv = "/usr/bin/uv"
         monkeypatch.setattr(service_manager_module.shutil, "which", lambda _name: expected_uv)
@@ -108,7 +108,7 @@ def test_manager_reuses_authenticated_healthy_service_without_owning_it(tmp_path
     data_dir = tmp_path / "data"
     config_file(config, data_dir)
     (data_dir / "service.token").write_text("existing-token", encoding="utf-8")
-    monkeypatch.setattr(proxy, "CONFIG_PATH", config)
+    monkeypatch.setattr(app_config, "CONFIG_PATH", config)
     monkeypatch.setattr(service_manager_module, "_service_is_ready", lambda _upstream, _token: True)
 
     def unexpected_popen(*_args, **_kwargs):
@@ -129,7 +129,7 @@ def test_manager_reuses_authenticated_healthy_service_without_owning_it(tmp_path
 def test_manager_surfaces_start_failure_without_raising_into_comfyui(tmp_path, monkeypatch):
     config = tmp_path / "config.toml"
     config_file(config, tmp_path / "data")
-    monkeypatch.setattr(proxy, "CONFIG_PATH", config)
+    monkeypatch.setattr(app_config, "CONFIG_PATH", config)
     monkeypatch.setattr(service_manager_module.shutil, "which", lambda _name: None)
     monkeypatch.setattr(service_manager_module.Path, "home", staticmethod(lambda: tmp_path))
 
@@ -143,7 +143,7 @@ def test_manager_restarts_unexpected_exit_only_once(tmp_path, monkeypatch):
     config = tmp_path / "config.toml"
     data_dir = tmp_path / "data"
     config_file(config, data_dir)
-    monkeypatch.setattr(proxy, "CONFIG_PATH", config)
+    monkeypatch.setattr(app_config, "CONFIG_PATH", config)
     monkeypatch.setattr(service_manager_module.shutil, "which", lambda _name: "/usr/bin/uv")
 
     healthy = {"value": False}
@@ -190,7 +190,7 @@ def test_manager_marks_repeated_health_failure_unavailable(tmp_path, monkeypatch
     data_dir = tmp_path / "data"
     config_file(config, data_dir)
     (data_dir / "service.token").write_text("existing-token", encoding="utf-8")
-    monkeypatch.setattr(proxy, "CONFIG_PATH", config)
+    monkeypatch.setattr(app_config, "CONFIG_PATH", config)
     healthy = {"value": True}
     monkeypatch.setattr(
         service_manager_module,

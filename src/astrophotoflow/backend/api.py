@@ -7,7 +7,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from .db import Database
 from .errors import ApiError
-from .settings import Settings
+from ..config import Settings
 from . import capture_profiles, datasets, equipment, imports, library, projects, system, trash
 
 

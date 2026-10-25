@@ -1,8 +1,4 @@
 import asyncio
-import ipaddress
-import os
-from pathlib import Path
-import tomllib
 from urllib.parse import quote
 from uuid import uuid4
 
@@ -10,7 +6,7 @@ import aiohttp
 from aiohttp import web
 
 
-CONFIG_PATH = Path.home() / ".config/astrophotoflow/config.toml"
+from ..config import ConfigurationError, load_settings
 BASE_PATH = "/astrophotoflow/api/v1"
 
 # Public route, corresponding API path, and method. No wildcard proxy route is registered.
@@ -87,53 +83,8 @@ class ProxyError(Exception):
 
 def _configuration(*, allow_missing_token: bool = False):
     try:
-        config_path = Path(os.environ.get("ASTROPHOTOFLOW_CONFIG", CONFIG_PATH)).expanduser()
-        with config_path.open("rb") as stream:
-            config = tomllib.load(stream)
-        if set(config) not in ({"server", "storage", "comfyui"}, {"server", "storage", "comfyui", "imports"}):
-            raise ValueError("配置包含未知字段")
-        if "imports" in config:
-            imports = config["imports"]
-            if not isinstance(imports, dict) or set(imports) != {"roots"} or not isinstance(imports["roots"], list):
-                raise ValueError("素材根目录配置无效")
-            seen_root_ids = set()
-            for root in imports["roots"]:
-                if not isinstance(root, dict) or set(root) != {"id", "path"}:
-                    raise ValueError("素材根目录配置无效")
-                root_id, root_path = root["id"], root["path"]
-                if not isinstance(root_id, str) or not root_id.strip() or root_id in seen_root_ids:
-                    raise ValueError("素材根目录 id 必须非空且唯一")
-                if not isinstance(root_path, str) or not root_path.strip():
-                    raise ValueError("素材根目录路径无效")
-                if not Path(root_path).expanduser().is_absolute():
-                    raise ValueError("素材根目录路径必须为绝对路径")
-                seen_root_ids.add(root_id)
-        server = config["server"]
-        storage = config["storage"]
-        comfyui = config["comfyui"]
-        if set(server) != {"host", "port"} or set(storage) != {"data_dir"} or set(comfyui) != {"allowed_origins"}:
-            raise ValueError("配置字段与约定不符")
-        host, port = server["host"], server["port"]
-        origins, data_dir = comfyui["allowed_origins"], storage["data_dir"]
-        if not isinstance(host, str) or not ipaddress.ip_address(host).is_loopback or type(port) is not int or not 1 <= port <= 65535:
-            raise ValueError("server 配置无效")
-        if not isinstance(data_dir, str) or not data_dir.strip():
-            raise ValueError("storage.data_dir 配置无效")
-        if not isinstance(origins, list) or not origins:
-            raise ValueError("comfyui.allowed_origins 配置无效")
-        for origin in origins:
-            from urllib.parse import urlsplit
-            parsed = urlsplit(origin) if isinstance(origin, str) else None
-            if parsed is None or parsed.scheme != "http" or not parsed.hostname or parsed.path or parsed.query or parsed.fragment or parsed.username or parsed.password:
-                raise ValueError("allowed_origins 配置无效")
-            if parsed.hostname != "localhost" and not ipaddress.ip_address(parsed.hostname).is_loopback:
-                raise ValueError("allowed_origins 只能包含本机回环地址")
-            if parsed.port is None or not 1 <= parsed.port <= 65535:
-                raise ValueError("allowed_origins 配置无效")
-        data_path = Path(data_dir).expanduser()
-        if not data_path.is_absolute():
-            data_path = config_path.parent / data_path
-        token_path = data_path / "service.token"
+        settings = load_settings()
+        token_path = settings.token_path
         try:
             token = token_path.read_text(encoding="utf-8").strip()
         except FileNotFoundError:
@@ -145,10 +96,8 @@ def _configuration(*, allow_missing_token: bool = False):
                 token = None
             else:
                 raise ValueError("服务令牌为空")
-        if ":" in host and not host.startswith("["):
-            host = f"[{host}]"
-        return f"http://{host}:{port}", set(origins), token
-    except (OSError, KeyError, TypeError, ValueError, tomllib.TOMLDecodeError) as exc:
+        return settings.service_url, set(settings.allowed_origins), token
+    except (OSError, ConfigurationError, ValueError) as exc:
         raise ProxyError(503, "SERVICE_NOT_CONFIGURED", "AstroPhotoFlow 本机服务配置或令牌不可用。") from exc
 
 

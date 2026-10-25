@@ -15,8 +15,8 @@ def test_initialize_copies_extension_and_start_uses_backend_module(tmp_path, mon
     vendor.mkdir(parents=True)
     extension.mkdir(parents=True)
     (extension / "__init__.py").write_text("CPU adapter marker\n", encoding="utf-8")
-    (extension / "web").mkdir()
-    (extension / "web" / "adapter.js").write_text("export const adapter = true;\n", encoding="utf-8")
+    (extension / "assets").mkdir()
+    (extension / "assets" / "adapter.js").write_text("export const adapter = true;\n", encoding="utf-8")
     archive_path = vendor / "comfyui-0.42.0.zip"
     with zipfile.ZipFile(archive_path, "w") as archive:
         archive.writestr("ComfyUI/main.py", "")
@@ -37,7 +37,7 @@ def test_initialize_copies_extension_and_start_uses_backend_module(tmp_path, mon
     config_path = workbench.initialize(workspace, service_port=18190, comfyui_port=18188)
     copied_extension = runtime / "comfyui-data" / "custom_nodes" / "AstroPhotoFlow"
     assert (copied_extension / "__init__.py").read_text(encoding="utf-8") == "CPU adapter marker\n"
-    assert (copied_extension / "web" / "adapter.js").is_file()
+    assert (copied_extension / "assets" / "adapter.js").is_file()
 
     commands = []
 
@@ -62,3 +62,39 @@ def test_initialize_copies_extension_and_start_uses_backend_module(tmp_path, mon
 
     workbench.start(config_path)
     assert commands[0][1:] == ["-m", "astrophotoflow.backend.cli", "serve"]
+
+
+def test_stop_terminates_children_before_clearing_process_state(tmp_path, monkeypatch):
+    (tmp_path / "run").mkdir()
+    state = tmp_path / "run/processes.json"
+    state.write_text('{"processes": [{"pid": 1}]}', encoding="utf-8")
+    terminated = []
+
+    class Process:
+        def __init__(self, pid):
+            self.pid = pid
+            self.running = True
+
+        def children(self, recursive=False):
+            return [child]
+
+        def environ(self):
+            return {"APF_WORKSPACE": str(tmp_path)}
+
+        def terminate(self):
+            self.running = False
+            terminated.append(self.pid)
+
+        def wait(self, timeout=None):
+            return 0
+
+    parent, child = Process(1), Process(2)
+    monkeypatch.setattr(workbench, "_identity", lambda record: parent)
+    monkeypatch.setattr(
+        workbench.psutil, "wait_procs",
+        lambda processes, timeout: ([p for p in processes if not p.running], [p for p in processes if p.running]),
+    )
+    workbench.stop(tmp_path / "config.toml")
+    assert terminated == [2, 1]
+    assert not parent.running and not child.running
+    assert json.loads(state.read_text(encoding="utf-8")) == {"processes": []}

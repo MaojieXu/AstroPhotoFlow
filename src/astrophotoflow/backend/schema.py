@@ -7,7 +7,7 @@ from alembic.config import Config
 from filelock import FileLock, Timeout
 from sqlalchemy.engine import URL
 
-from .settings import Settings, ensure_data_dir
+from ..config import Settings, ensure_data_dir
 
 
 SCHEMA_REVISION = "0006_library_trash_cleanup_state"

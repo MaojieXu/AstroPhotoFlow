@@ -8,6 +8,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 from astrophotoflow.backend.import_schemas import AssetParametersPatch
 
 from .client import AssetClient, ServiceApiError
+from .config import ConfigurationError
 
 
 server = MCPServer("AstroPhotoFlow", instructions="使用本机 AstroPhotoFlow 工作台 API 管理托管天文照片和当前参数。")
@@ -16,7 +17,7 @@ server = MCPServer("AstroPhotoFlow", instructions="使用本机 AstroPhotoFlow �
 def _call(operation):
     try:
         return operation()
-    except (ServiceApiError, httpx.HTTPError, OSError, ValueError, KeyError) as exc:
+    except (ConfigurationError, ServiceApiError, httpx.HTTPError, OSError, ValueError, KeyError) as exc:
         raise ToolError(str(exc)) from exc
 
 
