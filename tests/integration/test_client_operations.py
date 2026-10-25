@@ -158,3 +158,22 @@ def test_mcp_display_image_uses_sdk_content_conversion(monkeypatch):
     assert result.structured_content is None and len(result.content) == 1
     assert result.content[0].type == "image" and result.content[0].mime_type == "image/jpeg"
     assert b64decode(result.content[0].data) == jpeg
+
+
+def test_preview_export_preserves_existing_destination_and_cli_fails(client, tmp_path, monkeypatch, capsys):
+    from astrophotoflow import cli
+
+    api, _ = client
+    output = tmp_path / "original.fits"
+    original = b"original scientific photo bytes"
+    output.write_bytes(original)
+    with pytest.raises(FileExistsError):
+        api.export_display_preview("asset", "version", output)
+    assert output.read_bytes() == original
+
+    monkeypatch.setattr(cli, "AssetClient", lambda: api)
+    monkeypatch.setattr("sys.argv", ["apf", "previews", "export", "asset", "version", str(output)])
+    with pytest.raises(SystemExit) as caught:
+        cli.main()
+    assert caught.value.code == 1 and output.name in capsys.readouterr().err
+    assert output.read_bytes() == original

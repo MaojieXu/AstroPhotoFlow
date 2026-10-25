@@ -45,7 +45,7 @@ List commands accept `--limit/--offset`. Searchable registries accept `--q/--sta
 | `previews schedule/status/export` | `schedule_display_preview`, `get_display_preview_status`, `read_display_preview` |
 | `trash list/restore/delete-preview/delete` | `list_trash`, `restore_trash`, `preview_trash_delete`, `delete_trash` |
 
-There are 58 tools. All five original names remain: `import_photo`, `get_import_task`, `list_assets`, `get_asset`, `update_asset_parameters`. `read_display_preview` is an explicit native MCP `ImageContent` response; ordinary import/task/asset responses contain metadata without embedded base64 JPEGs. The CLI export writes the cached JPEG to the requested local output file and returns its absolute path and byte count.
+There are 58 tools. All five original names remain: `import_photo`, `get_import_task`, `list_assets`, `get_asset`, `update_asset_parameters`. `read_display_preview` is an explicit native MCP `ImageContent` response; ordinary import/task/asset responses contain metadata without embedded base64 JPEGs. The CLI export exclusively creates the requested local output file and returns its absolute path and byte count. An existing destination fails clearly without changing its bytes; choose a new output path on collision.
 
 ## Night import and automatic/manual classification
 

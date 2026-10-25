@@ -97,5 +97,6 @@ class LibraryOperations:
     def export_display_preview(self, asset_id: str, version_id: str, output: Path) -> dict[str, Any]:
         data = self.read_display_preview(asset_id, version_id)
         output = output.expanduser().resolve()
-        output.write_bytes(data)
+        with output.open("xb") as stream:
+            stream.write(data)
         return {"path": str(output), "byte_size": len(data)}
