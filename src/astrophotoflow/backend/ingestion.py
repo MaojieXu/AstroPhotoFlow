@@ -616,6 +616,10 @@ def _refresh_fits_metadata(database: Database, settings: Settings, item_id: str,
         }
         item.metadata_status = "failed" if error else "available"
         item.preview_status = "pending"
+        for preview in session.scalars(select(Preview).where(
+            Preview.asset_version_id == version_id, Preview.size == "thumbnail",
+        )).all():
+            preview.status = "pending"
         item.error = {"code": f"{category.upper()}_PARSE_FAILED", "message": error} if error else None
         item.updated_at = datetime.now(timezone.utc)
     return error

@@ -525,13 +525,16 @@ def test_metadata_retry_barrier_and_cancelled_preview_stage_stay_uncached_until_
             version = session.get(AssetVersion, item["asset_version_id"])
             assert version.scientific_metadata["metadata_status"] == "available"
             thumbnail = session.scalar(select(Preview).where(Preview.size == "thumbnail"))
-            assert thumbnail.status == "available" and thumbnail.display_parameters == old_recipe
+            assert thumbnail.status == "pending" and thumbnail.display_parameters == old_recipe
             latest = session.scalar(select(AssetTaskItem).where(AssetTaskItem.asset_version_id == version.id)
                 .order_by(AssetTaskItem.created_at.desc(), AssetTaskItem.id.desc()).limit(1))
             assert latest.preview_status == "pending"
             retry_id, retry_item_id = latest.task_id, latest.id
         state = client.post(base(item) + "/display", headers=AUTH, json={}).json()
         assert state["status"] == "not_ready" and state["error"]["code"] == "RECIPE_NOT_READY"
+        assert client.get(base(item) + "/thumbnail", headers=AUTH).status_code == 404
+        with app.state.database.read_session() as session:
+            assert not session.scalar(select(Preview).where(Preview.size == "display"))
         assert client.post(f"/api/v1/asset-tasks/{retry_id}/cancel", headers=AUTH, json={}).status_code == 202
     finally:
         release.set()
@@ -540,6 +543,9 @@ def test_metadata_retry_barrier_and_cancelled_preview_stage_stay_uncached_until_
     assert response["retry"].status_code == 202
     assert client.get(f"/api/v1/asset-tasks/{retry_id}", headers=AUTH).json()["status"] == "cancelled"
     assert client.post(base(item) + "/display", headers=AUTH, json={}).json()["error"]["code"] == "RECIPE_NOT_READY"
+    with app.state.database.read_session() as session:
+        assert session.scalar(select(Preview).where(Preview.size == "thumbnail")).status == "pending"
+        assert not session.scalar(select(Preview).where(Preview.size == "display"))
     monkeypatch.setattr(ingestion, "_process_preview", process)
     recovered = client.post(f"/api/v1/asset-tasks/{retry_id}/retry", headers=AUTH, json={"item_ids": [retry_item_id]})
     assert recovered.status_code == 202, recovered.text
@@ -550,3 +556,87 @@ def test_metadata_retry_barrier_and_cancelled_preview_stage_stay_uncached_until_
         assert not session.scalar(select(Preview).where(Preview.size == "display"))
     client.post(base(item) + "/display", headers=AUTH, json={})
     assert finished(client, base(item))["status"] == "available"
+
+
+@pytest.mark.parametrize("historical_status", ["unsupported", "failed"])
+def test_backfilled_thumbnail_is_display_authority_without_rewriting_task_history(service, monkeypatch, historical_status):
+    from astrophotoflow.backend import fits_preview
+    settings, app, client, root = service
+    source = root / "pixinsight.fits"
+    image = fits.PrimaryHDU(np.stack([np.full((20, 30), value, dtype=np.float32) for value in (0, 100, 200)]))
+    image.header["PROGRAM"] = "PixInsight 1.9.3"
+    image.header["BAYERPAT"] = "RGGB"
+    image.writeto(source)
+    original_bytes = source.read_bytes()
+    with monkeypatch.context() as legacy:
+        if historical_status == "unsupported":
+            legacy.setattr(fits_preview, "_rgb_channel_first", lambda _header: False)
+        else:
+            def failed(*_args, **_kwargs):
+                raise ValueError("controlled old preview failure")
+            legacy.setattr(ingestion, "create_preview", failed)
+        accepted = client.post("/api/v1/imports", headers=AUTH, json={
+            "sources": [{"root_id": "science", "path": source.name}], "storage_mode": "managed"})
+    task_id = accepted.json()["task_id"]
+    before_backfill = client.get("/api/v1/asset-tasks/" + task_id, headers=AUTH).json()
+    item = before_backfill["items"][0]
+    assert item["preview_status"] == historical_status
+    assert ingestion.backfill_missing_previews(app.state.database, settings) == {"generated": 1, "failed": 0}
+    history = client.get("/api/v1/asset-tasks/" + task_id, headers=AUTH).json()
+    assert history["items"] == before_backfill["items"]
+    with app.state.database.read_session() as session:
+        thumbnail = session.scalar(select(Preview).where(Preview.asset_version_id == item["asset_version_id"], Preview.size == "thumbnail"))
+        assert thumbnail.status == "available"
+        recipe = dict(thumbnail.display_parameters)
+    thumbnail_bytes = client.get(base(item) + "/thumbnail", headers=AUTH).content
+    scheduled = client.post(base(item) + "/display", headers=AUTH, json={})
+    assert scheduled.status_code in {200, 202}
+    assert finished(client, base(item))["status"] == "available"
+    response = client.get(base(item) + "/display", headers=AUTH)
+    with Image.open(BytesIO(response.content)) as display:
+        assert display.size == (30, 20)
+        red, green, blue = display.getpixel((10, 10))
+        assert red < green < blue
+    with app.state.database.read_session() as session:
+        display = session.scalar(select(Preview).where(Preview.asset_version_id == item["asset_version_id"], Preview.size == "display"))
+        for key in ("stretch_low", "stretch_high", "stretch_reference_version_id"):
+            assert display.display_parameters[key] == recipe[key]
+    assert client.get("/api/v1/asset-tasks/" + task_id, headers=AUTH).json() == history
+    assert client.get(base(item) + "/thumbnail", headers=AUTH).content == thumbnail_bytes
+    assert source.read_bytes() == original_bytes
+
+
+def test_failed_metadata_retry_leaves_cache_pending_until_backfill_without_history_rewrite(service, monkeypatch):
+    _, app, client, root = service
+    XISF.write(str(root / "backfill.xisf"), np.arange(600, dtype=np.float32).reshape(20, 30, 1), image_metadata={
+        "FITSKeywords": {"EXPTIME": [{"value": "300.000", "comment": "Exposure"}]}})
+    inspect = ingestion._inspect_xisf
+    def failed_header(_path):
+        raise ValueError("controlled header failure")
+    monkeypatch.setattr(ingestion, "_inspect_xisf", failed_header)
+    accepted = client.post("/api/v1/imports", headers=AUTH, json={
+        "sources": [{"root_id": "science", "path": "backfill.xisf"}], "storage_mode": "managed"})
+    original_task = client.get("/api/v1/asset-tasks/" + accepted.json()["task_id"], headers=AUTH).json()
+    item = original_task["items"][0]
+    assert item["metadata_status"] == "failed" and item["preview_status"] == "available"
+    monkeypatch.setattr(ingestion, "_inspect_xisf", inspect)
+    decode = ingestion._xisf_image
+    def failed_preview(*_args, **_kwargs):
+        raise ValueError("controlled refreshed preview failure")
+    monkeypatch.setattr(ingestion, "_xisf_image", failed_preview)
+    retry = client.post(f"/api/v1/asset-tasks/{original_task['id']}/retry", headers=AUTH, json={"item_ids": [item["id"]]})
+    retry_id = retry.json()["task_id"]
+    failed = client.get("/api/v1/asset-tasks/" + retry_id, headers=AUTH).json()
+    assert failed["items"][0]["metadata_status"] == "available"
+    assert failed["items"][0]["preview_status"] == "failed"
+    with app.state.database.read_session() as session:
+        assert session.scalar(select(Preview).where(Preview.size == "thumbnail")).status == "pending"
+        assert not session.scalar(select(Preview).where(Preview.size == "display"))
+    assert client.post(base(item) + "/display", headers=AUTH, json={}).json()["error"]["code"] == "RECIPE_NOT_READY"
+    monkeypatch.setattr(ingestion, "_xisf_image", decode)
+    assert ingestion.backfill_missing_previews(app.state.database, app.state.settings) == {"generated": 1, "failed": 0}
+    history = client.get("/api/v1/asset-tasks/" + retry_id, headers=AUTH).json()
+    assert history["items"] == failed["items"]
+    client.post(base(item) + "/display", headers=AUTH, json={})
+    assert finished(client, base(item))["status"] == "available"
+    assert client.get("/api/v1/asset-tasks/" + retry_id, headers=AUTH).json() == history
