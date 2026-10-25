@@ -47,7 +47,7 @@ def create_upload(body: UploadImportCreate, request: Request, session: deps.Writ
     create_dataset = body.create_dataset or len(body.files) > 1
     task = AssetTask(
         id=task_id, status="queued", sources=sources, storage_mode="managed",
-        classification=body.classification.model_dump(mode="json"), parameters=body.parameters.model_dump(mode="json"),
+        classification=body.classification.model_dump(mode="json") if "classification" in body.model_fields_set else {}, parameters=body.parameters.model_dump(mode="json", exclude_unset=True),
         import_defaults_snapshot=defaults_snapshot,
         notes=body.notes,
         dataset_name=(body.dataset_name or body.files[0].name) if create_dataset else None,
@@ -114,7 +114,7 @@ def start_upload_import(task_id: UUID, request: Request, background: BackgroundT
         raise ApiError(409, "TASK_STATE_CONFLICT", "该上传批次已开始处理。")
     task.report = {**task.report, "upload_complete": True}
     task.updated_at = shared._now()
-    background.add_task(process_task, request.app.state.database, request.app.state.settings, task.id)
+    background.add_task(process_task, request.app.state.database, request.app.state.settings, task.id, request.app.state.import_workers)
     return {"task_id": UUID(task.id), "status": "queued"}
 
 
@@ -229,8 +229,8 @@ def create_import(body: ImportCreate, request: Request, background: BackgroundTa
         )
     task = AssetTask(
         id=task_id, status="queued", sources=sources, storage_mode=body.storage_mode,
-        classification=body.classification.model_dump(mode="json"),
-        parameters=body.parameters.model_dump(mode="json"), notes=body.notes, dataset_name=dataset_name,
+        classification=body.classification.model_dump(mode="json") if "classification" in body.model_fields_set else {},
+        parameters=body.parameters.model_dump(mode="json", exclude_unset=True), notes=body.notes, dataset_name=dataset_name,
         import_defaults_snapshot=capture_defaults_snapshot(session, body.capture_preset_id),
         target_dataset_id=target_dataset_id, dataset_base_revision=None, dataset_id=None,
         enumeration_completed=False, retry_of_task_id=None, report={}, error=None,
@@ -238,7 +238,7 @@ def create_import(body: ImportCreate, request: Request, background: BackgroundTa
     )
     session.add(task)
     session.flush()
-    background.add_task(process_task, request.app.state.database, request.app.state.settings, task_id)
+    background.add_task(process_task, request.app.state.database, request.app.state.settings, task_id, request.app.state.import_workers)
     return {"task_id": UUID(task_id), "status": "queued"}
 
 
@@ -302,7 +302,7 @@ def resume_asset_task(task_id: UUID, request: Request, background: BackgroundTas
     )).all():
         item.status = "queued"
         item.updated_at = shared._now()
-    background.add_task(process_task, request.app.state.database, request.app.state.settings, task.id)
+    background.add_task(process_task, request.app.state.database, request.app.state.settings, task.id, request.app.state.import_workers)
     return {"task_id": UUID(task.id), "status": "queued"}
 
 
@@ -338,6 +338,7 @@ def retry_asset_task(task_id: UUID, body: RetryCreate, request: Request, backgro
         target_dataset_id=target_dataset_id, dataset_base_revision=dataset.revision if dataset else None,
         dataset_id=source_task.dataset_id, enumeration_completed=True, retry_of_task_id=original.id,
         report={
+            "preview_stretch_groups": (original.report or {}).get("preview_stretch_groups", {}),
             "upload_manifest": bool((source_task.report or {}).get("upload_manifest")),
             "upload_complete": bool((source_task.report or {}).get("upload_complete")),
             "upload_source_task_id": (source_task.report or {}).get("upload_source_task_id", source_task.id),
@@ -358,5 +359,5 @@ def retry_asset_task(task_id: UUID, body: RetryCreate, request: Request, backgro
             created_at=shared._now(), updated_at=shared._now(),
         ))
     session.flush()
-    background.add_task(process_task, request.app.state.database, request.app.state.settings, retry_task_id)
+    background.add_task(process_task, request.app.state.database, request.app.state.settings, retry_task_id, request.app.state.import_workers)
     return {"task_id": UUID(retry_task_id), "status": "queued"}

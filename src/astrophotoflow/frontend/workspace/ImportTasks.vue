@@ -7,7 +7,7 @@ import { pageSchema, taskActionSchema, taskSchema } from '../assets/contracts'
 const props = withDefaults(defineProps<{ refreshToken: number; uploadProgress?: Record<string, { loaded: number; total: number }>; watchTaskIds?: string[] }>(), {
   uploadProgress: () => ({}), watchTaskIds: () => []
 })
-const emit = defineEmits<{ completed: [taskId: string] }>()
+const emit = defineEmits<{ completed: [taskId: string]; registered: [taskId: string] }>()
 type Task = ReturnType<typeof taskSchema.parse>
 defineSlots<{ default(props: { tasks: Task[]; resume: (task: Task) => Promise<void>; busyTaskId?: string; error: string }): unknown }>()
 const tasks = ref<Task[]>([])
@@ -15,6 +15,8 @@ const error = ref('')
 const busyTaskId = ref<string>()
 let refreshTimer: ReturnType<typeof setInterval> | undefined
 const notified = new Set<string>()
+const registered = new Set<string>()
+const visibleTasks = computed(() => tasks.value.filter(task => !(task.report as Record<string, any>).registration?.completed || ['interrupted', 'failed'].includes(task.status)))
 const activeStatuses = ['queued', 'running', 'cancelling', 'interrupted']
 const showError = computed(() => Boolean(error.value) && (props.refreshToken > 0 || tasks.value.length > 0))
 const statusLabel = (status: string) => ({
@@ -41,7 +43,8 @@ function taskProgress(task: Task) {
   }
   if (!task.enumeration_completed) return undefined
   if (task.items_total === 0) return 0
-  return Math.min(100, Math.round(task.items_completed * 100 / task.items_total))
+  const registration = report.registration
+  return registration ? (registration.total ? Math.round(registration.registered * 100 / registration.total) : 100) : Math.min(100, Math.round(task.items_completed * 100 / task.items_total))
 }
 
 function taskProgressText(task: Task) {
@@ -49,6 +52,7 @@ function taskProgressText(task: Task) {
   const upload = props.uploadProgress[task.id]
   if (!report.upload_complete && upload) return Math.floor(upload.loaded / 1024 / 1024) + ' / ' + Math.ceil(upload.total / 1024 / 1024) + ' MB 已上传'
   if (report.upload_manifest && !report.upload_complete) return '等待文件上传'
+  if (report.registration) return report.registration.registered + ' / ' + report.registration.total + ' 项已登记'
   return task.enumeration_completed
     ? task.items_completed + ' / ' + task.items_total + ' 项已处理'
     : task.items_completed + ' 项已处理，正在读取剩余来源'
@@ -72,6 +76,10 @@ async function loadTasks() {
     )
     const previous = new Map(tasks.value.map(task => [task.id, task.status]))
     for (const task of page.items) {
+      if ((task.report as Record<string, any>).registration?.completed && (activeStatuses.includes(task.status) || props.watchTaskIds.includes(task.id)) && !registered.has(task.id)) {
+        registered.add(task.id)
+        emit('registered', task.id)
+      }
       if (props.watchTaskIds.includes(task.id) && !activeStatuses.includes(task.status) && !notified.has(task.id)) {
         notified.add(task.id)
         emit('completed',task.id)
@@ -111,9 +119,9 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <slot v-if="$slots.default" :tasks="tasks" :resume="resume" :busy-task-id="busyTaskId" :error="error" />
-  <section v-else-if="tasks.length || showError" class="apf-import-progress" aria-label="导入进度">
-    <article v-for="task in tasks" :key="task.id" class="apf-import-progress__item">
+  <slot v-if="$slots.default" :tasks="visibleTasks" :resume="resume" :busy-task-id="busyTaskId" :error="error" />
+  <section v-else-if="visibleTasks.length || showError" class="apf-import-progress" aria-label="导入进度">
+    <article v-for="task in visibleTasks" :key="task.id" class="apf-import-progress__item">
       <div class="apf-import-progress__heading">
         <strong>{{ task.dataset_name || '素材导入' }}</strong>
         <span>{{ taskStatus(task) }}</span>

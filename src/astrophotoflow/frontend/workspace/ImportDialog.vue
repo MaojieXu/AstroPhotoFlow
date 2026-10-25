@@ -14,6 +14,7 @@ const error = ref('')
 const datasetName = ref('')
 const notes = ref('')
 const capturePresetId = ref('')
+const manualClassification = ref(false)
 const frameClass = ref<'subframe'|'masterframe'|'video'|''>('')
 const frameType = ref<'light'|'bias'|'dark'|'flat'|'dark_flat'|''>('')
 const parameterMode = ref<'iso'|'gain'|''>('')
@@ -53,20 +54,20 @@ function fieldValue(field:Field) {
 function buildParameters() {
   const ids=['camera_id','optical_system_id','filter_id']
   const params:Record<string,unknown>={}
-  for(const key of ids)params[key]=parameters.value[key]||null
-  params.parameter_mode=parameterMode.value||'standard'
-  for(const field of fields)params[field.key]=fieldValue(field)
-  params.iso=fieldValue({key:'iso',title:'ISO'})
-  params.gain=fieldValue({key:'gain',title:'Gain'})
-  params.offset=fieldValue({key:'offset',title:'Offset'})
+  for(const key of ids)if(parameters.value[key]!=='')params[key]=parameters.value[key]
+  if(parameterMode.value)params.parameter_mode=parameterMode.value
+  for(const field of fields)if(parameters.value[field.key]!=='')params[field.key]=fieldValue(field)
+  if(parameters.value.iso!=='')params.iso=fieldValue({key:'iso',title:'ISO'})
+  if(parameters.value.gain!=='')params.gain=fieldValue({key:'gain',title:'Gain'})
+  if(parameters.value.offset!=='')params.offset=fieldValue({key:'offset',title:'Offset'})
   const bin=fieldValue({key:'binning',title:'Bin',integer:true,positive:true})
-  params.binning_x=bin;params.binning_y=bin
-  params.cfa_pattern=parameters.value.cfa_pattern||null
+  if(bin!==null){params.binning_x=bin;params.binning_y=bin}
+  if(parameters.value.cfa_pattern)params.cfa_pattern=parameters.value.cfa_pattern
   if(frameClass.value==='video'){
-    params.exposure_seconds=null
-    params.integration_seconds=null
+    delete params.exposure_seconds
+    delete params.integration_seconds
   } else if(frameClass.value!=='masterframe'){
-    params.integration_seconds=null
+    delete params.integration_seconds
   }
   return params
 }
@@ -76,7 +77,7 @@ async function submitImport(){
   try{
     const accepted=await assetApi.send('/astrophotoflow/api/v1/uploads',uploadCreatedSchema,'POST',{
       files:props.files.map(file=>({name:file.name,size:file.size})),
-      classification:{frame_class:frameClass.value||null,frame_type:frameClass.value==='video'?null:frameType.value||null},
+      ...(manualClassification.value?{classification:{frame_class:frameClass.value||null,frame_type:frameClass.value==='video'?null:frameType.value||null}}:{}),
       parameters:buildParameters(),
       ...(capturePresetId.value ? {capture_preset_id:capturePresetId.value} : {}),
       notes:notes.value||null,
@@ -106,7 +107,7 @@ async function uploadFiles(taskId:string){
   }
 }
 watch(()=>props.open,open=>{if(open){
-  error.value='';datasetName.value=props.datasetName??'';notes.value='';frameClass.value='';frameType.value='';parameterMode.value=''
+  error.value='';datasetName.value=props.datasetName??'';notes.value='';manualClassification.value=false;frameClass.value='';frameType.value='';parameterMode.value=''
   parameters.value={camera_id:'',optical_system_id:'',filter_id:'',iso:'',gain:'',offset:'',exposure_seconds:'',integration_seconds:'',sensor_temperature_c:'',binning:'',cfa_pattern:''}
   capturePresetId.value=''
   void loadEquipment()
@@ -121,8 +122,10 @@ watch(()=>props.open,open=>{if(open){
         <p>已选择 {{ files.length }} 个文件：{{ files.map(file=>file.name).join('、') }}</p>
         <CapturePresetPicker v-model="capturePresetId" :disabled="submitting" />
         <label v-if="isDataset">数据集名称<input v-model="datasetName" :placeholder="props.datasetName||'可留空，使用来源名称'" /></label>
-        <label>素材形态<select v-model="frameClass"><option value="">未指定</option><option value="subframe">Subframe</option><option value="masterframe">Masterframe</option><option value="video">Video</option></select></label>
-        <label v-if="frameClass!==''&&frameClass!=='video'">帧用途<select v-model="frameType"><option value="">未指定</option><option value="light">Light</option><option value="bias">Bias</option><option value="dark">Dark</option><option value="flat">Flat</option><option value="dark_flat">Dark Flat</option></select></label>
+        <label><span><input v-model="manualClassification" type="checkbox" /> 手动指定整批分类</span></label>
+        <p v-if="!manualClassification">按每个文件的明确 Header 分类；缺少资料时保留未知。</p>
+        <label v-if="manualClassification">素材形态<select v-model="frameClass"><option value="">未指定</option><option value="subframe">Subframe</option><option value="masterframe">Masterframe</option><option value="video">Video</option></select></label>
+        <label v-if="manualClassification&&frameClass!==''&&frameClass!=='video'">帧用途<select v-model="frameType"><option value="">未指定</option><option value="light">Light</option><option value="bias">Bias</option><option value="dark">Dark</option><option value="flat">Flat</option><option value="dark_flat">Dark Flat</option></select></label>
         <label>相机<select v-model="parameters.camera_id"><option value="">未指定</option><option v-for="item in cameraOptions" :key="item.id" :value="item.id">{{item.name}}</option></select></label>
         <label v-if="['light','flat'].includes(frameType)">成像系统<select v-model="parameters.optical_system_id"><option value="">未指定</option><option v-for="item in opticalOptions" :key="item.id" :value="item.id">{{item.name}}</option></select></label>
         <label v-if="['light','flat'].includes(frameType)">滤镜<select v-model="parameters.filter_id"><option value="">未指定</option><option v-for="item in filterOptions" :key="item.id" :value="item.id">{{item.name}}</option></select></label>

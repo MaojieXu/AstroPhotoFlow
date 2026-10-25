@@ -73,6 +73,22 @@ def _header_cards(header) -> list[dict[str, str]]:
     ]
 
 
+def _header_classification(value: Any) -> dict:
+    label = " ".join(str(value).strip().casefold().replace("_", " ").replace("-", " ").split())
+    frame_class = None
+    if label.startswith("master "):
+        frame_class, label = "masterframe", label[7:]
+    elif label in {"master", "masterframe"}:
+        return {"frame_class": "masterframe", "frame_type": None}
+    elif label in {"subframe", "video"}:
+        return {"frame_class": label, "frame_type": None}
+    if label.endswith(" frame"):
+        frame_class, label = frame_class or "subframe", label[:-6]
+    frame_type = {"light": "light", "bias": "bias", "dark": "dark", "flat": "flat",
+                  "dark flat": "dark_flat", "flat dark": "dark_flat"}.get(label)
+    return {"frame_class": frame_class, "frame_type": frame_type} if frame_type else {}
+
+
 def _parsed_parameters(header) -> dict[str, Any]:
     aliases = {
         "exposure_seconds": ("EXPTIME",),
@@ -121,6 +137,7 @@ def _parsed_parameters(header) -> dict[str, Any]:
         parsed["target_name"] = str(header["OBJECT"])
     for keyword in ("IMAGETYP", "IMAGETYPE", "OBSTYPE", "FRAMETYP", "FRAME"):
         if keyword in header:
+            parsed["classification"] = _header_classification(header[keyword])
             parsed["file_classification_header"] = {
                 "keyword": keyword,
                 "value": _json_value(header[keyword]),
