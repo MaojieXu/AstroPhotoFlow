@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { assetApi } from '../assets/host-client'
 import { equipmentSchema, importAcceptedSchema, pageSchema, taskActionSchema, uploadCreatedSchema } from '../assets/contracts'
 import { ApiClientError } from '../assets/client'
+import CapturePresetPicker from './CapturePresetPicker.vue'
 
 type Field = { key: string; title: string; integer?: boolean; positive?: boolean; nonnegative?: boolean }
 
@@ -12,6 +13,7 @@ const submitting = ref(false)
 const error = ref('')
 const datasetName = ref('')
 const notes = ref('')
+const capturePresetId = ref('')
 const frameClass = ref<'subframe'|'masterframe'|'video'|''>('')
 const frameType = ref<'light'|'bias'|'dark'|'flat'|'dark_flat'|''>('')
 const parameterMode = ref<'iso'|'gain'|''>('')
@@ -76,6 +78,7 @@ async function submitImport(){
       files:props.files.map(file=>({name:file.name,size:file.size})),
       classification:{frame_class:frameClass.value||null,frame_type:frameClass.value==='video'?null:frameType.value||null},
       parameters:buildParameters(),
+      ...(capturePresetId.value ? {capture_preset_id:capturePresetId.value} : {}),
       notes:notes.value||null,
       dataset_name:isDataset.value?(datasetName.value||props.datasetName||null):null,
       create_dataset:Boolean(props.createDataset)
@@ -105,6 +108,7 @@ async function uploadFiles(taskId:string){
 watch(()=>props.open,open=>{if(open){
   error.value='';datasetName.value=props.datasetName??'';notes.value='';frameClass.value='';frameType.value='';parameterMode.value=''
   parameters.value={camera_id:'',optical_system_id:'',filter_id:'',iso:'',gain:'',offset:'',exposure_seconds:'',integration_seconds:'',sensor_temperature_c:'',binning:'',cfa_pattern:''}
+  capturePresetId.value=''
   void loadEquipment()
 }})
 </script>
@@ -115,6 +119,7 @@ watch(()=>props.open,open=>{if(open){
       <header><h2>确认素材信息</h2><button type="button" @click="emit('close')">关闭</button></header>
       <form @submit.prevent="submitImport">
         <p>已选择 {{ files.length }} 个文件：{{ files.map(file=>file.name).join('、') }}</p>
+        <CapturePresetPicker v-model="capturePresetId" :disabled="submitting" />
         <label v-if="isDataset">数据集名称<input v-model="datasetName" :placeholder="props.datasetName||'可留空，使用来源名称'" /></label>
         <label>素材形态<select v-model="frameClass"><option value="">未指定</option><option value="subframe">Subframe</option><option value="masterframe">Masterframe</option><option value="video">Video</option></select></label>
         <label v-if="frameClass!==''&&frameClass!=='video'">帧用途<select v-model="frameType"><option value="">未指定</option><option value="light">Light</option><option value="bias">Bias</option><option value="dark">Dark</option><option value="flat">Flat</option><option value="dark_flat">Dark Flat</option></select></label>

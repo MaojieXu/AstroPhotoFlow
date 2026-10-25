@@ -5,14 +5,25 @@ import InlineField from './InlineField.vue'
 import InlineMultiSelect from './InlineMultiSelect.vue'
 import ParameterModeField from './ParameterModeField.vue'
 import WorkspaceRecords from './WorkspaceRecords.vue'
+import EquipmentSetupManager from './EquipmentSetupManager.vue'
 
 export default {
-  components: { InlineField, InlineMultiSelect, ParameterModeField, WorkspaceRecords },
+  components: { InlineField, InlineMultiSelect, ParameterModeField, WorkspaceRecords, EquipmentSetupManager },
   setup() { return inject<WorkspaceContext>('workspace')! }
 }
 </script>
 
 <template>
+  <EquipmentSetupManager v-if="store.section==='equipment-setups'" />
+  <template v-else>
+  <section v-if="store.section==='capture-profiles'" class="apf-details" aria-label="旧版拍摄配置">
+    <button type="button" @click="selectSection('equipment-setups')">← 返回使用组合</button>
+    <p>旧版拍摄配置保留原有设备与项目关联。新拍摄预设请在使用组合内创建。</p>
+  </section>
+  <section v-if="store.section==='projects'" class="apf-details" aria-label="项目素材说明">
+    <p>项目按拍摄目标或处理任务收集跨夜、跨滤镜的单图和数据集。选用时固定版本，库中后续变化不会替换已选版本。</p>
+    <p v-if="viewingProjectAssets||viewingProjectDatasets">{{viewingProjectAssets?'单图':'数据集'}} · {{addingProjectAssets||addingProjectDatasets?'从素材库选择要固定的版本':'已选固定版本'}}</p>
+  </section>
   <WorkspaceRecords />
           <section v-if="editorType" class="apf-editor" aria-label="记录编辑表单">
             <template v-if="editingId">
@@ -26,7 +37,7 @@ export default {
                 <label>状态<InlineField :value="draft.status" kind="select" :choices="[{value:'active',label:'启用'},{value:'archived',label:'归档'}]" :save="value=>saveEditorInline('status',value)" @cancelled="clearInlineSaveFailure(editorInlineFailureKey('status'))" /></label>
               </template>
               <template v-else-if="editorType==='equipment'">
-                <label>设备类型<select :value="draft.kind" disabled><option v-for="kind in equipmentKinds" :key="kind" :value="kind">{{kind}}</option></select></label>
+                <label>设备类型<select :value="draft.kind" disabled><option v-for="kind in equipmentKinds" :key="kind" :value="kind">{{equipmentKindLabels[kind]}}</option></select></label>
                 <label>型号<InlineField :value="draft.model" :display="draft.model||'未指定'" :save="value=>saveEditorInline('model',value)" @cancelled="clearInlineSaveFailure(editorInlineFailureKey('model'))" /></label>
                 <label>序列号<InlineField :value="draft.serial_number" :display="draft.serial_number||'未指定'" :save="value=>saveEditorInline('serial_number',value)" @cancelled="clearInlineSaveFailure(editorInlineFailureKey('serial_number'))" /></label>
                 <label>说明<InlineField :value="draft.notes" kind="textarea" :save="value=>saveEditorInline('notes',value)" @cancelled="clearInlineSaveFailure(editorInlineFailureKey('notes'))" /></label>
@@ -62,7 +73,7 @@ export default {
               </template>
               <template v-if="editorType === 'equipment'">
                 <label>设备类型<select v-model="draft.kind" :disabled="!!editingId" @change="onEquipmentKindChange">
-                  <option v-for="kind in equipmentKinds" :key="kind" :value="kind">{{ kind }}</option>
+                  <option v-for="kind in equipmentKinds" :key="kind" :value="kind">{{ equipmentKindLabels[kind] }}</option>
                 </select></label>
                 <label>型号<input v-model="draft.model" /></label>
                 <label>序列号<input v-model="draft.serial_number" /></label>
@@ -113,11 +124,14 @@ export default {
             <p>{{ itemSubtitle(selected) }}</p>
             <button v-if="store.section === 'projects' && !viewingProjectAssets && !viewingProjectDatasets" type="button" @click="openProjectAssets">查看项目资产</button>
             <button v-if="store.section === 'projects' && !viewingProjectAssets && !viewingProjectDatasets" type="button" @click="openProjectDatasets">查看项目数据集</button>
+            <button v-if="store.section === 'projects' && !viewingProjectAssets && !viewingProjectDatasets" type="button" @click="openAvailableAssets">添加单图</button>
+            <button v-if="store.section === 'projects' && !viewingProjectAssets && !viewingProjectDatasets" type="button" @click="openAvailableDatasets">添加数据集</button>
             <button v-if="store.section === 'projects' && !viewingProjectAssets && !viewingProjectDatasets" type="button" @click="editProject(selected)">编辑项目</button>
             <button v-if="store.section === 'projects' && viewingProjectAssets && !addingProjectAssets" type="button" @click="removeSelectedAssetReference">从项目移除</button>
             <button v-if="store.section === 'projects' && viewingProjectDatasets && !addingProjectDatasets" type="button" @click="removeSelectedDatasetReference">从项目移除数据集</button>
             <button v-if="store.section === 'projects' && addingProjectAssets" type="button" @click="addSelectedAsset">选用此资产版本</button>
             <button v-if="store.section === 'projects' && addingProjectDatasets" type="button" @click="addSelectedDataset">选用此数据集版本</button>
+            <p v-if="store.section==='projects'&&(viewingProjectAssets||viewingProjectDatasets)">{{addingProjectAssets||addingProjectDatasets?'将选用版本':'固定版本'}} v{{selected.version?.version_number??selected.current_version?.version_number??'—'}} · {{selected.asset_version_id??selected.dataset_version_id??selected.current_version_id}}</p>
             <button v-if="selected.dataset || selected.dataset_id || selected.entry_type==='dataset'" type="button" @click="editDataset(selected)">编辑数据集成员</button>
             <div v-if="selected.asset || selected.scope==='shared'" class="apf-detail-fields">
               <label>名称<InlineField :value="itemTitle(selected)" :save="selectedFieldSave('name')" @cancelled="clearInlineSaveFailure(inlineFailureKey(selected,'name'))" /></label>
@@ -173,4 +187,5 @@ export default {
             </div>
           </template>
         </aside>
+  </template>
 </template>

@@ -5,7 +5,7 @@ import {
   assetSchema, capabilitiesSchema, captureProfileSchema, datasetReferenceSchema, datasetSchema, libraryEntriesRemoveRequestSchema,
   libraryEntriesRemoveSchema,
   datasetVersionSchema, datasetMemberParametersUpdateSchema, equipmentSchema, importAcceptedSchema, pageSchema, projectAssetReferenceSchema,
-  projectSchema, libraryItemSchema, taskSchema, type Asset
+  projectSchema, libraryItemSchema, taskSchema, equipmentSetupSchema, type Asset
 } from '../assets/contracts'
 import { ApiClientError } from '../assets/client'
 import { assetApi } from '../assets/host-client'
@@ -34,6 +34,8 @@ const loading = ref(false)
 const error = ref<ApiClientError>()
 const capabilityError = ref<ApiClientError>()
 const statusFilter = ref<'active' | 'archived' | 'all'>('active')
+const equipmentKindFilter = ref('')
+const setupDirty = ref(false)
 const roleFilter = ref('')
 const frameTypeFilter = ref('')
 type LibraryFilters = Record<string, string[] | string>
@@ -93,7 +95,7 @@ const relatedProfilesReady = ref(false)
 let searchTimer: ReturnType<typeof setTimeout> | undefined
 let recordsLoadPending = false
 
-const dirty = computed(() => editorType.value !== undefined && JSON.stringify(draft.value) !== originalDraft.value)
+const dirty = computed(() => setupDirty.value || (editorType.value !== undefined && JSON.stringify(draft.value) !== originalDraft.value))
 const isAssetSection = computed(() =>
   store.section === 'calibration' || viewingProjectAssets.value ||
   (activeArea.value === 'library' && !viewingProjectDatasets.value)
@@ -143,8 +145,14 @@ const specFields: Record<string, InputField[]> = {
     { key: 'central_wavelength_nm', label: '中心波长（nm）', type: 'number' },
     { key: 'bandwidth_nm', label: '带宽（nm）', type: 'number' },
     { key: 'bandpass_note', label: '带通说明' }
-  ]
+  ],
+  mount: [
+    {key:'mount_type',label:'赤道仪类型'}, {key:'payload_kg',label:'承重（kg）',type:'number'},
+    {key:'connection_note',label:'连接说明'}
+  ],
+  accessory: [{key:'accessory_type',label:'配件类型'},{key:'connection_note',label:'连接说明'}]
 }
+specFields.telescope = specFields.optical_system
 const frameTypes = ['light', 'bias', 'dark', 'flat', 'dark_flat']
 const frameClasses = ['subframe', 'masterframe', 'video']
 const cfaChoices=[
@@ -152,7 +160,8 @@ const cfaChoices=[
   {value:'RGGB',label:'RGGB'},{value:'BGGR',label:'BGGR'},{value:'GRBG',label:'GRBG'},{value:'GBRG',label:'GBRG'},
   {value:'XTRANS',label:'X-Trans 6×6'},{value:'QUAD_BAYER',label:'Quad Bayer'}
 ]
-const equipmentKinds = ['camera', 'optical_system', 'filter']
+const equipmentKinds = ['camera', 'telescope', 'filter', 'mount', 'accessory', 'optical_system']
+const equipmentKindLabels:Record<string,string> = {camera:'相机',telescope:'望远镜',filter:'滤镜',mount:'赤道仪',accessory:'配件',optical_system:'成像系统（既有）'}
 function specKind(field:InputField):'number'|'select'|'text'{
   return field.key==='cfa_pattern'||field.options?'select':field.type==='number'?'number':'text'
 }
@@ -350,7 +359,11 @@ async function loadRecords() {
       loadedRows = page.items
       loadedTotal = page.total
     } else if (store.section === 'equipment') {
-      const page = await loadWorkspacePage('/equipment', equipmentSchema, {status: statusFilter.value})
+      const page = await loadWorkspacePage('/equipment', equipmentSchema, {status: statusFilter.value,kind:equipmentKindFilter.value})
+      loadedRows = page.items
+      loadedTotal = page.total
+    } else if (store.section === 'equipment-setups') {
+      const page = await loadWorkspacePage('/equipment-setups', equipmentSetupSchema, {status:statusFilter.value})
       loadedRows = page.items
       loadedTotal = page.total
     } else {
@@ -457,7 +470,7 @@ async function selectSection(section: WorkspaceSection) {
   addingProjectAssets.value = false
   addingProjectDatasets.value = false
   store.selectSection(section)
-  if (section === 'projects' || section === 'equipment' || section === 'capture-profiles') {
+  if (section === 'projects' || section === 'equipment' || section === 'equipment-setups' || section === 'capture-profiles') {
     lastManagementSection.value = section
   }
   selected.value = undefined
@@ -1168,6 +1181,7 @@ function onLibraryRowClick(row:RecordData,event:MouseEvent){
 
 async function selectRow(row: RecordData) {
   if(selected.value?.id===row.id)return
+  if(setupDirty.value&&!window.confirm('当前组合或预设有未保存修改。放弃修改吗？'))return
   if(!await waitForInlineSave())return
   selected.value = row
   if(store.section==='projects'&&!viewingProjectAssets.value&&!viewingProjectDatasets.value){
@@ -1426,7 +1440,8 @@ const itemSubtitle = (row: RecordData) => {
   if (row.entry_type === 'dataset') return (row.member_count ?? 0) + ' 个成员'
   if (row.version) return '固定版本 · ' + (row.version.frame_type ?? '未分类')
   if (row.current_version) return row.current_version.frame_type ?? '未分类'
-  if (row.kind) return row.kind + (row.model ? ' · ' + row.model : '')
+  if (row.kind) return equipmentKindLabels[row.kind] + (row.model ? ' · ' + row.model : '')
+  if (row.components) return row.components.length + ' 个设备 · ' + (row.status==='active'?'启用':'已归档')
   if (row.camera_id) return row.frame_type + ' · 相机 ' + row.camera_id
   return row.status ?? ''
 }
@@ -1480,11 +1495,11 @@ function datasetClassification(row: RecordData) {
 }
 
 watch(
-  [() => store.query, () => store.offset, () => store.pageSize, statusFilter, roleFilter, frameTypeFilter],
-  ([query, offset, pageSize, status, role, frameType], [previousQuery, previousOffset, previousPageSize, previousStatus, previousRole, previousFrameType]) => {
+  [() => store.query, () => store.offset, () => store.pageSize, statusFilter, roleFilter, frameTypeFilter, equipmentKindFilter],
+  ([query, offset, pageSize, status, role, frameType, kind], [previousQuery, previousOffset, previousPageSize, previousStatus, previousRole, previousFrameType, previousKind]) => {
     if(restoringOuterLibraryState.value)return
     const queryChanged = query !== previousQuery
-    const filtersChanged = pageSize !== previousPageSize || status !== previousStatus || role !== previousRole || frameType !== previousFrameType
+    const filtersChanged = pageSize !== previousPageSize || status !== previousStatus || role !== previousRole || frameType !== previousFrameType || kind !== previousKind
     if(offset!==previousOffset||queryChanged||filtersChanged)clearBulkSelection()
     if (queryChanged || filtersChanged) {
       loadGeneration++
@@ -1505,7 +1520,7 @@ watch(
 const workspaceContext = {
   store, activeArea, lastManagementSection, capabilities, rows,
   selected, total, loading, error, capabilityError,
-  statusFilter, roleFilter, frameTypeFilter, emptyFilters, activeFilters,
+  statusFilter, equipmentKindFilter, setupDirty, roleFilter, frameTypeFilter, emptyFilters, activeFilters,
   filterPanelOpen, filterButton, activeFilterCount, viewingProjectAssets, viewingProjectDatasets,
   addingProjectAssets, addingProjectDatasets, importDialogOpen, importFiles, filePicker,
   folderPicker, importMenuOpen, importCreatesDataset, importDatasetName, libraryViewMode,
@@ -1518,7 +1533,7 @@ const workspaceContext = {
   relatedProfilesLoading, relatedProfilesError, relatedProfilesReady, dirty, isAssetSection,
   isAssetTable, isDatasetTable, isLibraryItemsView, isLibraryTableView, isDatasetMembersView,
   pageSelectionKeys, pageAllSelected, pagePartiallySelected, areaTitles, areaMessages,
-  specFields, frameTypes, frameClasses, cfaChoices, equipmentKinds,
+  specFields, frameTypes, frameClasses, cfaChoices, equipmentKinds, equipmentKindLabels,
   specKind, specChoices, specDisplay, apiPath, loadWorkspacePage,
   libraryFilterParams, formListPath, loadAll, loadRelatedEquipment, equipmentChoiceMessage,
   equipmentChoices, profileChoices, profileChoiceMessage, loadRelatedProfiles, loadCapabilities,
@@ -1602,18 +1617,19 @@ onBeforeUnmount(() => {
               </div>
             </div>
             <div v-if="activeArea === 'settings' && !viewingProjectAssets && !viewingProjectDatasets" class="apf-management-tabs" aria-label="设置类别">
-              <button v-for="(title, section) in { projects: '项目', equipment: '设备', 'capture-profiles': '拍摄设置' }"
-                :key="section" type="button" :aria-current="store.section === section ? 'page' : undefined"
+              <button v-for="(title, section) in { projects: '项目', equipment: '设备', 'equipment-setups': '使用组合' }"
+                :key="section" type="button" :aria-current="store.section === section || (section==='equipment-setups'&&store.section==='capture-profiles') ? 'page' : undefined"
                 @click="selectSection(section as WorkspaceSection)">{{ title }}</button>
             </div>
             <label class="apf-search">
               <i class="pi pi-search" aria-hidden="true"></i>
-              <input :value="store.query" aria-label="搜索" placeholder="搜索名称" :disabled="bulkDeleteBusy" @input="setQuery" />
+              <input :value="store.query" aria-label="搜索" placeholder="搜索名称" :disabled="bulkDeleteBusy||setupDirty" @input="setQuery" />
             </label>
-            <select v-if="store.section === 'projects' || store.section === 'equipment' || store.section === 'capture-profiles'"
-              v-model="statusFilter" aria-label="状态筛选">
+            <select v-if="store.section === 'projects' || store.section === 'equipment' || store.section === 'equipment-setups' || store.section === 'capture-profiles'"
+              v-model="statusFilter" :disabled="setupDirty" aria-label="状态筛选">
               <option value="active">启用</option><option value="archived">已归档</option><option value="all">全部</option>
             </select>
+            <label v-if="store.section==='equipment'">设备类别<select v-model="equipmentKindFilter" aria-label="设备类别筛选"><option value="">全部设备</option><option v-for="kind in equipmentKinds" :key="kind" :value="kind">{{equipmentKindLabels[kind]}}</option></select></label>
             <button v-if="isLibraryItemsView" ref="filterButton" type="button" :disabled="bulkDeleteBusy" :aria-expanded="filterPanelOpen" @click="filterPanelOpen=!filterPanelOpen">
               筛选<span v-if="activeFilterCount">（{{activeFilterCount}}）</span>
             </button>
@@ -1625,8 +1641,8 @@ onBeforeUnmount(() => {
               <button type="button" :aria-pressed="libraryViewMode==='simple'" @click="libraryViewMode='simple'">简约</button>
               <button type="button" :aria-pressed="libraryViewMode==='detail'" @click="libraryViewMode='detail'">细节</button>
             </div>
-            <button v-if="activeArea !== 'library' || viewingProjectAssets || viewingProjectDatasets" type="button" @click="loadRecords"><i class="pi pi-refresh" aria-hidden="true"></i><span>刷新</span></button>
-            <button v-if="store.section === 'projects' && !viewingProjectAssets" type="button" @click="openCreate('project')">新建项目</button>
+            <button v-if="activeArea !== 'library' || viewingProjectAssets || viewingProjectDatasets" type="button" :disabled="setupDirty" @click="loadRecords"><i class="pi pi-refresh" aria-hidden="true"></i><span>刷新</span></button>
+            <button v-if="store.section === 'projects' && !viewingProjectAssets && !viewingProjectDatasets" type="button" @click="openCreate('project')">新建项目</button>
             <button v-if="store.section === 'equipment'" type="button" @click="openCreate('equipment')">添加设备</button>
             <button v-if="store.section === 'capture-profiles'" type="button" @click="openCreate('capture-profile')">新建配置</button>
             <button v-if="store.section==='projects' && viewingProjectAssets" type="button" @click="toggleProjectAssetMode">{{addingProjectAssets?'查看已选资产':'添加素材'}}</button>
