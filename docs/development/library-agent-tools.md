@@ -72,7 +72,7 @@ apf tasks retry FAILED_TASK_ID --data '@retry.json'
 {"sources":[{"root_id":"science","path":"2026-10-25/M31"}],"storage_mode":"reference","dataset_name":"M31 night"}
 ```
 
-`retry.json` selects original task-item IDs: `{"item_ids":["FAILED_ITEM_UUID"]}`. Resume applies to service-interrupted tasks; selected retry applies to eligible failed or cancelled tasks/items. Task `report.registration.completed` is distinct from `content_status`, `metadata_status`, `preview_status` and asset-version `availability`. Registration alone does not mean managed originals or previews are ready.
+`retry.json` selects original task-item IDs: `{"item_ids":["FAILED_ITEM_UUID"]}`. Resume applies to service-interrupted tasks; selected retry applies to eligible failed or cancelled tasks/items. Task `report.registration.completed` is distinct from `content_status`, `metadata_status`, `preview_status` and asset-version `availability`. Registration alone does not mean managed originals or previews are ready. A `SOURCE_CHANGED` item error / `availability:changed` means the source changed between registration and reading/copying: confirm the intended current source and create a new import rather than blindly retrying or altering timestamps.
 
 The old single-photo client no longer hardcodes Light/subframe. Omitted classification keys use file facts/preset defaults. Supplied keys override the batch, including explicit null; supply both keys to classify the whole batch manually:
 
