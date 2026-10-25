@@ -152,4 +152,31 @@ describe('workspace async view boundaries',()=>{
   expect(vm.activeFilters).toEqual({roles:['raw']})
   expect(wrapper.findAll('.apf-assets-table tbody tr')).toHaveLength(0)
  })
+ it('does not navigate back to a calibration group created after leaving its view',async()=>{
+  const dark={...asset,name:'Master dark',role:'calibration',classification:{frame_class:'masterframe',frame_type:'dark'}}
+  const group={id:id(20),name:'New calibration',notes:null,status:'active',revision:1,current_version_id:id(21),member_count:1,created_at:timestamp,updated_at:timestamp}
+  const version={id:id(21),dataset_id:group.id,version_number:1,created_at:timestamp,calibration_defaults:{},members:[{
+   id:id(22),dataset_version_id:id(21),asset_version_id:assetVersion.id,position:0,relative_path:null,calibration_overrides:{},asset:dark,version:assetVersion
+  }]}
+  let persisted=false
+  get.mockImplementation(async(path:string)=>{
+   if(path.endsWith('/capabilities'))return cap
+   if(path.includes('/library/assets'))return page([dark])
+   if(path.includes('/library/items'))return page(persisted?[{entry_type:'dataset',dataset:group,version,matching_member_count:1,import_issue:null}]:[])
+   if(path.endsWith('/versions/'+version.id))return version
+   return page([])
+  })
+  await flushPromises();await click('校准库');await click('从已有校准照片创建组')
+  const form=wrapper.get('form[aria-label="创建校准组"]')
+  await form.get('input[required]').setValue(group.name)
+  await form.get('input[type="checkbox"]').setValue(true)
+  let resolveCreate!:(value:unknown)=>void
+  send.mockImplementationOnce(()=>new Promise(resolve=>{resolveCreate=resolve}))
+  await form.trigger('submit');await flushPromises()
+  await click('全部素材')
+  persisted=true;resolveCreate(group);await flushPromises()
+  expect(wrapper.get('h1').text()).toBe('素材库')
+  const vm=wrapper.getComponent(Workspace).vm as unknown as {activeDataset:unknown}
+  expect(vm.activeDataset).toBeUndefined()
+ })
 })

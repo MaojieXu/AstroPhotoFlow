@@ -6,12 +6,13 @@ import type {WorkspaceContext} from './Workspace.vue'
 import WorkspaceRecords from './WorkspaceRecords.vue'
 
 const context=inject<WorkspaceContext>('workspace')!
+let active=true
 const creating=ref(false),loading=ref(false),saving=ref(false)
 const photos=ref<Asset[]>([]),chosen=ref<string[]>([])
 const name=ref(''),notes=ref(''),error=ref(''),frameType=ref('')
 const visiblePhotos=computed(()=>photos.value.filter(photo=>!frameType.value||photo.classification?.frame_type===frameType.value))
 watch(()=>Boolean(creating.value&&(name.value||notes.value||chosen.value.length)),value=>{context.calibrationDirty.value=value})
-onBeforeUnmount(()=>{context.calibrationDirty.value=false})
+onBeforeUnmount(()=>{active=false;context.calibrationDirty.value=false})
 async function begin(){
   creating.value=true;loading.value=true;error.value='';photos.value=[];chosen.value=[];name.value='';notes.value=''
   try{
@@ -25,8 +26,10 @@ async function create(){
   saving.value=true;error.value=''
   try{
     const created=await assetApi.send('/astrophotoflow/api/v1/datasets',datasetSchema,'POST',{name:name.value,notes:notes.value||null,asset_version_ids:chosen.value})
+    if(!active)return
     creating.value=false
     await context.loadRecords()
+    if(!active)return
     const row=context.rows.value.find(row=>row.id===created.id)
     if(row)await context.openDataset(row)
   }catch(cause){error.value=cause instanceof Error?cause.message:'校准组创建失败。'}finally{saving.value=false}
