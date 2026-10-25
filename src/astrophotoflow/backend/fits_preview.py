@@ -56,8 +56,13 @@ def _rgb_channel_first(header) -> bool:
         return True
     return (
         not axis3
-        and str(header.get("CTYPE1", "")).strip().upper().startswith("RA")
-        and str(header.get("CTYPE2", "")).strip().upper().startswith("DEC")
+        and (
+            str(header.get("PROGRAM", "")).strip().upper().startswith("PIXINSIGHT ")
+            or (
+                str(header.get("CTYPE1", "")).strip().upper().startswith("RA")
+                and str(header.get("CTYPE2", "")).strip().upper().startswith("DEC")
+            )
+        )
     )
 
 

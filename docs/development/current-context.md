@@ -6,7 +6,7 @@
 
 - 项目 Python：`.artifacts/venvs/dev`，依赖沿用根 uv.lock。
 - 本机变量：根 `.env`，模板 `.env.example`；由 uv 显式加载。
-- 当前 workspace：`.artifacts/workspaces/dev`，使用空的新数据库；配置为该目录的 config.toml。
+- 当前 workspace：`.artifacts/workspaces/dev`，创建时使用新数据库，现保留用户手动导入的数据；配置为该目录的 config.toml。
 - 前端／服务：`http://127.0.0.1:31388/` 和 `127.0.0.1:31390`。
 - CPU runtime：复用正常用户 LocalAppData 下的 AstroPhotoFlow/runtime/0.1.0，不再依赖旧 test/ 中的解释器或 ComfyUI 源码。
 - MCP：开发环境 uv 加载项目 `.env` 后运行 `apf mcp`；其他 Codex/MCP 设置保持不变。
@@ -20,3 +20,5 @@
 schema 仍为 `0006_library_trash_cleanup_state`，MCP 严格为五工具。素材行为见[架构说明](../architecture/assets.md)，CLI/MCP 见[接口说明](../api/README.md)。Agent、软件适配、完整工作流、增强数据库和结果比较仍未实现。
 
 原工程重构验收见[历史记录](remake-acceptance.md)，本轮配置和运行收尾的实际证据见[配置管理验收](config-management-acceptance.md)。不自动合并 dev/main 或推送远端，不进行前端自动点击。
+
+最新预览修复：PixInsight 无 CTYPE3 的三平面 FITS 识别已补齐，已有库无需重导入即可回填预览；资产、版本、分组和人工参数保持。验证见 [PixInsight 预览修复](pixinsight-preview-fix.md)。

@@ -41,7 +41,7 @@ def test_first_supported_hdu_is_fixed_when_preview_generation_fails(tmp_path):
         create_preview(path, parsed["selected_hdu"], "mono", {}, 100)
 
 
-def test_only_explicitly_labeled_rgb_channel_axis_is_supported(tmp_path):
+def test_explicitly_labeled_rgb_channel_axis_is_supported(tmp_path):
     path = tmp_path / "rgb.fits"
     primary = fits.PrimaryHDU()
     rgb = fits.ImageHDU(np.ones((3, 20, 30), dtype=np.float32))
@@ -53,6 +53,37 @@ def test_only_explicitly_labeled_rgb_channel_axis_is_supported(tmp_path):
     assert parsed["hdus"][0]["supported_kind"] is None
     image, _ = create_preview(path, 1, "rgb", {}, 100)
     assert image.size == (30, 20)
+
+
+@pytest.mark.parametrize("dtype", [np.float32, np.int32])
+def test_pixinsight_planar_rgb_without_ctype3_has_a_color_thumbnail(tmp_path, dtype):
+    path = tmp_path / "pixinsight.fits"
+    data = np.stack([np.full((20, 30), value, dtype=dtype) for value in (0, 100, 200)])
+    hdu = fits.PrimaryHDU(data)
+    hdu.header["PROGRAM"] = "PixInsight 1.9.4"
+    hdu.header["BAYERPAT"] = "RGGB"
+    hdu.writeto(path)
+    original = path.read_bytes()
+    parsed = inspect_fits(path)
+    assert parsed["selected_hdu"] == 0
+    assert parsed["hdus"][0]["supported_kind"] == "rgb"
+    image, display = create_preview(path, 0, "rgb", {"cfa_pattern": "RGGB"}, 100)
+    assert image.size == (30, 20)
+    red, green, blue = image.getpixel((10, 10))
+    assert red < green < blue
+    assert display["cfa_pattern"] is None
+    assert path.read_bytes() == original
+
+
+@pytest.mark.parametrize("program,axis3", [("", ""), ("Other Program", ""), ("PixInsight 1.9.4", "FREQ")])
+def test_unidentified_or_explicit_scientific_cube_is_not_assumed_rgb(tmp_path, program, axis3):
+    path = tmp_path / "cube.fits"
+    hdu = fits.PrimaryHDU(np.ones((3, 20, 30), dtype=np.float32))
+    hdu.header["PROGRAM"] = program
+    if axis3:
+        hdu.header["CTYPE3"] = axis3
+    hdu.writeto(path)
+    assert inspect_fits(path)["selected_hdu"] is None
 
 
 def test_table_hdu_before_image_is_not_selected_as_a_supported_image(tmp_path):

@@ -17,7 +17,7 @@ from sqlalchemy import select
 from xisf import XISF
 
 from astrophotoflow.backend.api import create_app
-from astrophotoflow.backend.models import Asset, AssetTask, AssetTaskItem, Preview
+from astrophotoflow.backend.models import Asset, AssetTask, AssetTaskItem, FitsHduMetadata, Preview
 from astrophotoflow.backend.ingestion import backfill_missing_previews, mark_interrupted_tasks, process_task
 from astrophotoflow.backend import ingestion
 from astrophotoflow.backend.schema import database_lock, upgrade_database
@@ -582,6 +582,54 @@ def test_non_bayer_cfa_stays_registered_and_reports_preview_unsupported(tmp_path
         assert restored.json()["classification"]=={"frame_class":"subframe","frame_type":None}
     finally:
         client.__exit__(None,None,None)
+        app.state.database.close()
+
+
+def test_backfill_recognizes_previously_unsupported_pixinsight_rgb_without_reimport(tmp_path, monkeypatch):
+    from astrophotoflow.backend import fits_preview
+
+    root = tmp_path / "science"
+    root.mkdir()
+    path = root / "color.fits"
+    hdu = fits.PrimaryHDU(np.stack([np.full((20, 30), value, dtype=np.float32) for value in (0, 100, 200)]))
+    hdu.header["PROGRAM"] = "PixInsight 1.9.3"
+    hdu.header["BAYERPAT"] = "RGGB"
+    hdu.header["EXPTIME"] = 60
+    hdu.writeto(path)
+    original = path.read_bytes()
+    settings, app, client = make_client(tmp_path, (ImportRoot("science", root),))
+    try:
+        with monkeypatch.context() as legacy:
+            legacy.setattr(fits_preview, "_rgb_channel_first", lambda header: False)
+            accepted = start_import(client, "color.fits", storage_mode="managed")
+        assert accepted.status_code == 202
+        before = client.get("/api/v1/library/assets", headers=AUTH).json()["items"][0]
+        asset_id, version_id = before["id"], before["current_version"]["id"]
+        endpoint = f"/api/v1/library/assets/{asset_id}/versions/{version_id}/previews/thumbnail"
+        assert client.get(endpoint, headers=AUTH).status_code == 404
+        with app.state.database.read_session() as session:
+            stored_hdu = session.scalar(select(FitsHduMetadata).where(FitsHduMetadata.asset_version_id == version_id))
+            hdu_id = stored_hdu.id
+            assert stored_hdu.supported_kind is None and not stored_hdu.is_selected
+        assert backfill_missing_previews(app.state.database, settings) == {"generated": 1, "failed": 0}
+        after = client.get(f"/api/v1/library/assets/{asset_id}", headers=AUTH).json()
+        for key in ("id", "revision", "current_version_id", "parameters", "classification", "notes", "value_sources"):
+            assert after[key] == before[key]
+        assert after["parameters"]["exposure_seconds"] == 0
+        response = client.get(endpoint, headers=AUTH)
+        assert response.status_code == 200
+        with Image.open(BytesIO(response.content)) as image:
+            assert image.mode == "RGB" and max(image.size) <= 100
+        with app.state.database.read_session() as session:
+            stored_hdu = session.get(FitsHduMetadata, hdu_id)
+            assert stored_hdu.supported_kind == "rgb" and stored_hdu.is_selected
+            preview_id = session.scalar(select(Preview.id).where(Preview.asset_version_id == version_id))
+        assert backfill_missing_previews(app.state.database, settings) == {"generated": 0, "failed": 0}
+        with app.state.database.read_session() as session:
+            assert session.scalar(select(Preview.id).where(Preview.asset_version_id == version_id)) == preview_id
+        assert path.read_bytes() == original
+    finally:
+        client.__exit__(None, None, None)
         app.state.database.close()
 
 

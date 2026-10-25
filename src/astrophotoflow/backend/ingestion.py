@@ -478,7 +478,21 @@ def backfill_missing_previews(database: Database, settings: Settings) -> dict[st
                     _save_task_stretch(database, task_id, group_key, display, version_id)
             elif metadata.get("format") == "fits":
                 if selected is None:
-                    raise ValueError("FITS 没有已选中的图像 HDU。")
+                    with database.read_session() as session:
+                        version = session.get(AssetVersion, version_id)
+                        asset = session.get(Asset, version.asset_id)
+                        parameters = dict(asset.parameters or {})
+                    inspected = inspect_fits(path, parameters.get("cfa_pattern"))
+                    selected_data = next((row for row in inspected["hdus"] if row["is_selected"]), None)
+                    if selected_data is None:
+                        raise ValueError("FITS 没有已选中的图像 HDU。")
+                    with database.write_session() as session:
+                        selected = session.execute(select(FitsHduMetadata).where(
+                            FitsHduMetadata.asset_version_id == version_id,
+                            FitsHduMetadata.hdu_index == selected_data["hdu_index"],
+                        )).scalar_one()
+                        for key, value in selected_data.items():
+                            setattr(selected, key, value)
                 if selected.supported_kind in {"xtrans", "quad_bayer"}:
                     continue
                 with database.read_session() as session:
