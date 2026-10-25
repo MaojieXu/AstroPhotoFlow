@@ -346,6 +346,19 @@ def remove_library_entries(body: LibraryEntriesRemove, session: base.WriteSessio
     return {"removed_count": added}
 
 
+def _trash_cleanup_status(session, removal: LibraryEntryRemoval) -> str:
+    if removal.cleaned_paths or removal.cleaned_asset_ids:
+        return "partial"
+    if removal.entry_type == "dataset":
+        for asset_id in removal.member_asset_ids or []:
+            child = session.get(LibraryEntryRemoval, ("asset", asset_id))
+            if child is not None and _trash_cleanup_status(session, child) == "partial":
+                return "partial"
+    elif any(not Path(path).is_file() for path in (removal.pending_paths or [])):
+        return "partial"
+    return "trash"
+
+
 def _trash_item(session, removal: LibraryEntryRemoval, source_dataset_id: str | None = None) -> dict:
     row = session.get(Asset if removal.entry_type == "asset" else Dataset, removal.entry_id)
     name = row.name if row is not None else removal.entry_id
@@ -365,7 +378,7 @@ def _trash_item(session, removal: LibraryEntryRemoval, source_dataset_id: str | 
                   for group in asset_groups]
     return LibraryTrashItemOut(
         entry_type=removal.entry_type, id=UUID(removal.entry_id), name=name, removed_at=base._utc(removal.removed_at),
-        revision=revision, current_version_id=UUID(current_version_id) if current_version_id else None, cleanup_status=removal.cleanup_status,
+        revision=revision, current_version_id=UUID(current_version_id) if current_version_id else None, cleanup_status=_trash_cleanup_status(session, removal),
         cleanup_error=removal.cleanup_error, photo_count=photo_count,
         member_asset_ids=[UUID(asset_id) for asset_id in member_asset_ids], groups=groups, source_dataset_id=UUID(source_dataset_id) if source_dataset_id else None,
     ).model_dump()
@@ -404,7 +417,8 @@ def library_trash(session: base.ReadSession, limit: base.Limit = 50, offset: bas
 def restore_library_trash(body: LibraryTrashSelection, session: base.WriteSession):
     restored = 0
     restored_asset_ids = set()
-    for item in body.items:
+    # Keep parent removal records available while restoring their selected photos.
+    for item in sorted(body.items, key=lambda item: item.entry_type == "dataset"):
         removal = session.get(LibraryEntryRemoval, (item.entry_type, base._id(item.id)))
         source_dataset_id = base._id(item.source_dataset_id) if item.source_dataset_id else None
         source_group = session.get(LibraryEntryRemoval, ("dataset", source_dataset_id)) if source_dataset_id else None
@@ -412,7 +426,7 @@ def restore_library_trash(body: LibraryTrashSelection, session: base.WriteSessio
             removal = LibraryEntryRemoval(entry_type="asset", entry_id=base._id(item.id), removed_at=source_group.removed_at,
                 cleanup_status="trash", member_asset_ids=[], pending_paths=[], cleaned_paths=[], cleaned_asset_ids=[])
             removal.source_dataset_id = source_dataset_id
-        if removal is None or removal.cleanup_status != "trash":
+        if removal is None or _trash_cleanup_status(session, removal) != "trash":
             raise ApiError(409, "TRASH_STATE_CONFLICT", "该记录已清理或状态已变化，不能恢复。")
         row = session.get(Asset if item.entry_type == "asset" else Dataset, removal.entry_id)
         if row is None or row.revision != item.revision or base._utc(removal.removed_at) != base._utc(item.removed_at):
@@ -421,10 +435,6 @@ def restore_library_trash(body: LibraryTrashSelection, session: base.WriteSessio
             raise ApiError(409, "REVISION_CONFLICT", "照片版本已变化，请重新读取。")
         if isinstance(row, Dataset) and row.current_version_id != (base._id(item.current_version_id) if item.current_version_id else None):
             raise ApiError(409, "REVISION_CONFLICT", "数据集版本已变化，请重新读取。")
-        if item.entry_type == "dataset":
-            member_removals = [session.get(LibraryEntryRemoval, ("asset", asset_id)) for asset_id in (removal.member_asset_ids or [])]
-            if removal.cleaned_asset_ids or any(member is not None and member.cleanup_status != "trash" for member in member_removals):
-                raise ApiError(409, "TRASH_STATE_CONFLICT", "组内照片已有部分清理，不能恢复该组。")
         if source_dataset_id and item.entry_type == "asset":
             source_group = session.get(LibraryEntryRemoval, ("dataset", source_dataset_id))
             if source_group is None or removal.entry_id not in (source_group.member_asset_ids or []):
@@ -572,7 +582,7 @@ def library_trash_delete_preview(body: LibraryTrashSelection, request: Request, 
     asset_ids, versions, previews, refs, tasks, paths, managed_bytes = _trash_scope(session, request.app.state.settings, records)
     snapshot = {
         "items": [(r.entry_type, r.entry_id, r.removed_at.isoformat(), row.revision, getattr(row, "current_version_id", None),
-                   r.cleanup_status, tuple(sorted(r.pending_paths or [])), tuple(sorted(r.cleaned_paths or [])), tuple(sorted(r.member_asset_ids or [])), tuple(sorted(r.cleaned_asset_ids or [])))
+                   _trash_cleanup_status(session, r), tuple(sorted(r.pending_paths or [])), tuple(sorted(r.cleaned_paths or [])), tuple(sorted(r.member_asset_ids or [])), tuple(sorted(r.cleaned_asset_ids or [])))
                   for r, row in records],
         "assets": sorted((asset.id, asset.revision, asset.current_version_id) for asset in
                          session.scalars(select(Asset).where(Asset.id.in_(asset_ids))).all()) if asset_ids else [],
@@ -633,17 +643,25 @@ def library_trash_delete(body: LibraryTrashDelete, request: Request, session: ba
     # cleanup non-restorable until the operation either succeeds or proves that no path was removed.
     with request.app.state.database.write_session() as write:
         current_records = _selected_trash(write, body)
-        for removal, _ in current_records:
-            source_dataset_id = getattr(removal, "source_dataset_id", None)
-            if source_dataset_id and write.get(LibraryEntryRemoval, ("asset", removal.entry_id)) is None:
-                write.add(LibraryEntryRemoval(entry_type="asset", entry_id=removal.entry_id,
-                    dataset_version_id=removal.dataset_version_id, member_asset_ids=[], pending_paths=[], cleaned_paths=[],
-                    cleaned_asset_ids=[], cleanup_status="trash", cleanup_error=None, removed_at=removal.removed_at))
-                removal.source_dataset_id = source_dataset_id
         current_preview = library_trash_delete_preview(body, request, write)
         if current_preview["preview_fingerprint"] != body.preview_fingerprint:
             raise ApiError(409, "TRASH_PREVIEW_STALE", "清理范围已变化，请重新预览。")
-        for removal, _ in current_records:
+        asset_records = {}
+        for asset_id in asset_ids:
+            removal = write.get(LibraryEntryRemoval, ("asset", asset_id))
+            if removal is None:
+                source = next(removal for removal, _ in current_records if
+                    removal.entry_type == "asset" and removal.entry_id == asset_id or
+                    removal.entry_type == "dataset" and asset_id in (removal.member_asset_ids or []))
+                removal = LibraryEntryRemoval(entry_type="asset", entry_id=asset_id,
+                    dataset_version_id=source.dataset_version_id, member_asset_ids=[], pending_paths=[],
+                    cleaned_paths=[], cleaned_asset_ids=[], cleanup_status="trash", removed_at=source.removed_at)
+                write.add(removal)
+            asset_records[asset_id] = removal
+        current_records = [(asset_records[removal.entry_id] if removal.entry_type == "asset" else removal, row)
+                           for removal, row in current_records]
+        group_records = [removal for removal, _ in current_records if removal.entry_type == "dataset"]
+        for removal in [*asset_records.values(), *group_records]:
             if removal.entry_type == "asset":
                 pending = [str(path) for path in paths_by_asset.get(removal.entry_id, [])]
             else:
@@ -653,12 +671,16 @@ def library_trash_delete(body: LibraryTrashDelete, request: Request, session: ba
             removal.cleanup_status = "partial"
             removal.cleanup_error = None
 
+    removal_times = {asset_id: removal.removed_at for asset_id, removal in asset_records.items()}
     for asset_id in sorted(asset_ids):
         expected_versions = {version.id for version in versions if version.asset_id == asset_id}
         removed_paths = []
         asset_changed_projects, asset_changed_datasets = set(), set()
         try:
             with request.app.state.database.write_session() as write:
+                current_removal = write.get(LibraryEntryRemoval, ("asset", asset_id))
+                if current_removal is None or base._utc(current_removal.removed_at) != base._utc(removal_times[asset_id]):
+                    raise ApiError(409, "TRASH_PREVIEW_STALE", "照片已恢复或垃圾桶范围已变化，请重新预览。")
                 asset = write.get(Asset, asset_id)
                 if asset is not None and (asset.revision, asset.current_version_id) != asset_states[asset_id]:
                     raise ApiError(409, "TRASH_PREVIEW_STALE", "照片资料或版本已变化，请重新预览。")
@@ -792,12 +814,12 @@ def library_trash_delete(body: LibraryTrashDelete, request: Request, session: ba
                         removal.entry_type == "dataset" and removal.entry_id in selected_group_ids and asset_id in (removal.member_asset_ids or [])
                     ):
                         removal.cleaned_paths = list(dict.fromkeys([*(removal.cleaned_paths or []), *removed_paths]))
-                        removal.cleanup_status = "partial" if removal.cleaned_paths or removal.cleaned_asset_ids else "trash"
+                        removal.cleanup_status = _trash_cleanup_status(write, removal)
                         removal.cleanup_error = str(exc)
                 if stale_before_cleanup:
                     for removal, _ in records:
                         current = write.get(LibraryEntryRemoval, (removal.entry_type, removal.entry_id))
-                        if current and not current.cleaned_paths:
+                        if current and _trash_cleanup_status(write, current) == "trash":
                             current.cleanup_status = "trash"
                             current.cleanup_error = None
             if stale_before_cleanup:
@@ -814,6 +836,10 @@ def library_trash_delete(body: LibraryTrashDelete, request: Request, session: ba
                     dataset_removal = write.get(LibraryEntryRemoval, ("dataset", row.id))
                     dataset = write.get(Dataset, row.id)
                     original = next(item for item in body.items if item.entry_type == "dataset" and base._id(item.id) == row.id)
+                    if dataset_removal is None or base._utc(dataset_removal.removed_at) != base._utc(original.removed_at) or set(
+                        dataset_removal.member_asset_ids or []
+                    ) != remaining:
+                        raise ApiError(409, "TRASH_PREVIEW_STALE", "组已恢复或垃圾桶范围已变化，请重新预览。")
                     if dataset and (dataset.revision != original.revision + dataset_revision_deltas.get(row.id, 0) or
                                     dataset.current_version_id != (base._id(original.current_version_id) if original.current_version_id else None)):
                         raise ApiError(409, "TRASH_PREVIEW_STALE", "组版本已变化，请重新预览。")
@@ -857,14 +883,12 @@ def library_trash_delete(body: LibraryTrashDelete, request: Request, session: ba
                 with request.app.state.database.write_session() as write:
                     dataset_removal = write.get(LibraryEntryRemoval, ("dataset", row.id))
                     if dataset_removal:
-                        original_group = next(original for original, _ in records if original.entry_type == "dataset" and original.entry_id == row.id)
-                        changed_members = set(dataset_removal.member_asset_ids or []) != set(original_group.member_asset_ids or [])
-                        dataset_removal.cleanup_status = "partial" if dataset_removal.cleaned_paths or dataset_removal.cleaned_asset_ids or changed_members else "trash"
+                        dataset_removal.cleanup_status = _trash_cleanup_status(write, dataset_removal)
                         dataset_removal.cleanup_error = str(exc)
                     if stale_before_cleanup:
                         for selected_removal, _ in records:
                             current = write.get(LibraryEntryRemoval, (selected_removal.entry_type, selected_removal.entry_id))
-                            if current and not current.cleaned_paths:
+                            if current and _trash_cleanup_status(write, current) == "trash":
                                 current.cleanup_status = "trash"
                                 current.cleanup_error = None
                 if stale_before_cleanup:

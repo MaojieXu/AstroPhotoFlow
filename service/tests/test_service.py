@@ -4,6 +4,7 @@ from pathlib import Path
 from uuid import uuid4
 import json
 import sys
+from types import SimpleNamespace
 import pytest
 from alembic.autogenerate import compare_metadata
 from alembic import command
@@ -1233,11 +1234,13 @@ def test_trash_group_persists_database_cleanup_progress_and_retries_after_file_f
     asset_a, version_a = "00000000-0000-0000-0000-000000000001", "00000000-0000-0000-0000-000000000011"
     asset_b, version_b = "00000000-0000-0000-0000-000000000002", "00000000-0000-0000-0000-000000000012"
     dataset_id, dataset_version_id = "00000000-0000-0000-0000-000000000003", "00000000-0000-0000-0000-000000000013"
+    original = settings.data_dir.parent / "external-original.fit"
+    original.write_bytes(b"external original")
     path = settings.data_dir / "objects" / version_b / "source.fit"
     path.parent.mkdir(parents=True, exist_ok=True); path.write_bytes(b"managed")
     with database.write_session() as session:
         for asset_id, version_id, name, mode, location in (
-            (asset_a, version_a, "A reference.fit", "reference", "A reference.fit"),
+            (asset_a, version_a, "A reference.fit", "reference", str(original)),
             (asset_b, version_b, "B managed.fit", "managed", (Path("objects") / version_b / "source.fit").as_posix()),
         ):
             asset = Asset(id=asset_id, name=name, scope="shared", role="raw", status="active", revision=1,
@@ -1271,6 +1274,7 @@ def test_trash_group_persists_database_cleanup_progress_and_retries_after_file_f
     with database.read_session() as session:
         assert session.get(Asset, asset_a) is None
         assert session.get(LibraryEntryRemoval, ("dataset", dataset_id)).cleaned_asset_ids == [asset_a]
+    assert original.read_bytes() == b"external original"
     assert client.post("/api/v1/library/trash/restore", headers=auth(), json=selection).status_code == 409
     monkeypatch.setattr(Path, "unlink", original_unlink)
     latest_group = next(row for row in client.get("/api/v1/library/trash", headers=auth()).json()["items"] if row["id"] == dataset_id)
@@ -1284,6 +1288,7 @@ def test_trash_group_persists_database_cleanup_progress_and_retries_after_file_f
     assert finished.status_code == 200 and finished.json()["deleted_count"] == 1
     with database.read_session() as session:
         assert session.get(Dataset, dataset_id) is None and session.get(Asset, asset_b) is None
+    assert original.read_bytes() == b"external original"
 
 
 
@@ -1356,3 +1361,318 @@ def test_trash_group_deletes_multiple_members_without_self_revision_conflict(ser
     assert deleted.json()["deleted_count"]==2 and deleted.json()["deleted_entry_count"]==3 and deleted.json()["failed"]==[]
     with database.read_session() as session:
         assert session.get(Dataset,dataset_id) is None and all(session.get(Asset,asset_id) is None for asset_id in asset_ids)
+
+
+@pytest.fixture
+def trash_recovery_group(service):
+    settings, client, database = service
+    photos = []
+    gid, gvid = str(uuid4()), str(uuid4())
+    with database.write_session() as session:
+        for index in range(2):
+            aid = f"00000000-0000-4000-8000-{201 + index:012d}"
+            vid = str(uuid4())
+            raw = settings.data_dir / "objects" / vid / "source.fit"
+            thumb = settings.data_dir / "previews" / vid / "thumb.jpg"
+            raw.parent.mkdir(parents=True); raw.write_bytes(b"source")
+            thumb.parent.mkdir(parents=True); thumb.write_bytes(b"thumbnail")
+            asset = Asset(id=aid, name=f"{index}.fit", scope="shared", role="raw", status="active",
+                          revision=1, parameters={}, classification={})
+            session.add(asset); session.flush()
+            session.add(AssetVersion(id=vid, asset_id=aid, version_number=1, storage_mode="managed",
+                storage_location=raw.relative_to(settings.data_dir).as_posix(), availability="available"))
+            session.flush(); asset.current_version_id = vid
+            session.add(Preview(id=str(uuid4()), asset_version_id=vid, hdu_index=0, size="thumbnail",
+                width=1, height=1, storage_path=thumb.relative_to(settings.data_dir).as_posix(),
+                display_parameters={}, algorithm_version="test", status="available"))
+            photos.append(SimpleNamespace(id=aid, version_id=vid, raw=raw, thumb=thumb))
+        group = Dataset(id=gid, name="Recovery group", status="active", revision=1)
+        session.add(group); session.flush()
+        session.add(DatasetVersion(id=gvid, dataset_id=gid, version_number=1)); session.flush()
+        group.current_version_id = gvid
+        for position, photo in enumerate(photos):
+            session.add(DatasetMember(id=str(uuid4()), dataset_version_id=gvid,
+                                      asset_version_id=photo.version_id, position=position))
+    removed = client.request("DELETE", "/api/v1/library/items", headers=auth(), json={"items": [
+        {"entry_type": "dataset", "id": gid, "revision": 1, "current_version_id": gvid}]})
+    assert removed.status_code == 200, removed.text
+    return SimpleNamespace(settings=settings, client=client, database=database, photos=photos, id=gid)
+
+
+def trash_selection(row):
+    return {"items": [{key: row[key] for key in
+        ("entry_type", "id", "removed_at", "revision", "current_version_id", "source_dataset_id") if key in row}]}
+
+
+def test_trash_group_restore_ignores_paths_of_restored_and_independently_deleted_photo(trash_recovery_group, monkeypatch):
+    group = trash_recovery_group
+    client, database = group.client, group.database
+    removed, intact = group.photos
+    row = next(row for row in client.get("/api/v1/library/trash", headers=auth()).json()["items"] if row["id"] == group.id)
+    group_version_id = row["current_version_id"]
+    with database.read_session() as session:
+        member = session.scalar(select(DatasetMember).where(
+            DatasetMember.dataset_version_id == group_version_id, DatasetMember.asset_version_id == intact.version_id))
+        member_id, member_position = member.id, member.position
+    intact_bytes = (intact.raw.read_bytes(), intact.thumb.read_bytes())
+    selection = trash_selection(row)
+    preview = client.post("/api/v1/library/trash/delete-preview", headers=auth(), json=selection)
+    assert preview.status_code == 200, preview.text
+    unlink = Path.unlink
+    attempted = set()
+
+    def fail_first_file(path, *args, **kwargs):
+        if path in (removed.raw, intact.raw):
+            attempted.add(path)
+            raise PermissionError("controlled first-file lock")
+        return unlink(path, *args, **kwargs)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(Path, "unlink", fail_first_file)
+        failed = client.post("/api/v1/library/trash/delete", headers=auth(), json={
+            **selection, "preview_fingerprint": preview.json()["preview_fingerprint"]})
+    assert failed.status_code == 200, failed.text
+    assert failed.json()["deleted_count"] == 0 and failed.json()["deleted_file_count"] == 0
+    assert len(failed.json()["failed"]) == 2 and attempted == {removed.raw, intact.raw}
+    assert all(photo.raw.exists() and photo.thumb.exists() for photo in group.photos)
+
+    child = next(row for row in client.get(f"/api/v1/library/trash?group_id={group.id}", headers=auth()).json()["items"]
+                 if row["id"] == removed.id)
+    restored = client.post("/api/v1/library/trash/restore", headers=auth(), json=trash_selection(child))
+    assert restored.status_code == 200, restored.text
+    with database.read_session() as session:
+        parent = session.get(LibraryEntryRemoval, ("dataset", group.id))
+        assert parent.member_asset_ids == [intact.id]
+        assert str(removed.raw) in parent.pending_paths
+        assert parent.cleaned_paths == [] and parent.cleaned_asset_ids == []
+
+    removed_again = client.request("DELETE", "/api/v1/library/items", headers=auth(), json={"items": [{
+        "entry_type": "asset", "id": removed.id, "revision": child["revision"], "current_version_id": removed.version_id}]})
+    assert removed_again.status_code == 200, removed_again.text
+    row = next(row for row in client.get("/api/v1/library/trash", headers=auth()).json()["items"] if row["id"] == removed.id)
+    selection = trash_selection(row)
+    preview = client.post("/api/v1/library/trash/delete-preview", headers=auth(), json=selection)
+    assert preview.status_code == 200 and preview.json()["photo_count"] == 1, preview.text
+    deleted = client.post("/api/v1/library/trash/delete", headers=auth(), json={
+        **selection, "preview_fingerprint": preview.json()["preview_fingerprint"]})
+    assert deleted.status_code == 200, deleted.text
+    assert deleted.json()["deleted_count"] == 1 and deleted.json()["deleted_file_count"] == 2 and not deleted.json()["failed"]
+    assert not removed.raw.exists() and not removed.thumb.exists()
+
+    row = next(row for row in client.get("/api/v1/library/trash", headers=auth()).json()["items"] if row["id"] == group.id)
+    assert row["member_asset_ids"] == [intact.id] and row["cleanup_status"] == "trash"
+    restored = client.post("/api/v1/library/trash/restore", headers=auth(), json=trash_selection(row))
+    assert restored.status_code == 200, restored.text
+    assert client.get("/api/v1/library/trash", headers=auth()).json()["total"] == 0
+    with database.read_session() as session:
+        assert session.get(Asset, removed.id) is None
+        assert session.get(Asset, intact.id).current_version_id == intact.version_id
+        assert session.get(AssetVersion, intact.version_id).asset_id == intact.id
+        assert session.get(Dataset, group.id).current_version_id == group_version_id
+        member = session.get(DatasetMember, member_id)
+        assert (member.dataset_version_id, member.asset_version_id, member.position) == (
+            group_version_id, intact.version_id, member_position)
+    assert (intact.raw.read_bytes(), intact.thumb.read_bytes()) == intact_bytes
+
+
+def test_trash_partial_group_blocks_damaged_child_but_restores_intact_sibling(trash_recovery_group, monkeypatch):
+    group = trash_recovery_group
+    client, database = group.client, group.database
+    damaged, intact = group.photos
+    row = next(row for row in client.get("/api/v1/library/trash", headers=auth()).json()["items"] if row["id"] == group.id)
+    selection = trash_selection(row)
+    preview = client.post("/api/v1/library/trash/delete-preview", headers=auth(), json=selection).json()
+    unlink = Path.unlink
+    def fail(path, *args, **kwargs):
+        if path in (damaged.thumb, intact.raw):
+            raise PermissionError("controlled file lock")
+        return unlink(path, *args, **kwargs)
+    with monkeypatch.context() as patch:
+        patch.setattr(Path, "unlink", fail)
+        result = client.post("/api/v1/library/trash/delete", headers=auth(), json={
+            **selection, "preview_fingerprint": preview["preview_fingerprint"]})
+    assert result.status_code == 200 and len(result.json()["failed"]) == 2, result.text
+    assert not damaged.raw.exists() and intact.raw.exists() and intact.thumb.exists()
+    children = {row["id"]: row for row in client.get(f"/api/v1/library/trash?group_id={group.id}", headers=auth()).json()["items"]}
+    assert children[damaged.id]["cleanup_status"] == "partial"
+    assert children[intact.id]["cleanup_status"] == "trash"
+    with database.read_session() as session:
+        assert session.get(LibraryEntryRemoval, ("asset", damaged.id)).pending_paths
+    assert client.post("/api/v1/library/trash/restore", headers=auth(), json=trash_selection(children[damaged.id])).status_code == 409
+    assert client.post("/api/v1/library/trash/restore", headers=auth(), json=selection).status_code == 409
+    restored = client.post("/api/v1/library/trash/restore", headers=auth(), json=trash_selection(children[intact.id]))
+    assert restored.status_code == 200, restored.text
+    row = next(row for row in client.get("/api/v1/library/trash", headers=auth()).json()["items"] if row["id"] == group.id)
+    selection = trash_selection(row)
+    preview = client.post("/api/v1/library/trash/delete-preview", headers=auth(), json=selection).json()
+    finished = client.post("/api/v1/library/trash/delete", headers=auth(), json={
+        **selection, "preview_fingerprint": preview["preview_fingerprint"]})
+    assert finished.status_code == 200 and not finished.json()["failed"], finished.text
+    with database.read_session() as session:
+        assert session.get(Asset, damaged.id) is None and session.get(Dataset, group.id) is None
+        assert session.get(Asset, intact.id).current_version_id == intact.version_id
+    assert intact.raw.exists() and intact.thumb.exists()
+
+
+@pytest.mark.parametrize("remove_source", [False, True])
+def test_trash_child_intent_survives_interruption_and_restart(trash_recovery_group, monkeypatch, remove_source):
+    from astrophotoflow_service import stage2
+    from astrophotoflow_service.import_schemas import LibraryTrashDelete
+    group = trash_recovery_group
+    photo = group.photos[0]
+    client, database = group.client, group.database
+    child = client.get(f"/api/v1/library/trash?group_id={group.id}", headers=auth()).json()["items"][0]
+    selection = trash_selection(child)
+    preview = client.post("/api/v1/library/trash/delete-preview", headers=auth(), json=selection).json()
+    unlink = Path.unlink
+    def interrupt(path, *args, **kwargs):
+        if path == photo.raw:
+            if remove_source:
+                unlink(path, *args, **kwargs)
+            raise KeyboardInterrupt("controlled interruption")
+        return unlink(path, *args, **kwargs)
+    request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(database=database, settings=group.settings)))
+    with monkeypatch.context() as patch:
+        patch.setattr(Path, "unlink", interrupt)
+        with pytest.raises(KeyboardInterrupt), database.read_session() as session:
+            stage2.library_trash_delete(LibraryTrashDelete.model_validate({
+                **selection, "preview_fingerprint": preview["preview_fingerprint"]}), request, session)
+    with database.read_session() as session:
+        record = session.get(LibraryEntryRemoval, ("asset", photo.id))
+        assert set(record.pending_paths) == {str(photo.raw), str(photo.thumb)}
+        assert session.get(Asset, photo.id) is not None
+    restarted_app = create_app(group.settings, TOKEN)
+    try:
+        with TestClient(restarted_app) as restarted:
+            child = restarted.get(f"/api/v1/library/trash?group_id={group.id}", headers=auth()).json()["items"][0]
+            assert child["cleanup_status"] == ("partial" if remove_source else "trash")
+            selection = trash_selection(child)
+            restored = restarted.post("/api/v1/library/trash/restore", headers=auth(), json=selection)
+            assert restored.status_code == (409 if remove_source else 200), restored.text
+            if remove_source:
+                preview = restarted.post("/api/v1/library/trash/delete-preview", headers=auth(), json=selection).json()
+                deleted = restarted.post("/api/v1/library/trash/delete", headers=auth(), json={
+                    **selection, "preview_fingerprint": preview["preview_fingerprint"]})
+                assert deleted.status_code == 200 and not deleted.json()["failed"], deleted.text
+                assert not photo.thumb.exists()
+            else:
+                assert photo.raw.exists() and photo.thumb.exists()
+    finally:
+        restarted_app.state.database.close()
+
+
+def test_trash_child_restore_between_intent_and_cleanup_cancels_deletion(trash_recovery_group, monkeypatch):
+    from contextlib import contextmanager
+    from astrophotoflow_service import stage2
+    from astrophotoflow_service.import_schemas import LibraryTrashSelection
+    group = trash_recovery_group
+    photo = group.photos[0]
+    child = group.client.get(f"/api/v1/library/trash?group_id={group.id}", headers=auth()).json()["items"][0]
+    selection = trash_selection(child)
+    preview = group.client.post("/api/v1/library/trash/delete-preview", headers=auth(), json=selection).json()
+    write_session = group.database.write_session
+    restored = False
+    @contextmanager
+    def restore_after_intent():
+        nonlocal restored
+        with write_session() as session:
+            yield session
+        if not restored:
+            restored = True
+            with write_session() as session:
+                result = stage2.restore_library_trash(LibraryTrashSelection.model_validate(selection), session)
+                assert result["restored_count"] == 1
+    monkeypatch.setattr(group.database, "write_session", restore_after_intent)
+    response = group.client.post("/api/v1/library/trash/delete", headers=auth(), json={
+        **selection, "preview_fingerprint": preview["preview_fingerprint"]})
+    assert response.status_code == 409, response.text
+    assert photo.raw.exists() and photo.thumb.exists()
+    with group.database.read_session() as session:
+        assert session.get(Asset, photo.id).current_version_id == photo.version_id
+        assert session.get(LibraryEntryRemoval, ("asset", photo.id)) is None
+
+
+@pytest.mark.parametrize("remove_again", [False, True])
+def test_trash_group_restore_after_delete_intent_invalidates_old_request(trash_recovery_group, monkeypatch, remove_again):
+    from contextlib import contextmanager
+    from astrophotoflow_service import stage2
+    from astrophotoflow_service.import_schemas import LibraryEntriesRemove, LibraryTrashSelection
+    group = trash_recovery_group
+    children = group.client.get(f"/api/v1/library/trash?group_id={group.id}", headers=auth()).json()["items"]
+    restored = group.client.post("/api/v1/library/trash/restore", headers=auth(), json={
+        "items": [trash_selection(child)["items"][0] for child in children]})
+    assert restored.status_code == 200, restored.text
+    row = next(row for row in group.client.get("/api/v1/library/trash", headers=auth()).json()["items"] if row["id"] == group.id)
+    assert row["photo_count"] == 0
+    selection = trash_selection(row)
+    preview = group.client.post("/api/v1/library/trash/delete-preview", headers=auth(), json=selection).json()
+    assert preview["photo_count"] == 0
+    write_session = group.database.write_session
+    restored_after_intent = False
+
+    @contextmanager
+    def restore_after_intent():
+        nonlocal restored_after_intent
+        with write_session() as session:
+            yield session
+        if not restored_after_intent:
+            restored_after_intent = True
+            with write_session() as session:
+                result = stage2.restore_library_trash(LibraryTrashSelection.model_validate(selection), session)
+                assert result["restored_count"] == 1
+                if remove_again:
+                    stage2.remove_library_entries(LibraryEntriesRemove.model_validate({"items": [{
+                        "entry_type": "dataset", "id": group.id, "revision": row["revision"],
+                        "current_version_id": row["current_version_id"]}]}), session)
+
+    monkeypatch.setattr(group.database, "write_session", restore_after_intent)
+    response = group.client.post("/api/v1/library/trash/delete", headers=auth(), json={
+        **selection, "preview_fingerprint": preview["preview_fingerprint"]})
+    assert response.status_code == 409, response.text
+    assert response.json()["error"]["code"] == "TRASH_PREVIEW_STALE"
+    with group.database.read_session() as session:
+        assert session.get(Dataset, group.id).current_version_id == row["current_version_id"]
+        removal = session.get(LibraryEntryRemoval, ("dataset", group.id))
+        assert (removal is not None) == remove_again
+        assert set(session.scalars(select(DatasetMember.asset_version_id).where(
+            DatasetMember.dataset_version_id == row["current_version_id"])).all()) == {photo.version_id for photo in group.photos}
+    assert all(photo.raw.exists() and photo.thumb.exists() for photo in group.photos)
+
+
+@pytest.mark.parametrize("parent_first", [False, True])
+@pytest.mark.parametrize("individual_removal", [False, True])
+def test_trash_restores_parent_and_selected_child_in_either_order(trash_recovery_group, parent_first, individual_removal):
+    group = trash_recovery_group
+    photo = group.photos[0]
+    if individual_removal:
+        response = group.client.request("DELETE", "/api/v1/library/items", headers=auth(), json={"items": [{
+            "entry_type": "asset", "id": photo.id, "revision": 1, "current_version_id": photo.version_id}]})
+        assert response.status_code == 200, response.text
+    row = next(row for row in group.client.get("/api/v1/library/trash", headers=auth()).json()["items"] if row["id"] == group.id)
+    child = next(row for row in group.client.get(f"/api/v1/library/trash?group_id={group.id}", headers=auth()).json()["items"] if row["id"] == photo.id)
+    items = [trash_selection(row)["items"][0], trash_selection(child)["items"][0]]
+    response = group.client.post("/api/v1/library/trash/restore", headers=auth(), json={
+        "items": items if parent_first else items[::-1]})
+    assert response.status_code == 200, response.text
+    assert response.json()["restored_count"] == 2
+    assert group.client.get("/api/v1/library/trash", headers=auth()).json()["total"] == 0
+    with group.database.read_session() as session:
+        assert session.get(Dataset, group.id).current_version_id == row["current_version_id"]
+        assert set(session.scalars(select(DatasetMember.asset_version_id).where(
+            DatasetMember.dataset_version_id == row["current_version_id"])).all()) == {photo.version_id for photo in group.photos}
+        assert all(session.get(Asset, photo.id).current_version_id == photo.version_id for photo in group.photos)
+    assert all(photo.raw.exists() and photo.thumb.exists() for photo in group.photos)
+
+
+def test_trash_parent_selection_does_not_bypass_a_stale_child_revision(trash_recovery_group):
+    group = trash_recovery_group
+    row = next(row for row in group.client.get("/api/v1/library/trash", headers=auth()).json()["items"] if row["id"] == group.id)
+    child = group.client.get(f"/api/v1/library/trash?group_id={group.id}", headers=auth()).json()["items"][0]
+    stale_child = trash_selection(child)["items"][0]
+    stale_child["revision"] += 1
+    response = group.client.post("/api/v1/library/trash/restore", headers=auth(), json={
+        "items": [trash_selection(row)["items"][0], stale_child]})
+    assert response.status_code == 409, response.text
+    with group.database.read_session() as session:
+        assert set(session.get(LibraryEntryRemoval, ("dataset", group.id)).member_asset_ids) == {photo.id for photo in group.photos}
+    assert all(photo.raw.exists() and photo.thumb.exists() for photo in group.photos)
