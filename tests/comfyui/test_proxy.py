@@ -129,10 +129,25 @@ def test_proxy_whitelist_origin_headers_and_upstream_status(tmp_path, monkeypatc
             assert uploaded.status == 200
             assert (await uploaded.json())["received"] == 101 * 1024 * 1024
 
-            assert len(proxy.ROUTES) == 71
+            for base in (
+                "/library/assets/asset/versions/version/previews/display",
+                "/projects/project/asset-references/reference/previews/display",
+            ):
+                scheduled = await client.post("/api" + proxy.BASE_PATH + base, json={}, headers={"Origin": origin})
+                assert scheduled.status == 200
+                assert seen["path"] == "/api/v1" + base
+                assert seen["authorization"] == "Bearer server-only-token"
+                polled = await client.get("/api" + proxy.BASE_PATH + base + "/status", headers={"Origin": origin})
+                assert polled.status == 200
+                assert seen["path"] == "/api/v1" + base + "/status"
+                blocked = await client.post("/api" + proxy.BASE_PATH + base, json={}, headers={"Origin": "http://evil.invalid"})
+                assert blocked.status == 403
+
+            assert len(proxy.ROUTES) == 75
             assert all(
                 method == "GET" or (method == "POST" and path == "/datasets/{dataset_id}/versions")
                 or (method == "PATCH" and path == "/datasets/{dataset_id}/member-parameters")
+                or (method == "POST" and path in {"/library/assets/{asset_id}/versions/{version_id}/previews/display", "/projects/{project_id}/asset-references/{reference_id}/previews/display"})
                 for method, path, _ in proxy.ROUTES
                 if "/versions" in path or path.endswith("/previews/{size}")
             )
@@ -145,6 +160,7 @@ def test_proxy_whitelist_origin_headers_and_upstream_status(tmp_path, monkeypatc
                 and "/versions" in path
                 and path != "/datasets/{dataset_id}/versions"
                 and path != "/datasets/{dataset_id}/member-parameters"
+                and not (method == "POST" and path == "/library/assets/{asset_id}/versions/{version_id}/previews/display")
                 for method, path, _ in proxy.ROUTES
             )
         finally:

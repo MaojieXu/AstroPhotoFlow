@@ -328,7 +328,7 @@ def _fit_preview_rows(database: Database, settings: Settings, version_id: str, h
 def _save_preview(database: Database, settings: Settings, version_id: str, hdu_index: int, size: str, edge: int, image: Image.Image, display_parameters: dict | None = None) -> None:
     image.thumbnail((edge, edge), Image.Resampling.LANCZOS)
     preview_id = str(uuid4())
-    relative = Path("previews") / version_id / f"{PREVIEW_ALGORITHM_VERSION}-{hdu_index}-thumbnail.jpg"
+    relative = Path("previews") / version_id / f"{PREVIEW_ALGORITHM_VERSION}-{hdu_index}-{size}.jpg"
     final = settings.data_dir / relative
     final.parent.mkdir(parents=True, exist_ok=True)
     fd, temporary = tempfile.mkstemp(prefix=preview_id, suffix=".tmp", dir=final.parent)
@@ -454,23 +454,25 @@ def _backfill_stretch(database: Database, version_id: str, layout: str) -> tuple
     return (task_ids[0] if task_ids else None), group_key, None, None
 
 
-def _raw_image(path: Path) -> Image.Image:
+def _raw_image(path: Path, max_edge: int = 100) -> Image.Image:
     import rawpy
 
     with rawpy.imread(str(path)) as raw:
+        source_edge = max(raw.sizes.width, raw.sizes.height)
+        threshold = min(max_edge, source_edge)
         try:
             thumbnail = raw.extract_thumb()
             if thumbnail.format == rawpy.ThumbFormat.JPEG:
                 with Image.open(BytesIO(thumbnail.data)) as image:
-                    if max(image.size) >= 100:
+                    if max(image.size) >= threshold:
                         return ImageOps.exif_transpose(image).convert("RGB").copy()
             elif thumbnail.format == rawpy.ThumbFormat.BITMAP:
                 image = Image.fromarray(thumbnail.data)
-                if max(image.size) >= 100:
+                if max(image.size) >= threshold:
                     return image.convert("RGB").copy()
         except (rawpy.LibRawError, OSError, ValueError):
             pass
-        return Image.fromarray(raw.postprocess(half_size=True, output_bps=8, output_color=rawpy.ColorSpace.sRGB)).convert("RGB")
+        return Image.fromarray(raw.postprocess(half_size=source_edge // 2 >= max_edge, output_bps=8, output_color=rawpy.ColorSpace.sRGB)).convert("RGB")
 
 
 def backfill_missing_previews(database: Database, settings: Settings) -> dict[str, int]:
@@ -614,6 +616,7 @@ def _refresh_fits_metadata(database: Database, settings: Settings, item_id: str,
             "observed_parameters": parsed,
         }
         item.metadata_status = "failed" if error else "available"
+        item.preview_status = "pending"
         item.error = {"code": f"{category.upper()}_PARSE_FAILED", "message": error} if error else None
         item.updated_at = datetime.now(timezone.utc)
     return error

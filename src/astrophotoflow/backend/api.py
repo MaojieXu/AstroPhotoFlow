@@ -9,7 +9,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from .db import Database
 from .errors import ApiError
 from ..config import Settings
-from . import calibration, capture_profiles, datasets, equipment, imports, library, projects, setups, system, trash
+from . import calibration, capture_profiles, datasets, equipment, imports, library, projects, previews, setups, system, trash
 
 
 logger = logging.getLogger("astrophotoflow.service")
@@ -22,6 +22,7 @@ def create_app(settings: Settings, token: str) -> FastAPI:
     async def lifespan(app):
         with import_workers(settings) as workers:
             app.state.import_workers = workers
+            app.state.display_previews = previews.DisplayPreviews(app.state.database, settings, workers[1])
             yield
 
     app = FastAPI(lifespan=lifespan, title="AstroPhotoFlow Asset Service", version="1.0.0", docs_url=None, redoc_url=None)
@@ -64,7 +65,7 @@ def create_app(settings: Settings, token: str) -> FastAPI:
         logger.exception("request failed request_id=%s", getattr(request.state, "request_id", "unknown"))
         return _error_response(request, 500, "INTERNAL_ERROR", "服务发生未预期错误。", [])
 
-    for route_module in (system, projects, equipment, capture_profiles, setups, library, trash, imports, datasets, calibration):
+    for route_module in (system, projects, equipment, capture_profiles, setups, previews, library, trash, imports, datasets, calibration):
         app.include_router(route_module.router)
     return app
 

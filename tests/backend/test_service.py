@@ -1029,6 +1029,7 @@ def test_openapi_snapshot_matches_service_and_proxy_allowlist(service):
     )
     assert not any(
         method in {"POST", "PATCH", "PUT", "DELETE"} and "/library/assets/" in path and "/versions" in path
+        and not (method == "POST" and path == "/library/assets/{asset_id}/versions/{version_id}/previews/display")
         for method, path, _ in ROUTES
     )
 

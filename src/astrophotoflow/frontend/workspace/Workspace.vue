@@ -11,7 +11,7 @@ import { ApiClientError } from '../assets/client'
 import { assetApi } from '../assets/host-client'
 import type { ZodType } from 'zod'
 import { useWorkspaceStore, type WorkspaceSection } from './store'
-import DatasetEditor from './DatasetEditor.vue'
+import PhotoPreviewDialog, { type PreviewPhoto } from './PhotoPreviewDialog.vue'
 import ImportDialog from './ImportDialog.vue'
 import LibraryTrashDialog from './LibraryTrashDialog.vue'
 import { firstLevelImportFiles } from './folder-selection'
@@ -72,12 +72,12 @@ const progressRefreshToken = ref(0)
 const uploadProgress = ref<Record<string, { loaded: number; total: number }>>({})
 const watchedTaskIds = ref<string[]>([])
 type ImportTask = ReturnType<typeof taskSchema.parse>
-const datasetEditorId = ref<string>()
-const datasetPendingIds = ref<string[]>([])
 const activeDataset = ref<RecordData>()
 const outerLibraryState = ref<{query:string;offset:number;pageSize:10|20|50|'all';sort:{by:string;order:'asc'|'desc'};view:'simple'|'detail'}>()
 const restoringOuterLibraryState = ref(false)
 const previewUrls = ref<Record<string,string>>({})
+const photoPreview = ref<PreviewPhoto>()
+let photoPreviewRequest = 0
 const editorType = ref<EditorType>()
 const editingId = ref<string>()
 const draft = ref<RecordData>({})
@@ -412,7 +412,7 @@ async function loadThumbnails(items: RecordData[], generation: number) {
       const member = await previewMember(row)
       if (!member) continue
       const blob = await assetApi.getBlob(
-        '/astrophotoflow/api/v1/library/assets/' + member.asset.id + '/versions/' + member.version.id + '/previews/thumbnail'
+        photoPreviewBase(row, member) + '/thumbnail'
       )
       const url = URL.createObjectURL(blob)
       if (generation !== loadGeneration) URL.revokeObjectURL(url)
@@ -422,6 +422,24 @@ async function loadThumbnails(items: RecordData[], generation: number) {
     }
   }
 }
+
+function photoPreviewBase(row: RecordData, member: {asset: Asset; version: RecordData}) {
+  return row.project_id && row.asset_version_id
+    ? '/astrophotoflow/api/v1/projects/' + row.project_id + '/asset-references/' + row.id + '/previews'
+    : '/astrophotoflow/api/v1/library/assets/' + member.asset.id + '/versions/' + member.version.id + '/previews'
+}
+async function openPhotoPreview(row: RecordData) {
+  const current = ++photoPreviewRequest
+  if (!await waitForInlineSave()) return
+  try {
+    const member = await previewMember(row)
+    if (current === photoPreviewRequest && member) photoPreview.value = {
+      assetId: member.asset.id, versionId: member.version.id, title: member.asset.name,
+      basePath: photoPreviewBase(row, member)
+    }
+  } catch (cause) { if (current === photoPreviewRequest) error.value = presentError(cause) }
+}
+function closePhotoPreview() { photoPreviewRequest++; photoPreview.value = undefined }
 
 async function previewMember(row: RecordData): Promise<{asset: Asset; version: RecordData}|undefined> {
   if (row.version?.members) {
@@ -467,8 +485,6 @@ async function selectSection(section: WorkspaceSection) {
   leaveDatasetContext()
   editorType.value = undefined
   editingId.value = undefined
-  datasetEditorId.value = undefined
-  datasetPendingIds.value = []
   viewingProjectAssets.value = false
   viewingProjectDatasets.value = false
   addingProjectAssets.value = false
@@ -497,8 +513,6 @@ async function selectArea(area: WorkspaceArea) {
   leaveDatasetContext()
   editorType.value = undefined
   editingId.value = undefined
-  datasetEditorId.value = undefined
-  datasetPendingIds.value = []
   viewingProjectAssets.value = false
   viewingProjectDatasets.value = false
   addingProjectAssets.value = false
@@ -589,13 +603,6 @@ function importTaskCompleted(taskId: string) {
   clearBulkSelection()
   void loadRecords()
 }
-function datasetInlineSaving(active:boolean){savingInline.value=Math.max(0,savingInline.value+(active?1:-1))}
-function datasetInlineFailure(message:string){
-  const key='dataset-editor:'+datasetEditorId.value
-  if(message)inlineSaveFailures.value={...inlineSaveFailures.value,[key]:message}
-  else clearInlineSaveFailure(key)
-}
-
 function updateUploadProgress(taskId: string, _index: number, loaded: number, total: number) {
   uploadProgress.value = { ...uploadProgress.value, [taskId]: { loaded, total } }
 }
@@ -961,11 +968,6 @@ async function performBinSave(row: RecordData, value: string | number | null) {
   }
 }
 
-function editDataset(row: RecordData) {
-  datasetEditorId.value = row.dataset_id ?? row.dataset?.id ?? row.id
-  datasetPendingIds.value = []
-}
-
 async function openDataset(row:RecordData){
   const context={query:store.query,offset:store.offset,pageSize:store.pageSize,sort:{...librarySort.value},view:libraryViewMode.value}
   if(!await waitForInlineSave())return
@@ -1013,34 +1015,11 @@ async function closeDataset(){
   await loadRecords()
 }
 
-function datasetSaved() {
-  datasetEditorId.value = undefined
-  datasetPendingIds.value = []
-  void datasetUpdated()
-}
-
-async function datasetUpdated(){
-  if(activeDataset.value){
-    const current=activeDataset.value
-    const generation=++datasetRefreshGeneration
-    const dataset=await assetApi.get('/astrophotoflow/api/v1/datasets/'+current.id,datasetSchema)
-    if(generation!==datasetRefreshGeneration||!isDatasetMembersView.value||activeDataset.value?.id!==current.id)return
-    activeDataset.value={...dataset}
-  }
-  await loadRecords()
-}
-
 async function calibrationUpdated(dataset:RecordData){
   if(activeDataset.value?.id===dataset.id){
     activeDataset.value={...dataset}
     await loadRecords()
   }
-}
-
-function closeDatasetEditor(){
-  clearInlineSaveFailure('dataset-editor:'+datasetEditorId.value)
-  datasetEditorId.value=undefined
-  datasetPendingIds.value=[]
 }
 
 async function addSelectedAsset() {
@@ -1559,7 +1538,7 @@ const workspaceContext = {
   folderPicker, importMenuOpen, importCreatesDataset, importDatasetName, libraryViewMode,
   librarySort, bulkSelectMode, bulkSelection, bulkDeleteBusy, bulkDeleteNotice,
   bulkConfirmOpen, bulkConfirmRows, trashOpen, progressRefreshToken, uploadProgress,
-  watchedTaskIds, datasetEditorId, datasetPendingIds, activeDataset, outerLibraryState,
+  watchedTaskIds, activeDataset, outerLibraryState,
   restoringOuterLibraryState, previewUrls, editorType, editingId, draft,
   originalDraft, saving, savingInline, inlineSaveFailures, inlineSaveFailure,
   relatedEquipment, relatedEquipmentLoading, relatedEquipmentError, relatedEquipmentReady, relatedProfiles,
@@ -1570,10 +1549,10 @@ const workspaceContext = {
   specKind, specChoices, specDisplay, apiPath, loadWorkspacePage,
   libraryFilterParams, formListPath, loadAll, loadRelatedEquipment, equipmentChoiceMessage,
   equipmentChoices, profileChoices, profileChoiceMessage, loadRelatedProfiles, loadCapabilities,
-  loadRecords, loadThumbnails, previewMember, presentError, errorText,
+  loadRecords, loadThumbnails, previewMember, openPhotoPreview, presentError, errorText,
   waitForInlineSave, selectSection, selectArea, startImport, applyFilters,
-  filesChosen, foldersChosen, importSubmitted, importTaskCompleted, importRegistrationCompleted, datasetInlineSaving,
-  datasetInlineFailure, updateUploadProgress, uploadTaskProgress, uploadTaskLabel, refreshLibrary,
+  filesChosen, foldersChosen, importSubmitted, importTaskCompleted, importRegistrationCompleted,
+  updateUploadProgress, uploadTaskProgress, uploadTaskLabel, refreshLibrary,
   saveInlineField, selectedFieldSave, selectedParameterSave, selectedBinSave, selectedProfileSave,
   syncEditingDraft, editorRow, saveEditorInline, saveEditorBin, saveEditorParameterGroup,
   saveEditorProjectProfiles, performInlineFieldSave, saveRowField, saveDatasetParameter, saveDatasetClassification,
@@ -1581,8 +1560,8 @@ const workspaceContext = {
   binEditChoices, datasetBinChoices, datasetRawValue, datasetParameterRaw, parameterModeValue,
   parameterModeDisplay, captureProfileModeDisplay, displayTemperature, datasetTemperature, inlineFailureKey,
   editorInlineFailureKey, setInlineSaveFailure, clearInlineSaveFailure, finishInlineSave, saveBin,
-  performBinSave, editDataset, openDataset, leaveDatasetContext, closeDataset,
-  datasetSaved, datasetUpdated, calibrationUpdated, closeDatasetEditor, addSelectedAsset, removeSelectedAssetReference,
+  performBinSave, openDataset, leaveDatasetContext, closeDataset,
+  calibrationUpdated, addSelectedAsset, removeSelectedAssetReference,
   addSelectedDataset, removeSelectedDatasetReference, setQuery, bulkKey, clearBulkSelection,
   toggleLibrarySort, sortAria, sortArrow, toggleBulkSelection, togglePageSelection,
   enterBulkSelectMode, leaveBulkSelectMode, removeSelectedLibraryEntries, confirmRemoveSelectedLibraryEntries, onLibraryRowClick,
@@ -1628,7 +1607,6 @@ onBeforeUnmount(() => {
               <button v-else-if="viewingProjectAssets || viewingProjectDatasets" type="button" @click="leaveProjectAssets">← 返回项目</button>
               <h1>{{ activeDataset ? '素材库 / '+activeDataset.name : activeArea === 'library' ? '素材库' : (viewingProjectAssets ? '项目资产' : viewingProjectDatasets ? '项目数据集' : '设置') }}</h1>
               <span v-if="activeDataset" class="apf-state">图像组 · {{activeDataset.version?.members?.length??activeDataset.member_count??0}} 张</span>
-              <button v-if="activeDataset" type="button" @click="editDataset(activeDataset)">管理成员</button>
               <div v-if="isLibraryItemsView" class="apf-heading-actions">
                 <template v-if="bulkSelectMode">
                   <button type="button" :disabled="bulkDeleteBusy||bulkSelection.size===0||savingInline>0||Boolean(inlineSaveFailure)" @click="removeSelectedLibraryEntries">{{bulkDeleteBusy?'删除中…':'删除'}}</button>
@@ -1692,6 +1670,7 @@ onBeforeUnmount(() => {
           <p>{{ areaMessages[activeArea] }}</p>
         </section>
     </main>
+      <PhotoPreviewDialog :photo="photoPreview" @close="closePhotoPreview" />
       <LibraryTrashDialog :open="trashOpen" @close="trashOpen=false" @changed="refreshLibrary" />
       <div v-if="bulkConfirmOpen" class="apf-trash-confirm-backdrop" role="presentation" @click.self="bulkConfirmOpen=false">
         <section class="apf-trash-confirm" role="alertdialog" aria-modal="true" aria-labelledby="bulk-trash-confirm-title">
@@ -1702,7 +1681,6 @@ onBeforeUnmount(() => {
         </section>
       </div>
       <ImportDialog :open="importDialogOpen" :files="importFiles" :create-dataset="importCreatesDataset" :dataset-name="importDatasetName" @close="importDialogOpen=false" @submitted="importSubmitted" @upload-progress="updateUploadProgress" @upload-failed="progressRefreshToken++" />
-      <DatasetEditor v-if="datasetEditorId" :dataset-id="datasetEditorId" :pending-asset-version-ids="datasetPendingIds" @close="closeDatasetEditor" @saved="datasetSaved" @updated="datasetUpdated" @saving="datasetInlineSaving" @failure="datasetInlineFailure" />
   </section>
 </template>
 
@@ -1727,7 +1705,7 @@ onBeforeUnmount(() => {
 .apf-assets-table td strong,.apf-assets-table td small { display:block; }
 .apf-assets-table small { color:var(--descrip-text,#999); }
 .apf-assets-table .apf-note-cell { min-width:140px; max-width:280px; white-space:pre-wrap; overflow-wrap:anywhere; }
-.apf-assets-table .apf-thumb { display:flex; align-items:center; justify-content:center; width:100px; height:64px; overflow:hidden; border-radius:8px; background:var(--comfy-menu-secondary-bg,#292929); cursor:default; }
+.apf-assets-table .apf-thumb { display:flex; align-items:center; justify-content:center; width:100px; height:64px; overflow:hidden; border-radius:8px; background:var(--comfy-menu-secondary-bg,#292929); cursor:pointer; border:0; padding:0; color:inherit; }
 .apf-assets-table .apf-thumb img { width:100%; height:100%; object-fit:contain; }
 .apf-dataset-editor { z-index:6; }
 .apf-nav { display:flex; flex:0 0 48px; flex-direction:column; align-items:center; gap:6px; padding:8px 4px; border-right:1px solid var(--border-color,#4e4e4e); background:var(--comfy-menu-bg,#202124); }
