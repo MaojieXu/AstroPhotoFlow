@@ -75,4 +75,6 @@ DatasetVersion.calibration_defaults 和 DatasetMember.calibration_overrides 中�
 | 基线与用户抉择 | 已确认 | 本文件及当前 Goal |
 | workspace 插件隔离、导入并发配置 | 基础实现通过 | workbench/comfyui 19 项通过；复用/隔离补充 3 项通过 |
 | 组合/预设与校准公共模型 | 基础实现通过 | 模型/迁移/契约 9 项通过；前端 111 项通过，类型检查通过 |
-| 五个功能分支 | 待公共基础固定 | 未创建 |
+| 五个功能分支 | 已从 3f72b71 创建 | 导入与设置已进入各自管理型 worktree；其他按依赖启动 |
+
+逐项交付状态和实际证据见[验收记录](module-improvements-acceptance.md)。

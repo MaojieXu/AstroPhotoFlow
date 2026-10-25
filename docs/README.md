@@ -10,6 +10,7 @@
 | 开发 | [开发流程](development/README.md)、[工作台使用](development/workbench.md) | 构建、测试、安装与诊断 |
 | 上下文 | [当前状态](development/current-context.md) | 当前工作基线、明确未实现内容和交接边界 |
 | 并行开发 | [五分支计划与约定](development/module-improvements.md) | 新功能的共享语义、分工、运行隔离和执行证据 |
+| 并行验收 | [五分支验收矩阵](development/module-improvements-acceptance.md) | 按要求区分已验证、待实现与待验收 |
 | 测试 | [需求与测试矩阵](development/test-matrix.md) | 已有覆盖、已实现能力的缺口、未来验收 |
 | 运行收尾 | [配置管理验收](development/config-management-acceptance.md) | 统一环境、配置与旧目录清理证据 |
 | 预览修复 | [PixInsight FITS 预览](development/pixinsight-preview-fix.md) | 三平面识别与实际素材回填证据 |
