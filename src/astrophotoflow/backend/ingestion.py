@@ -19,7 +19,7 @@ from sqlalchemy import delete, func, select
 from .db import Database
 from .errors import ApiError, invalid_reference, not_found
 from .files import SUPPORTED_EXTENSIONS, enumerate_source, find_root, format_for_path, resolve_relative
-from .fits_preview import PARSER_VERSION, PREVIEW_ALGORITHM_VERSION, _display, create_preview, inspect_fits, stretch_bounds
+from .fits_preview import PARSER_VERSION, PREVIEW_ALGORITHM_VERSION, _display, _parsed_parameters, create_preview, inspect_fits, stretch_bounds
 from .models import (
     Asset, AssetTask, AssetTaskItem, AssetVersion, Dataset, DatasetMember,
     DatasetVersion, Equipment, FitsHduMetadata, Preview,
@@ -391,6 +391,14 @@ def _xisf_image(path: Path, stretch: tuple[float, float] | None = None) -> tuple
     return _display(array, (low, high)), {"stretch_low": low, "stretch_high": high}
 
 
+def _inspect_xisf(path: Path) -> dict:
+    from xisf import XISF
+
+    keywords = XISF(str(path)).get_images_metadata()[0].get("FITSKeywords", {})
+    header = {keyword: entries[0]["value"] for keyword, entries in keywords.items() if entries}
+    return {**_parsed_parameters(header), "xisf_fits_keywords": deepcopy(keywords)}
+
+
 def _xisf_layout(path: Path) -> str:
     from xisf import XISF
 
@@ -560,6 +568,7 @@ def _refresh_fits_metadata(database: Database, settings: Settings, item_id: str,
         asset = session.get(Asset, asset_id)
         root_id, source_path = item.root_id, item.source_path
         storage_mode, storage_location = version.storage_mode, version.storage_location
+        category = (version.scientific_metadata or {}).get("format")
         current_parameters, value_sources = dict(asset.parameters or {}), dict(asset.value_sources or {})
     if storage_mode == "managed":
         path = settings.data_dir / storage_location
@@ -567,13 +576,15 @@ def _refresh_fits_metadata(database: Database, settings: Settings, item_id: str,
         if storage_mode != "managed":
             _, root = find_root(settings, root_id)
             path = resolve_relative(root, source_path)
-        result = inspect_fits(path, current_parameters.get("cfa_pattern"))
-        hdu_rows = result["hdus"]
-        parsed = result["parsed_parameters"]
+        if category == "xisf":
+            hdu_rows, parsed = [], _inspect_xisf(path)
+        else:
+            result = inspect_fits(path, current_parameters.get("cfa_pattern"))
+            hdu_rows, parsed = result["hdus"], result["parsed_parameters"]
         error = None
     except Exception:
         hdu_rows, parsed = [], {}
-        error = "FITS 元数据解析失败；原始文件已完成内容入库。"
+        error = f"{category.upper()} 元数据解析失败；原始文件已完成内容入库。"
     with database.write_session() as session:
         item = session.get(AssetTaskItem, item_id)
         asset = session.get(Asset, asset_id)
@@ -602,7 +613,7 @@ def _refresh_fits_metadata(database: Database, settings: Settings, item_id: str,
             "observed_parameters": parsed,
         }
         item.metadata_status = "failed" if error else "available"
-        item.error = {"code": "FITS_PARSE_FAILED", "message": error} if error else None
+        item.error = {"code": f"{category.upper()}_PARSE_FAILED", "message": error} if error else None
         item.updated_at = datetime.now(timezone.utc)
     return error
 
@@ -630,12 +641,15 @@ def _register_asset(database: Database, settings: Settings, task_data: dict, ite
         raise IngestionError("UNSUPPORTED_FORMAT", "该文件格式不在本阶段入库清单中。")
     parsed, hdu_rows, parse_error = {}, [], None
     defaults = task_data.get("import_defaults_snapshot") or {}
-    if category == "fits":
+    if category in {"fits", "xisf"}:
         try:
-            inspected = inspect_fits(original, task_data["parameters"].get("cfa_pattern"))
-            parsed, hdu_rows = inspected["parsed_parameters"], inspected["hdus"]
+            if category == "xisf":
+                parsed = _inspect_xisf(original)
+            else:
+                inspected = inspect_fits(original, task_data["parameters"].get("cfa_pattern"))
+                parsed, hdu_rows = inspected["parsed_parameters"], inspected["hdus"]
         except Exception:
-            parse_error = "FITS 元数据解析失败；原始文件仍将继续内容入库。"
+            parse_error = f"{category.upper()} 元数据解析失败；原始文件仍将继续内容入库。"
     parameters, value_sources = _current_asset_parameters(task_data["parameters"], parsed, defaults.get("parameters"))
     if category == "fits" and not parse_error and parameters.get("cfa_pattern") and not parsed.get("cfa_pattern") and not task_data["parameters"].get("cfa_pattern"):
         hdu_rows = inspect_fits(original, parameters["cfa_pattern"])["hdus"]
@@ -647,7 +661,7 @@ def _register_asset(database: Database, settings: Settings, task_data: dict, ite
     if task_data["storage_mode"] == "managed":
         suffix = "".join(original.suffixes[-2:]) if original.name.lower().endswith((".fits.fz", ".fit.fz")) else original.suffix
         location = (Path("objects") / version_id / f"source{suffix.lower()}").as_posix()
-    metadata_status = "failed" if parse_error else "available" if category == "fits" else "unsupported"
+    metadata_status = "failed" if parse_error else "available" if category in {"fits", "xisf"} else "unsupported"
     with database.write_session() as session:
         item = session.get(AssetTaskItem, item_id)
         asset = Asset(id=asset_id, name=Path(asset_name).stem or asset_name, scope="shared", owner_project_id=None,
@@ -673,7 +687,7 @@ def _register_asset(database: Database, settings: Settings, task_data: dict, ite
         asset.current_version_id = version_id
         item.asset_id, item.asset_version_id = asset_id, version_id
         item.metadata_status, item.status = metadata_status, "running"
-        item.error = {"code": "FITS_PARSE_FAILED", "message": parse_error} if parse_error else None
+        item.error = {"code": f"{category.upper()}_PARSE_FAILED", "message": parse_error} if parse_error else None
         item.updated_at = datetime.now(timezone.utc)
         for row in hdu_rows:
             session.add(FitsHduMetadata(id=str(uuid4()), asset_version_id=version_id, **row))
@@ -920,7 +934,10 @@ def _process_preview(database: Database, settings: Settings, task_data: dict, it
                 _save_task_stretch(database, task_id, group_key, display, item_data["asset_version_id"])
             with database.write_session() as session:
                 item = session.get(AssetTaskItem, item_id)
-                item.preview_status, item.status, item.error = "available", "completed", None
+                item.preview_status = "available"
+                item.status = "completed_with_errors" if item.metadata_status == "failed" else "completed"
+                if item.metadata_status != "failed":
+                    item.error = None
                 item.updated_at = datetime.now(timezone.utc)
         except Exception as exc:
             logger.exception("image preview failed task_id=%s item_id=%s", task_id, item_id)

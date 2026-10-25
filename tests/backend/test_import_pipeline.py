@@ -444,3 +444,90 @@ def test_preview_retry_reuses_persisted_group_stretch(service, monkeypatch):
         preview = session.scalar(select(Preview).where(Preview.asset_version_id == first["asset_version_id"]))
         assert preview.display_parameters["stretch_reference_version_id"] == second["asset_version_id"]
         assert recovered["report"]["preview_stretch_groups"] == original["report"]["preview_stretch_groups"]
+
+
+def test_xisf_headers_register_without_pixels_and_override_preset_defaults(service, monkeypatch):
+    from xisf import XISF
+    settings, app, client, root = service
+    keywords = {
+        "IMAGETYP": [{"value": "Master Light", "comment": "Type of image"}],
+        "EXPTIME": [{"value": "300.000", "comment": "Exposure seconds"}],
+        "GAIN": [{"value": "9", "comment": "Observed gain"}],
+        "FILTER": [{"value": "O", "comment": "Observed filter"}],
+    }
+    path = root / "observed.xisf"
+    XISF.write(str(path), np.arange(120, dtype=np.float32).reshape(10, 12, 1), image_metadata={"FITSKeywords": keywords})
+    defaults = {"parameters": {"exposure_seconds": 60, "gain": 50, "offset": 7},
+                "classification": {"frame_class": "subframe", "frame_type": "dark"}}
+    task_id = enqueue(app, import_defaults_snapshot=defaults, parameters={"gain": 0})
+    entered, release = Event(), Event()
+    read = ingestion._read_hash_and_copy
+    def blocked(*args):
+        entered.set()
+        assert release.wait(5)
+        return read(*args)
+    original_pixels = XISF.read_image
+    pixel_calls = []
+    def pixels(*args, **kwargs):
+        pixel_calls.append(1)
+        return original_pixels(*args, **kwargs)
+    monkeypatch.setattr(ingestion, "_read_hash_and_copy", blocked)
+    monkeypatch.setattr(XISF, "read_image", pixels)
+    thread = run(app, settings, task_id)
+    try:
+        assert entered.wait(5)
+        assert pixel_calls == []
+        item = task(client, task_id)["items"][0]
+        asset = client.get(f"/api/v1/library/assets/{item['asset_id']}", headers=AUTH).json()
+        assert asset["classification"] == {"frame_class": "masterframe", "frame_type": "light"}
+        assert asset["parameters"]["exposure_seconds"] == 300
+        assert asset["parameters"]["gain"] == 0
+        assert asset["parameters"]["offset"] == 7
+        assert asset["parameters"]["iso"] is None
+        assert asset["value_sources"]["exposure_seconds"] == "file"
+        observed = asset["current_version"]["scientific_metadata"]["observed_parameters"]
+        assert observed["xisf_fits_keywords"] == keywords
+        assert observed["filter_name"] == "O"
+        assert asset["current_version"]["capture_snapshot"]["import_provenance"]["observed_parameters"] == observed
+        assert item["metadata_status"] == "available"
+    finally:
+        release.set()
+        thread.join(5)
+    assert task(client, task_id)["status"] == "completed"
+    monkeypatch.setattr(ingestion, "_read_hash_and_copy", read)
+    manual_id = enqueue(app, import_defaults_snapshot=defaults,
+                        classification={"frame_class": "subframe", "frame_type": None}, parameters={"exposure_seconds": 0})
+    ingestion.process_task(app.state.database, settings, manual_id, app.state.import_workers)
+    item = task(client, manual_id)["items"][0]
+    asset = client.get(f"/api/v1/library/assets/{item['asset_id']}", headers=AUTH).json()
+    assert asset["classification"] == {"frame_class": "subframe", "frame_type": None}
+    assert asset["parameters"]["exposure_seconds"] == 0
+    assert asset["value_sources"]["classification.frame_type"] == "manual"
+
+
+def test_xisf_missing_headers_remain_unknown_and_metadata_failure_retries(service, monkeypatch):
+    from xisf import XISF
+    settings, app, client, root = service
+    XISF.write(str(root / "unknown.xisf"), np.ones((10, 12, 1), dtype=np.float32))
+    task_id = enqueue(app)
+    ingestion.process_task(app.state.database, settings, task_id, app.state.import_workers)
+    item = task(client, task_id)["items"][0]
+    asset = client.get(f"/api/v1/library/assets/{item['asset_id']}", headers=AUTH).json()
+    assert asset["classification"] == {"frame_class": None, "frame_type": None}
+    assert asset["parameters"]["exposure_seconds"] is None
+    inspect = ingestion._inspect_xisf
+    def failed(_path):
+        raise ValueError("injected XISF metadata failure")
+    monkeypatch.setattr(ingestion, "_inspect_xisf", failed)
+    failed_id = enqueue(app)
+    ingestion.process_task(app.state.database, settings, failed_id, app.state.import_workers)
+    item = task(client, failed_id)["items"][0]
+    assert item["metadata_status"] == "failed"
+    assert item["preview_status"] == "available"
+    assert item["error"]["code"] == "XISF_PARSE_FAILED"
+    monkeypatch.setattr(ingestion, "_inspect_xisf", inspect)
+    retried = client.post(f"/api/v1/asset-tasks/{failed_id}/retry", headers=AUTH, json={"item_ids": [item["id"]]})
+    recovered = task(client, retried.json()["task_id"])
+    assert recovered["status"] == "completed"
+    assert recovered["items"][0]["asset_version_id"] == item["asset_version_id"]
+    assert recovered["items"][0]["metadata_status"] == "available"
