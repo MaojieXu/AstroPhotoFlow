@@ -1,5 +1,5 @@
 const supportedExtensions=[
-  '.fits.fz','.fit.fz','.fits','.fit','.fts','.jpg','.jpeg','.png','.tif','.tiff','.bmp','.webp',
+  '.fits.fz','.fit.fz','.fits','.fit','.fts','.jpg','.jpeg','.png','.tif','.tiff','.bmp','.webp','.heic','.heif','.hif',
   '.cr2','.cr3','.nef','.arw','.dng','.raf','.orf','.rw2','.pef','.srw','.xisf','.ser','.mp4','.mov','.avi','.mkv'
 ]
 

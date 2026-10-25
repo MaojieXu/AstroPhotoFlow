@@ -59,7 +59,10 @@ def test_init_lock_token_and_unknown_schema(tmp_path):
         assert upgrade_database(s) is None
     assert current_revision(s.database_path)=="0005_dataset_removal_version_snapshot"
     token=ensure_service_token(s)
-    assert s.token_path.stat().st_mode&0o777==0o600 and ensure_service_token(s)==token
+    token_mode=s.token_path.stat().st_mode&0o777
+    assert ensure_service_token(s)==token
+    if sys.platform != "win32":
+        assert token_mode==0o600
     legacy=tmp_path/"legacy"; legacy.mkdir()
     old=Settings("127.0.0.1",8190,legacy,())
     with sqlite3.connect(old.database_path) as db: db.execute("CREATE TABLE keep_me(value TEXT)")
@@ -82,8 +85,11 @@ def test_alembic_initial_migration_matches_orm_metadata(tmp_path):
 def test_existing_data_directory_permissions_are_not_changed(tmp_path):
     settings = Settings("127.0.0.1", 8190, tmp_path, ())
     settings.data_dir.chmod(0o750)
+    mode = settings.data_dir.stat().st_mode
     ensure_data_dir(settings)
-    assert settings.data_dir.stat().st_mode & 0o777 == 0o750
+    assert settings.data_dir.stat().st_mode == mode
+    if sys.platform != "win32":
+        assert mode & 0o777 == 0o750
 
 
 def test_import_root_settings_require_unique_ids_and_absolute_paths(tmp_path):
@@ -115,15 +121,10 @@ path = "relative/path"
     with pytest.raises(ConfigurationError, match="绝对路径"):
         load_settings(config)
 
-    config.write_text(prefix + """
-[[imports.roots]]
-id = "duplicate"
-path = "/tmp/a"
-
-[[imports.roots]]
-id = "duplicate"
-path = "/tmp/b"
-""")
+    config.write_text(prefix + "\n".join((
+        "[[imports.roots]]", 'id = "duplicate"', f'path = "{(tmp_path / "a").as_posix()}"', "",
+        "[[imports.roots]]", 'id = "duplicate"', f'path = "{(tmp_path / "b").as_posix()}"', "",
+    )))
     with pytest.raises(ConfigurationError, match="唯一"):
         load_settings(config)
 

@@ -8,7 +8,7 @@ from astropy.io import fits
 from PIL import Image
 
 PARSER_VERSION = "fits-1"
-PREVIEW_ALGORITHM_VERSION = "auto-stretch-1"
+PREVIEW_ALGORITHM_VERSION = "auto-stretch-2"
 CFA_PATTERNS = {"RGGB", "BGGR", "GRBG", "GBRG"}
 
 
@@ -41,13 +41,25 @@ def _image_kind(hdu, cfa_override: str | None = None) -> str | None:
             return "quad_bayer"
         return "bayer" if pattern in CFA_PATTERNS or cfa_override in CFA_PATTERNS else "mono"
     if ndim == 3:
-        axis3 = str(header.get("CTYPE3", "")).strip().upper()
-        axis1 = str(header.get("CTYPE1", "")).strip().upper()
-        if int(header.get("NAXIS3", 0)) == 3 and axis3 in {"RGB", "COLOR"}:
+        if _rgb_channel_first(header):
             return "rgb"
+        axis1 = str(header.get("CTYPE1", "")).strip().upper()
         if int(header.get("NAXIS1", 0)) == 3 and axis1 in {"RGB", "COLOR"}:
             return "rgb"
     return None
+
+
+def _rgb_channel_first(header) -> bool:
+    if int(header.get("NAXIS3", 0)) != 3:
+        return False
+    axis3 = str(header.get("CTYPE3", "")).strip().upper()
+    if axis3 in {"RGB", "COLOR"}:
+        return True
+    return (
+        not axis3
+        and str(header.get("CTYPE1", "")).strip().upper().startswith("RA")
+        and str(header.get("CTYPE2", "")).strip().upper().startswith("DEC")
+    )
 
 
 def _header_cards(header) -> list[dict[str, str]]:
@@ -169,32 +181,33 @@ def _bayer_demosaic(mosaic: np.ndarray, pattern: str, x_offset: int, y_offset: i
     return output
 
 
-def _display(array: np.ndarray) -> Image.Image:
+def stretch_bounds(array: np.ndarray) -> tuple[float, float]:
+    finite = np.asarray(array, dtype=np.float32)
+    finite = finite[np.isfinite(finite)]
+    if finite.size == 0:
+        raise ValueError("所选 HDU 没有有效像素。")
+    low, high = (float(value) for value in np.percentile(finite, (1, 99)))
+    return low, high if high > low else low + 1.0
+
+
+def _display(array: np.ndarray, stretch: tuple[float, float] | None = None) -> Image.Image:
     pixels = np.asarray(array, dtype=np.float32)
+    if stretch is not None and not np.isfinite(pixels).any():
+        raise ValueError("所选 HDU 没有有效像素。")
     if pixels.ndim == 2:
-        finite = pixels[np.isfinite(pixels)]
-        if finite.size == 0:
-            raise ValueError("所选 HDU 没有有效像素。")
-        low, high = np.percentile(finite, (1, 99))
-        if high <= low:
-            high = low + 1.0
+        low, high = stretch if stretch is not None else stretch_bounds(pixels)
         gray = np.clip((pixels - low) / (high - low), 0, 1)
         gray[~np.isfinite(gray)] = 0
         return Image.fromarray(np.asarray(gray * 255, dtype=np.uint8), mode="L").convert("RGB")
     if pixels.ndim == 3 and pixels.shape[-1] == 3:
-        finite = pixels[np.isfinite(pixels)]
-        if finite.size == 0:
-            raise ValueError("所选 HDU 没有有效像素。")
-        low, high = np.percentile(finite, (1, 99))
-        if high <= low:
-            high = low + 1.0
+        low, high = stretch if stretch is not None else stretch_bounds(pixels)
         rgb = np.clip((pixels - low) / (high - low), 0, 1)
         rgb[~np.isfinite(rgb)] = 0
         return Image.fromarray(np.asarray(rgb * 255, dtype=np.uint8), mode="RGB")
     raise ValueError("预览数据形状不受支持。")
 
 
-def create_preview(path: Path, hdu_index: int, kind: str, parameters: dict, max_edge: int) -> tuple[Image.Image, dict]:
+def create_preview(path: Path, hdu_index: int, kind: str, parameters: dict, max_edge: int, stretch: tuple[float, float] | None = None) -> tuple[Image.Image, dict]:
     if kind in {"xtrans", "quad_bayer"}:
         raise ValueError(f"{kind} CFA 已登记；当前暂不支持其马赛克彩色预览。")
     with fits.open(path, memmap=False, lazy_load_hdus=True) as file:
@@ -208,7 +221,7 @@ def create_preview(path: Path, hdu_index: int, kind: str, parameters: dict, max_
         data = hdu.section
         if kind == "rgb":
             header = hdu.header
-            if int(header.get("NAXIS3", 0)) == 3 and str(header.get("CTYPE3", "")).strip().upper() in {"RGB", "COLOR"}:
+            if _rgb_channel_first(header):
                 sample = np.asarray(data[:, ::stride, ::stride], dtype=np.float32)
                 sample = np.moveaxis(sample, 0, -1)
             else:
@@ -223,10 +236,13 @@ def create_preview(path: Path, hdu_index: int, kind: str, parameters: dict, max_
                 sample, pattern,
                 int(hdu.header.get("XBAYROFF", 0)), int(hdu.header.get("YBAYROFF", 0)), stride,
             )
-        image = _display(sample)
+        low, high = stretch if stretch is not None else stretch_bounds(sample)
+        image = _display(sample, (low, high))
         image.thumbnail((max_edge, max_edge), Image.Resampling.LANCZOS)
         display_parameters = {
             "stretch": "percentile_1_99",
+            "stretch_low": low,
+            "stretch_high": high,
             "downsample_stride": stride,
             "cfa_pattern": parameters.get("cfa_pattern") if kind == "bayer" else None,
             "algorithm": PREVIEW_ALGORITHM_VERSION,

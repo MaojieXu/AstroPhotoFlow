@@ -328,7 +328,7 @@ describe('dataset group member table',()=>{
     expect(rows[1].find('td:nth-child(3)').text()).not.toContain('subframe')
   })
 
-  it('previews the fixed member version and uses the latest asset revision for consecutive edits',async()=>{
+  it('shows the fixed member thumbnail and uses the latest asset revision for consecutive edits',async()=>{
     const group=dataset(30,'Editing group',40,2)
     const asset=assetFor(300,'Editable.fit')
     const fixed=member(asset,40,0,40)
@@ -337,9 +337,12 @@ describe('dataset group member table',()=>{
     configureLibrary([{dataset:group,version:groupVersion}])
     await mountLibrary();await enterGroup('Editing group')
 
+    const previewRequests=getBlob.mock.calls.length
     await wrapper.get('.apf-assets-table tbody tr .apf-thumb').trigger('click')
     await flushPromises()
-    expect(getBlob).toHaveBeenCalledWith('/astrophotoflow/api/v1/library/assets/'+asset.id+'/versions/'+fixed.version.id+'/previews/detail')
+    expect(getBlob).toHaveBeenCalledTimes(previewRequests)
+    expect(wrapper.find('.apf-preview-overlay').exists()).toBe(false)
+    expect(getBlob).toHaveBeenCalledWith('/astrophotoflow/api/v1/library/assets/'+asset.id+'/versions/'+fixed.version.id+'/previews/thumbnail')
     expect(get.mock.calls.some(([path])=>String(path).includes('/datasets/'+group.id+'/versions/'))).toBe(true)
     const row=wrapper.findAll('.apf-assets-table tbody tr').find(item=>item.text().includes('Editable.fit'))!
     const nameButton=row.find('.apf-inline-value')
@@ -468,7 +471,7 @@ describe('dataset group member table',()=>{
     await flushPromises()
     expect(send).toHaveBeenCalledTimes(1)
 
-    await row.find('.apf-thumb').trigger('click')
+    await row.findAll('.apf-member-open').find(button=>button.text().includes('张'))!.trigger('click')
     await flushPromises()
     expect(wrapper.get('h1').text()).toBe('素材库')
     expect(wrapper.findAll('.apf-assets-table tbody tr')).toHaveLength(2)
@@ -692,17 +695,19 @@ describe('dataset group member table',()=>{
     const emptyVersion=version(group.id,60,[])
     configureLibrary([{dataset:group,version:emptyVersion}])
     await mountLibrary()
-    await wrapper.get('.apf-assets-table tbody tr .apf-thumb').trigger('click')
+    await wrapper.findAll('button').find(button=>button.text()==='图像组 · 0 张')!.trigger('click')
     await flushPromises()
     expect(wrapper.get('h1').text()).toBe('素材库 / Empty group')
     expect(wrapper.text()).toContain('此图像组当前没有成员。')
     await wrapper.findAll('button').find(button=>button.text()==='← 返回素材库')!.trigger('click')
     await flushPromises()
     const singleRow=wrapper.findAll('.apf-assets-table tbody tr').find(row=>row.text().includes('unrelated.fit'))!
+    const previewRequests=getBlob.mock.calls.length
     await singleRow.get('.apf-thumb').trigger('click')
     await flushPromises()
-    expect(wrapper.find('.apf-preview-dialog').isVisible()).toBe(true)
-    expect(getBlob).toHaveBeenCalledWith('/astrophotoflow/api/v1/library/assets/'+idAt(900)+'/versions/'+versionFor(idAt(900),1900).id+'/previews/detail')
+    expect(wrapper.find('.apf-preview-overlay').exists()).toBe(false)
+    expect(getBlob).toHaveBeenCalledTimes(previewRequests)
+    expect(getBlob).toHaveBeenCalledWith('/astrophotoflow/api/v1/library/assets/'+idAt(900)+'/versions/'+versionFor(idAt(900),1900).id+'/previews/thumbnail')
   })
 
   it('cancels a pending group open when the search removes its row',async()=>{
@@ -721,7 +726,7 @@ describe('dataset group member table',()=>{
     await row.get('.apf-inline-value').trigger('dblclick')
     await row.get('input').setValue('Saved pending group')
     await row.get('input').trigger('keydown',{key:'Enter'});await flushPromises()
-    await row.get('.apf-thumb').trigger('click');await flushPromises()
+    await row.findAll('.apf-member-open').find(button=>button.text().includes('张'))!.trigger('click');await flushPromises()
     await wrapper.get('input[aria-label="搜索"]').setValue('unrelated')
     await new Promise(resolve=>setTimeout(resolve,300));await flushPromises()
     resolveSave({...group,name:'Saved pending group',revision:2});await flushPromises()

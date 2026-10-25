@@ -71,7 +71,7 @@ uv sync --project service --extra test
 uv run --project service --extra test pytest service/tests
 ```
 
-支持格式、实际解析能力、固定预览预设及合成验收样本见[资产格式支持矩阵](../docs/资产格式支持矩阵.md)。FITS、常规图像和视频首帧生成两档 JPEG 预览；SER 使用格式读取器，其余视频使用系统 FFmpeg。RAW、XISF、NumPy 只入库，不宣称支持解码。导入任务保留逐文件内容、元数据和预览状态；取消后只重试已登记项，`resume` 仅用于服务中断的原任务。
+支持格式、实际解析能力、固定预览预设、解码依赖许可证及合成验收样本见[资产格式支持矩阵](../docs/资产格式支持矩阵.md)。FITS、常规图像、相机 RAW、XISF、HEIF 和视频首帧仅持久化最长边 100 px 的 JPEG 缩略图；素材列表展示小图，点击图片不打开预览。SER 使用格式读取器，其余视频使用系统 FFmpeg。RAW 的具体支持取决于 LibRaw 支持的相机型号和编码；NumPy 只入库。导入任务保留逐文件内容、元数据、预览状态和同条件组的拉伸参数；取消后只重试已登记项，`resume` 仅用于服务中断的原任务。
 
 既有素材缺少预览时，可在服务停止或持有数据库锁的环境中执行 `uv run --project service --locked --no-sync apf-service previews backfill`。命令只补缺失预览，单项失败写入服务日志并继续后续项目。
 
