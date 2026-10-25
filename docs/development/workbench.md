@@ -25,7 +25,7 @@ $env:ASTROPHOTOFLOW_CONFIG = 'D:\AstroPhotoFlow\workspace\config.toml'
 .\.apf-env\Scripts\apf.exe mcp-config --workspace D:\AstroPhotoFlow\workspace
 ```
 
-使用响应中的当前 revision 继续更新，不能假定始终为示例数值。MCP 注册信息包含绝对命令路径和 workspace 配置；`apf mcp` 启动 stdio 服务。已有连接不需要重复注册，CLI／MCP 改动后使用前端现有刷新按钮查看。
+使用响应中的当前 revision 继续更新，不能假定始终为示例数值。MCP 注册信息包含绝对命令路径和 workspace 配置；`apf mcp` 启动 stdio 服务。已有注册不需要重复添加；代码更新后重连该MCP服务器刷新工具清单，资料修改后刷新前端查看。完整58工具和领域命令见[操作参考](library-agent-tools.md)。
 
 ## 数据与维护
 
@@ -37,6 +37,6 @@ $env:ASTROPHOTOFLOW_CONFIG = 'D:\AstroPhotoFlow\workspace\config.toml'
 .\.apf-env\Scripts\apf-service.exe db upgrade
 ```
 
-服务启动不会自动升级已有数据库；显式 upgrade 沿用现有备份机制，当前 revision 是 `0006_library_trash_cleanup_state`。诊断先看 workspace/logs/service.log、comfyui.log 和健康检查；不要输出 service.token 内容。
+服务启动不会自动升级已有数据库；显式 upgrade 沿用现有备份机制，当前 revision 是 `0007_setups_and_calibration`。诊断先看 workspace/logs/service.log、comfyui.log 和健康检查；不要输出 service.token 内容。
 
-开发用历史数据库可按用户授权删除重建；原始照片和 ZIP 不属于可清理测试缓存。Linux 的 Python／构建检查由 CI 覆盖，不能据此声称 Windows CPU 安装流程已在 Linux 完成产品验收。
+开发用历史数据库可按用户授权删除重建；原始照片和 ZIP 不属于可清理测试缓存。CI配置包含Linux的Python／构建检查，本轮未远端执行，不能声称Windows CPU安装流程已在Linux完成产品验收。

@@ -2,7 +2,7 @@
 
 本地天文素材工作台，使用 ComfyUI 承载界面，提供素材／数据集、项目、设备和拍摄配置管理，以及 CPU 工作台、CLI 和初版 MCP。
 
-当前支持素材导入、资料编辑、筛选排序、100 px 缩略图和组／照片回收站。Agent、外部软件节点、完整工作流管理和结果比较属于后续开发范围。[文档索引](docs/README.md)区分当前实现、冻结需求与历史记录。
+当前支持分阶段异步导入、资料编辑、筛选排序、100 px 缩略图与按需1080 px大图、组／照片回收站、设备组合／拍摄预设，以及固定版本校准关联。Agent、外部软件节点、完整工作流管理和结果比较属于后续开发范围。[文档索引](docs/README.md)区分当前实现、冻结需求与历史记录。
 
 ## 源码开发
 
@@ -32,7 +32,7 @@ uv run --locked --no-sync python scripts/verify_distribution.py
 
 wheel 和 sdist 携带已构建前端资源，最终用户安装不需要 Node.js 或 Git。CPU 工作台面向 Windows x64/Python 3.12，固定 ComfyUI 0.42.0 和其前端 1.57.1；首次初始化准备 CPU 运行环境，需要下载依赖。安装、启动、workspace 搬迁及 MCP 配置见[工作台使用](docs/development/workbench.md)。
 
-ComfyUI checkout 扩展仍通过根 `__init__.py` 发现；将本仓库链接到自己的 `custom_nodes` 后，先完成前端构建和根 Python 依赖同步。令牌保存在 workspace 数据目录，浏览器通过同源代理调用服务。[接口说明](docs/api/README.md)列出当前 CLI 和五个 MCP 工具。
+ComfyUI checkout 扩展仍通过根 `__init__.py` 发现；将本仓库链接到自己的 `custom_nodes` 后，先完成前端构建和根 Python 依赖同步。令牌保存在 workspace 数据目录，浏览器通过同源代理调用服务。[接口说明](docs/api/README.md)列出结构化 CLI 和58个 MCP 工具，保留原五工具名称。[项目 Skill](.agents/skills/astrophotoflow-library/SKILL.md)提供素材管理流程。
 
 ## 许可与来源
 

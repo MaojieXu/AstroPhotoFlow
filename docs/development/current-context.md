@@ -17,7 +17,7 @@
 
 ## 产品边界
 
-开发代码 schema 已进入 `0007_setups_and_calibration`，运行中的旧展示实例尚未统一更新。MCP 已扩为58工具，保留原五工具；全局注册未改，既有连接重新启动后才会加载新工具。素材行为见[架构说明](../architecture/assets.md)，CLI/MCP 见[接口说明](../api/README.md)。新功能按[五分支约定](module-improvements.md)推进；完整 Agent、软件适配、工作流和结果比较仍未实现。
+开发及31388展示实例的schema均为 `0007_setups_and_calibration`。MCP为58工具，保留原五工具；已用原全局注册命令验证新会话，全局注册未改，既有客户端连接可能需重连刷新工具清单。素材行为见[架构说明](../architecture/assets.md)，CLI/MCP 见[接口说明](../api/README.md)。新功能按[五分支约定](module-improvements.md)推进；完整 Agent、软件适配、工作流和结果比较仍未实现。
 
 原工程重构验收见[历史记录](remake-acceptance.md)，本轮配置和运行收尾的实际证据见[配置管理验收](config-management-acceptance.md)。不自动合并 dev/main 或推送远端，不进行前端自动点击。
 
@@ -25,11 +25,12 @@
 
 ## 当前 Goal 开发进度
 
-五分支共同基础为 `3f72b71`。五个功能分支代码均已本地合入 feature/remake，包括分阶段导入与实测优化、
-组合与预设、校准库、大图预览、结构化CLI/MCP和项目Skill。集成候选 `b637097` 的组合检查66项及前端127项通过，
-工具后续候选 `54c9eaf` 的真实SDK图片读取/CLI导出及冲突保护通过。根集成另外修复了部分分类字段省略语义、
-登记后来源变化及宿主键盘事件阻止大图Escape的问题。当前进入最终独立复查、完整测试和发行包验证，
-尚不能宣称整个Goal完成。实际证据和剩余验收见[矩阵](module-improvements-acceptance.md)。
+五分支共同基础为 `3f72b71`，均包含a5c6381。五分支功能已本地合入feature/remake：分阶段导入、实测FITS优化、
+组合/预设、独立校准库及固定版本关系、按需大图、结构化CLI/MCP和项目Skill。代码复查三轮收敛；
+随后运行验收纠正了历史任务标记阻挡可用缓存及创建校准组的迟到导航。最终运行实现为11a267f，
+后续交付文档不改变运行代码。验收、跳过项和实际散列见[矩阵](module-improvements-acceptance.md)，
+手动入口见[检查清单](module-improvements-manual-check.md)。
 
-原 31388 展示进程尚未替换为本轮候选。工作区插件隔离已通过两套真实 CPU 实例验证，
-测试实例已退出，无受管子进程残留，四个端口均释放。全局 MCP 注册与默认 workspace 指针未改变。
+31388/31390使用原workspace并已升级0007，原38张照片/参数/版本/成员/旧缩略图保持；未全量重导入。
+插件在workspace/comfyui-data中隔离，JS/CSS提供内容与build一致；原全局MCP命令能发现58工具及相同图片。
+默认workspace指针和全局MCP配置未变。双实例隔离测试环境已停止，当前仅保留主展示实例运行。
