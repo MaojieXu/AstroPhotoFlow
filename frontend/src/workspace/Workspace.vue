@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { z } from 'zod'
 import {
   assetSchema, capabilitiesSchema, captureProfileSchema, datasetReferenceSchema, datasetSchema, libraryEntriesRemoveRequestSchema,
@@ -69,6 +69,9 @@ const watchedTaskIds = ref<string[]>([])
 type ImportTask = ReturnType<typeof taskSchema.parse>
 const datasetEditorId = ref<string>()
 const datasetPendingIds = ref<string[]>([])
+const activeDataset = ref<RecordData>()
+const outerLibraryState = ref<{query:string;offset:number;pageSize:10|20|50|'all';sort:{by:string;order:'asc'|'desc'};view:'simple'|'detail'}>()
+const restoringOuterLibraryState = ref(false)
 const previewUrl = ref<string>()
 const previewError = ref('')
 const previewUrls = ref<Record<string,string>>({})
@@ -100,7 +103,9 @@ const isAssetSection = computed(() =>
 const isAssetTable = computed(() => (activeArea.value === 'library' && !viewingProjectDatasets.value) ||
   store.section === 'calibration' || viewingProjectAssets.value)
 const isDatasetTable = computed(() => store.section === 'projects' && viewingProjectDatasets.value)
-const isLibraryItemsView = computed(() => activeArea.value === 'library' && !viewingProjectAssets.value && !viewingProjectDatasets.value)
+const isLibraryItemsView = computed(() => activeArea.value === 'library' && !viewingProjectAssets.value && !viewingProjectDatasets.value && !activeDataset.value)
+const isLibraryTableView = computed(() => activeArea.value === 'library' && !viewingProjectAssets.value && !viewingProjectDatasets.value)
+const isDatasetMembersView = computed(() => activeArea.value === 'library' && store.section === 'library' && Boolean(activeDataset.value) && !viewingProjectAssets.value && !viewingProjectDatasets.value)
 const pageSelectionKeys = computed(() => rows.value.map(row => bulkKey(row)))
 const pageAllSelected = computed(() => pageSelectionKeys.value.length > 0 && pageSelectionKeys.value.every(key => bulkSelection.value.has(key)))
 const pagePartiallySelected = computed(() => pageSelectionKeys.value.some(key => bulkSelection.value.has(key)) && !pageAllSelected.value)
@@ -117,6 +122,7 @@ const areaMessages: Partial<Record<WorkspaceArea, string>> = {
   agent: 'Agent 聊天区域已预留，聊天功能尚未接入。'
 }
 let loadGeneration = 0
+let datasetRefreshGeneration = 0
 
 const specFields: Record<string, InputField[]> = {
   camera: [
@@ -289,7 +295,20 @@ async function loadRecords() {
   try {
     let loadedRows: RecordData[]
     let loadedTotal: number
-    if (store.section === 'library' && !viewingProjectAssets.value && !viewingProjectDatasets.value) {
+    if (isDatasetMembersView.value && activeDataset.value) {
+      const dataset=activeDataset.value
+      const version=await assetApi.get('/astrophotoflow/api/v1/datasets/'+dataset.id+'/versions/'+dataset.current_version_id,datasetVersionSchema)
+      if (generation !== loadGeneration || !isDatasetMembersView.value || activeDataset.value?.id !== dataset.id || activeDataset.value.current_version_id !== dataset.current_version_id) return
+      const members=version.members.map(member=>({...member.asset,asset:member.asset,version:member.version,entry_type:'asset',member_position:member.position}))
+      const needle=store.query.trim().toLocaleLowerCase()
+      const filtered=members.filter(row=>!needle||String(row.name??'').toLocaleLowerCase().includes(needle))
+      const value=(row:RecordData,by:string)=>({name:row.name,classification:row.classification?.frame_class,camera:row.parameters?.camera_id,parameter_mode:row.parameters?.iso??row.parameters?.gain,exposure_seconds:row.parameters?.exposure_seconds,sensor_temperature_c:row.parameters?.sensor_temperature_c,binning:row.parameters?.binning_x,cfa_pattern:row.parameters?.cfa_pattern,optical_system:row.parameters?.optical_system_id,filter:row.parameters?.filter_id,integration_seconds:row.parameters?.integration_seconds,storage_mode:row.version?.storage_mode,status:row.status,notes:row.notes,member_position:row.member_position} as Record<string,unknown>)[by]
+      filtered.sort((a,b)=>String(value(a,librarySort.value.by)??'').localeCompare(String(value(b,librarySort.value.by)??''),undefined,{numeric:true})*(librarySort.value.order==='asc'?1:-1))
+      loadedTotal=filtered.length
+      const pageSize=store.pageSize==='all'?filtered.length:store.pageSize
+      loadedRows=filtered.slice(store.offset,store.offset+pageSize)
+      activeDataset.value={...dataset,version}
+    } else if (store.section === 'library' && !viewingProjectAssets.value && !viewingProjectDatasets.value) {
       const page = await loadWorkspacePage('/library/items', libraryItemSchema, {
         ...libraryFilterParams(activeFilters.value), sort_by: librarySort.value.by, order: librarySort.value.order
       })
@@ -421,6 +440,7 @@ async function waitForInlineSave(){
 async function selectSection(section: WorkspaceSection) {
   if (dirty.value && !window.confirm('当前表单有未保存修改。放弃修改并切换吗？')) return
   if(!await waitForInlineSave())return
+  leaveDatasetContext()
   editorType.value = undefined
   editingId.value = undefined
   datasetEditorId.value = undefined
@@ -440,6 +460,7 @@ async function selectSection(section: WorkspaceSection) {
 async function selectArea(area: WorkspaceArea) {
   if (dirty.value && !window.confirm('当前表单有未保存修改。放弃修改并切换吗？')) return
   if(!await waitForInlineSave())return
+  leaveDatasetContext()
   editorType.value = undefined
   editingId.value = undefined
   datasetEditorId.value = undefined
@@ -481,6 +502,7 @@ function startImport(kind:'files'|'folder') {
 }
 
 function applyFilters(filters: LibraryFilters) {
+  if (!isLibraryItemsView.value) return
   activeFilters.value=Object.fromEntries(Object.entries(filters).filter(([,value])=>Array.isArray(value)?value.length>0:value!==''))
   clearBulkSelection()
   store.offset = 0
@@ -899,10 +921,62 @@ function editDataset(row: RecordData) {
   datasetPendingIds.value = []
 }
 
+function openDataset(row:RecordData){
+  datasetRefreshGeneration++
+  outerLibraryState.value={query:store.query,offset:store.offset,pageSize:store.pageSize,sort:{...librarySort.value},view:libraryViewMode.value}
+  activeDataset.value={...(row.dataset??row),id:row.dataset?.id??row.id,current_version_id:row.version?.id??row.dataset?.current_version_id??row.current_version_id,name:row.dataset?.name??row.name}
+  store.query='';store.offset=0;store.pageSize=50;librarySort.value={by:'member_position',order:'asc'};libraryViewMode.value='detail'
+  filterPanelOpen.value=false
+  void loadRecords()
+}
+function leaveDatasetContext(){
+  if(!activeDataset.value)return
+  datasetRefreshGeneration++
+  loadGeneration++
+  activeDataset.value=undefined
+  if(outerLibraryState.value){
+    store.query=outerLibraryState.value.query;store.offset=outerLibraryState.value.offset;store.pageSize=outerLibraryState.value.pageSize
+    librarySort.value=outerLibraryState.value.sort;libraryViewMode.value=outerLibraryState.value.view
+  }else if(librarySort.value.by==='member_position'){
+    librarySort.value={by:'created_at',order:'desc'}
+  }
+  outerLibraryState.value=undefined
+  filterPanelOpen.value=false
+  loading.value=false
+  error.value=undefined
+}
+async function closeDataset(){
+  if (dirty.value && !window.confirm('当前表单有未保存修改。放弃修改并返回吗？')) return
+  if(!await waitForInlineSave())return
+  datasetRefreshGeneration++
+  loadGeneration++
+  activeDataset.value=undefined
+  if(outerLibraryState.value){
+    restoringOuterLibraryState.value=true
+    store.query=outerLibraryState.value.query;store.offset=outerLibraryState.value.offset;store.pageSize=outerLibraryState.value.pageSize
+    librarySort.value=outerLibraryState.value.sort;libraryViewMode.value=outerLibraryState.value.view
+    await nextTick()
+    restoringOuterLibraryState.value=false
+  }
+  outerLibraryState.value=undefined
+  await loadRecords()
+}
+
 function datasetSaved() {
   datasetEditorId.value = undefined
   datasetPendingIds.value = []
-  void loadRecords()
+  void datasetUpdated()
+}
+
+async function datasetUpdated(){
+  if(activeDataset.value){
+    const current=activeDataset.value
+    const generation=++datasetRefreshGeneration
+    const dataset=await assetApi.get('/astrophotoflow/api/v1/datasets/'+current.id,datasetSchema)
+    if(generation!==datasetRefreshGeneration||!isDatasetMembersView.value||activeDataset.value?.id!==current.id)return
+    activeDataset.value={...dataset}
+  }
+  await loadRecords()
 }
 
 function closeDatasetEditor(){
@@ -1095,9 +1169,13 @@ async function removeSelectedLibraryEntries(){
   }finally{bulkDeleteBusy.value=false}
 }
 
-function onLibraryRowClick(row:RecordData){
-  if(bulkSelectMode.value)toggleBulkSelection(row)
-  else void selectRow(row)
+function onLibraryRowClick(row:RecordData,event:MouseEvent){
+  if(bulkSelectMode.value){toggleBulkSelection(row);return}
+  if(row.entry_type==='dataset'&&isLibraryItemsView.value&&!(event.target instanceof Element&&event.target.closest('.apf-inline-field'))){
+    openDataset(row)
+    return
+  }
+  void selectRow(row)
 }
 
 async function selectRow(row: RecordData) {
@@ -1416,6 +1494,7 @@ function datasetClassification(row: RecordData) {
 watch(
   [() => store.query, () => store.offset, () => store.pageSize, statusFilter, roleFilter, frameTypeFilter],
   ([query, offset, pageSize, status, role, frameType], [previousQuery, previousOffset, previousPageSize, previousStatus, previousRole, previousFrameType]) => {
+    if(restoringOuterLibraryState.value)return
     const queryChanged = query !== previousQuery
     const filtersChanged = pageSize !== previousPageSize || status !== previousStatus || role !== previousRole || frameType !== previousFrameType
     if(offset!==previousOffset||queryChanged||filtersChanged)clearBulkSelection()
@@ -1463,8 +1542,11 @@ onBeforeUnmount(() => {
         <template v-if="activeArea === 'library' || activeArea === 'settings'">
           <div class="apf-toolbar">
             <div class="apf-heading">
-              <button v-if="viewingProjectAssets || viewingProjectDatasets" type="button" @click="leaveProjectAssets">← 返回项目</button>
-              <h1>{{ activeArea === 'library' ? '素材库' : (viewingProjectAssets ? '项目资产' : viewingProjectDatasets ? '项目数据集' : '设置') }}</h1>
+              <button v-if="activeDataset" type="button" @click="closeDataset">← 返回素材库</button>
+              <button v-else-if="viewingProjectAssets || viewingProjectDatasets" type="button" @click="leaveProjectAssets">← 返回项目</button>
+              <h1>{{ activeDataset ? '素材库 / '+activeDataset.name : activeArea === 'library' ? '素材库' : (viewingProjectAssets ? '项目资产' : viewingProjectDatasets ? '项目数据集' : '设置') }}</h1>
+              <span v-if="activeDataset" class="apf-state">图像组 · {{activeDataset.version?.members?.length??activeDataset.member_count??0}} 张</span>
+              <button v-if="activeDataset" type="button" @click="editDataset(activeDataset)">管理成员</button>
               <div v-if="isLibraryItemsView" class="apf-heading-actions">
                 <template v-if="bulkSelectMode">
                   <button type="button" :disabled="bulkDeleteBusy||bulkSelection.size===0||savingInline>0||Boolean(inlineSaveFailure)" @click="removeSelectedLibraryEntries">{{bulkDeleteBusy?'删除中…':'删除'}}</button>
@@ -1497,14 +1579,14 @@ onBeforeUnmount(() => {
               v-model="statusFilter" aria-label="状态筛选">
               <option value="active">启用</option><option value="archived">已归档</option><option value="all">全部</option>
             </select>
-            <button v-if="activeArea==='library' && !viewingProjectAssets && !viewingProjectDatasets" ref="filterButton" type="button" :disabled="bulkDeleteBusy" :aria-expanded="filterPanelOpen" @click="filterPanelOpen=!filterPanelOpen">
+            <button v-if="isLibraryItemsView" ref="filterButton" type="button" :disabled="bulkDeleteBusy" :aria-expanded="filterPanelOpen" @click="filterPanelOpen=!filterPanelOpen">
               筛选<span v-if="activeFilterCount">（{{activeFilterCount}}）</span>
             </button>
             <div v-if="activeArea==='settings'" class="apf-layout">
               <button type="button" :aria-pressed="store.layout === 'grid'" @click="store.layout = 'grid'">网格</button>
               <button type="button" :aria-pressed="store.layout === 'list'" @click="store.layout = 'list'">列表</button>
             </div>
-            <div v-if="activeArea==='library'&&!viewingProjectAssets&&!viewingProjectDatasets" class="apf-library-view" aria-label="素材显示方式">
+            <div v-if="isLibraryTableView" class="apf-library-view" aria-label="素材显示方式">
               <button type="button" :aria-pressed="libraryViewMode==='simple'" @click="libraryViewMode='simple'">简约</button>
               <button type="button" :aria-pressed="libraryViewMode==='detail'" @click="libraryViewMode='detail'">细节</button>
             </div>
@@ -1516,7 +1598,7 @@ onBeforeUnmount(() => {
             <button v-if="store.section==='projects' && viewingProjectDatasets" type="button" @click="toggleProjectDatasetMode">{{addingProjectDatasets?'查看已选数据集':'添加数据集'}}</button>
           </div>
 
-          <LibraryFilterPanel v-if="filterPanelOpen" :filters="activeFilters" :anchor="filterButton" @apply="applyFilters" @cancel="filterPanelOpen=false" />
+          <LibraryFilterPanel v-if="filterPanelOpen && isLibraryItemsView" :filters="activeFilters" :anchor="filterButton" @apply="applyFilters" @cancel="filterPanelOpen=false" />
           <input ref="filePicker" type="file" multiple accept=".fits,.fit,.fts,.fits.fz,.fit.fz,.jpg,.jpeg,.png,.tif,.tiff,.bmp,.webp,.cr2,.cr3,.nef,.arw,.dng,.raf,.orf,.rw2,.pef,.srw,.xisf,.ser,.mp4,.mov,.avi,.mkv" hidden @change="filesChosen" />
           <input ref="folderPicker" type="file" webkitdirectory directory multiple hidden @change="foldersChosen" />
           <p v-if="capabilityError" class="apf-error" role="alert">能力状态读取失败：{{ errorText(capabilityError) }}</p>
@@ -1525,20 +1607,20 @@ onBeforeUnmount(() => {
           <p v-if="bulkDeleteNotice" class="apf-state" role="status">{{bulkDeleteNotice}}</p>
           <p v-if="error" class="apf-error" role="alert">{{ errorText(error) }}<span v-if="error.requestId"> 请求 ID：{{ error.requestId }}</span></p>
           <p v-if="loading" class="apf-state" role="status">正在读取服务数据…</p>
-          <p v-if="!loading && !error && rows.length === 0" class="apf-state">{{activeArea==='library'?'当前没有已完成的素材。':'此处目前没有记录。'}}</p>
+          <p v-if="!loading && !error && rows.length === 0" class="apf-state">{{activeDataset?'此图像组当前没有成员。':activeArea==='library'?'当前没有已完成的素材。':'此处目前没有记录。'}}</p>
 
           <div v-if="!loading && (rows.length || activeArea === 'library') && isAssetTable" class="apf-table-scroll" :class="activeArea==='library'?libraryViewMode:'detail'">
             <table :class="['apf-assets-table',{'is-selecting':bulkSelectMode,'is-deleting':bulkDeleteBusy}]">
               <thead><tr>
                 <th v-if="bulkSelectMode&&isLibraryItemsView"><input type="checkbox" aria-label="全选当前页" :checked="pageAllSelected" :indeterminate="pagePartiallySelected" :aria-checked="pagePartiallySelected?'mixed':pageAllSelected" :disabled="rows.length===0||bulkDeleteBusy" @change="togglePageSelection" /></th>
                 <th>预览</th>
-                <th :aria-sort="isLibraryItemsView?sortAria('name'):undefined"><button v-if="isLibraryItemsView" type="button" class="apf-sort-button" @click="toggleLibrarySort('name')">名称{{sortArrow('name')}}</button><template v-else>名称</template></th>
-                <th :aria-sort="isLibraryItemsView?sortAria('classification'):undefined"><button v-if="isLibraryItemsView" type="button" class="apf-sort-button" @click="toggleLibrarySort('classification')">分类{{sortArrow('classification')}}</button><template v-else>分类</template></th>
-                <th :aria-sort="isLibraryItemsView?sortAria('camera'):undefined"><button v-if="isLibraryItemsView" type="button" class="apf-sort-button" @click="toggleLibrarySort('camera')">相机{{sortArrow('camera')}}</button><template v-else>相机</template></th>
-                <th :aria-sort="isLibraryItemsView?sortAria('parameter_mode'):undefined"><button v-if="isLibraryItemsView" type="button" class="apf-sort-button" @click="toggleLibrarySort('parameter_mode')">ISO／Gain{{sortArrow('parameter_mode')}}</button><template v-else>ISO／Gain</template></th>
-                <th :aria-sort="isLibraryItemsView?sortAria('exposure_seconds'):undefined"><button v-if="isLibraryItemsView" type="button" class="apf-sort-button" @click="toggleLibrarySort('exposure_seconds')">曝光{{sortArrow('exposure_seconds')}}</button><template v-else>曝光</template></th>
-                <th :aria-sort="isLibraryItemsView?sortAria('sensor_temperature_c'):undefined"><button v-if="isLibraryItemsView" type="button" class="apf-sort-button" @click="toggleLibrarySort('sensor_temperature_c')">温度{{sortArrow('sensor_temperature_c')}}</button><template v-else>温度</template></th>
-                <template v-if="libraryViewMode==='detail'&&isLibraryItemsView">
+                <th :aria-sort="isLibraryTableView?sortAria('name'):undefined"><button v-if="isLibraryTableView" type="button" class="apf-sort-button" @click="toggleLibrarySort('name')">名称{{sortArrow('name')}}</button><template v-else>名称</template></th>
+                <th :aria-sort="isLibraryTableView?sortAria('classification'):undefined"><button v-if="isLibraryTableView" type="button" class="apf-sort-button" @click="toggleLibrarySort('classification')">分类{{sortArrow('classification')}}</button><template v-else>分类</template></th>
+                <th :aria-sort="isLibraryTableView?sortAria('camera'):undefined"><button v-if="isLibraryTableView" type="button" class="apf-sort-button" @click="toggleLibrarySort('camera')">相机{{sortArrow('camera')}}</button><template v-else>相机</template></th>
+                <th :aria-sort="isLibraryTableView?sortAria('parameter_mode'):undefined"><button v-if="isLibraryTableView" type="button" class="apf-sort-button" @click="toggleLibrarySort('parameter_mode')">ISO／Gain{{sortArrow('parameter_mode')}}</button><template v-else>ISO／Gain</template></th>
+                <th :aria-sort="isLibraryTableView?sortAria('exposure_seconds'):undefined"><button v-if="isLibraryTableView" type="button" class="apf-sort-button" @click="toggleLibrarySort('exposure_seconds')">曝光{{sortArrow('exposure_seconds')}}</button><template v-else>曝光</template></th>
+                <th :aria-sort="isLibraryTableView?sortAria('sensor_temperature_c'):undefined"><button v-if="isLibraryTableView" type="button" class="apf-sort-button" @click="toggleLibrarySort('sensor_temperature_c')">温度{{sortArrow('sensor_temperature_c')}}</button><template v-else>温度</template></th>
+                <template v-if="libraryViewMode==='detail'&&isLibraryTableView">
                   <th :aria-sort="sortAria('binning')"><button type="button" class="apf-sort-button" @click="toggleLibrarySort('binning')">Bin{{sortArrow('binning')}}</button></th>
                   <th :aria-sort="sortAria('cfa_pattern')"><button type="button" class="apf-sort-button" @click="toggleLibrarySort('cfa_pattern')">CFA{{sortArrow('cfa_pattern')}}</button></th>
                   <th :aria-sort="sortAria('optical_system')"><button type="button" class="apf-sort-button" @click="toggleLibrarySort('optical_system')">成像系统{{sortArrow('optical_system')}}</button></th>
@@ -1563,13 +1645,13 @@ onBeforeUnmount(() => {
                     </div></td>
                   </tr>
                 </ImportTasks>
-                <tr v-for="row in rows" :key="row.entry_type+':'+row.id" :aria-selected="bulkSelectMode?bulkSelection.has(bulkKey(row)):selected?.id===row.id" @click="onLibraryRowClick(row)" @dblclick.capture="bulkSelectMode?$event.stopPropagation():undefined">
+                <tr v-for="row in rows" :key="row.entry_type+':'+row.id" :aria-selected="bulkSelectMode?bulkSelection.has(bulkKey(row)):selected?.id===row.id" @click="onLibraryRowClick(row,$event)" @dblclick.capture="bulkSelectMode?$event.stopPropagation():undefined">
                 <td v-if="bulkSelectMode&&isLibraryItemsView"><input type="checkbox" :aria-label="'选择 '+itemTitle(row)" :checked="bulkSelection.has(bulkKey(row))" :disabled="bulkDeleteBusy" @click.stop @change="toggleBulkSelection(row)" /></td>
-                <td><button class="apf-thumb" type="button" :aria-label="'查看 '+itemTitle(row)+' 预览'" @click.stop="showPreview(row)">
+                <td><button class="apf-thumb" type="button" :aria-label="row.entry_type==='dataset'?'打开图像组 '+itemTitle(row):'查看 '+itemTitle(row)+' 预览'" @click.stop="row.entry_type==='dataset'?openDataset(row):showPreview(row)">
                   <img v-if="previewUrls[row.id]" :src="previewUrls[row.id]" alt="" />
                   <span v-else>100px</span>
                 </button></td>
-                <td><InlineField :value="itemTitle(row)" :save="value=>saveRowField(row,'name',value)" @cancelled="clearInlineSaveFailure(inlineFailureKey(row,'name'))" /><button v-if="row.entry_type==='dataset'" type="button" class="apf-member-open" @click.stop="editDataset(row)">{{itemSubtitle(row)}}</button><small v-else>{{itemSubtitle(row)}}</small></td>
+                <td><InlineField :value="itemTitle(row)" :save="value=>saveRowField(row,'name',value)" @cancelled="clearInlineSaveFailure(inlineFailureKey(row,'name'))" /><template v-if="row.entry_type==='dataset'"><button type="button" class="apf-member-open" @click.stop="editDataset(row)">管理成员</button><button type="button" class="apf-member-open" @click.stop="openDataset(row)">图像组 · {{row.version?.members?.length??row.member_count??0}} 张</button></template><small v-else>{{itemSubtitle(row)}}</small></td>
                 <td v-if="row.entry_type==='dataset'">
                   <InlineField :value="datasetRawValue(row,member=>member.asset?.classification?.frame_class)" :display="datasetValue(row,member=>member.asset?.classification?.frame_class,frameClassLabel)" kind="select" :choices="[{value:'',label:'未指定'},{value:'mixed',label:'混合',disabled:true},...frameClasses.map(value=>({value,label:value}))]" :save="value=>saveRowField(row,'frame_class',value)" @cancelled="clearInlineSaveFailure(inlineFailureKey(row,'frame_class'))" /><span class="apf-classification-separator" aria-hidden="true">/</span>
                   <InlineField :value="datasetRawValue(row,member=>member.asset?.classification?.frame_type)" :display="datasetValue(row,member=>member.asset?.classification?.frame_type,frameTypeLabel)" kind="select" :choices="[{value:'',label:'未指定'},{value:'mixed',label:'混合',disabled:true},...frameTypes.map(value=>({value,label:value}))]" :save="value=>saveRowField(row,'frame_type',value)" @cancelled="clearInlineSaveFailure(inlineFailureKey(row,'frame_type'))" />
@@ -1584,7 +1666,7 @@ onBeforeUnmount(() => {
                 </td>
                 <td><InlineField :value="row.entry_type==='dataset'?datasetRawValue(row,member=>member.asset?.parameters?.exposure_seconds):rowParameters(row).exposure_seconds" :display="row.entry_type==='dataset'?datasetValue(row,member=>member.asset?.parameters?.exposure_seconds,value=>value==null?'未指定':String(value)+' s'):captureValue(rowParameters(row).exposure_seconds)+(rowParameters(row).exposure_seconds==null?'':' s')" :edit-value="row.entry_type==='dataset'&&datasetRawValue(row,member=>member.asset?.parameters?.exposure_seconds)==='mixed'?'':undefined" kind="number" :save="value=>saveRowField(row,'exposure_seconds',value)" @cancelled="clearInlineSaveFailure(inlineFailureKey(row,'exposure_seconds'))" /></td>
                 <td><InlineField :value="row.entry_type==='dataset'?datasetRawValue(row,member=>member.asset?.parameters?.sensor_temperature_c):rowParameters(row).sensor_temperature_c" :display="row.entry_type==='dataset'?datasetTemperature(row):rowParameters(row).sensor_temperature_c==null?'未指定':displayTemperature(rowParameters(row).sensor_temperature_c)+' °C'" :edit-value="row.entry_type==='dataset'&&datasetRawValue(row,member=>member.asset?.parameters?.sensor_temperature_c)==='mixed'?'':undefined" kind="number" :save="value=>saveRowField(row,'sensor_temperature_c',value)" @cancelled="clearInlineSaveFailure(inlineFailureKey(row,'sensor_temperature_c'))" /></td>
-                <template v-if="libraryViewMode==='detail'&&isLibraryItemsView">
+                <template v-if="libraryViewMode==='detail'&&isLibraryTableView">
                   <td><InlineField :value="row.entry_type==='dataset'?datasetRawValue(row,member=>binEditValue(member.asset?.parameters??{})):binEditValue(rowParameters(row))" :display="row.entry_type==='dataset'?datasetValue(row,member=>binValue(member.asset?.parameters??{}),value=>String(value??'未指定')):binValue(rowParameters(row))??'未指定'" kind="select" :choices="row.entry_type==='dataset'?datasetBinChoices(row):binEditChoices(rowParameters(row))" :save="value=>saveBin(row,value)" @cancelled="clearInlineSaveFailure(inlineFailureKey(row,'binning'))" /></td>
                   <td><InlineField :value="row.entry_type==='dataset'?datasetRawValue(row,member=>member.asset?.parameters?.cfa_pattern):rowParameters(row).cfa_pattern??''" :display="row.entry_type==='dataset'?datasetValue(row,member=>member.asset?.parameters?.cfa_pattern,cfaLabel):cfaLabel(rowParameters(row).cfa_pattern)" kind="select" :choices="row.entry_type==='dataset'?[...cfaChoices,{value:'mixed',label:'混合',disabled:true}]:cfaChoices" :save="value=>saveRowField(row,'cfa_pattern',value)" @cancelled="clearInlineSaveFailure(inlineFailureKey(row,'cfa_pattern'))" /></td>
                   <td><InlineField :value="row.entry_type==='dataset'?datasetRawValue(row,member=>member.asset?.parameters?.optical_system_id):rowParameters(row).optical_system_id" :display="row.entry_type==='dataset'?datasetValue(row,member=>member.asset?.parameters?.optical_system_id,value=>equipmentName(typeof value==='string'?value:null)):equipmentName(rowParameters(row).optical_system_id)" :edit-value="row.entry_type==='dataset'&&datasetRawValue(row,member=>member.asset?.parameters?.optical_system_id)==='mixed'?'':undefined" kind="select" :choices="[{value:'',label:'未指定'},{value:'mixed',label:'混合',disabled:true},...equipmentChoices('optical_system')]" :choices-message="equipmentChoiceMessage('optical_system')" :save="value=>saveRowField(row,'optical_system_id',value)" @cancelled="clearInlineSaveFailure(inlineFailureKey(row,'optical_system_id'))" /></td>
@@ -1812,7 +1894,7 @@ onBeforeUnmount(() => {
         </section>
       </main>
       <ImportDialog :open="importDialogOpen" :files="importFiles" :create-dataset="importCreatesDataset" :dataset-name="importDatasetName" @close="importDialogOpen=false" @submitted="importSubmitted" @upload-progress="updateUploadProgress" @upload-failed="progressRefreshToken++" />
-      <DatasetEditor v-if="datasetEditorId" :dataset-id="datasetEditorId" :pending-asset-version-ids="datasetPendingIds" @close="closeDatasetEditor" @saved="datasetSaved" @updated="loadRecords" @saving="datasetInlineSaving" @failure="datasetInlineFailure" />
+      <DatasetEditor v-if="datasetEditorId" :dataset-id="datasetEditorId" :pending-asset-version-ids="datasetPendingIds" @close="closeDatasetEditor" @saved="datasetSaved" @updated="datasetUpdated" @saving="datasetInlineSaving" @failure="datasetInlineFailure" />
       <div v-if="previewUrl || previewError" class="apf-preview-overlay" role="dialog" aria-modal="true" aria-label="素材预览" @click.self="closePreview" @keydown.stop>
         <div class="apf-preview-dialog"><button type="button" @click="closePreview">关闭预览</button><p v-if="previewError" role="alert">{{previewError}}</p><img v-else :src="previewUrl" alt="素材图像或视频首帧预览" /></div>
       </div>

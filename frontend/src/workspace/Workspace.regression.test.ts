@@ -398,8 +398,6 @@ describe('first-stage regression fixes', () => {
     wrapper=mount(App,{global:{plugins:[pinia]}})
     await flushPromises()
     expect(wrapper.get('.apf-table-scroll').classes()).toContain('simple')
-    await wrapper.get('.apf-assets-table tbody tr').trigger('click')
-    await flushPromises()
     await wrapper.get('input[aria-label="搜索"]').setValue('M31')
     await new Promise(resolve=>setTimeout(resolve,300))
     await flushPromises()
@@ -413,7 +411,7 @@ describe('first-stage regression fixes', () => {
     expect(wrapper.get('.apf-table-scroll').classes()).toContain('detail')
     expect((wrapper.get('input[aria-label="搜索"]').element as HTMLInputElement).value).toBe('M31')
     expect(wrapper.findAll('button').find(button=>button.text().startsWith('筛选'))!.text()).toBe('筛选（1）')
-    expect(wrapper.get('.apf-assets-table tbody tr').attributes('aria-selected')).toBe('true')
+    expect(wrapper.get('.apf-assets-table tbody tr').attributes('aria-selected')).toBe('false')
     expect(wrapper.find('.apf-filter-panel').exists()).toBe(true)
 
     const binSelector='.apf-assets-table tbody tr td:nth-child(8) .apf-inline-value'
@@ -566,8 +564,6 @@ describe('first-stage regression fixes', () => {
     send.mockRejectedValue(new Error('revision conflict'))
     vi.stubGlobal('confirm',()=>true)
     wrapper=mount(App,{attachTo:document.body,global:{plugins:[pinia]}})
-    await flushPromises()
-    await wrapper.get('.apf-assets-table tbody tr').trigger('click')
     await flushPromises()
     await wrapper.get('.apf-member-open').trigger('click')
     await flushPromises()
