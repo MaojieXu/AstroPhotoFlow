@@ -243,12 +243,12 @@ def create_preview(path: Path, hdu_index: int, kind: str, parameters: dict, max_
         if kind == "rgb":
             header = hdu.header
             if _rgb_channel_first(header):
-                sample = np.asarray(data[:, ::stride, ::stride], dtype=np.float32)
+                sample = np.asarray(data[:, ::stride, :][:, :, ::stride], dtype=np.float32)
                 sample = np.moveaxis(sample, 0, -1)
             else:
-                sample = np.asarray(data[::stride, ::stride, :], dtype=np.float32)
+                sample = np.asarray(data[::stride, :, :][:, ::stride, :], dtype=np.float32)
         else:
-            sample = np.asarray(data[::stride, ::stride], dtype=np.float32)
+            sample = np.asarray(data[::stride, :][:, ::stride], dtype=np.float32)
         if kind == "bayer":
             pattern = str(parameters.get("cfa_pattern") or hdu.header.get("BAYERPAT", hdu.header.get("BAYERPATTERN", ""))).upper()
             if pattern not in CFA_PATTERNS:

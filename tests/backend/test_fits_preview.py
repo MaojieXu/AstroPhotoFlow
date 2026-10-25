@@ -137,3 +137,82 @@ def test_manual_cfa_choice_overrides_conflicting_fits_header(tmp_path):
     assert parsed['hdus'][0]['supported_kind']=='bayer'
     image,_=create_preview(path,0,'bayer',{'cfa_pattern':'RGGB'},100)
     assert image.size==(8,8)
+
+
+@pytest.mark.parametrize("layout", ["float", "uint16", "scaled", "bayer", "planar", "interleaved", "compressed"])
+def test_sampled_rows_match_previous_scalar_section_samples_and_preview(tmp_path, layout):
+    from PIL import Image
+    from astrophotoflow.backend.fits_preview import _bayer_demosaic, _display, stretch_bounds
+    path = tmp_path / f"{layout}.fits"
+    values = np.arange(99 * 148, dtype=np.float32).reshape(99, 148) / 100
+    kind, parameters = "mono", {}
+    if layout == "uint16":
+        hdu = fits.PrimaryHDU((values * 100).astype(np.uint16))
+    elif layout == "scaled":
+        hdu = fits.PrimaryHDU(values)
+        hdu.scale("int16", bscale=.25, bzero=20)
+    elif layout == "planar":
+        hdu = fits.PrimaryHDU(np.stack([values, values + 10, values + 20]))
+        hdu.header["CTYPE3"] = "RGB"
+        kind = "rgb"
+    elif layout == "interleaved":
+        hdu = fits.PrimaryHDU(np.stack([values, values + 10, values + 20], axis=-1))
+        hdu.header["CTYPE1"] = "RGB"
+        kind = "rgb"
+    elif layout == "compressed":
+        hdu = fits.CompImageHDU(values)
+    else:
+        hdu = fits.PrimaryHDU(values)
+    if layout == "bayer":
+        kind, parameters = "bayer", {"cfa_pattern": "RGGB"}
+        hdu.header["BAYERPAT"] = "RGGB"
+        hdu.header["XBAYROFF"], hdu.header["YBAYROFF"] = 1, 1
+    if layout == "compressed":
+        fits.HDUList([fits.PrimaryHDU(), hdu]).writeto(path)
+        index = 1
+    else:
+        hdu.writeto(path)
+        index = 0
+    original_bytes = path.read_bytes()
+    with fits.open(path, memmap=False, lazy_load_hdus=True) as hdus:
+        source = hdus[index]
+        stride = (max(source.shape[-2:]) + 30) // 31
+        if kind == "bayer" and stride % 2 == 0:
+            stride += 1
+        # The previous implementation's exact Section expression is the oracle.
+        if layout == "planar":
+            sample = np.moveaxis(np.asarray(source.section[:, ::stride, ::stride], dtype=np.float32), 0, -1)
+        elif layout == "interleaved":
+            sample = np.asarray(source.section[::stride, ::stride, :], dtype=np.float32)
+        else:
+            sample = np.asarray(source.section[::stride, ::stride], dtype=np.float32)
+        if kind == "bayer":
+            sample = _bayer_demosaic(sample, "RGGB", 1, 1, stride)
+    low, high = stretch_bounds(sample)
+    expected = _display(sample, (low, high))
+    expected.thumbnail((31, 31), Image.Resampling.LANCZOS)
+    actual, display = create_preview(path, index, kind, parameters, 31)
+    assert actual.size == expected.size
+    assert actual.tobytes() == expected.tobytes()
+    assert display["stretch_low"] == low
+    assert display["stretch_high"] == high
+    assert display["downsample_stride"] == stride
+    assert path.read_bytes() == original_bytes
+
+
+def test_sampled_rows_avoid_per_pixel_fits_reads(tmp_path, monkeypatch):
+    path = tmp_path / "reads.fits"
+    fits.PrimaryHDU(np.arange(99 * 148, dtype=np.float32).reshape(99, 148)).writeto(path)
+    original = fits.PrimaryHDU._get_scaled_image_data
+    calls = []
+    def counted(*args, **kwargs):
+        calls.append(1)
+        return original(*args, **kwargs)
+    monkeypatch.setattr(fits.PrimaryHDU, "_get_scaled_image_data", counted)
+    with fits.open(path, memmap=False) as hdus:
+        np.asarray(hdus[0].section[::5, ::5])
+    old_count = len(calls)
+    calls.clear()
+    create_preview(path, 0, "mono", {}, 31)
+    assert len(calls) == 20
+    assert old_count == 600
