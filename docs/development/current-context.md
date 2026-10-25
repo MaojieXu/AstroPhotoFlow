@@ -17,7 +17,7 @@
 
 ## 产品边界
 
-开发代码 schema 已进入 `0007_setups_and_calibration`，运行中的旧展示实例尚未统一更新；MCP 当前仍为五工具。素材行为见[架构说明](../architecture/assets.md)，CLI/MCP 见[接口说明](../api/README.md)。新功能按[五分支约定](module-improvements.md)推进；完整 Agent、软件适配、工作流和结果比较仍未实现。
+开发代码 schema 已进入 `0007_setups_and_calibration`，运行中的旧展示实例尚未统一更新。MCP 已扩为58工具，保留原五工具；全局注册未改，既有连接重新启动后才会加载新工具。素材行为见[架构说明](../architecture/assets.md)，CLI/MCP 见[接口说明](../api/README.md)。新功能按[五分支约定](module-improvements.md)推进；完整 Agent、软件适配、工作流和结果比较仍未实现。
 
 原工程重构验收见[历史记录](remake-acceptance.md)，本轮配置和运行收尾的实际证据见[配置管理验收](config-management-acceptance.md)。不自动合并 dev/main 或推送远端，不进行前端自动点击。
 
@@ -25,10 +25,11 @@
 
 ## 当前 Goal 开发进度
 
-五分支共同基础为 `3f72b71`。设置组织和异步导入首版已经本地合入 feature/remake，
-两分支集成候选为 `9a0706e`（集成后 Python 30、前端 119 项通过）。校准库继续在独立
-worktree 开发；导入分支正在补充分阶段性能和 XISF 元数据观察。1080 px 预览及工具/Skill
-分支尚未交付，不能宣称整个 Goal 完成。实际证据和剩余验收见[矩阵](module-improvements-acceptance.md)。
+五分支共同基础为 `3f72b71`。五个功能分支代码均已本地合入 feature/remake，包括分阶段导入与实测优化、
+组合与预设、校准库、大图预览、结构化CLI/MCP和项目Skill。集成候选 `b637097` 的组合检查66项及前端127项通过，
+工具后续候选 `54c9eaf` 的真实SDK图片读取/CLI导出及冲突保护通过。根集成另外修复了部分分类字段省略语义、
+登记后来源变化及宿主键盘事件阻止大图Escape的问题。当前进入最终独立复查、完整测试和发行包验证，
+尚不能宣称整个Goal完成。实际证据和剩余验收见[矩阵](module-improvements-acceptance.md)。
 
 原 31388 展示进程尚未替换为本轮候选。工作区插件隔离已通过两套真实 CPU 实例验证，
 测试实例已退出，无受管子进程残留，四个端口均释放。全局 MCP 注册与默认 workspace 指针未改变。

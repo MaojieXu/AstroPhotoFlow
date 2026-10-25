@@ -5,10 +5,11 @@
 | 需求范围 | 当前实现 | 自动化证据 |
 |---|---|---|
 | FR-01 项目基础管理 | 创建、编辑、归档、引用及拍摄配置关联；完整托管工作流未实现 | `tests/backend/test_service.py`、前端 Workspace/Settings 测试 |
-| FR-04 素材管理 | 上传／引用／托管导入、任务、元数据、数据集、筛选排序、参数编辑 | backend ingestion/service/library_sort；frontend Workspace/DatasetEditor/ImportDialog/ImportTasks |
+| FR-04 素材管理 | 分阶段异步导入、Header 分类、任务、预设快照、数据集、筛选排序与编辑 | backend ingestion/import_pipeline/service/library_sort；frontend Workspace/ImportDialog/ImportTasks；integration import_presets |
 | FR-04/11 删除与恢复 | 已接受的组／照片回收站、确认范围、部分清理、R4、身份和固定版本保留 | backend service 的 trash 回归；frontend LibraryTrashDialog |
-| FR-05 当前显示子集 | 100 px 缩略图、既有拉伸规则；完整查看器／比较未实现 | backend fits_preview/ingestion/video_preview |
-| FR-07 初版资产 MCP | 五工具及 CLI 共用领域 API；完整项目／工作流工具未实现 | `tests/integration/test_cli_mcp_protocol.py` |
+| FR-05 当前显示子集 | 100 px 缩略图、1080 px按需缓存、固定拉伸和项目固定成员浏览；完整比较未实现 | backend fits_preview/display_previews/video_preview；frontend PhotoPreviewDialog |
+| FR-07 资料管理 MCP | 58工具及 CLI 共用领域客户端，覆盖素材／配置／校准；完整软件工作流未实现 | integration cli_mcp_protocol/client_operations |
+| 设备组合与校准关系 | 内联设备、所属预设、固定校准版本、组默认／成员覆盖、历史引用保护 | backend setups/calibration/domain_foundation；frontend SettingsOrganization/CalibrationLibrary |
 | FR-08 当前并发子集 | 参数 revision、过期请求拒绝；完整接管／撤销未实现 | backend service/ingestion、CLI/MCP 协议回归 |
 | FR-13/15 CPU 交付 | 固定 ComfyUI 来源、包资源、生命周期接线 | `tests/workbench/`、`tests/packaging/`、发行验证脚本 |
 | FR-14 当前服务边界 | 本地认证、代理来源／路径约束、原图和共享文件保护 | `tests/comfyui/`、backend service/ingestion |

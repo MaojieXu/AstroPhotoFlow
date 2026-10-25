@@ -26,6 +26,20 @@ beforeEach(()=>{
 afterEach(()=>{wrapper?.unmount();wrapper=undefined;vi.useRealTimers();vi.unstubAllGlobals()})
 
 describe('lightweight photo preview',()=>{
+  it('closes from the focused button inside a workspace that stops keyboard bubbling',async()=>{
+    const host=document.createElement('div')
+    document.body.append(host)
+    host.addEventListener('keydown',event=>event.stopPropagation())
+    send.mockResolvedValue(state('available'))
+    try{
+      wrapper=mount(PhotoPreviewDialog,{props:{photo},attachTo:host})
+      await flushPromises()
+      await wrapper.get('button[aria-label="关闭大图预览"]').trigger('keydown',{key:'Escape'})
+      expect(wrapper.emitted('close')).toHaveLength(1)
+    }finally{
+      wrapper?.unmount();wrapper=undefined;host.remove()
+    }
+  })
   it('validates the state DTO and polls without repeating the scheduling request',async()=>{
     expect(displayPreviewSchema.parse(state('generating')).status).toBe('generating')
     send.mockResolvedValue(state('generating'));get.mockResolvedValue(state('available'))

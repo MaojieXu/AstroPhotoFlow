@@ -58,12 +58,13 @@ async function load() {
 function escape(event: KeyboardEvent) {
   if (props.photo && event.key === 'Escape') {
     event.preventDefault()
+    event.stopPropagation()
     emit('close')
   }
 }
 watch(() => props.photo, () => void load(), { immediate: true })
-onMounted(() => window.addEventListener('keydown', escape))
-onBeforeUnmount(() => { generation++; clear(); window.removeEventListener('keydown', escape) })
+onMounted(() => window.addEventListener('keydown', escape, true))
+onBeforeUnmount(() => { generation++; clear(); window.removeEventListener('keydown', escape, true) })
 </script>
 
 <template>
