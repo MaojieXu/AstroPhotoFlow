@@ -579,8 +579,11 @@ def _refresh_fits_metadata(database: Database, settings: Settings, item_id: str,
         if category == "xisf":
             hdu_rows, parsed = [], _inspect_xisf(path)
         else:
-            result = inspect_fits(path, current_parameters.get("cfa_pattern"))
+            manual_cfa = current_parameters.get("cfa_pattern") if value_sources.get("cfa_pattern") == "manual" else None
+            result = inspect_fits(path, manual_cfa)
             hdu_rows, parsed = result["hdus"], result["parsed_parameters"]
+            if not parsed.get("cfa_pattern") and value_sources.get("cfa_pattern") == "preset":
+                hdu_rows = inspect_fits(path, current_parameters["cfa_pattern"])["hdus"]
         error = None
     except Exception:
         hdu_rows, parsed = [], {}

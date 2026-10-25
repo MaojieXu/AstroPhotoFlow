@@ -531,3 +531,63 @@ def test_xisf_missing_headers_remain_unknown_and_metadata_failure_retries(servic
     assert recovered["status"] == "completed"
     assert recovered["items"][0]["asset_version_id"] == item["asset_version_id"]
     assert recovered["items"][0]["metadata_status"] == "available"
+
+
+@pytest.mark.parametrize(("file_cfa", "preset_cfa", "manual_cfa", "expected_cfa", "expected_source", "expected_kind"), [
+    ("RGGB", "MONO", None, "RGGB", "file", "bayer"),
+    (None, "RGGB", None, "RGGB", "preset", "bayer"),
+    ("RGGB", "BGGR", "MONO", "MONO", "manual", "mono"),
+    ("BGGR", "MONO", "RGGB", "RGGB", "manual", "bayer"),
+])
+def test_fits_metadata_retry_preserves_cfa_precedence_and_frozen_snapshot(
+    service, monkeypatch, file_cfa, preset_cfa, manual_cfa, expected_cfa, expected_source, expected_kind,
+):
+    from astrophotoflow.backend.models import FitsHduMetadata
+    settings, app, client, root = service
+    original_bytes = image(root / "retry.fits", **({"BAYERPAT": file_cfa} if file_cfa else {}))
+    setup_id, preset_id = str(uuid4()), str(uuid4())
+    with app.state.database.write_session() as session:
+        session.add(EquipmentSetup(id=setup_id, name="CFA setup", components=[]))
+        session.flush()
+        session.add(CapturePreset(id=preset_id, equipment_setup_id=setup_id, name="CFA preset",
+                                  parameters={"cfa_pattern": preset_cfa}, classification={}))
+    inspect = ingestion.inspect_fits
+    def failed(*_args, **_kwargs):
+        raise OSError("controlled initial header failure")
+    monkeypatch.setattr(ingestion, "inspect_fits", failed)
+    accepted = client.post("/api/v1/imports", headers=AUTH, json={
+        "sources": [{"root_id": "science", "path": "retry.fits"}], "storage_mode": "managed", "capture_preset_id": preset_id})
+    assert accepted.status_code == 202, accepted.text
+    original_task = task(client, accepted.json()["task_id"])
+    original_item = original_task["items"][0]
+    assert original_item["metadata_status"] == "failed"
+    with app.state.database.read_session() as session:
+        snapshot = deepcopy(session.get(AssetVersion, original_item["asset_version_id"]).capture_snapshot)
+    if manual_cfa is not None:
+        edited = client.patch(f"/api/v1/library/assets/{original_item['asset_id']}", headers=AUTH,
+                              json={"base_revision": 1, "parameters": {"cfa_pattern": manual_cfa}})
+        assert edited.status_code == 200, edited.text
+    monkeypatch.setattr(ingestion, "inspect_fits", inspect)
+    retried = client.post(f"/api/v1/asset-tasks/{original_task['id']}/retry", headers=AUTH,
+                          json={"item_ids": [original_item["id"]]})
+    assert retried.status_code == 202, retried.text
+    recovered = task(client, retried.json()["task_id"])
+    assert recovered["status"] == "completed"
+    item = recovered["items"][0]
+    assert item["asset_id"] == original_item["asset_id"]
+    assert item["asset_version_id"] == original_item["asset_version_id"]
+    with app.state.database.read_session() as session:
+        asset = session.get(Asset, item["asset_id"])
+        version = session.get(AssetVersion, item["asset_version_id"])
+        hdu = session.scalar(select(FitsHduMetadata).where(FitsHduMetadata.asset_version_id == version.id,
+                                                        FitsHduMetadata.is_selected.is_(True)))
+        preview = session.scalar(select(Preview).where(Preview.asset_version_id == version.id, Preview.size == "thumbnail"))
+        assert asset.parameters["cfa_pattern"] == expected_cfa
+        assert asset.value_sources["cfa_pattern"] == expected_source
+        assert hdu.supported_kind == expected_kind
+        assert preview.display_parameters["cfa_pattern"] == (expected_cfa if expected_kind == "bayer" else None)
+        assert (version.scientific_metadata["observed_parameters"].get("cfa_pattern")) == file_cfa
+        assert version.capture_snapshot == snapshot
+        assert asset.revision == (2 if manual_cfa is not None else 1)
+        assert (settings.data_dir / version.storage_location).read_bytes() == original_bytes
+    assert (root / "retry.fits").read_bytes() == original_bytes
