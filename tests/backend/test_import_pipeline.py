@@ -6,6 +6,7 @@ from pathlib import Path
 from threading import Event, Lock, Thread
 import time
 from uuid import uuid4
+import os
 
 import blake3
 import numpy as np
@@ -21,6 +22,46 @@ from astrophotoflow.backend.schema import database_lock, upgrade_database
 from astrophotoflow.config import ImportRoot, Settings
 
 AUTH = {"Authorization": "Bearer import-pipeline-test"}
+
+
+@pytest.mark.parametrize("change_stage", ["before_content", "during_copy"])
+def test_changed_external_source_cannot_publish_stale_registration(service, monkeypatch, change_stage):
+    settings, app, client, root = service
+    source = root / "changing.fits"
+    image(source, EXPTIME=30)
+    before = source.stat()
+
+    def change_source():
+        with fits.open(source, mode="update") as hdus:
+            hdus[0].header["EXPTIME"] = 99
+        os.utime(source, ns=(before.st_atime_ns, before.st_mtime_ns + 1_000_000_000))
+
+    if change_stage == "before_content":
+        original = ingestion._create_asset_content
+        def change_then_process(*args, **kwargs):
+            change_source()
+            return original(*args, **kwargs)
+        monkeypatch.setattr(ingestion, "_create_asset_content", change_then_process)
+    else:
+        original = ingestion._read_hash_and_copy
+        def change_then_copy(*args, **kwargs):
+            change_source()
+            return original(*args, **kwargs)
+        monkeypatch.setattr(ingestion, "_read_hash_and_copy", change_then_copy)
+    task_id = enqueue(app, [source.name])
+    ingestion.process_task(app.state.database, settings, task_id, app.state.import_workers)
+    current = task(client, task_id)
+    assert current["status"] == "failed"
+    item = current["items"][0]
+    assert item["error"]["code"] == "SOURCE_CHANGED"
+    assert item["content_status"] == "failed"
+    assert fits.getheader(source)["EXPTIME"] == 99
+    asset = client.get(f"/api/v1/library/assets/{item['asset_id']}", headers=AUTH).json()
+    assert asset["parameters"]["exposure_seconds"] == 30
+    assert asset["current_version"]["availability"] == "changed"
+    assert asset["current_version"]["content_hash"] is None
+    assert not (settings.data_dir / asset["current_version"]["storage_location"]).exists()
+    assert not list((settings.data_dir / "staging").rglob("*.part"))
 
 
 def image(path, label="Light Frame", offset=0, **headers):

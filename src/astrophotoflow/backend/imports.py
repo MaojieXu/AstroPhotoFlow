@@ -322,7 +322,7 @@ def retry_asset_task(task_id: UUID, body: RetryCreate, request: Request, backgro
     if len(items) != len(selected_ids):
         raise not_found()
     if any(item.status == "skipped" or not (
-        item.content_status in {"pending", "failed"} or item.metadata_status == "failed" or item.preview_status == "failed"
+        item.content_status in {"pending", "failed"} or item.metadata_status == "failed" or item.preview_status in {"pending", "failed"}
     ) for item in items):
         raise ApiError(422, "VALIDATION_ERROR", "所选项没有失败或未完成阶段，不能重试。")
     source_task = session.get(AssetTask, original.retry_of_task_id) if original.retry_of_task_id else original

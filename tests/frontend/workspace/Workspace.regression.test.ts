@@ -149,7 +149,7 @@ describe('first-stage regression fixes', () => {
     expect(send).toHaveBeenCalledTimes(recovery==='cancel'?1:2)
   })
 
-  it('shows a thumbnail without opening any image when it is clicked',async()=>{
+  it('opens a lazy display preview when its thumbnail is clicked',async()=>{
     const version={id:idAt(502),asset_id:libraryAsset.id,version_number:1,availability:'available',storage_mode:'reference',metadata_status:'ready',preview_status:'ready',created_at:createdAt}
     const asset={...libraryAsset,current_version:version,current_version_id:version.id}
     get.mockImplementation(async(path:string)=>path.endsWith('/capabilities')?capabilities:path.includes('/library/items')?page([{entry_type:'asset',asset,import_issue:null}]):emptyPage)
@@ -159,15 +159,17 @@ describe('first-stage regression fixes', () => {
     wrapper=mount(App,{global:{plugins:[pinia]}})
     await flushPromises()
     const thumb=wrapper.get('.apf-assets-table .apf-thumb')
-    expect(thumb.element.tagName).toBe('DIV')
+    expect(thumb.element.tagName).toBe('BUTTON')
     expect(thumb.get('img').attributes('src')).toBe('blob:thumb')
     const requests=getBlob.mock.calls.length
+    send.mockResolvedValue({asset_version_id:version.id,size:'display',status:'available',width:240,height:160,error:null})
     await thumb.trigger('click')
     await flushPromises()
-    expect(getBlob).toHaveBeenCalledTimes(requests)
-    expect(wrapper.find('.apf-preview-overlay').exists()).toBe(false)
-    delete (URL as any).createObjectURL
-    delete (URL as any).revokeObjectURL
+    expect(getBlob).toHaveBeenCalledTimes(requests+1)
+    expect(wrapper.find('[role="dialog"]').exists()).toBe(true)
+    expect(send.mock.calls[0][0]).toContain('/versions/'+version.id+'/previews/display')
+    await wrapper.get('button[aria-label="关闭大图预览"]').trigger('click')
+    await flushPromises()
   })
 
   it('selects a library row with one click and edits an enum value on double-click',async()=>{
@@ -536,7 +538,7 @@ describe('first-stage regression fixes', () => {
     expect(wrapper.text()).toContain('revision conflict')
   })
 
-  it('releases only the dataset editor failure after confirmed discard',async()=>{
+  it('releases a dataset inline failure after cancelling its draft',async()=>{
     const versionId=idAt(700)
     const datasetVersion={id:versionId,dataset_id:idAt(701),version_number:1,created_at:createdAt,members:[]}
     const dataset={id:idAt(701),name:'Group',notes:null,status:'active',revision:1,current_version_id:versionId,
@@ -552,16 +554,15 @@ describe('first-stage regression fixes', () => {
     vi.stubGlobal('confirm',()=>true)
     wrapper=mount(App,{attachTo:document.body,global:{plugins:[pinia]}})
     await flushPromises()
-    await wrapper.get('.apf-member-open').trigger('click')
-    await flushPromises()
-    await clickDetail(wrapper.get('.apf-dataset-editor .apf-inline-value').element,2)
-    const nameInput=wrapper.get('.apf-dataset-editor input[type="text"]')
+    await clickDetail(wrapper.get('.apf-assets-table tbody tr td:nth-child(2) .apf-inline-value').element,2)
+    const nameInput=wrapper.get('.apf-assets-table tbody tr td:nth-child(2) input[type="text"]')
     await nameInput.setValue('Changed')
     await nameInput.trigger('keydown',{key:'Enter'})
     await flushPromises()
     expect(wrapper.text()).toContain('revision conflict')
 
-    await wrapper.get('.apf-dataset-editor header button').trigger('click')
+    expect((nameInput.element as HTMLInputElement).value).toBe('Changed')
+    await nameInput.trigger('keydown',{key:'Escape'})
     await flushPromises()
     await wrapper.get('.apf-nav button[aria-label="设置"]').trigger('click')
     await flushPromises()
@@ -588,10 +589,8 @@ describe('first-stage regression fixes', () => {
     })
     wrapper=mount(App,{attachTo:document.body,global:{plugins:[pinia]}})
     await flushPromises()
-    await wrapper.get('.apf-member-open').trigger('click')
-    await flushPromises()
-    await clickDetail(wrapper.get('.apf-dataset-editor .apf-inline-value').element,2)
-    const nameInput=wrapper.get('.apf-dataset-editor input[type="text"]')
+    await clickDetail(wrapper.get('.apf-assets-table tbody tr td:nth-child(2) .apf-inline-value').element,2)
+    const nameInput=wrapper.get('.apf-assets-table tbody tr td:nth-child(2) input[type="text"]')
     await nameInput.setValue('New name')
     await nameInput.trigger('keydown',{key:'Enter'})
     await flushPromises()

@@ -328,7 +328,7 @@ def _fit_preview_rows(database: Database, settings: Settings, version_id: str, h
 def _save_preview(database: Database, settings: Settings, version_id: str, hdu_index: int, size: str, edge: int, image: Image.Image, display_parameters: dict | None = None) -> None:
     image.thumbnail((edge, edge), Image.Resampling.LANCZOS)
     preview_id = str(uuid4())
-    relative = Path("previews") / version_id / f"{PREVIEW_ALGORITHM_VERSION}-{hdu_index}-thumbnail.jpg"
+    relative = Path("previews") / version_id / f"{PREVIEW_ALGORITHM_VERSION}-{hdu_index}-{size}.jpg"
     final = settings.data_dir / relative
     final.parent.mkdir(parents=True, exist_ok=True)
     fd, temporary = tempfile.mkstemp(prefix=preview_id, suffix=".tmp", dir=final.parent)
@@ -454,23 +454,25 @@ def _backfill_stretch(database: Database, version_id: str, layout: str) -> tuple
     return (task_ids[0] if task_ids else None), group_key, None, None
 
 
-def _raw_image(path: Path) -> Image.Image:
+def _raw_image(path: Path, max_edge: int = 100) -> Image.Image:
     import rawpy
 
     with rawpy.imread(str(path)) as raw:
+        source_edge = max(raw.sizes.width, raw.sizes.height)
+        threshold = min(max_edge, source_edge)
         try:
             thumbnail = raw.extract_thumb()
             if thumbnail.format == rawpy.ThumbFormat.JPEG:
                 with Image.open(BytesIO(thumbnail.data)) as image:
-                    if max(image.size) >= 100:
+                    if max(image.size) >= threshold:
                         return ImageOps.exif_transpose(image).convert("RGB").copy()
             elif thumbnail.format == rawpy.ThumbFormat.BITMAP:
                 image = Image.fromarray(thumbnail.data)
-                if max(image.size) >= 100:
+                if max(image.size) >= threshold:
                     return image.convert("RGB").copy()
         except (rawpy.LibRawError, OSError, ValueError):
             pass
-        return Image.fromarray(raw.postprocess(half_size=True, output_bps=8, output_color=rawpy.ColorSpace.sRGB)).convert("RGB")
+        return Image.fromarray(raw.postprocess(half_size=source_edge // 2 >= max_edge, output_bps=8, output_color=rawpy.ColorSpace.sRGB)).convert("RGB")
 
 
 def backfill_missing_previews(database: Database, settings: Settings) -> dict[str, int]:
@@ -614,9 +616,15 @@ def _refresh_fits_metadata(database: Database, settings: Settings, item_id: str,
             "observed_parameters": parsed,
         }
         item.metadata_status = "failed" if error else "available"
+        item.preview_status = "pending"
         item.error = {"code": f"{category.upper()}_PARSE_FAILED", "message": error} if error else None
         item.updated_at = datetime.now(timezone.utc)
     return error
+
+
+def _source_stamp(path: Path) -> dict:
+    stat = path.stat()
+    return {"size": stat.st_size, "mtime_ns": stat.st_mtime_ns}
 
 
 def _register_asset(database: Database, settings: Settings, task_data: dict, item_id: str) -> None:
@@ -637,6 +645,7 @@ def _register_asset(database: Database, settings: Settings, task_data: dict, ite
         location = f"roots/{root_spec.id}/{source_path}"
     if not original.is_file():
         raise IngestionError("SOURCE_UNAVAILABLE", "所选来源不是可读文件。")
+    source_stamp = _source_stamp(original) if root_id != "__upload__" else None
     category = format_for_path(original)
     if category not in SUPPORTED_EXTENSIONS.values():
         raise IngestionError("UNSUPPORTED_FORMAT", "该文件格式不在本阶段入库清单中。")
@@ -682,7 +691,8 @@ def _register_asset(database: Database, settings: Settings, task_data: dict, ite
                 "defaults_snapshot": deepcopy(defaults),
             }},
             scientific_metadata={"format": category, "metadata_status": metadata_status,
-                                 "parse_error": parse_error, "observed_parameters": parsed},
+                                 "parse_error": parse_error, "observed_parameters": parsed,
+                                 "registration_source_stamp": source_stamp},
         ))
         session.flush()
         asset.current_version_id = version_id
@@ -709,6 +719,7 @@ def _create_asset_content(database: Database, settings: Settings, task_data: dic
         version = session.get(AssetVersion, item.asset_version_id)
         root_id, source_path = item.root_id, item.source_path
         mode, location = version.storage_mode, version.storage_location
+        source_stamp = (version.scientific_metadata or {}).get("registration_source_stamp")
     if refresh:
         return _refresh_fits_metadata(database, settings, item_id, asset_id, version_id)
     if _cancelled(database, task_data["id"]):
@@ -729,7 +740,11 @@ def _create_asset_content(database: Database, settings: Settings, task_data: dic
         stage.parent.mkdir(parents=True, exist_ok=True)
         stage.unlink(missing_ok=True)
     try:
+        if source_stamp is not None and original != final and _source_stamp(original) != source_stamp:
+            raise IngestionError("SOURCE_CHANGED", "来源文件在登记后发生变化，请确认来源并重新导入。")
         content_hash, byte_size = _read_hash_and_copy(original, stage, lambda: _cancelled(database, task_data["id"]))
+        if source_stamp is not None and original != final and _source_stamp(original) != source_stamp:
+            raise IngestionError("SOURCE_CHANGED", "来源文件在后台读取时发生变化，请确认来源并重新导入。")
         if _cancelled(database, task_data["id"]):
             return "CANCELLED"
         if final is not None and original != final:
@@ -1048,6 +1063,8 @@ def _content_item(database: Database, settings: Settings, task_data: dict, item_
             item.status = "cancelled" if code == "CANCELLED" else "failed"
             item.content_status = "pending" if code == "CANCELLED" else "failed"
             item.error = None if code == "CANCELLED" else {"code": code, "message": message}
+            if code == "SOURCE_CHANGED":
+                session.get(AssetVersion, item.asset_version_id).availability = "changed"
             item.updated_at = datetime.now(timezone.utc)
 
 

@@ -197,11 +197,13 @@ def _fits_hdu_out(row: FitsHduMetadata) -> dict:
 
 
 def _read_preview(request: Request, version_id: str, hdu_index: int | None, size: str) -> Response:
-    if size != "thumbnail" or hdu_index is None:
+    if size not in {"thumbnail", "display"} or hdu_index is None:
         raise not_found()
     with request.app.state.database.read_session() as session:
+        from .fits_preview import PREVIEW_ALGORITHM_VERSION
+        algorithm = [Preview.algorithm_version == PREVIEW_ALGORITHM_VERSION] if size == "display" else []
         preview = session.scalar(select(Preview).where(
-            Preview.asset_version_id == version_id, Preview.hdu_index == hdu_index,
+            *algorithm, Preview.asset_version_id == version_id, Preview.hdu_index == hdu_index,
             Preview.size == size, Preview.status == "available",
         ).order_by(Preview.created_at.desc()).limit(1))
         if preview is None:
