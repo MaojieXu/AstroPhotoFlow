@@ -19,7 +19,7 @@ from astrophotoflow.backend.models import (
     Asset, AssetTask, AssetTaskItem, AssetVersion, Base, CaptureProfile, Dataset, DatasetMember, DatasetVersion, Equipment,
     LibraryEntryRemoval, Preview, Project, ProjectAssetReference, ProjectCaptureProfile, ProjectDatasetReference,
 )
-from astrophotoflow.backend.schema import SchemaError, current_revision, database_lock, ensure_schema_for_serve, upgrade_database
+from astrophotoflow.backend.schema import SCHEMA_REVISION, SchemaError, current_revision, database_lock, ensure_schema_for_serve, upgrade_database
 from astrophotoflow.backend.schemas import ErrorEnvelope
 from astrophotoflow.config import ConfigurationError, Settings, ensure_data_dir, ensure_service_token, load_settings
 
@@ -58,7 +58,7 @@ def test_init_lock_token_and_unknown_schema(tmp_path):
     with database_lock(s):
         with pytest.raises(SchemaError): database_lock(s)
         assert upgrade_database(s) is None
-    assert current_revision(s.database_path)=="0006_library_trash_cleanup_state"
+    assert current_revision(s.database_path)==SCHEMA_REVISION
     token=ensure_service_token(s)
     token_mode=s.token_path.stat().st_mode&0o777
     assert ensure_service_token(s)==token
@@ -178,7 +178,7 @@ def test_stage_two_upgrade_preserves_stage_one_records_and_backs_up(tmp_path):
 
     backup = upgrade_database(settings)
     assert backup is not None and backup.is_file()
-    assert current_revision(settings.database_path) == "0006_library_trash_cleanup_state"
+    assert current_revision(settings.database_path) == SCHEMA_REVISION
     with sqlite3.connect(settings.database_path) as db:
         assert db.execute("SELECT name,revision FROM project WHERE id=?", (project_id,)).fetchone() == ("pre-stage-two", 3)
         assert db.execute("SELECT name FROM equipment WHERE id=?", (equipment_id,)).fetchone() == ("preserved camera",)
@@ -210,7 +210,7 @@ def test_asset_fact_backfill_uses_current_version_and_preserves_manual_clears(tm
                    (edited_version_id, edited_asset_id, 1, "reference", "edited.fit", "available", "light", json.dumps({"gain": 12, "exposure_seconds": 30})))
 
     backup = upgrade_database(settings)
-    assert backup is not None and current_revision(settings.database_path) == "0006_library_trash_cleanup_state"
+    assert backup is not None and current_revision(settings.database_path) == SCHEMA_REVISION
     with sqlite3.connect(settings.database_path) as db:
         legacy = db.execute("SELECT classification,parameters FROM asset WHERE id=?", (old_asset_id,)).fetchone()
         edited = db.execute("SELECT classification,parameters,value_sources FROM asset WHERE id=?", (edited_asset_id,)).fetchone()

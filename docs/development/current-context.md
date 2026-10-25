@@ -17,7 +17,7 @@
 
 ## 产品边界
 
-schema 仍为 `0006_library_trash_cleanup_state`，MCP 严格为五工具。素材行为见[架构说明](../architecture/assets.md)，CLI/MCP 见[接口说明](../api/README.md)。Agent、软件适配、完整工作流、增强数据库和结果比较仍未实现。
+开发代码 schema 已进入 `0007_setups_and_calibration`，运行中的旧展示实例尚未统一更新；MCP 当前仍为五工具。素材行为见[架构说明](../architecture/assets.md)，CLI/MCP 见[接口说明](../api/README.md)。新功能按[五分支约定](module-improvements.md)推进；完整 Agent、软件适配、工作流和结果比较仍未实现。
 
 原工程重构验收见[历史记录](remake-acceptance.md)，本轮配置和运行收尾的实际证据见[配置管理验收](config-management-acceptance.md)。不自动合并 dev/main 或推送远端，不进行前端自动点击。
 

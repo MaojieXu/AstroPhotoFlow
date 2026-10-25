@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_serial
 
 UuidInput = Annotated[UUID, Field(strict=False)]
 CfaPattern = Literal["MONO", "RGGB", "BGGR", "GRBG", "GBRG", "XTRANS", "QUAD_BAYER"]
+EquipmentKind = Literal["camera", "optical_system", "filter", "telescope", "mount", "accessory"]
 
 
 class StrictModel(BaseModel):
@@ -28,6 +29,14 @@ def check_name(value: str) -> str:
     if not value.strip():
         raise ValueError("名称不能为空或仅含空白。")
     return value
+
+
+class CalibrationTarget(StrictModel):
+    kind: Literal["asset_version", "dataset_version"]
+    id: UuidInput
+
+
+CalibrationBindings = dict[Literal["bias", "dark", "flat", "dark_flat"], CalibrationTarget | None]
 
 
 def finite(value: float | None) -> float | None:
@@ -122,7 +131,35 @@ class FilterCreate(EquipmentCreateBase):
     specs: FilterSpecs = Field(default_factory=FilterSpecs)
 
 
-EquipmentCreate = Annotated[CameraCreate | OpticalSystemCreate | FilterCreate, Field(discriminator="kind")]
+class TelescopeCreate(EquipmentCreateBase):
+    kind: Literal["telescope"]
+    specs: OpticalSystemSpecs = Field(default_factory=OpticalSystemSpecs)
+
+
+class MountSpecs(StrictModel):
+    mount_type: str | None = None
+    payload_kg: float | None = Field(default=None, gt=0)
+    connection_note: str | None = None
+
+    _finite = field_validator("payload_kg")(finite)
+
+
+class AccessorySpecs(StrictModel):
+    accessory_type: str | None = None
+    connection_note: str | None = None
+
+
+class MountCreate(EquipmentCreateBase):
+    kind: Literal["mount"]
+    specs: MountSpecs = Field(default_factory=MountSpecs)
+
+
+class AccessoryCreate(EquipmentCreateBase):
+    kind: Literal["accessory"]
+    specs: AccessorySpecs = Field(default_factory=AccessorySpecs)
+
+
+EquipmentCreate = Annotated[CameraCreate | OpticalSystemCreate | FilterCreate | TelescopeCreate | MountCreate | AccessoryCreate, Field(discriminator="kind")]
 
 
 class EquipmentPatchBase(StrictModel):
@@ -193,7 +230,21 @@ class FilterPatch(EquipmentPatchBase):
     specs: FilterSpecsPatch | None = None
 
 
-EquipmentPatch = Annotated[CameraPatch | OpticalSystemPatch | FilterPatch, Field(discriminator="kind")]
+class TelescopePatch(OpticalSystemPatch):
+    kind: Literal["telescope"]
+
+
+class MountPatch(EquipmentPatchBase):
+    kind: Literal["mount"]
+    specs: MountSpecs | None = None
+
+
+class AccessoryPatch(EquipmentPatchBase):
+    kind: Literal["accessory"]
+    specs: AccessorySpecs | None = None
+
+
+EquipmentPatch = Annotated[CameraPatch | OpticalSystemPatch | FilterPatch | TelescopePatch | MountPatch | AccessoryPatch, Field(discriminator="kind")]
 
 
 class CaptureProfileCreate(StrictModel):
@@ -256,7 +307,7 @@ class ProjectOut(StrictModel):
 
 class EquipmentOut(StrictModel):
     id: UUID
-    kind: Literal["camera", "optical_system", "filter"]
+    kind: EquipmentKind
     name: str
     model: str | None
     serial_number: str | None
@@ -507,6 +558,7 @@ class DatasetMemberOut(StrictModel):
     asset_version_id: UUID
     position: int
     relative_path: str | None
+    calibration_overrides: CalibrationBindings = Field(default_factory=dict)
     asset: AssetOut
     version: AssetVersionOut
 
@@ -516,6 +568,7 @@ class DatasetVersionOut(StrictModel):
     dataset_id: UUID
     version_number: int
     created_at: datetime
+    calibration_defaults: CalibrationBindings = Field(default_factory=dict)
     members: list[DatasetMemberOut]
 
 

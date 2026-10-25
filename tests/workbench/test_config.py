@@ -68,3 +68,16 @@ def test_invalid_config_fails_consistently(tmp_path, monkeypatch):
     with pytest.raises(proxy.ProxyError) as error:
         proxy._configuration()
     assert error.value.code == "SERVICE_NOT_CONFIGURED"
+
+
+def test_ingestion_concurrency_defaults_and_explicit_configuration(tmp_path):
+    path = write_config(tmp_path / "config.toml")
+    settings = config.load_settings(path)
+    assert (settings.file_workers, settings.preview_workers) == (2, 1)
+    with path.open("a", encoding="utf-8") as stream:
+        stream.write("\n[ingestion]\nfile_workers = 4\npreview_workers = 2\n")
+    settings = config.load_settings(path)
+    assert (settings.file_workers, settings.preview_workers) == (4, 2)
+    path.write_text(path.read_text(encoding="utf-8").replace("file_workers = 4", "file_workers = 0"), encoding="utf-8")
+    with pytest.raises(config.ConfigurationError, match="正整数"):
+        config.load_settings(path)

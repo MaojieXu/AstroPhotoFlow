@@ -29,7 +29,7 @@ class Project(Base):
 class Equipment(Base):
     __tablename__ = "equipment"
     __table_args__ = (
-        CheckConstraint("kind IN ('camera', 'optical_system', 'filter')", name="ck_equipment_kind"),
+        CheckConstraint("kind IN ('camera', 'optical_system', 'filter', 'telescope', 'mount', 'accessory')", name="ck_equipment_kind"),
         CheckConstraint("status IN ('active', 'archived')", name="ck_equipment_status"),
         CheckConstraint("revision >= 1", name="ck_equipment_revision"),
         Index("ix_equipment_kind_status", "kind", "status"),
@@ -42,6 +42,42 @@ class Equipment(Base):
     serial_number: Mapped[str | None] = mapped_column(String)
     notes: Mapped[str | None] = mapped_column(String)
     specs: Mapped[dict] = mapped_column(JSON, nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="active")
+    revision: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.current_timestamp())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.current_timestamp())
+
+
+class EquipmentSetup(Base):
+    __tablename__ = "equipment_setup"
+    __table_args__ = (
+        CheckConstraint("status IN ('active', 'archived')", name="ck_equipment_setup_status"),
+        CheckConstraint("revision >= 1", name="ck_equipment_setup_revision"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    name: Mapped[str] = mapped_column(String, nullable=False)
+    components: Mapped[list] = mapped_column(JSON, nullable=False, default=list, server_default="[]")
+    notes: Mapped[str | None] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="active")
+    revision: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.current_timestamp())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.current_timestamp())
+
+
+class CapturePreset(Base):
+    __tablename__ = "capture_preset"
+    __table_args__ = (
+        CheckConstraint("status IN ('active', 'archived')", name="ck_capture_preset_status"),
+        CheckConstraint("revision >= 1", name="ck_capture_preset_revision"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    equipment_setup_id: Mapped[str] = mapped_column(ForeignKey("equipment_setup.id"), nullable=False)
+    name: Mapped[str] = mapped_column(String, nullable=False)
+    classification: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict, server_default="{}")
+    parameters: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict, server_default="{}")
+    notes: Mapped[str | None] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="active")
     revision: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.current_timestamp())
@@ -185,6 +221,7 @@ class DatasetVersion(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     dataset_id: Mapped[str] = mapped_column(ForeignKey("dataset.id", ondelete="CASCADE"), nullable=False)
     version_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    calibration_defaults: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict, server_default="{}")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.current_timestamp())
 
 
@@ -202,6 +239,7 @@ class DatasetMember(Base):
     asset_version_id: Mapped[str] = mapped_column(ForeignKey("asset_version.id"), nullable=False)
     position: Mapped[int] = mapped_column(Integer, nullable=False)
     relative_path: Mapped[str | None] = mapped_column(Text)
+    calibration_overrides: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict, server_default="{}")
 
 
 class ProjectDatasetReference(Base):
@@ -250,6 +288,7 @@ class AssetTask(Base):
     storage_mode: Mapped[str] = mapped_column(String(16), nullable=False)
     classification: Mapped[dict] = mapped_column(JSON, nullable=False)
     parameters: Mapped[dict] = mapped_column(JSON, nullable=False)
+    import_defaults_snapshot: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict, server_default="{}")
     notes: Mapped[str | None] = mapped_column(Text)
     dataset_name: Mapped[str | None] = mapped_column(String)
     target_dataset_id: Mapped[str | None] = mapped_column(String(36))

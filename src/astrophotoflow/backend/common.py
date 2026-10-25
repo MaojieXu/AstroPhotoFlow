@@ -245,11 +245,13 @@ def _dataset_version_out(session, row: DatasetVersion) -> dict:
             result.append({
                 "id": UUID(member.id), "dataset_version_id": UUID(row.id), "asset_version_id": UUID(version.id),
                 "position": member.position, "relative_path": member.relative_path,
+                "calibration_overrides": member.calibration_overrides,
                 "asset": _asset_out(session, asset), "version": _version_out(version),
             })
     return {
         "id": UUID(row.id), "dataset_id": UUID(row.dataset_id), "version_number": row.version_number,
         "created_at": _utc(row.created_at), "members": result,
+        "calibration_defaults": row.calibration_defaults,
     }
 
 

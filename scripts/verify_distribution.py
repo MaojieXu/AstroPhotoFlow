@@ -24,7 +24,7 @@ def check_wheel(path: Path) -> None:
         prefix = "astrophotoflow/"
         required = {
             "backend/cli.py", "backend/alembic.ini", "backend/alembic/env.py",
-            "backend/alembic/versions/0006_library_trash_cleanup_state.py",
+            "backend/alembic/versions/0007_setups_and_calibration.py",
             "comfyui/extension/__init__.py", "comfyui/extension/assets/astrophotoflow.js",
             "comfyui/extension/assets/astrophotoflow.css", "vendor/comfyui-source.json",
             "vendor/comfyui-0.42.0.zip", "vendor/comfyui-0.42.0-windows-py312.lock",
@@ -72,7 +72,7 @@ import importlib.util
 from importlib.resources import files
 from pathlib import Path
 import sys
-from astrophotoflow.backend.schema import upgrade_database, current_revision
+from astrophotoflow.backend.schema import SCHEMA_REVISION, upgrade_database, current_revision
 from astrophotoflow.config import Settings
 import astrophotoflow.comfyui
 import astrophotoflow.mcp_server
@@ -81,7 +81,7 @@ assert importlib.util.find_spec('astrophotoflow_service') is None
 plugin = files('astrophotoflow.comfyui').joinpath('extension')
 assert plugin.joinpath('assets/astrophotoflow.js').is_file()
 """
-            script += "\ndata = Path('database'); data.mkdir(exist_ok=True)\nsettings = Settings('127.0.0.1', 8190, data.resolve(), ('http://127.0.0.1:8188',))\nupgrade_database(settings)\nassert current_revision(settings.database_path) == '0006_library_trash_cleanup_state'\n"
+            script += "\ndata = Path('database'); data.mkdir(exist_ok=True)\nsettings = Settings('127.0.0.1', 8190, data.resolve(), ('http://127.0.0.1:8188',))\nupgrade_database(settings)\nassert current_revision(settings.database_path) == SCHEMA_REVISION\n"
             run([str(python), "-c", script], cwd=work, env=env)
 
         smoke()

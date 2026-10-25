@@ -55,9 +55,14 @@ def _parser() -> argparse.ArgumentParser:
     init.add_argument("--workspace", type=Path)
     init.add_argument("--service-port", type=int, default=8190)
     init.add_argument("--comfyui-port", type=int, default=8188)
+    init.add_argument("--frontend-assets", type=Path, help="Use this checkout's built JS/CSS")
+    init.add_argument("--reuse-runtime", action="store_true", help="Reuse the already prepared fixed CPU runtime")
+    init.add_argument("--no-activate", action="store_true", help="Do not change the user's default workspace")
     for name in ("start", "status", "stop"):
         command = commands.add_parser(name)
         command.add_argument("--workspace", type=Path)
+        if name == "start":
+            command.add_argument("--no-activate", action="store_true")
     mcp_config = commands.add_parser("mcp-config", help="Print the Codex stdio MCP registration details")
     mcp_config.add_argument("--workspace", type=Path)
     photo = commands.add_parser("import-photo", help="Copy and ingest one local photograph")
@@ -127,10 +132,12 @@ def main() -> None:
                 if not workspace_text:
                     raise WorkbenchError("workspace 路径不能为空。")
                 workspace = Path(workspace_text)
-            result = initialize(workspace, args.service_port, args.comfyui_port)
+            result = initialize(workspace, args.service_port, args.comfyui_port,
+                                frontend_assets=args.frontend_assets, activate=not args.no_activate,
+                                reuse_runtime=args.reuse_runtime)
             print(f"workspace 已准备：{result.parent}")
         elif args.command == "start":
-            print(start(_workspace_config(args.workspace)))
+            print(start(_workspace_config(args.workspace), activate=not args.no_activate))
         elif args.command == "status":
             state, processes = status(_workspace_config(args.workspace))
             print(json.dumps({"status": state, "processes": processes}, ensure_ascii=False, indent=2))

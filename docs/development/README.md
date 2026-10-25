@@ -28,16 +28,18 @@ corepack pnpm test
 
 ```powershell
 Copy-Item .env.example .env
-uv run --locked --no-sync --env-file .env apf init --workspace .artifacts/workspaces/dev --service-port 31390 --comfyui-port 31388
+uv run --locked --no-sync --env-file .env apf init --workspace .artifacts/workspaces/dev --service-port 31390 --comfyui-port 31388 --frontend-assets build/frontend
 ```
 
-初始化会准备或检查固定的 CPU runtime。开发源码的前端产物在 build/frontend，初始化后同步到 runtime 插件；发行 wheel 已自带这些资源，不需要这一步：
+初始化会准备固定的 CPU runtime。开发源码通过 --frontend-assets 显式提供构建资源；发行 wheel 已自带资源。插件及资源位于当前 workspace 内，后续重新构建可同步到该目录：
 
 ```powershell
-$assets = Join-Path $env:LOCALAPPDATA 'AstroPhotoFlow/runtime/0.1.0/comfyui-data/custom_nodes/AstroPhotoFlow/assets'
+$assets = Join-Path $PWD '.artifacts/workspaces/dev/comfyui-data/custom_nodes/AstroPhotoFlow/assets'
 New-Item -ItemType Directory -Force $assets | Out-Null
 Copy-Item build/frontend/astrophotoflow.js,build/frontend/astrophotoflow.css $assets
 ```
+
+其他 worktree 使用各自的环境、workspace 和端口。CPU runtime 已准备时，在初始化命令中添加 `--reuse-runtime --no-activate`，启动时添加 `--no-activate`，即可复用 CPU 依赖且不修改用户默认 workspace。并发数通过 TOML 的 `[ingestion]` 配置，`file_workers` 默认 2，`preview_workers` 默认 1。
 
 本机开发 workspace 已准备后，日常命令为：
 

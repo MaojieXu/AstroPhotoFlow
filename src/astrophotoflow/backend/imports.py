@@ -17,6 +17,7 @@ from .files import entries_page, find_root, resolve_relative
 from .import_schemas import RetryCreate, ImportCreate, UploadImportCreate
 from pathlib import Path
 from .ingestion import process_task, validate_import_equipment
+from .presets import capture_defaults_snapshot
 
 
 router = APIRouter(prefix="/api/v1", responses=ERROR_RESPONSES)
@@ -46,6 +47,7 @@ def create_upload(body: UploadImportCreate, request: Request, session: deps.Writ
     task = AssetTask(
         id=task_id, status="queued", sources=sources, storage_mode="managed",
         classification=body.classification.model_dump(mode="json"), parameters=body.parameters.model_dump(mode="json"),
+        import_defaults_snapshot=capture_defaults_snapshot(session, body.capture_preset_id),
         notes=body.notes,
         dataset_name=(body.dataset_name or body.files[0].name) if create_dataset else None,
         target_dataset_id=str(uuid4()) if create_dataset else None, dataset_base_revision=None,
@@ -228,6 +230,7 @@ def create_import(body: ImportCreate, request: Request, background: BackgroundTa
         id=task_id, status="queued", sources=sources, storage_mode=body.storage_mode,
         classification=body.classification.model_dump(mode="json"),
         parameters=body.parameters.model_dump(mode="json"), notes=body.notes, dataset_name=dataset_name,
+        import_defaults_snapshot=capture_defaults_snapshot(session, body.capture_preset_id),
         target_dataset_id=target_dataset_id, dataset_base_revision=None, dataset_id=None,
         enumeration_completed=False, retry_of_task_id=None, report={}, error=None,
         created_at=shared._now(), updated_at=shared._now(),
@@ -330,6 +333,7 @@ def retry_asset_task(task_id: UUID, body: RetryCreate, request: Request, backgro
         sources=[{"root_id": item.root_id, "path": item.source_path, "kind": "file", "enumeration_completed": True, "error": None} for item in items],
         storage_mode=source_task.storage_mode, classification=source_task.classification,
         parameters=source_task.parameters, notes=source_task.notes, dataset_name=source_task.dataset_name,
+        import_defaults_snapshot=source_task.import_defaults_snapshot,
         target_dataset_id=target_dataset_id, dataset_base_revision=dataset.revision if dataset else None,
         dataset_id=source_task.dataset_id, enumeration_completed=True, retry_of_task_id=original.id,
         report={

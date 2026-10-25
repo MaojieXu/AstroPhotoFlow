@@ -4,6 +4,7 @@ import hashlib
 import json
 from pathlib import Path
 import zipfile
+import pytest
 
 from astrophotoflow import workbench
 
@@ -35,9 +36,20 @@ def test_initialize_copies_extension_and_start_uses_backend_module(tmp_path, mon
 
     workspace = tmp_path / "workspace"
     config_path = workbench.initialize(workspace, service_port=18190, comfyui_port=18188)
-    copied_extension = runtime / "comfyui-data" / "custom_nodes" / "AstroPhotoFlow"
+    copied_extension = workspace / "comfyui-data" / "custom_nodes" / "AstroPhotoFlow"
     assert (copied_extension / "__init__.py").read_text(encoding="utf-8") == "CPU adapter marker\n"
     assert (copied_extension / "assets" / "adapter.js").is_file()
+    runtime_python = runtime / "comfyui-env" / ("Scripts/python.exe" if workbench.os.name == "nt" else "bin/python")
+    runtime_python.parent.mkdir(parents=True, exist_ok=True)
+    runtime_python.touch()
+    activations = []
+    monkeypatch.setattr(workbench, "_activate_workspace", lambda config_path: activations.append(config_path))
+    monkeypatch.setattr(workbench, "_run", lambda *args, **kwargs: pytest.fail("reuse must not reinstall CPU dependencies"))
+    second_workspace = tmp_path / "second-workspace"
+    workbench.initialize(second_workspace, service_port=18290, comfyui_port=18288,
+                         reuse_runtime=True, activate=False)
+    assert (second_workspace / "comfyui-data/custom_nodes/AstroPhotoFlow/assets/adapter.js").is_file()
+    assert activations == []
 
     commands = []
 
@@ -60,8 +72,29 @@ def test_initialize_copies_extension_and_start_uses_backend_module(tmp_path, mon
     monkeypatch.setattr(workbench, "_record", lambda process, role, cwd, command: {"role": role, "command": command})
     monkeypatch.setattr(workbench.socket, "create_connection", lambda address, timeout=None: FakeConnection())
 
-    workbench.start(config_path)
+    workbench.start(config_path, activate=False)
+    assert activations == []
     assert commands[0][1:] == ["-m", "astrophotoflow.backend.cli", "serve"]
+    assert commands[1][commands[1].index("--base-directory") + 1] == str(workspace / "comfyui-data")
+
+
+def test_workspace_plugins_and_development_assets_are_isolated(tmp_path, monkeypatch):
+    package = tmp_path / "package"
+    extension = package / "comfyui" / "extension"
+    extension.mkdir(parents=True)
+    (extension / "__init__.py").write_text("adapter", encoding="utf-8")
+    monkeypatch.setattr(workbench, "__file__", str(package / "workbench.py"))
+    assets = tmp_path / "build"
+    assets.mkdir()
+    for name in ("astrophotoflow.js", "astrophotoflow.css"):
+        (assets / name).write_text("first", encoding="utf-8")
+    first = workbench.install_extension(tmp_path / "first", assets)
+    for name in ("astrophotoflow.js", "astrophotoflow.css"):
+        (assets / name).write_text("second", encoding="utf-8")
+    second = workbench.install_extension(tmp_path / "second", assets)
+    assert (first / "assets/astrophotoflow.js").read_text(encoding="utf-8") == "first"
+    assert (second / "assets/astrophotoflow.js").read_text(encoding="utf-8") == "second"
+    assert first != second
 
 
 def test_stop_terminates_children_before_clearing_process_state(tmp_path, monkeypatch):

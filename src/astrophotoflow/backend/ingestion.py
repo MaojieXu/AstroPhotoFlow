@@ -746,13 +746,16 @@ def _publish_dataset(database: Database, task_data: dict, task_id: str) -> dict 
             if not additions and dataset.current_version_id is not None:
                 return None
             version_id = str(uuid4())
-            version = DatasetVersion(id=version_id, dataset_id=target_id, version_number=version_number)
+            previous_version = session.get(DatasetVersion, dataset.current_version_id) if dataset.current_version_id else None
+            version = DatasetVersion(id=version_id, dataset_id=target_id, version_number=version_number,
+                                     calibration_defaults=dict(previous_version.calibration_defaults) if previous_version else {})
             session.add(version)
             session.flush()
             for index, member in enumerate(base_members):
                 session.add(DatasetMember(
                     id=str(uuid4()), dataset_version_id=version_id, asset_version_id=member.asset_version_id,
                     position=index, relative_path=member.relative_path,
+                    calibration_overrides=dict(member.calibration_overrides),
                 ))
             for position, (asset_version_id, relative_path) in enumerate(additions, start=len(base_members)):
                 session.add(DatasetMember(

@@ -4,7 +4,7 @@ import os
 import pytest
 
 from astrophotoflow import config as app_config
-from astrophotoflow.comfyui import service_manager as service_manager_module
+from astrophotoflow.comfyui import proxy, service_manager as service_manager_module
 from astrophotoflow.comfyui.service_manager import ServiceManager
 
 

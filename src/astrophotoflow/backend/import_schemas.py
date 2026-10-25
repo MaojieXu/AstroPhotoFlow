@@ -98,6 +98,7 @@ class ImportCreate(StrictModel):
     parameters: AssetParameters = Field(default_factory=AssetParameters)
     notes: str | None = None
     dataset_name: str | None = None
+    capture_preset_id: UuidInput | None = None
 
 
 class UploadFile(StrictModel):
@@ -119,6 +120,7 @@ class UploadImportCreate(StrictModel):
     notes: str | None = None
     dataset_name: str | None = None
     create_dataset: bool = False
+    capture_preset_id: UuidInput | None = None
 
 
 class AssetPatch(StrictModel):

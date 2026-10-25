@@ -11,6 +11,10 @@ allowed_origins = [
   "http://localhost:31388"
 ]
 
+[ingestion]
+file_workers = 2
+preview_workers = 1
+
 # Add only directories that the service is allowed to browse and read.
 # [[imports.roots]]
 # id = "astrodata"

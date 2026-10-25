@@ -11,7 +11,7 @@ from fastapi import Depends
 from sqlalchemy import func, or_, select
 from .errors import ApiError, not_found
 from .models import Equipment
-from .schemas import EquipmentCreate, EquipmentOut, EquipmentPage, EquipmentPatch
+from .schemas import EquipmentCreate, EquipmentKind, EquipmentOut, EquipmentPage, EquipmentPatch
 
 
 router = APIRouter(prefix="/api/v1", responses=ERROR_RESPONSES)
@@ -21,7 +21,7 @@ router = APIRouter(prefix="/api/v1", responses=ERROR_RESPONSES)
 def list_equipment(
     session: ReadSession, limit: Limit = 50, offset: Offset = 0,
     sort_by: SortBy = "created_at", order: Order = "desc", q: str | None = None,
-    status: StatusFilter = "active", kind: Literal["camera", "optical_system", "filter"] | None = None,
+    status: StatusFilter = "active", kind: EquipmentKind | None = None,
 ):
     filters = []
     status_clause = _status_clause(Equipment, status)

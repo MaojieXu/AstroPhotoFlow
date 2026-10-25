@@ -26,6 +26,8 @@ class Settings:
     data_dir: Path
     allowed_origins: tuple[str, ...]
     import_roots: tuple[ImportRoot, ...] = ()
+    file_workers: int = 2
+    preview_workers: int = 1
 
     @property
     def service_url(self) -> str:
@@ -71,7 +73,7 @@ def load_settings(config_path: Path | None = None) -> Settings:
         port = server["port"]
         data_dir = storage["data_dir"]
         origins = comfyui["allowed_origins"]
-        if set(raw) not in ({"server", "storage", "comfyui"}, {"server", "storage", "comfyui", "imports"}):
+        if not {"server", "storage", "comfyui"} <= set(raw) or set(raw) - {"server", "storage", "comfyui", "imports", "ingestion"}:
             raise ValueError("顶层配置包含未知字段")
         if set(server) != {"host", "port"} or set(storage) != {"data_dir"} or set(comfyui) != {"allowed_origins"}:
             raise ValueError("配置字段与约定不符")
@@ -95,6 +97,13 @@ def load_settings(config_path: Path | None = None) -> Settings:
                 seen_root_ids.add(root_id)
                 import_roots.append(ImportRoot(root_id, root_path))
 
+        ingestion = raw.get("ingestion", {})
+        if not isinstance(ingestion, dict) or set(ingestion) - {"file_workers", "preview_workers"}:
+            raise ValueError("ingestion 只接受 file_workers 和 preview_workers")
+        file_workers = ingestion.get("file_workers", 2)
+        preview_workers = ingestion.get("preview_workers", 1)
+        if any(type(value) is not int or value < 1 for value in (file_workers, preview_workers)):
+            raise ValueError("导入与预览并发数必须为正整数")
         address = ipaddress.ip_address(host)
         if not isinstance(host, str) or not address.is_loopback:
             raise ValueError("server.host 必须是本机回环地址")
@@ -115,7 +124,7 @@ def load_settings(config_path: Path | None = None) -> Settings:
         data_path = Path(data_dir).expanduser()
         if not data_path.is_absolute():
             data_path = config_path.parent / data_path
-        return Settings(str(address), port, data_path.resolve(), tuple(origins), tuple(import_roots))
+        return Settings(str(address), port, data_path.resolve(), tuple(origins), tuple(import_roots), file_workers, preview_workers)
     except (KeyError, TypeError, ValueError, tomllib.TOMLDecodeError) as exc:
         raise ConfigurationError(f"配置文件无效：{exc}") from exc
 

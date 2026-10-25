@@ -26,7 +26,7 @@ export const projectSchema = z.object({
 }).strict()
 
 export const equipmentSchema = z.object({
-  id, kind: z.enum(['camera', 'optical_system', 'filter']), name: z.string(),
+  id, kind: z.enum(['camera', 'optical_system', 'filter', 'telescope', 'mount', 'accessory']), name: z.string(),
   model: nullableText, serial_number: nullableText, notes: nullableText,
   specs: z.record(z.string(), z.unknown()), status: z.enum(['active', 'archived']),
   revision: z.number().int().positive(), created_at: timestamp, updated_at: timestamp
@@ -106,13 +106,16 @@ export const datasetSchema = z.object({
   revision: z.number().int().positive(), current_version_id: id.nullable(),
   member_count: z.number().int().nonnegative(), created_at: timestamp, updated_at: timestamp
 }).strict()
+export const calibrationTargetSchema = z.object({kind:z.enum(['asset_version','dataset_version']),id}).strict()
+export const calibrationBindingsSchema = z.partialRecord(z.enum(['bias','dark','flat','dark_flat']),calibrationTargetSchema.nullable())
 export const datasetMemberSchema = z.object({
   id, dataset_version_id: id, asset_version_id: id, position: z.number().int().nonnegative(),
-  relative_path: nullableText, asset: assetSchema, version: assetVersionSchema
+  relative_path: nullableText, asset: assetSchema, version: assetVersionSchema,
+  calibration_overrides: calibrationBindingsSchema.default({})
 }).strict()
 export const datasetVersionSchema = z.object({
   id, dataset_id: id, version_number: z.number().int().positive(), created_at: timestamp,
-  members: z.array(datasetMemberSchema)
+  members: z.array(datasetMemberSchema), calibration_defaults: calibrationBindingsSchema.default({})
 }).strict()
 export const libraryItemSchema = z.discriminatedUnion('entry_type', [
   z.object({ entry_type: z.literal('asset'), asset: assetSchema, import_issue: nullableText }).strict(),

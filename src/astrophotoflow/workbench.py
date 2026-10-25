@@ -83,7 +83,26 @@ def _run(command: list[str], env: dict[str, str] | None = None) -> None:
     subprocess.run(command, check=True, env=env)
 
 
-def initialize(workspace: Path, service_port: int = 8190, comfyui_port: int = 8188) -> Path:
+def install_extension(workspace: Path, frontend_assets: Path | None = None) -> Path:
+    """Install this checkout/package's plugin into this workspace only."""
+    package = Path(__file__).resolve().parent
+    plugin = workspace / "comfyui-data" / "custom_nodes" / "AstroPhotoFlow"
+    shutil.copytree(package / "comfyui" / "extension", plugin, dirs_exist_ok=True,
+                    ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+    if frontend_assets is not None:
+        for name in ("astrophotoflow.js", "astrophotoflow.css"):
+            source = frontend_assets / name
+            if not source.is_file():
+                raise WorkbenchError(f"前端构建资源不存在：{source}")
+        (plugin / "assets").mkdir(exist_ok=True)
+        for name in ("astrophotoflow.js", "astrophotoflow.css"):
+            shutil.copy2(frontend_assets / name, plugin / "assets" / name)
+    return plugin
+
+
+def initialize(workspace: Path, service_port: int = 8190, comfyui_port: int = 8188, *,
+               frontend_assets: Path | None = None, activate: bool = True,
+               reuse_runtime: bool = False) -> Path:
     workspace = workspace.expanduser().resolve()
     workspace.mkdir(parents=True, exist_ok=True)
     config_path = workspace / "config.toml"
@@ -115,8 +134,17 @@ def initialize(workspace: Path, service_port: int = 8190, comfyui_port: int = 81
     runtime = _runtime_dir()
     comfyui = runtime / "ComfyUI"
     runtime.mkdir(parents=True, exist_ok=True)
-    uv_env = _uv_environment(runtime)
     commit_marker = comfyui / ".apf-commit"
+    env_dir = runtime / "comfyui-env"
+    comfy_python = env_dir / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+    if reuse_runtime:
+        if not commit_marker.is_file() or commit_marker.read_text(encoding="utf-8").strip() != COMFY_COMMIT or not comfy_python.is_file():
+            raise WorkbenchError("可复用的固定 CPU runtime 不完整；请先正常执行 apf init。")
+        install_extension(workspace, frontend_assets)
+        if activate:
+            _activate_workspace(config_path)
+        return config_path
+    uv_env = _uv_environment(runtime)
     if not commit_marker.is_file() or commit_marker.read_text(encoding="utf-8").strip() != COMFY_COMMIT:
         if comfyui.exists():
             shutil.rmtree(comfyui)
@@ -125,11 +153,7 @@ def initialize(workspace: Path, service_port: int = 8190, comfyui_port: int = 81
             archive.extractall(runtime)
         (comfyui / ".apf-commit").write_text(COMFY_COMMIT, encoding="utf-8")
 
-    base_dir = runtime / "comfyui-data"
-    plugin = base_dir / "custom_nodes" / "AstroPhotoFlow"
-    base_dir.mkdir(parents=True, exist_ok=True)
-    shutil.copytree(app_package / "comfyui" / "extension", plugin, dirs_exist_ok=True)
-    env_dir = runtime / "comfyui-env"
+    install_extension(workspace, frontend_assets)
     if not (env_dir / ("Scripts/python.exe" if os.name == "nt" else "bin/python")).is_file():
         _run([_uv(), "venv", "--managed-python", "--python", "3.12", str(env_dir)], env=uv_env)
     comfy_python = env_dir / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
@@ -138,7 +162,8 @@ def initialize(workspace: Path, service_port: int = 8190, comfyui_port: int = 81
     requirements = app_package / "vendor" / "comfyui-0.42.0-windows-py312.lock" if os.name == "nt" else comfyui / "requirements.txt"
     _run([_uv(), "pip", "install", "--python", str(comfy_python), "-r", str(requirements)], env=uv_env)
 
-    _activate_workspace(config_path)
+    if activate:
+        _activate_workspace(config_path)
     print(f"ComfyUI 源码: {manifest['comfyui_version']} ({manifest['commit']})")
     print(f"ComfyUI archive SHA-256: {digest}")
     return config_path
@@ -228,13 +253,14 @@ def _health(config_path: Path) -> bool:
         return False
 
 
-def start(workspace_config: Path | None = None) -> str:
+def start(workspace_config: Path | None = None, *, activate: bool = True) -> str:
     config_path = (workspace_config or _active_config()).resolve()
     workspace = _workspace_for_config(config_path)
     _config, service_port, service_host, comfy_port = _load_config(config_path)
     state, _active = status(config_path)
     if state == "running":
-        _activate_workspace(config_path)
+        if activate:
+            _activate_workspace(config_path)
         return "AstroPhotoFlow 工作台已在运行。"
     if state == "partial":
         raise WorkbenchError("工作台处于部分运行状态；先运行 apf stop，再重新启动。")
@@ -246,7 +272,9 @@ def start(workspace_config: Path | None = None) -> str:
     package_root = Path(__file__).resolve().parent
     runtime = _runtime_dir()
     comfyui = runtime / "ComfyUI"
-    base_dir = runtime / "comfyui-data"
+    base_dir = workspace / "comfyui-data"
+    if not (base_dir / "custom_nodes" / "AstroPhotoFlow" / "__init__.py").is_file():
+        raise WorkbenchError("当前 workspace 未安装插件；请先运行 apf init。")
     env = os.environ.copy()
     env.update({
         "ASTROPHOTOFLOW_CONFIG": str(config_path),
@@ -286,7 +314,8 @@ def start(workspace_config: Path | None = None) -> str:
         else:
             raise WorkbenchError("ComfyUI 未能在 180 秒内启动；请查看 workspace/logs/comfyui.log。")
         _state_path(workspace).write_text(json.dumps({"processes": records}, indent=2), encoding="utf-8")
-        _activate_workspace(config_path)
+        if activate:
+            _activate_workspace(config_path)
         return f"工作台已启动：资产服务 {service_host}:{service_port}，ComfyUI 127.0.0.1:{comfy_port}。"
     except (OSError, subprocess.SubprocessError) as exc:
         for process in reversed(launched):

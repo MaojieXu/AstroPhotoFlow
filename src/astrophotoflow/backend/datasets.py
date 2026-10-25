@@ -43,16 +43,20 @@ def _publish_dataset_version(session, dataset: Dataset, submitted_ids: list[str]
     if dataset.current_version_id and submitted_ids == old_ids:
         return session.get(DatasetVersion, dataset.current_version_id)
     latest_number = session.scalar(select(func.max(DatasetVersion.version_number)).where(DatasetVersion.dataset_id == dataset.id)) or 0
-    version = DatasetVersion(id=str(uuid4()), dataset_id=dataset.id, version_number=latest_number + 1)
+    previous_version = session.get(DatasetVersion, dataset.current_version_id) if dataset.current_version_id else None
+    version = DatasetVersion(id=str(uuid4()), dataset_id=dataset.id, version_number=latest_number + 1,
+                             calibration_defaults=dict(previous_version.calibration_defaults) if previous_version else {})
     session.add(version)
     session.flush()
     path_map = relative_paths or {}
     retained = {member.asset_version_id: member.relative_path for member in existing}
+    retained_overrides = {member.asset_version_id: dict(member.calibration_overrides) for member in existing}
     for position, asset_version_id in enumerate(submitted_ids):
         relative = retained.get(asset_version_id) if asset_version_id in retained else path_map.get(asset_version_id)
         session.add(DatasetMember(
             id=str(uuid4()), dataset_version_id=version.id, asset_version_id=asset_version_id,
             position=position, relative_path=relative,
+            calibration_overrides=retained_overrides.get(asset_version_id, {}),
         ))
     dataset.current_version_id = version.id
     dataset.revision += 1
