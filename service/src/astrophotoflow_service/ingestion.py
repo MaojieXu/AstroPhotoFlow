@@ -4,6 +4,7 @@ import logging
 import os
 import tempfile
 import time
+from io import BytesIO
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -16,13 +17,17 @@ from sqlalchemy import delete, func, select
 from .db import Database
 from .errors import ApiError, invalid_reference, not_found
 from .files import SUPPORTED_EXTENSIONS, enumerate_source, find_root, format_for_path, resolve_relative
-from .fits_preview import PARSER_VERSION, PREVIEW_ALGORITHM_VERSION, create_preview, inspect_fits
+from .fits_preview import PARSER_VERSION, PREVIEW_ALGORITHM_VERSION, _display, create_preview, inspect_fits
 from .models import (
     Asset, AssetTask, AssetTaskItem, AssetVersion, Dataset, DatasetMember,
     DatasetVersion, Equipment, FitsHduMetadata, Preview,
 )
 from .settings import Settings
 from .video_preview import first_video_frame
+from pillow_heif import register_heif_opener
+
+
+register_heif_opener(thumbnails=False)
 
 
 logger = logging.getLogger("astrophotoflow.service.ingestion")
@@ -348,6 +353,46 @@ def _ordinary_image(path: Path) -> Image.Image:
         return image.convert("RGB").copy()
 
 
+def _xisf_image(path: Path) -> Image.Image:
+    from xisf import XISF
+
+    reader = XISF(str(path))
+    metadata = reader.get_images_metadata()[0]
+    color_space = str(metadata.get("colorSpace", "")).casefold()
+    channels = metadata["geometry"][2]
+    array = reader.read_image(0, data_format="channels_last")
+    if color_space == "gray" and channels == 1:
+        if array.ndim == 3 and array.shape[-1] == 1:
+            array = array[..., 0]
+        if array.ndim != 2:
+            raise ValueError("XISF 灰度图像数据形状无效。")
+    elif color_space == "rgb" and channels == 3:
+        if array.ndim != 3 or array.shape[-1] != 3:
+            raise ValueError("XISF RGB 图像必须包含三个通道。")
+    else:
+        raise ValueError(f"不支持 XISF 色彩布局：{metadata.get('colorSpace', 'unknown')}")
+    return _display(array)
+
+
+def _raw_image(path: Path) -> Image.Image:
+    import rawpy
+
+    with rawpy.imread(str(path)) as raw:
+        try:
+            thumbnail = raw.extract_thumb()
+            if thumbnail.format == rawpy.ThumbFormat.JPEG:
+                with Image.open(BytesIO(thumbnail.data)) as image:
+                    if max(image.size) >= 1024:
+                        return ImageOps.exif_transpose(image).convert("RGB").copy()
+            elif thumbnail.format == rawpy.ThumbFormat.BITMAP:
+                image = Image.fromarray(thumbnail.data)
+                if max(image.size) >= 1024:
+                    return image.convert("RGB").copy()
+        except (rawpy.LibRawError, OSError, ValueError):
+            pass
+        return Image.fromarray(raw.postprocess(half_size=True, output_bps=8, output_color=rawpy.ColorSpace.sRGB)).convert("RGB")
+
+
 def backfill_missing_previews(database: Database, settings: Settings) -> dict[str, int]:
     with database.read_session() as session:
         versions = session.scalars(select(AssetVersion).join(Asset, Asset.id == AssetVersion.asset_id)
@@ -355,7 +400,7 @@ def backfill_missing_previews(database: Database, settings: Settings) -> dict[st
         rows = [(row.id, row.storage_mode, row.storage_location, row.scientific_metadata or {}) for row in versions]
     generated = failed = 0
     for version_id, mode, location, metadata in rows:
-        if metadata.get("format") not in {"image", "fits", "video"}:
+        if metadata.get("format") not in {"image", "raw", "xisf", "fits", "video"}:
             continue
         with database.read_session() as session:
             selected = session.scalar(select(FitsHduMetadata).where(
@@ -374,7 +419,12 @@ def backfill_missing_previews(database: Database, settings: Settings) -> dict[st
                 _, root_id, relative = location.split("/", 2)
                 _, root = find_root(settings, root_id)
                 path = resolve_relative(root, relative)
-            if metadata.get("format") == "fits":
+            if metadata.get("format") in {"raw", "xisf"}:
+                image = _raw_image(path) if metadata["format"] == "raw" else _xisf_image(path)
+                for size, edge in (("thumbnail", 100), ("detail", 1024)):
+                    if size not in available:
+                        _save_preview(database, settings, version_id, 0, size, edge, image.copy())
+            elif metadata.get("format") == "fits":
                 if selected is None:
                     raise ValueError("FITS 没有已选中的图像 HDU。")
                 if selected.supported_kind in {"xtrans", "quad_bayer"}:
@@ -783,15 +833,16 @@ def process_task(database: Database, settings: Settings, task_id: str) -> None:
                 continue
             with database.read_session() as session:
                 item = session.get(AssetTaskItem, item_id)
+                version = session.get(AssetVersion, item.asset_version_id) if item.asset_version_id else None
                 item_data = {
-                    "format": format_for_path(Path(item.source_path)),
+                    "format": (version.scientific_metadata or {}).get("format") if version else format_for_path(Path(item.source_path)),
                     "root_id": item.root_id,
                     "asset_id": item.asset_id, "asset_version_id": item.asset_version_id,
                     "content_status": item.content_status,
                 }
             if item_data["content_status"] != "available":
                 continue
-            if item_data["format"] in {"image", "video"}:
+            if item_data["format"] in {"image", "raw", "xisf", "video"}:
                 with database.read_session() as session:
                     version = session.get(AssetVersion, item_data["asset_version_id"])
                     source_location, source_mode = version.storage_location, version.storage_mode
@@ -803,6 +854,10 @@ def process_task(database: Database, settings: Settings, task_id: str) -> None:
                         image_path = resolve_relative(root_path, item.source_path)
                     if item_data["format"] == "video":
                         image, display = first_video_frame(image_path, 1024)
+                    elif item_data["format"] == "raw":
+                        image, display = _raw_image(image_path), {"algorithm": PREVIEW_ALGORITHM_VERSION}
+                    elif item_data["format"] == "xisf":
+                        image, display = _xisf_image(image_path), {"algorithm": PREVIEW_ALGORITHM_VERSION}
                     else:
                         image, display = _ordinary_image(image_path), {"algorithm": PREVIEW_ALGORITHM_VERSION}
                     for size, edge in (("thumbnail", 100), ("detail", 1024)):
@@ -816,7 +871,7 @@ def process_task(database: Database, settings: Settings, task_id: str) -> None:
                     with database.write_session() as session:
                         item = session.get(AssetTaskItem, item_id)
                         item.preview_status, item.status = "failed", "completed_with_errors"
-                        label = "视频首帧" if item_data["format"] == "video" else "常规图像"
+                        label = {"video": "视频首帧", "raw": "RAW", "xisf": "XISF"}.get(item_data["format"], "常规图像")
                         item.error = {"code": "PREVIEW_FAILED", "message": f"{label}预览生成失败：{exc}"}
                         item.updated_at = datetime.now(timezone.utc)
                 continue

@@ -1007,7 +1007,7 @@ def get_version_preview(asset_id: UUID, version_id: UUID, size: str, request: Re
     selected = session.scalar(select(FitsHduMetadata.hdu_index).where(
         FitsHduMetadata.asset_version_id == version.id, FitsHduMetadata.is_selected.is_(True)
     ))
-    if selected is None and (version.scientific_metadata or {}).get("format") in {"image", "video"}:
+    if selected is None and (version.scientific_metadata or {}).get("format") in {"image", "raw", "xisf", "video"}:
         selected = 0
     return _read_preview(request, version.id, selected, size)
 
@@ -1027,7 +1027,7 @@ def get_project_reference_preview(project_id: UUID, reference_id: UUID, size: st
     selected = session.scalar(select(FitsHduMetadata.hdu_index).where(
         FitsHduMetadata.asset_version_id == version.id, FitsHduMetadata.is_selected.is_(True)
     ))
-    if selected is None and (version.scientific_metadata or {}).get("format") in {"image", "video"}:
+    if selected is None and (version.scientific_metadata or {}).get("format") in {"image", "raw", "xisf", "video"}:
         selected = 0
     return _read_preview(request, version.id, selected, size)
 

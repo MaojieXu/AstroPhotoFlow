@@ -21,10 +21,13 @@ dependencies = [
     "mcp==2.3.0",
     "numpy>=2.4.6",
     "pillow>=13.0.0",
+    "pillow-heif==1.1.1",
     "psutil>=6,<8",
+    "rawpy==0.27.1",
     "sqlalchemy>=2.0,<3",
     "uv>=0.8,<1",
     "uvicorn>=0.32,<1",
+    "xisf==0.9.7",
 ]
 
 [project.optional-dependencies]

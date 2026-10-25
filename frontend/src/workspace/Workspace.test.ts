@@ -31,6 +31,7 @@ describe('workspace panel', () => {
   it('shows five side areas and opens each area in the current panel', async () => {
     wrapper = mount(App, { global: { plugins: [createPinia()] } })
     await flushPromises()
+    expect(wrapper.findAll('input[type="file"]')[0].attributes('accept')).toContain('.heic,.heif,.hif')
     expect(wrapper.find('dialog').exists()).toBe(false)
     expect(wrapper.text()).not.toContain('打开资产工作区')
     expect(wrapper.get('.apf-nav').findAll('button')).toHaveLength(5)

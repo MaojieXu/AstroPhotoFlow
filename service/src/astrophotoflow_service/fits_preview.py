@@ -41,13 +41,25 @@ def _image_kind(hdu, cfa_override: str | None = None) -> str | None:
             return "quad_bayer"
         return "bayer" if pattern in CFA_PATTERNS or cfa_override in CFA_PATTERNS else "mono"
     if ndim == 3:
-        axis3 = str(header.get("CTYPE3", "")).strip().upper()
-        axis1 = str(header.get("CTYPE1", "")).strip().upper()
-        if int(header.get("NAXIS3", 0)) == 3 and axis3 in {"RGB", "COLOR"}:
+        if _rgb_channel_first(header):
             return "rgb"
+        axis1 = str(header.get("CTYPE1", "")).strip().upper()
         if int(header.get("NAXIS1", 0)) == 3 and axis1 in {"RGB", "COLOR"}:
             return "rgb"
     return None
+
+
+def _rgb_channel_first(header) -> bool:
+    if int(header.get("NAXIS3", 0)) != 3:
+        return False
+    axis3 = str(header.get("CTYPE3", "")).strip().upper()
+    if axis3 in {"RGB", "COLOR"}:
+        return True
+    return (
+        not axis3
+        and str(header.get("CTYPE1", "")).strip().upper().startswith("RA")
+        and str(header.get("CTYPE2", "")).strip().upper().startswith("DEC")
+    )
 
 
 def _header_cards(header) -> list[dict[str, str]]:
@@ -208,7 +220,7 @@ def create_preview(path: Path, hdu_index: int, kind: str, parameters: dict, max_
         data = hdu.section
         if kind == "rgb":
             header = hdu.header
-            if int(header.get("NAXIS3", 0)) == 3 and str(header.get("CTYPE3", "")).strip().upper() in {"RGB", "COLOR"}:
+            if _rgb_channel_first(header):
                 sample = np.asarray(data[:, ::stride, ::stride], dtype=np.float32)
                 sample = np.moveaxis(sample, 0, -1)
             else:

@@ -12,7 +12,9 @@ import pytest
 from astropy.io import fits
 from fastapi.testclient import TestClient
 from PIL import Image
+from pillow_heif import register_heif_opener
 from sqlalchemy import select
+from xisf import XISF
 
 from astrophotoflow_service.api import create_app
 from astrophotoflow_service.models import Asset, AssetTask, AssetTaskItem, Preview
@@ -614,6 +616,83 @@ def test_ordinary_images_create_both_preview_sizes(tmp_path):
         assert source.read_bytes()==original
     finally:
         client.__exit__(None,None,None)
+        app.state.database.close()
+
+
+def test_xisf_and_heif_imports_create_slot_zero_previews_for_assets_and_references(tmp_path):
+    root = tmp_path / "science"
+    root.mkdir()
+    xisf_path = root / "moon.xisf"
+    xisf_pixels = np.arange(160 * 90, dtype=np.uint16).reshape(90, 160)
+    XISF.write(str(xisf_path), xisf_pixels[..., None])
+    heif_path = root / "phone.heic"
+    heif_paths = (heif_path, root / "phone.heif", root / "phone.hif")
+    register_heif_opener(thumbnails=False)
+    Image.new("RGB", (160, 90), (30, 120, 210)).save(heif_path, format="HEIF")
+    for path in heif_paths[1:]:
+        path.write_bytes(heif_path.read_bytes())
+    import_paths = (xisf_path, *heif_paths)
+    source_bytes = {path.name: path.read_bytes() for path in import_paths}
+    settings, app, client = make_client(tmp_path, (ImportRoot("science", root),))
+    try:
+        created = client.post(
+            "/api/v1/imports", headers=AUTH,
+            json={
+                "sources": [{"root_id": "science", "path": path.name} for path in import_paths],
+                "storage_mode": "managed",
+                "classification": {"frame_class": "subframe", "frame_type": "light"},
+                "parameters": {}, "notes": "",
+            },
+        )
+        assert created.status_code == 202, created.text
+        task = client.get(f"/api/v1/asset-tasks/{created.json()['task_id']}", headers=AUTH).json()
+        assert task["status"] == "completed", task
+        assert [item["preview_status"] for item in task["items"]] == ["available"] * 4
+        assets = client.get("/api/v1/library/assets", headers=AUTH).json()["items"]
+        categorized = {
+            category: [asset for asset in assets if asset["current_version"]["scientific_metadata"]["format"] == category]
+            for category in ("xisf", "image")
+        }
+        assert len(categorized["xisf"]) == 1 and len(categorized["image"]) == 3
+        by_format = {"xisf": categorized["xisf"][0], "image": categorized["image"][0]}
+        for asset in (by_format["xisf"], *categorized["image"]):
+            version = asset["current_version"]
+            category = version["scientific_metadata"]["format"]
+            for size in ("thumbnail", "detail"):
+                response = client.get(
+                    f"/api/v1/library/assets/{asset['id']}/versions/{version['id']}/previews/{size}", headers=AUTH,
+                )
+                assert response.status_code == 200
+                assert response.headers["content-type"] == "image/jpeg"
+                with Image.open(BytesIO(response.content)) as preview:
+                    assert preview.size == ((100, 56) if size == "thumbnail" else (160, 90))
+            project = client.post("/api/v1/projects", headers=AUTH, json={"name": category}).json()
+            reference = client.post(
+                f"/api/v1/projects/{project['id']}/asset-references", headers=AUTH,
+                json={"base_revision": 1, "asset_version_id": version["id"]},
+            )
+            assert reference.status_code == 201, reference.text
+            for size in ("thumbnail", "detail"):
+                response = client.get(
+                    f"/api/v1/projects/{project['id']}/asset-references/{reference.json()['id']}/previews/{size}", headers=AUTH,
+                )
+                assert response.status_code == 200
+                assert response.headers["content-type"] == "image/jpeg"
+        xisf_version = by_format["xisf"]["current_version"]
+        with app.state.database.write_session() as session:
+            thumbnail = session.scalar(select(Preview).where(
+                Preview.asset_version_id == xisf_version["id"], Preview.size == "thumbnail",
+            ))
+            session.delete(thumbnail)
+        assert backfill_missing_previews(app.state.database, settings) == {"generated": 1, "failed": 0}
+        rebuilt = client.get(
+            f"/api/v1/library/assets/{by_format['xisf']['id']}/versions/{xisf_version['id']}/previews/thumbnail",
+            headers=AUTH,
+        )
+        assert rebuilt.status_code == 200 and rebuilt.headers["content-type"] == "image/jpeg"
+        assert {path.name: path.read_bytes() for path in import_paths} == source_bytes
+    finally:
+        client.__exit__(None, None, None)
         app.state.database.close()
 
 

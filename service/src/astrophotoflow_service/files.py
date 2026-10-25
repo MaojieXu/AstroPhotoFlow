@@ -8,6 +8,7 @@ from .settings import ImportRoot, Settings
 SUPPORTED_EXTENSIONS = {
     ".fits": "fits", ".fit": "fits", ".fts": "fits", ".fits.fz": "fits", ".fit.fz": "fits",
     ".jpg": "image", ".jpeg": "image", ".png": "image", ".tif": "image", ".tiff": "image", ".bmp": "image", ".webp": "image",
+    ".heic": "image", ".heif": "image", ".hif": "image",
     ".cr2": "raw", ".cr3": "raw", ".nef": "raw", ".arw": "raw", ".dng": "raw", ".raf": "raw", ".orf": "raw", ".rw2": "raw", ".pef": "raw", ".srw": "raw",
     ".xisf": "xisf", ".npy": "numpy", ".npz": "numpy",
     ".ser": "video", ".mp4": "video", ".mov": "video", ".avi": "video", ".mkv": "video",
