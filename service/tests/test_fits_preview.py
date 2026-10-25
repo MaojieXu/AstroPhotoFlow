@@ -20,14 +20,9 @@ def test_bayer_manual_cfa_and_display_presets_do_not_upscale(tmp_path):
     thumbnail, thumb_parameters = create_preview(
         path, 0, "bayer", {"cfa_pattern": "BGGR"}, 100,
     )
-    detail, detail_parameters = create_preview(
-        path, 0, "bayer", {"cfa_pattern": "BGGR"}, 1024,
-    )
     assert max(thumbnail.size) <= 100
-    assert max(detail.size) <= 1024
     assert thumbnail.size == (96, 48)
-    assert detail.size == (800, 400)
-    assert thumb_parameters["stretch"] == detail_parameters["stretch"] == "percentile_1_99"
+    assert thumb_parameters["stretch"] == "percentile_1_99"
     assert thumb_parameters["cfa_pattern"] == "BGGR"
     assert path.read_bytes() == original
 
@@ -43,7 +38,7 @@ def test_first_supported_hdu_is_fixed_when_preview_generation_fails(tmp_path):
     assert parsed["hdus"][0]["is_selected"] is True
     assert parsed["hdus"][1]["is_selected"] is False
     with pytest.raises(ValueError, match="有效像素"):
-        create_preview(path, parsed["selected_hdu"], "mono", {}, 1024)
+        create_preview(path, parsed["selected_hdu"], "mono", {}, 100)
 
 
 def test_only_explicitly_labeled_rgb_channel_axis_is_supported(tmp_path):
@@ -80,6 +75,14 @@ def test_two_dimensional_image_without_cfa_is_previewed_as_mono(tmp_path):
     assert parsed["hdus"][0]["supported_kind"] == "mono"
     image, _ = create_preview(path, 0, "mono", {}, 100)
     assert image.size == (8, 6)
+
+
+def test_float_image_keeps_its_fractional_stretch_range(tmp_path):
+    path = tmp_path / "fractional.fits"
+    fits.PrimaryHDU(np.linspace(0, 1, 100, dtype=np.float32).reshape(10, 10)).writeto(path)
+    image, display = create_preview(path, 0, "mono", {}, 100)
+    assert display["stretch_high"] < 1
+    assert image.getpixel((9, 9))[0] == 255
 
 
 @pytest.mark.parametrize("pattern,kind", [("XTRANS","xtrans"),("QUAD_BAYER","quad_bayer")])

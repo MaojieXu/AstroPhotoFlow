@@ -72,8 +72,6 @@ const datasetPendingIds = ref<string[]>([])
 const activeDataset = ref<RecordData>()
 const outerLibraryState = ref<{query:string;offset:number;pageSize:10|20|50|'all';sort:{by:string;order:'asc'|'desc'};view:'simple'|'detail'}>()
 const restoringOuterLibraryState = ref(false)
-const previewUrl = ref<string>()
-const previewError = ref('')
 const previewUrls = ref<Record<string,string>>({})
 const editorType = ref<EditorType>()
 const editingId = ref<string>()
@@ -93,7 +91,6 @@ const relatedProfilesError = ref('')
 const relatedProfilesReady = ref(false)
 let searchTimer: ReturnType<typeof setTimeout> | undefined
 let recordsLoadPending = false
-let previewRequestId = 0
 
 const dirty = computed(() => editorType.value !== undefined && JSON.stringify(draft.value) !== originalDraft.value)
 const isAssetSection = computed(() =>
@@ -985,37 +982,6 @@ function closeDatasetEditor(){
   datasetPendingIds.value=[]
 }
 
-async function showPreview(row: RecordData) {
-  closePreview()
-  const requestId = previewRequestId
-  previewError.value = ''
-  try {
-    const member = await previewMember(row)
-    if (requestId !== previewRequestId) return
-    if (!member) {
-      previewError.value = '此资产尚无可查看的预览。'
-      return
-    }
-    const blob = await assetApi.getBlob(
-      '/astrophotoflow/api/v1/library/assets/' + member.asset.id + '/versions/' + member.version.id + '/previews/detail'
-    )
-    if (requestId !== previewRequestId) return
-    previewUrl.value = URL.createObjectURL(blob)
-  } catch (cause) {
-    if (requestId !== previewRequestId) return
-    previewError.value = cause instanceof ApiClientError && cause.code === 'RESOURCE_NOT_FOUND'
-      ? '预览尚未生成或当前格式不支持。'
-      : presentError(cause).message
-  }
-}
-
-function closePreview() {
-  previewRequestId++
-  if (previewUrl.value) URL.revokeObjectURL(previewUrl.value)
-  previewUrl.value = undefined
-  previewError.value = ''
-}
-
 async function addSelectedAsset() {
   const revision = store.activeProjectRevision
   if (!store.activeProjectId || revision == null || !selected.value?.current_version_id) return
@@ -1522,7 +1488,6 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   clearTimeout(searchTimer)
   for (const url of Object.values(previewUrls.value)) URL.revokeObjectURL(url)
-  closePreview()
 })
 </script>
 
@@ -1647,10 +1612,10 @@ onBeforeUnmount(() => {
                 </ImportTasks>
                 <tr v-for="row in rows" :key="row.entry_type+':'+row.id" :aria-selected="bulkSelectMode?bulkSelection.has(bulkKey(row)):selected?.id===row.id" @click="onLibraryRowClick(row,$event)" @dblclick.capture="bulkSelectMode?$event.stopPropagation():undefined">
                 <td v-if="bulkSelectMode&&isLibraryItemsView"><input type="checkbox" :aria-label="'选择 '+itemTitle(row)" :checked="bulkSelection.has(bulkKey(row))" :disabled="bulkDeleteBusy" @click.stop @change="toggleBulkSelection(row)" /></td>
-                <td><button class="apf-thumb" type="button" :aria-label="row.entry_type==='dataset'?'打开图像组 '+itemTitle(row):'查看 '+itemTitle(row)+' 预览'" @click.stop="row.entry_type==='dataset'?openDataset(row):showPreview(row)">
+                <td><div class="apf-thumb" @click.stop>
                   <img v-if="previewUrls[row.id]" :src="previewUrls[row.id]" alt="" />
                   <span v-else>100px</span>
-                </button></td>
+                </div></td>
                 <td><InlineField :value="itemTitle(row)" :save="value=>saveRowField(row,'name',value)" @cancelled="clearInlineSaveFailure(inlineFailureKey(row,'name'))" /><template v-if="row.entry_type==='dataset'"><button type="button" class="apf-member-open" @click.stop="editDataset(row)">管理成员</button><button type="button" class="apf-member-open" @click.stop="openDataset(row)">图像组 · {{row.version?.members?.length??row.member_count??0}} 张</button></template><small v-else>{{itemSubtitle(row)}}</small></td>
                 <td v-if="row.entry_type==='dataset'">
                   <InlineField :value="datasetRawValue(row,member=>member.asset?.classification?.frame_class)" :display="datasetValue(row,member=>member.asset?.classification?.frame_class,frameClassLabel)" kind="select" :choices="[{value:'',label:'未指定'},{value:'mixed',label:'混合',disabled:true},...frameClasses.map(value=>({value,label:value}))]" :save="value=>saveRowField(row,'frame_class',value)" @cancelled="clearInlineSaveFailure(inlineFailureKey(row,'frame_class'))" /><span class="apf-classification-separator" aria-hidden="true">/</span>
@@ -1690,7 +1655,7 @@ onBeforeUnmount(() => {
             <table class="apf-assets-table apf-dataset-table">
               <thead><tr><th>封面</th><th>数据集</th><th>分类</th><th>成员数</th><th>相机</th><th>ISO／Gain</th><th>曝光</th><th>温度</th><th>成像系统</th><th>滤镜</th><th>存储</th><th>状态</th><th>备注</th><th>操作</th></tr></thead>
               <tbody><tr v-for="row in rows" :key="row.id" :aria-selected="selected?.id===row.id" @click="selectRow(row)">
-                <td><button class="apf-thumb" type="button" @click.stop="showPreview(row)"><img v-if="previewUrls[row.id]" :src="previewUrls[row.id]" alt="" /><span v-else>100px</span></button></td>
+                <td><div class="apf-thumb" @click.stop><img v-if="previewUrls[row.id]" :src="previewUrls[row.id]" alt="" /><span v-else>100px</span></div></td>
                 <td><strong>{{row.dataset?.name??row.name}}</strong><small>{{row.dataset_version_id?'项目固定版本':'数据集'}}</small></td>
                 <td>{{datasetClassification(row)}}</td>
                 <td>{{row.version?.members?.length??row.member_count??'—'}}</td>
@@ -1895,9 +1860,6 @@ onBeforeUnmount(() => {
       </main>
       <ImportDialog :open="importDialogOpen" :files="importFiles" :create-dataset="importCreatesDataset" :dataset-name="importDatasetName" @close="importDialogOpen=false" @submitted="importSubmitted" @upload-progress="updateUploadProgress" @upload-failed="progressRefreshToken++" />
       <DatasetEditor v-if="datasetEditorId" :dataset-id="datasetEditorId" :pending-asset-version-ids="datasetPendingIds" @close="closeDatasetEditor" @saved="datasetSaved" @updated="datasetUpdated" @saving="datasetInlineSaving" @failure="datasetInlineFailure" />
-      <div v-if="previewUrl || previewError" class="apf-preview-overlay" role="dialog" aria-modal="true" aria-label="素材预览" @click.self="closePreview" @keydown.stop>
-        <div class="apf-preview-dialog"><button type="button" @click="closePreview">关闭预览</button><p v-if="previewError" role="alert">{{previewError}}</p><img v-else :src="previewUrl" alt="素材图像或视频首帧预览" /></div>
-      </div>
   </section>
 </template>
 
@@ -1921,11 +1883,8 @@ onBeforeUnmount(() => {
 .apf-assets-table td strong,.apf-assets-table td small { display:block; }
 .apf-assets-table small { color:var(--descrip-text,#999); }
 .apf-assets-table .apf-note-cell { min-width:140px; max-width:280px; white-space:pre-wrap; overflow-wrap:anywhere; }
-.apf-assets-table .apf-thumb { display:block; width:100px; height:64px; min-height:64px; padding:0; overflow:hidden; }
+.apf-assets-table .apf-thumb { display:flex; align-items:center; justify-content:center; width:100px; height:64px; overflow:hidden; border-radius:8px; background:var(--comfy-menu-secondary-bg,#292929); cursor:default; }
 .apf-assets-table .apf-thumb img { width:100%; height:100%; object-fit:contain; }
-.apf-preview-overlay { position:absolute; inset:0; z-index:8; display:grid; place-items:center; padding:12px; background:#000b; }
-.apf-preview-dialog { max-width:100%; max-height:100%; overflow:auto; padding:12px; background:var(--comfy-menu-bg,#292929); border:1px solid var(--border-color,#555); border-radius:8px; }
-.apf-preview-dialog img { display:block; max-width:min(1024px,80vw); max-height:80vh; object-fit:contain; }
 .apf-dataset-editor { z-index:6; }
 .apf-nav { display:flex; flex:0 0 48px; flex-direction:column; align-items:center; gap:6px; padding:8px 4px; border-right:1px solid var(--border-color,#4e4e4e); background:var(--comfy-menu-bg,#202124); }
 .apf-workspace .apf-nav button { display:grid; width:40px; min-height:42px; height:42px; padding:0; border-radius:6px; color:var(--descrip-text,#999); background:transparent; font-size:18px; }

@@ -18,7 +18,6 @@ from . import api as base
 from .db import Database
 from .errors import ApiError, invalid_reference, not_found
 from .files import entries_page, find_root, format_for_path, resolve_relative
-from .fits_preview import PREVIEW_ALGORITHM_VERSION, create_preview
 from .import_schemas import (
     AssetClassification, AssetParameters, AssetPatch, DatasetMemberParametersUpdate, DatasetMembersCreate, DatasetPatch, ImportCreate,
     LibraryEntriesRemove,
@@ -960,7 +959,7 @@ def _fits_hdu_out(row: FitsHduMetadata) -> dict:
 
 
 def _read_preview(request: Request, version_id: str, hdu_index: int | None, size: str) -> Response:
-    if size not in {"thumbnail", "detail"} or hdu_index is None:
+    if size != "thumbnail" or hdu_index is None:
         raise not_found()
     with request.app.state.database.read_session() as session:
         preview = session.scalar(select(Preview).where(

@@ -137,7 +137,7 @@ def test_root_browser_import_versions_edit_and_dataset_references(tmp_path):
         assert hdus.status_code == 200 and hdus.json()["total"] == 2
 
         preview = client.get(
-            f"/api/v1/library/assets/{asset['id']}/versions/{version['id']}/previews/detail",
+            f"/api/v1/library/assets/{asset['id']}/versions/{version['id']}/previews/thumbnail",
             headers=AUTH,
         )
         assert preview.status_code == 200
@@ -585,7 +585,7 @@ def test_non_bayer_cfa_stays_registered_and_reports_preview_unsupported(tmp_path
         app.state.database.close()
 
 
-def test_ordinary_images_create_both_preview_sizes(tmp_path):
+def test_ordinary_images_create_only_small_preview(tmp_path):
     root=tmp_path/"science"
     source=root/"portrait.png"
     source.parent.mkdir(parents=True)
@@ -598,24 +598,117 @@ def test_ordinary_images_create_both_preview_sizes(tmp_path):
         assert accepted.status_code==202
         asset=client.get("/api/v1/library/assets",headers=AUTH).json()["items"][0]
         version=asset["current_version"]
-        for size,expected in (("thumbnail",(100,56)),("detail",(320,180))):
-            response=client.get(f"/api/v1/library/assets/{asset['id']}/versions/{version['id']}/previews/{size}",headers=AUTH)
-            assert response.status_code==200
-            with Image.open(BytesIO(response.content)) as preview:
-                assert preview.size==expected
+        response=client.get(f"/api/v1/library/assets/{asset['id']}/versions/{version['id']}/previews/thumbnail",headers=AUTH)
+        assert response.status_code==200
+        with Image.open(BytesIO(response.content)) as preview:
+            assert preview.size==(100,56)
+        assert client.get(f"/api/v1/library/assets/{asset['id']}/versions/{version['id']}/previews/detail",headers=AUTH).status_code==404
         with app.state.database.read_session() as session:
-            detail=session.scalar(select(Preview).where(Preview.asset_version_id==version["id"],Preview.size=="detail"))
-            detail_path=settings.data_dir/detail.storage_path
-            detail_bytes=detail_path.read_bytes()
+            assert session.scalar(select(Preview).where(Preview.asset_version_id==version["id"],Preview.size=="detail")) is None
             thumbnail=session.scalar(select(Preview).where(Preview.asset_version_id==version["id"],Preview.size=="thumbnail"))
             thumbnail_id=thumbnail.id
         with app.state.database.write_session() as session:
             session.delete(session.get(Preview,thumbnail_id))
         assert backfill_missing_previews(app.state.database,settings)=={"generated":1,"failed":0}
-        assert detail_path.read_bytes()==detail_bytes
+        with app.state.database.read_session() as session:
+            assert session.scalar(select(Preview).where(Preview.asset_version_id==version["id"],Preview.size=="detail")) is None
         assert source.read_bytes()==original
     finally:
         client.__exit__(None,None,None)
+        app.state.database.close()
+
+
+def test_fits_batch_reuses_group_stretch_and_restores_it_on_resume(tmp_path):
+    root = tmp_path / "science"
+    root.mkdir()
+    cases = (
+        ("a.fit", 0, 30, "L"),
+        ("b.fit", 1000, 30, "L"),
+        ("c.fit", 2000, 60, "L"),
+        ("d.fit", None, 30, "Ha"),
+        ("e.fit", 3000, 30, "Ha"),
+    )
+    for name, offset, exposure, filter_name in cases:
+        pixels = (np.arange(2400, dtype=np.float32).reshape(40, 60) + offset) if offset is not None else np.full((40, 60), np.nan, dtype=np.float32)
+        hdu = fits.PrimaryHDU(pixels)
+        hdu.header["EXPTIME"] = exposure
+        hdu.header["FILTER"] = filter_name
+        hdu.writeto(root / name)
+    settings, app, client = make_client(tmp_path, (ImportRoot("science", root),))
+    try:
+        created = client.post("/api/v1/imports", headers=AUTH, json={
+            "sources": [{"root_id": "science", "path": name} for name, *_ in cases],
+            "storage_mode": "reference",
+            "classification": {"frame_class": "subframe", "frame_type": "light"},
+            "parameters": {}, "notes": "",
+        })
+        assert created.status_code == 202
+        task_id = created.json()["task_id"]
+        task = client.get(f"/api/v1/asset-tasks/{task_id}", headers=AUTH).json()
+        items = {Path(item["source_path"]).name: item for item in task["items"]}
+        assert items["d.fit"]["preview_status"] == "failed"
+        with app.state.database.read_session() as session:
+            displays = {
+                name: session.scalar(select(Preview).where(Preview.asset_version_id == items[name]["asset_version_id"], Preview.size == "thumbnail")).display_parameters
+                for name in ("a.fit", "b.fit", "c.fit", "e.fit")
+            }
+            groups = session.get(AssetTask, task_id).report["preview_stretch_groups"]
+        assert len(groups) == 3
+        assert displays["a.fit"]["stretch_low"] == displays["b.fit"]["stretch_low"]
+        assert displays["a.fit"]["stretch_high"] == displays["b.fit"]["stretch_high"]
+        assert displays["b.fit"]["stretch_reference_version_id"] == items["a.fit"]["asset_version_id"]
+        assert displays["c.fit"]["stretch_group"] != displays["a.fit"]["stretch_group"]
+        assert displays["e.fit"]["stretch_reference_version_id"] == items["e.fit"]["asset_version_id"]
+        assert client.get(f"/api/v1/library/assets/{items['b.fit']['asset_id']}/versions/{items['b.fit']['asset_version_id']}/previews/detail",headers=AUTH).status_code==404
+        assert len(list((settings.data_dir / "previews" / items["b.fit"]["asset_version_id"]).glob("*.jpg"))) == 1
+        with app.state.database.write_session() as session:
+            session.delete(session.scalar(select(Preview).where(Preview.asset_version_id == items["b.fit"]["asset_version_id"], Preview.size == "thumbnail")))
+            session.get(AssetTaskItem, items["b.fit"]["id"]).status = "interrupted"
+            session.get(AssetTask, task_id).status = "running"
+        process_task(app.state.database, settings, task_id)
+        with app.state.database.read_session() as session:
+            resumed = session.scalar(select(Preview).where(Preview.asset_version_id == items["b.fit"]["asset_version_id"], Preview.size == "thumbnail"))
+            assert resumed.display_parameters["stretch_reference_version_id"] == items["a.fit"]["asset_version_id"]
+            assert resumed.display_parameters["stretch_low"] == displays["a.fit"]["stretch_low"]
+        assert len(list((settings.data_dir / "previews" / items["b.fit"]["asset_version_id"]).glob("*.jpg"))) == 1
+    finally:
+        client.__exit__(None, None, None)
+        app.state.database.close()
+
+
+def test_xisf_and_high_depth_images_share_stretch_within_each_format(tmp_path):
+    root = tmp_path / "science"
+    root.mkdir()
+    values = np.arange(2400, dtype=np.uint16).reshape(40, 60)
+    for name, offset in (("a.xisf", 0), ("b.xisf", 1000)):
+        XISF.write(str(root / name), (values + offset)[..., None])
+    for name, offset in (("a.tif", 0), ("b.tif", 1000)):
+        Image.fromarray(values + offset).save(root / name)
+    settings, app, client = make_client(tmp_path, (ImportRoot("science", root),))
+    try:
+        created = client.post("/api/v1/imports", headers=AUTH, json={
+            "sources": [{"root_id": "science", "path": name} for name in ("a.xisf", "b.xisf", "a.tif", "b.tif")],
+            "storage_mode": "reference",
+            "classification": {"frame_class": "subframe", "frame_type": "light"},
+            "parameters": {}, "notes": "",
+        })
+        assert created.status_code == 202
+        task = client.get(f"/api/v1/asset-tasks/{created.json()['task_id']}", headers=AUTH).json()
+        assert task["status"] == "completed", task
+        items = {Path(item["source_path"]).name: item for item in task["items"]}
+        with app.state.database.read_session() as session:
+            displays = {
+                name: session.scalar(select(Preview).where(Preview.asset_version_id == item["asset_version_id"], Preview.size == "thumbnail")).display_parameters
+                for name, item in items.items()
+            }
+            assert len(session.get(AssetTask, created.json()["task_id"]).report["preview_stretch_groups"]) == 2
+        for first, second in (("a.xisf", "b.xisf"), ("a.tif", "b.tif")):
+            assert displays[first]["stretch_low"] == displays[second]["stretch_low"]
+            assert displays[first]["stretch_high"] == displays[second]["stretch_high"]
+            assert displays[second]["stretch_reference_version_id"] == items[first]["asset_version_id"]
+        assert displays["a.xisf"]["stretch_group"] != displays["a.tif"]["stretch_group"]
+    finally:
+        client.__exit__(None, None, None)
         app.state.database.close()
 
 
@@ -658,21 +751,21 @@ def test_xisf_and_heif_imports_create_slot_zero_previews_for_assets_and_referenc
         for asset in (by_format["xisf"], *categorized["image"]):
             version = asset["current_version"]
             category = version["scientific_metadata"]["format"]
-            for size in ("thumbnail", "detail"):
+            for size in ("thumbnail",):
                 response = client.get(
                     f"/api/v1/library/assets/{asset['id']}/versions/{version['id']}/previews/{size}", headers=AUTH,
                 )
                 assert response.status_code == 200
                 assert response.headers["content-type"] == "image/jpeg"
                 with Image.open(BytesIO(response.content)) as preview:
-                    assert preview.size == ((100, 56) if size == "thumbnail" else (160, 90))
+                    assert preview.size == (100, 56)
             project = client.post("/api/v1/projects", headers=AUTH, json={"name": category}).json()
             reference = client.post(
                 f"/api/v1/projects/{project['id']}/asset-references", headers=AUTH,
                 json={"base_revision": 1, "asset_version_id": version["id"]},
             )
             assert reference.status_code == 201, reference.text
-            for size in ("thumbnail", "detail"):
+            for size in ("thumbnail",):
                 response = client.get(
                     f"/api/v1/projects/{project['id']}/asset-references/{reference.json()['id']}/previews/{size}", headers=AUTH,
                 )
@@ -900,7 +993,7 @@ def test_ser_import_previews_survive_decode_failure_and_backfill_each_item(tmp_p
         assert by_path['broken.ser']['preview_status']=='failed'
         good_asset=client.get(f"/api/v1/library/assets/{by_path['valid.ser']['asset_id']}",headers=AUTH).json()
         good_version=good_asset['current_version']
-        for size,expected in (('thumbnail',(100,67)),('detail',(120,80))):
+        for size,expected in (('thumbnail',(60,40)),):
             response=client.get(f"/api/v1/library/assets/{good_asset['id']}/versions/{good_version['id']}/previews/{size}",headers=AUTH)
             assert response.status_code==200
             assert response.headers['content-type']=='image/jpeg'
@@ -911,9 +1004,10 @@ def test_ser_import_previews_survive_decode_failure_and_backfill_each_item(tmp_p
             'base_revision':project['revision'],'asset_version_id':good_version['id']
         })
         assert reference.status_code==201,reference.text
-        project_preview=client.get(f"/api/v1/projects/{project['id']}/asset-references/{reference.json()['id']}/previews/detail",headers=AUTH)
+        project_preview=client.get(f"/api/v1/projects/{project['id']}/asset-references/{reference.json()['id']}/previews/thumbnail",headers=AUTH)
         assert project_preview.status_code==200
         assert project_preview.headers['content-type']=='image/jpeg'
+        assert client.get(f"/api/v1/projects/{project['id']}/asset-references/{reference.json()['id']}/previews/detail",headers=AUTH).status_code==404
         with app.state.database.write_session() as session:
             thumbnail=session.scalar(select(Preview).where(Preview.asset_version_id==good_version['id'],Preview.size=='thumbnail'))
             session.delete(thumbnail)

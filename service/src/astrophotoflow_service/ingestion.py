@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 import os
 import tempfile
@@ -17,7 +18,7 @@ from sqlalchemy import delete, func, select
 from .db import Database
 from .errors import ApiError, invalid_reference, not_found
 from .files import SUPPORTED_EXTENSIONS, enumerate_source, find_root, format_for_path, resolve_relative
-from .fits_preview import PARSER_VERSION, PREVIEW_ALGORITHM_VERSION, _display, create_preview, inspect_fits
+from .fits_preview import PARSER_VERSION, PREVIEW_ALGORITHM_VERSION, _display, create_preview, inspect_fits, stretch_bounds
 from .models import (
     Asset, AssetTask, AssetTaskItem, AssetVersion, Dataset, DatasetMember,
     DatasetVersion, Equipment, FitsHduMetadata, Preview,
@@ -230,14 +231,15 @@ def _current_asset_parameters(request_values: dict, file_values: dict) -> tuple[
     return values, sources
 
 
-def _fit_preview_rows(database: Database, settings: Settings, version_id: str, hdu_rows: list[dict], parameters: dict, path: Path, missing_only: bool = False) -> tuple[str, str | None]:
+def _fit_preview_rows(database: Database, settings: Settings, version_id: str, hdu_rows: list[dict], parameters: dict, path: Path, missing_only: bool = False, stretch: tuple[float, float] | None = None, group_key: str | None = None, reference_version_id: str | None = None) -> tuple[str, str | None, dict | None]:
     selected = next((row for row in hdu_rows if row["is_selected"]), None)
     if selected is None:
-        return "unsupported", None
+        return "unsupported", None, None
     if selected["supported_kind"] in {"xtrans", "quad_bayer"}:
-        return "unsupported", f"{selected['supported_kind']} CFA 已登记；当前暂不支持其马赛克彩色预览。"
+        return "unsupported", f"{selected['supported_kind']} CFA 已登记；当前暂不支持其马赛克彩色预览。", None
     failed = None
-    for size, edge in (("thumbnail", 100), ("detail", 1024)):
+    display = None
+    for size, edge in (("thumbnail", 100),):
         try:
             if missing_only:
                 with database.read_session() as session:
@@ -248,15 +250,17 @@ def _fit_preview_rows(database: Database, settings: Settings, version_id: str, h
                     ))
                 if existing:
                     continue
-            image, display = create_preview(path, selected["hdu_index"], selected["supported_kind"], parameters, edge)
+            image, display = create_preview(path, selected["hdu_index"], selected["supported_kind"], parameters, edge, stretch)
+            if group_key is not None:
+                display.update(stretch_group=group_key, stretch_reference_version_id=reference_version_id or version_id)
             preview_id = str(uuid4())
-            relative = Path("previews") / version_id / f"{preview_id}.jpg"
+            relative = Path("previews") / version_id / f"{PREVIEW_ALGORITHM_VERSION}-{selected['hdu_index']}-thumbnail.jpg"
             final = settings.data_dir / relative
             final.parent.mkdir(parents=True, exist_ok=True)
             fd, temporary = tempfile.mkstemp(prefix=preview_id, suffix=".tmp", dir=final.parent)
             os.close(fd)
             try:
-                image.save(temporary, format="JPEG", quality=88, optimize=False)
+                image.save(temporary, format="JPEG", quality=80, optimize=False)
                 os.replace(temporary, final)
             finally:
                 if os.path.exists(temporary):
@@ -298,19 +302,19 @@ def _fit_preview_rows(database: Database, settings: Settings, version_id: str, h
                     preview.width, preview.height = 0, 0
                     preview.storage_path, preview.status, preview.error = "", "failed", failed
                     preview.display_parameters = {"algorithm": PREVIEW_ALGORITHM_VERSION}
-    return ("failed" if failed else "available"), failed
+    return ("failed" if failed else "available"), failed, display if not failed else None
 
 
 def _save_preview(database: Database, settings: Settings, version_id: str, hdu_index: int, size: str, edge: int, image: Image.Image, display_parameters: dict | None = None) -> None:
     image.thumbnail((edge, edge), Image.Resampling.LANCZOS)
     preview_id = str(uuid4())
-    relative = Path("previews") / version_id / f"{preview_id}.jpg"
+    relative = Path("previews") / version_id / f"{PREVIEW_ALGORITHM_VERSION}-{hdu_index}-thumbnail.jpg"
     final = settings.data_dir / relative
     final.parent.mkdir(parents=True, exist_ok=True)
     fd, temporary = tempfile.mkstemp(prefix=preview_id, suffix=".tmp", dir=final.parent)
     os.close(fd)
     try:
-        image.convert("RGB").save(temporary, format="JPEG", quality=88, optimize=False)
+        image.convert("RGB").save(temporary, format="JPEG", quality=80, optimize=False)
         os.replace(temporary, final)
     finally:
         if os.path.exists(temporary):
@@ -335,25 +339,18 @@ def _save_preview(database: Database, settings: Settings, version_id: str, hdu_i
             preview.status, preview.error = "available", None
 
 
-def _ordinary_image(path: Path) -> Image.Image:
+def _ordinary_image(path: Path, stretch: tuple[float, float] | None = None) -> tuple[Image.Image, dict | None]:
     with Image.open(path) as source:
         source.seek(0)
         image = ImageOps.exif_transpose(source)
         if image.mode in {"I;16", "I;16B", "I;16L", "I", "F"}:
             values = np.asarray(image, dtype=np.float32)
-            finite = values[np.isfinite(values)]
-            if finite.size == 0:
-                raise ValueError("图像没有有效像素。")
-            low, high = np.percentile(finite, (1, 99))
-            if high <= low:
-                high = low + 1
-            display = np.clip((values - low) / (high - low), 0, 1)
-            display[~np.isfinite(display)] = 0
-            return Image.fromarray(np.asarray(display * 255, dtype=np.uint8), mode="L").convert("RGB")
-        return image.convert("RGB").copy()
+            low, high = stretch if stretch is not None else stretch_bounds(values)
+            return _display(values, (low, high)), {"stretch_low": low, "stretch_high": high}
+        return image.convert("RGB").copy(), None
 
 
-def _xisf_image(path: Path) -> Image.Image:
+def _xisf_image(path: Path, stretch: tuple[float, float] | None = None) -> tuple[Image.Image, dict]:
     from xisf import XISF
 
     reader = XISF(str(path))
@@ -371,7 +368,58 @@ def _xisf_image(path: Path) -> Image.Image:
             raise ValueError("XISF RGB 图像必须包含三个通道。")
     else:
         raise ValueError(f"不支持 XISF 色彩布局：{metadata.get('colorSpace', 'unknown')}")
-    return _display(array)
+    low, high = stretch if stretch is not None else stretch_bounds(array)
+    return _display(array, (low, high)), {"stretch_low": low, "stretch_high": high}
+
+
+def _xisf_layout(path: Path) -> str:
+    from xisf import XISF
+
+    metadata = XISF(str(path)).get_images_metadata()[0]
+    return f"{metadata.get('colorSpace')}:{metadata.get('sampleFormat')}"
+
+
+def _preview_group_key(version: AssetVersion, asset: Asset, layout: str) -> str:
+    parameters = asset.parameters or {}
+    observed = (version.scientific_metadata or {}).get("observed_parameters") or {}
+    return json.dumps([
+        (version.scientific_metadata or {}).get("format"), layout,
+        (asset.classification or {}).get("frame_class"), version.frame_type,
+        parameters.get("camera_id"), parameters.get("filter_id") or observed.get("filter_name"),
+        parameters.get("exposure_seconds"), parameters.get("gain"), parameters.get("offset"),
+        parameters.get("binning_x"), parameters.get("binning_y"),
+    ], ensure_ascii=False, separators=(",", ":"))
+
+
+def _task_stretch(database: Database, task_id: str, group_key: str) -> tuple[tuple[float, float] | None, str | None]:
+    with database.read_session() as session:
+        profile = ((session.get(AssetTask, task_id).report or {}).get("preview_stretch_groups") or {}).get(group_key)
+    if profile is None:
+        return None, None
+    return (profile["low"], profile["high"]), profile["reference_version_id"]
+
+
+def _save_task_stretch(database: Database, task_id: str, group_key: str, display: dict, version_id: str) -> None:
+    with database.write_session() as session:
+        task = session.get(AssetTask, task_id)
+        report = dict(task.report or {})
+        groups = dict(report.get("preview_stretch_groups") or {})
+        if group_key not in groups:
+            groups[group_key] = {
+                "low": display["stretch_low"], "high": display["stretch_high"],
+                "reference_version_id": version_id,
+            }
+            task.report = {**report, "preview_stretch_groups": groups}
+
+
+def _backfill_stretch(database: Database, version_id: str, layout: str) -> tuple[str | None, str | None, tuple[float, float] | None, str | None]:
+    with database.read_session() as session:
+        version = session.get(AssetVersion, version_id)
+        asset = session.get(Asset, version.asset_id)
+        task_id = session.scalar(select(AssetTaskItem.task_id).where(AssetTaskItem.asset_version_id == version_id).limit(1))
+        group_key = _preview_group_key(version, asset, layout)
+    stretch, reference_id = _task_stretch(database, task_id, group_key) if task_id else (None, None)
+    return task_id, group_key, stretch, reference_id
 
 
 def _raw_image(path: Path) -> Image.Image:
@@ -382,11 +430,11 @@ def _raw_image(path: Path) -> Image.Image:
             thumbnail = raw.extract_thumb()
             if thumbnail.format == rawpy.ThumbFormat.JPEG:
                 with Image.open(BytesIO(thumbnail.data)) as image:
-                    if max(image.size) >= 1024:
+                    if max(image.size) >= 100:
                         return ImageOps.exif_transpose(image).convert("RGB").copy()
             elif thumbnail.format == rawpy.ThumbFormat.BITMAP:
                 image = Image.fromarray(thumbnail.data)
-                if max(image.size) >= 1024:
+                if max(image.size) >= 100:
                     return image.convert("RGB").copy()
         except (rawpy.LibRawError, OSError, ValueError):
             pass
@@ -410,7 +458,7 @@ def backfill_missing_previews(database: Database, settings: Settings) -> dict[st
                 Preview.asset_version_id == version_id, Preview.hdu_index == (selected.hdu_index if selected else 0),
                 Preview.algorithm_version == PREVIEW_ALGORITHM_VERSION, Preview.status == "available",
             )).all())
-        if len(available) == 2:
+        if "thumbnail" in available:
             continue
         try:
             if mode == "managed":
@@ -420,10 +468,15 @@ def backfill_missing_previews(database: Database, settings: Settings) -> dict[st
                 _, root = find_root(settings, root_id)
                 path = resolve_relative(root, relative)
             if metadata.get("format") in {"raw", "xisf"}:
-                image = _raw_image(path) if metadata["format"] == "raw" else _xisf_image(path)
-                for size, edge in (("thumbnail", 100), ("detail", 1024)):
-                    if size not in available:
-                        _save_preview(database, settings, version_id, 0, size, edge, image.copy())
+                if metadata["format"] == "raw":
+                    image, display = _raw_image(path), {"algorithm": PREVIEW_ALGORITHM_VERSION}
+                else:
+                    task_id, group_key, stretch, reference_id = _backfill_stretch(database, version_id, _xisf_layout(path))
+                    image, display = _xisf_image(path, stretch)
+                    display.update(stretch_group=group_key, stretch_reference_version_id=reference_id or version_id)
+                _save_preview(database, settings, version_id, 0, "thumbnail", 100, image, display)
+                if metadata["format"] == "xisf" and task_id and reference_id is None:
+                    _save_task_stretch(database, task_id, group_key, display, version_id)
             elif metadata.get("format") == "fits":
                 if selected is None:
                     raise ValueError("FITS 没有已选中的图像 HDU。")
@@ -434,19 +487,28 @@ def backfill_missing_previews(database: Database, settings: Settings) -> dict[st
                     asset = session.get(Asset, version.asset_id)
                     hdu_rows = [{"hdu_index": selected.hdu_index, "is_selected": True, "supported_kind": selected.supported_kind}]
                     parameters = dict(asset.parameters or {})
-                _, error = _fit_preview_rows(database, settings, version_id, hdu_rows, parameters, path, missing_only=True)
+                task_id, group_key, stretch, reference_id = _backfill_stretch(database, version_id, f"{selected.supported_kind}:{selected.bitpix}")
+                _, error, display = _fit_preview_rows(database, settings, version_id, hdu_rows, parameters, path, missing_only=True, stretch=stretch, group_key=group_key, reference_version_id=reference_id)
                 if error:
                     raise ValueError(error)
+                if display is not None and task_id and reference_id is None:
+                    _save_task_stretch(database, task_id, group_key, display, version_id)
             elif metadata.get("format") == "video":
-                image, display = first_video_frame(path, 1024)
-                for size, edge in (("thumbnail", 100), ("detail", 1024)):
-                    if size not in available:
-                        _save_preview(database, settings, version_id, 0, size, edge, image.copy(), display)
+                image, display = first_video_frame(path, 100)
+                _save_preview(database, settings, version_id, 0, "thumbnail", 100, image, display)
             else:
-                image = _ordinary_image(path)
-                for size, edge in (("thumbnail", 100), ("detail", 1024)):
-                    if size not in available:
-                        _save_preview(database, settings, version_id, 0, size, edge, image.copy())
+                with Image.open(path) as source:
+                    layout = source.mode
+                if layout in {"I;16", "I;16B", "I;16L", "I", "F"}:
+                    task_id, group_key, stretch, reference_id = _backfill_stretch(database, version_id, layout)
+                else:
+                    task_id, group_key, stretch, reference_id = None, None, None, None
+                image, stretch_display = _ordinary_image(path, stretch)
+                if stretch_display is not None:
+                    stretch_display.update(stretch_group=group_key, stretch_reference_version_id=reference_id or version_id)
+                _save_preview(database, settings, version_id, 0, "thumbnail", 100, image, stretch_display)
+                if stretch_display is not None and task_id and reference_id is None:
+                    _save_task_stretch(database, task_id, group_key, stretch_display, version_id)
             generated += 1
         except Exception:
             logger.exception("preview backfill failed version_id=%s", version_id)
@@ -846,6 +908,9 @@ def process_task(database: Database, settings: Settings, task_id: str) -> None:
                 with database.read_session() as session:
                     version = session.get(AssetVersion, item_data["asset_version_id"])
                     source_location, source_mode = version.storage_location, version.storage_mode
+                    asset = session.get(Asset, item_data["asset_id"])
+                    group_asset = asset
+                    group_version = version
                 try:
                     if source_mode == "managed":
                         image_path = settings.data_dir / source_location
@@ -853,15 +918,25 @@ def process_task(database: Database, settings: Settings, task_id: str) -> None:
                         _, root_path = find_root(settings, item_data["root_id"])
                         image_path = resolve_relative(root_path, item.source_path)
                     if item_data["format"] == "video":
-                        image, display = first_video_frame(image_path, 1024)
+                        image, display = first_video_frame(image_path, 100)
                     elif item_data["format"] == "raw":
                         image, display = _raw_image(image_path), {"algorithm": PREVIEW_ALGORITHM_VERSION}
                     elif item_data["format"] == "xisf":
-                        image, display = _xisf_image(image_path), {"algorithm": PREVIEW_ALGORITHM_VERSION}
+                        group_key = _preview_group_key(group_version, group_asset, _xisf_layout(image_path))
+                        stretch, reference_id = _task_stretch(database, task_id, group_key)
+                        image, display = _xisf_image(image_path, stretch)
                     else:
-                        image, display = _ordinary_image(image_path), {"algorithm": PREVIEW_ALGORITHM_VERSION}
-                    for size, edge in (("thumbnail", 100), ("detail", 1024)):
-                        _save_preview(database, settings, item_data["asset_version_id"], 0, size, edge, image.copy(), display)
+                        with Image.open(image_path) as source:
+                            layout = source.mode
+                        group_key = _preview_group_key(group_version, group_asset, layout) if layout in {"I;16", "I;16B", "I;16L", "I", "F"} else None
+                        stretch, reference_id = _task_stretch(database, task_id, group_key) if group_key else (None, None)
+                        image, stretch_display = _ordinary_image(image_path, stretch)
+                        display = {"algorithm": PREVIEW_ALGORITHM_VERSION, **(stretch_display or {})}
+                    if item_data["format"] in {"xisf", "image"} and group_key is not None:
+                        display.update(stretch_group=group_key, stretch_reference_version_id=reference_id or item_data["asset_version_id"])
+                    _save_preview(database, settings, item_data["asset_version_id"], 0, "thumbnail", 100, image, display)
+                    if item_data["format"] in {"xisf", "image"} and group_key is not None and reference_id is None:
+                        _save_task_stretch(database, task_id, group_key, display, item_data["asset_version_id"])
                     with database.write_session() as session:
                         item = session.get(AssetTaskItem, item_id)
                         item.preview_status, item.status, item.error = "available", "completed", None
@@ -920,11 +995,15 @@ def process_task(database: Database, settings: Settings, task_id: str) -> None:
                         FitsHduMetadata.is_selected.is_(True),
                     ))
                     current_version = version_for_parse
-                preview_state, preview_error = _fit_preview_rows(
+                group_key = _preview_group_key(current_version, asset, f"{hdu_for_parse.supported_kind}:{hdu_for_parse.bitpix}")
+                stretch, reference_id = _task_stretch(database, task_id, group_key)
+                preview_state, preview_error, display = _fit_preview_rows(
                     database, settings, current_version.id,
                     [{"hdu_index": hdu_index, "is_selected": True, "supported_kind": hdu_for_parse.supported_kind}],
-                    parameters, image_path,
+                    parameters, image_path, stretch=stretch, group_key=group_key, reference_version_id=reference_id,
                 )
+                if display is not None and reference_id is None:
+                    _save_task_stretch(database, task_id, group_key, display, current_version.id)
                 with database.write_session() as session:
                     item = session.get(AssetTaskItem, item_id)
                     item.preview_status = preview_state

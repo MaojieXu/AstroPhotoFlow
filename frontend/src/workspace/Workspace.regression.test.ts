@@ -149,38 +149,23 @@ describe('first-stage regression fixes', () => {
     expect(send).toHaveBeenCalledTimes(recovery==='cancel'?1:2)
   })
 
-  it('ignores out-of-order previews and releases the closed preview URL',async()=>{
+  it('shows a thumbnail without opening any image when it is clicked',async()=>{
     const version={id:idAt(502),asset_id:libraryAsset.id,version_number:1,availability:'available',storage_mode:'reference',metadata_status:'ready',preview_status:'ready',created_at:createdAt}
     const asset={...libraryAsset,current_version:version,current_version_id:version.id}
-    let resolveA!: (blob:Blob)=>void
-    let resolveB!: (blob:Blob)=>void
-    get.mockImplementation(async(path:string)=>{
-      if(path.endsWith('/capabilities'))return capabilities
-      if(path.includes('/library/items'))return page([{entry_type:'asset',asset,import_issue:null}])
-      return emptyPage
-    })
-    getBlob.mockImplementation((path:string)=>path.endsWith('/previews/thumbnail')
-      ?Promise.resolve(new Blob(['thumb']))
-      :new Promise(resolve=>{if(!resolveA)resolveA=resolve;else resolveB=resolve}))
-    let urlNumber=0
-    const createUrl=vi.fn(()=>['blob:thumb','blob:B','blob:A'][urlNumber++])
-    const revokeUrl=vi.fn()
-    Object.defineProperty(URL,'createObjectURL',{configurable:true,value:createUrl})
-    Object.defineProperty(URL,'revokeObjectURL',{configurable:true,value:revokeUrl})
+    get.mockImplementation(async(path:string)=>path.endsWith('/capabilities')?capabilities:path.includes('/library/items')?page([{entry_type:'asset',asset,import_issue:null}]):emptyPage)
+    getBlob.mockResolvedValue(new Blob(['thumb']))
+    Object.defineProperty(URL,'createObjectURL',{configurable:true,value:vi.fn(()=>'blob:thumb')})
+    Object.defineProperty(URL,'revokeObjectURL',{configurable:true,value:vi.fn()})
     wrapper=mount(App,{global:{plugins:[pinia]}})
     await flushPromises()
-    const thumb=wrapper.get('.apf-assets-table button.apf-thumb')
+    const thumb=wrapper.get('.apf-assets-table .apf-thumb')
+    expect(thumb.element.tagName).toBe('DIV')
+    expect(thumb.get('img').attributes('src')).toBe('blob:thumb')
+    const requests=getBlob.mock.calls.length
     await thumb.trigger('click')
-    await thumb.trigger('click')
-    resolveB(new Blob(['B!']))
     await flushPromises()
-    expect(wrapper.get('.apf-preview-dialog img').attributes('src')).toBe('blob:B')
-    await wrapper.get('.apf-preview-dialog button').trigger('click')
-    resolveA(new Blob(['A!']))
-    await flushPromises()
+    expect(getBlob).toHaveBeenCalledTimes(requests)
     expect(wrapper.find('.apf-preview-overlay').exists()).toBe(false)
-    expect(revokeUrl).toHaveBeenCalledWith('blob:B')
-    expect(createUrl).toHaveBeenCalledTimes(2)
     delete (URL as any).createObjectURL
     delete (URL as any).revokeObjectURL
   })
