@@ -110,7 +110,7 @@ Representative bodies (replace UUID placeholders with actual returned IDs):
 }
 ```
 
-Read the current project revision between dependent reference writes. References pin versions; membership and project reference operations do not physically copy originals. Removing project references preserves the library object. Group publication takes the complete ordered membership list, not a delta.
+Read the current project revision between dependent reference writes. References pin versions; membership and project reference operations do not physically copy originals. Removing project references preserves the library object. Group publication takes the complete membership list; retained members keep their existing relative order and new members append. Batch member editing requires `base_version_id` and revisions for ALL current canonical group assets.
 
 ## Equipment, setups and owned presets
 
@@ -162,7 +162,7 @@ apf trash delete-preview --data '@selection.json'
 apf trash delete --data '@confirmed-delete.json'
 ```
 
-Preview state is `not_ready|generating|available|failed|unsupported`; inspect the error and explicitly schedule to retry failures. Read/export the cached display JPEG after availability. No implicit scheduling is hidden in the image read.
+Preview state is `not_ready|generating|available|failed|unsupported`. Poll while generating. On `not_ready`, inspect original availability and the import-task outcome; wait only for a live running import/retry. Otherwise report the concrete unavailable/failed/interrupted cause or perform an already-authorized resume/retry. Cached failed/unsupported outcomes are terminal; inspect the error and explicitly schedule to retry a failed preview. Read/export the cached display JPEG after availability. No implicit scheduling is hidden in the image read.
 
 Removal items require `entry_type`, `id`, `revision`, `current_version_id`. Trash selection items require `entry_type`, `id`, `removed_at`, `revision`, `current_version_id`, optional `source_dataset_id`. Use only these request fields from the current trash DTO. A permanent deletion body is that exact current selection plus `preview_fingerprint` from its fresh deletion preview. Review references, tasks and managed-file scope, and act only inside the user's explicitly authorized permanent cleanup task.
 

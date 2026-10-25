@@ -91,13 +91,13 @@ def register(server, call):
 
     @server.tool()
     def publish_dataset_version(dataset_id: str, body: DatasetMembersCreate) -> dict[str, Any]:
-        """Publish complete ordered membership and optional calibration maps. Defaults replace when supplied; submitted member maps replace, missing members retain; absent slots inherit and null disables."""
+        """Publish complete membership and optional calibration maps. Retained members keep relative order; new members append. Defaults replace when supplied; submitted member maps replace, missing members retain; absent slots inherit and null disables."""
         return call(lambda client: client.publish_dataset_version(dataset_id, body))
 
 
     @server.tool()
     def update_dataset_members(dataset_id: str, body: DatasetMemberParametersUpdate) -> dict[str, Any]:
-        """Batch patch member parameters/classification using dataset revision, fixed base version and each asset revision."""
+        """Batch patch group member parameters/classification using dataset revision, fixed base version and revisions for ALL current canonical group assets."""
         return call(lambda client: client.update_dataset_members(dataset_id, body))
 
 
@@ -143,7 +143,7 @@ def register(server, call):
 
     @server.tool()
     def get_display_preview_status(asset_id: str, version_id: str) -> dict[str, Any]:
-        """Read display preview state: not_ready, generating, available, failed or unsupported, including dimensions and error."""
+        """Read display preview state and errors. Poll generating; for not_ready inspect original/task readiness and wait only for live import/retry work. Cached failed/unsupported are terminal."""
         return call(lambda client: client.get_display_preview_status(asset_id, version_id))
 
     @server.tool(structured_output=False)
