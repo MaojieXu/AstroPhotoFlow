@@ -1,54 +1,37 @@
 # AstroPhotoFlow
 
-AstroPhotoFlow 是运行在 ComfyUI 中的本地天文资产工作台。资产服务以独立进程运行；ComfyUI 加载 Extension 时会复用或自动启动服务，浏览器通过同源代理访问。
+本地天文素材工作台，使用 ComfyUI 承载界面，提供素材／数据集、项目、设备和拍摄配置管理，以及 CPU 工作台、CLI 和初版 MCP。
 
-## 当前状态
+当前支持素材导入、资料编辑、筛选排序、100 px 缩略图和组／照片回收站。Agent、外部软件节点、完整工作流管理和结果比较属于后续开发范围。[文档索引](docs/README.md)区分当前实现、冻结需求与历史记录。
 
-资产管理第一阶段已在 Git 分支 `feature/database` 上验收；第二阶段已在该分支完成素材导入、资料编辑、数据集、项目选用和 FITS 元数据／预览闭环及 S2-AT-01 至 S2-AT-11 验收。产品库不预置演示资产。格式支持范围及验证证据见[验收记录](docs/第二阶段验收记录.md)和[资产格式支持矩阵](docs/资产格式支持矩阵.md)。
+## 源码开发
 
-当前数据库闭环按两个阶段在 `feature/database` 开发。第一、第二阶段及必要集成回归验收通过且无阻断问题后，报告合并就绪；第三阶段暂缓，不作为当前数据库闭环的合并门槛。实际合并等待用户指令。阶段范围见[资产管理实施计划](docs/资产管理三阶段实施计划.md)，接口契约见[第一阶段设计](docs/第一阶段技术与接口设计.md)和[第二阶段设计](docs/第二阶段技术与接口设计.md)。
+需要 Python 3.12、Node.js 22.13+、Corepack 和 uv；在仓库根执行：
 
-## ComfyUI 扩展
-
-在当前 checkout 构建并链接扩展：
-
-```bash
-export PATH="/home/maojiexu/.nvm/versions/node/v22.22.2/bin:$PATH"
-npm exec --yes --package=pnpm@11.13.1 -- pnpm --dir frontend install --frozen-lockfile
-npm exec --yes --package=pnpm@11.13.1 -- pnpm --dir frontend typecheck
-npm exec --yes --package=pnpm@11.13.1 -- pnpm --dir frontend test
-npm exec --yes --package=pnpm@11.13.1 -- pnpm --dir frontend build
-bash scripts/link-comfyui.sh
+```powershell
+corepack pnpm install --frozen-lockfile
+corepack pnpm build
+$env:UV_PROJECT_ENVIRONMENT = "$PWD/.artifacts/venvs/dev"
+uv sync --locked --extra dev --python 3.12
+uv run --locked --no-sync pytest -q
+corepack pnpm test
 ```
 
-构建会生成 `web/astrophotoflow.js` 与 CSS，由根目录 `__init__.py` 加载。链接脚本根据当前 checkout 计算扩展路径；ComfyUI 的集成宿主为 `/home/maojiexu/Workshop/ComfyUI`，已存在的目标链接不会被覆盖。前端沿用 Vue 3、TypeScript、Vite、Tailwind 4、Pinia 和 Zod，主题与字体继承宿主。
+所有实现位于 `src/astrophotoflow`，测试在 `tests`，维护脚本在 `scripts`。前端输出 `build/frontend`，发行包输出 `dist`，新测试报告、临时 workspace 和缓存放入忽略的 `.artifacts`。详细规则见[开发流程](docs/development/README.md)。
 
-## 独立资产服务
+## 安装与使用
 
-需要 Python 3.11+ 和 uv。首次设置时，将 [服务配置示例](service/config.example.toml) 复制到 `~/.config/astrophotoflow/config.toml`，再按需调整数据目录和 ComfyUI 来源。不要覆盖已有配置。默认服务绑定 `127.0.0.1:8190`，数据目录是 `~/.local/share/astrophotoflow`。
+发行维护者运行：
 
-```bash
-uv sync --project service --locked
-uv run --project service apf-service db status
+```powershell
+uv run --locked --no-sync python scripts/build_release.py
+uv run --locked --no-sync python scripts/verify_distribution.py
 ```
 
-ComfyUI 扩展启动时会复用已认证且健康的资产服务，或通过 PATH、`~/.local/bin/uv` 自动启动服务并等待就绪。ComfyUI 启动不会安装依赖或迁移已有数据库。若 `db status` 显示 revision 不是当前版本，先审阅并显式运行 `uv run --project service --locked --no-sync apf-service db upgrade`；升级前会用 SQLite Backup API 保存一致备份。新数据库在首次服务启动时初始化。服务令牌由首次启动生成，保存在数据目录中，仅当前用户可读；浏览器不接收令牌。
+wheel 和 sdist 携带已构建前端资源，最终用户安装不需要 Node.js 或 Git。CPU 工作台面向 Windows x64/Python 3.12，固定 ComfyUI 0.42.0 和其前端 1.57.1；首次初始化准备 CPU 运行环境，需要下载依赖。安装、启动、workspace 搬迁及 MCP 配置见[工作台使用](docs/development/workbench.md)。
 
-更完整的启动、升级和恢复步骤见[服务 README](service/README.md)。实际应用导出的接口定义见 [OpenAPI 快照](service/openapi.json)。
+ComfyUI checkout 扩展仍通过根 `__init__.py` 发现；将本仓库链接到自己的 `custom_nodes` 后，先完成前端构建和根 Python 依赖同步。令牌保存在 workspace 数据目录，浏览器通过同源代理调用服务。[接口说明](docs/api/README.md)列出当前 CLI 和五个 MCP 工具。
 
-## 仓库模板
+## 许可与来源
 
-本仓库同时保留 ComfyUI 官方 Cookiecutter Extension 模板，供后续生成其他扩展项目：
-
-```bash
-python -m pip install cookiecutter
-cookiecutter .
-```
-
-默认项目名为 `ComfyUI-AstroPhotoFlow`，Python 模块名为 `astrophotoflow`。
-
-## 参考项目与许可
-
-可借鉴的上游仓库及许可证边界见需求文档的[开源项目借鉴与许可证](docs/AstroPhotoFlow_Requirements_v1.0/06_开源项目借鉴与许可证.md)和[调研来源与核验记录](docs/AstroPhotoFlow_Requirements_v1.0/08_调研来源与核验记录.md)。参考源码应单独克隆和审阅，不要放入本仓库提交。
-
-本仓库保留上游模板的 GPL-3.0 许可与版权声明。复用或分发第三方代码时，请遵守其原始许可证。原侧栏截图和验收记录是历史入口测试证据；本阶段只重验了新增或修改的行为。
+保留上游 Cookiecutter Comfy Extension 的 [LICENSE](LICENSE) 和版权通知；模板生成器已从产品工程移除。内置 ComfyUI 的固定来源、提交和散列见 [vendor 清单](src/astrophotoflow/vendor/comfyui-source.json)。第三方软件与依赖沿用其各自许可，原始开源参考记录保存在[冻结需求](docs/requirements/v1.0/06_开源项目借鉴与许可证.md)及历史验收中。

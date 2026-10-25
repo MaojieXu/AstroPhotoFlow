@@ -4,10 +4,10 @@ from pathlib import Path
 from server import PromptServer
 
 from .src.astrophotoflow import NODE_CLASS_MAPPINGS, NODE_DISPLAY_NAME_MAPPINGS
-from .src.astrophotoflow.proxy import register_proxy_routes
-from .src.astrophotoflow.service_manager import ServiceManager
+from .src.astrophotoflow.comfyui.proxy import register_proxy_routes
+from .src.astrophotoflow.comfyui.service_manager import ServiceManager
 
-WEB_DIRECTORY = "./web"
+WEB_DIRECTORY = "./build/frontend"
 
 _service_manager = ServiceManager(Path(__file__).resolve().parent)
 _service_manager.start()

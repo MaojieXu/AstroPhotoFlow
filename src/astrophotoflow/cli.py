@@ -7,7 +7,7 @@ from pathlib import Path
 import sys
 
 import httpx
-from astrophotoflow_service.import_schemas import AssetParametersPatch
+from astrophotoflow.backend.import_schemas import AssetParametersPatch
 
 from .client import AssetClient, ServiceApiError, config_path
 from .workbench import WorkbenchError, initialize, start, status, stop

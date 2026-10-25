@@ -1,12 +1,13 @@
 include LICENSE
-include service/README.md
-include service/pyproject.toml
-include service/uv.lock
-include service/alembic.ini
-recursive-include service/alembic *.py
-recursive-include service/src *.py
+include README.md
+include uv.lock
+include package.json pnpm-lock.yaml vite.config.ts vitest.config.ts tsconfig.json
+recursive-include src/astrophotoflow/backend *.py *.ini
+recursive-include src/astrophotoflow/frontend *.ts *.vue *.css
 recursive-include src/astrophotoflow/vendor *.zip *.json *.lock
-prune src/astrophotoflow/comfy_node/__pycache__
-include src/astrophotoflow/comfy_node/__init__.py
-recursive-include web *
+recursive-include build/frontend *.js *.css
 include scripts/build_release.py
+global-exclude *.py[cod]
+prune web
+prune tests
+prune .artifacts

@@ -132,7 +132,7 @@ def initialize(workspace: Path, service_port: int = 8190, comfyui_port: int = 81
     base_dir = runtime / "comfyui-data"
     plugin = base_dir / "custom_nodes" / "AstroPhotoFlow"
     base_dir.mkdir(parents=True, exist_ok=True)
-    shutil.copytree(app_package / "comfy_node", plugin, dirs_exist_ok=True)
+    shutil.copytree(app_package / "comfyui" / "extension", plugin, dirs_exist_ok=True)
     env_dir = runtime / "comfyui-env"
     if not (env_dir / ("Scripts/python.exe" if os.name == "nt" else "bin/python")).is_file():
         _run([_uv(), "venv", "--managed-python", "--python", "3.12", str(env_dir)], env=uv_env)
@@ -261,7 +261,7 @@ def start(workspace_config: Path | None = None) -> str:
         "APF_PACKAGE_ROOT": str(package_root),
         "APF_WORKBENCH_MANAGED": "1",
     })
-    service_command = [sys.executable, "-m", "astrophotoflow_service.cli", "serve"]
+    service_command = [sys.executable, "-m", "astrophotoflow.backend.cli", "serve"]
     comfy_python = runtime / "comfyui-env" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
     comfy_command = [
         str(comfy_python), str(comfyui / "main.py"), "--cpu", "--listen", "127.0.0.1", "--port", str(comfy_port),
@@ -271,7 +271,7 @@ def start(workspace_config: Path | None = None) -> str:
     launched: list[subprocess.Popen] = []
     records: list[dict] = []
     try:
-        service = _launch(service_command, package_root.parent.parent, env, workspace / "logs" / "service.log")
+        service = _launch(service_command, workspace, env, workspace / "logs" / "service.log")
         launched.append(service)
         records.append(_record(service, "asset-service", workspace, service_command))
         deadline = time.monotonic() + 90

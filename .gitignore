@@ -95,11 +95,6 @@ docs/_build/
 # PyBuilder
 target/
 
-# Cookiecutter
-output/
-python_boilerplate/
-cookiecutter-pypackage-env/
-
 # vscode settings
 /.vscode/
 .history/
@@ -114,6 +109,10 @@ cookiecutter-pypackage-env/
 # Local workbench data used by bundle acceptance
 /test/workspace/
 /test/workspace-moved/
+/test/workspaces/
+/test/reports/
+/service/.pytest-*/
+/.artifacts/
 
 # Local environment and secrets
 .env

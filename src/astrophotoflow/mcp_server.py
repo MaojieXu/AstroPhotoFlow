@@ -5,7 +5,7 @@ import httpx
 from mcp.server import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 
-from astrophotoflow_service.import_schemas import AssetParametersPatch
+from astrophotoflow.backend.import_schemas import AssetParametersPatch
 
 from .client import AssetClient, ServiceApiError
 
