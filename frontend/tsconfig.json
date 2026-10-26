@@ -20,6 +20,7 @@
     "allowJs": true,
     "verbatimModuleSyntax": true,
     "paths": {
+      "@astrophotoflow/*": ["../src/astrophotoflow/frontend/*"],
       "@/*": ["./src/*"],
       "@e2e/*": ["./browser_tests/*"],
       "@/utils/formatUtil": [

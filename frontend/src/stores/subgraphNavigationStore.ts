@@ -36,7 +36,7 @@ export const useSubgraphNavigationStore = defineStore(
     const canvasStore = useCanvasStore()
     const canvasScheduler = useCanvasScheduler()
     const router = useRouter()
-    const routeHash = useRouteQuery('graph', '')
+    const routeHash = useRouteQuery<string>('graph', '')
 
     /** The currently opened subgraph. */
     const activeSubgraph = shallowRef<Subgraph>()
@@ -403,7 +403,7 @@ export const useSubgraphNavigationStore = defineStore(
         if (!(await writeRouteHash(rootHash, true))) return false
         if (intent.id !== navigationIntentId) return false
       }
-      const currentId = routeHash.value?.slice(1)
+      const currentId = routeHash.value.slice(1)
       if (intent.hash.slice(1) === currentId) return true
 
       return writeRouteHash(intent.hash, false)
@@ -544,7 +544,7 @@ export const useSubgraphNavigationStore = defineStore(
       routeHash,
       (newHash) => {
         initialLoad = false
-        const hash = String(newHash)
+        const hash = newHash
         const stateWriteId = router.options.history.state[routeWriteStateKey]
         if (
           typeof stateWriteId === 'number' &&

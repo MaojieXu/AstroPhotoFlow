@@ -3,12 +3,13 @@ import { defineAsyncComponent, nextTick, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { onBeforeRouteUpdate, RouterLink, useRoute } from 'vue-router'
 
+import config from '@/config'
 import { setActiveLocale } from '@/i18n'
 import { getDefaultLocale } from '@/locales/localeConfig'
 import { useSettingStore } from '@/platform/settings/settingStore'
 import { useColorPaletteService } from '@/services/colorPaletteService'
 
-import Workspace from '../../../src/astrophotoflow/frontend/workspace/Workspace.vue'
+import Workspace from '@astrophotoflow/workspace/Workspace.vue'
 
 const { page } = defineProps<{
   page: 'library' | 'workflows' | 'settings'
@@ -63,7 +64,7 @@ watch(
       class="z-40 flex h-14 shrink-0 items-center gap-8 border-b border-interface-stroke bg-comfy-menu-bg px-5"
     >
       <strong class="text-base font-semibold tracking-wide"
-        >AstroPhotoFlow</strong
+        >{{ config.app_title }}</strong
       >
       <nav
         class="flex h-full items-center gap-2"
@@ -73,10 +74,10 @@ watch(
           v-for="destination in pages"
           :key="destination"
           :to="{ path: '/' + destination, query: route.query }"
-          class="rounded-md px-4 py-2 text-sm no-underline transition-colors hover:bg-comfy-menu-secondary-bg"
+          class="rounded-md px-4 py-2 text-sm no-underline transition-colors hover:bg-(--comfy-menu-secondary-bg)"
           :class="
             page === destination
-              ? 'bg-comfy-menu-secondary-bg font-semibold text-base-foreground'
+              ? 'bg-(--comfy-menu-secondary-bg) font-semibold text-base-foreground'
               : 'text-muted-foreground'
           "
           :aria-current="page === destination ? 'page' : undefined"

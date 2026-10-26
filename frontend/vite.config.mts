@@ -815,6 +815,7 @@ export default defineConfig({
   resolve: {
     dedupe: ['vue', 'pinia'],
     alias: {
+      '@astrophotoflow': resolve('../src/astrophotoflow/frontend'),
       '@/base/credits/comfyCredits':
         '/packages/shared-frontend-utils/src/creditsUtil.ts',
       '@/utils/formatUtil': '/packages/shared-frontend-utils/src/formatUtil.ts',
