@@ -17,6 +17,7 @@ interface BaseSidebarTabExtension {
   tooltip?: string
   label?: string
   onToggle?: () => boolean | Promise<boolean>
+  canClose?: () => boolean | Promise<boolean>
 }
 
 interface BaseBottomPanelExtension {

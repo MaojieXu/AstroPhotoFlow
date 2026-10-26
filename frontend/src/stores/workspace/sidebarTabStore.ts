@@ -20,6 +20,11 @@ export const useSidebarTabStore = defineStore('sidebarTab', () => {
     activeSidebarTabId.value = activeSidebarTabId.value === tabId ? null : tabId
   }
 
+  const closeSidebarTab = async () => {
+    if ((await activeSidebarTab.value?.canClose?.()) === false) return
+    activeSidebarTabId.value = null
+  }
+
   const registerSidebarTab = (
     tab: SidebarTabExtension,
     options?: { prepend?: boolean }
@@ -65,6 +70,7 @@ export const useSidebarTabStore = defineStore('sidebarTab', () => {
       versionAdded: '1.3.9',
       category: 'view-controls' as const,
       function: async () => {
+        if ((await activeSidebarTab.value?.canClose?.()) === false) return
         if (await tab.onToggle?.()) return
         toggleSidebarTab(tab.id)
       },
@@ -94,6 +100,7 @@ export const useSidebarTabStore = defineStore('sidebarTab', () => {
     activeSidebarTabId,
     activeSidebarTab,
     toggleSidebarTab,
+    closeSidebarTab,
     registerSidebarTab,
     unregisterSidebarTab
   }

@@ -6,15 +6,14 @@ import NativeShell from '@/views/NativeShell.vue'
 export default createRouter({
   history: createWebHashHistory(),
   routes: [
-    { path: '/', redirect: '/library' },
+    { path: '/', redirect: '/workflows' },
     {
-      path: '/:page(library|workflows|equipment)',
+      path: '/workflows',
       component: NativeShell,
-      props: true,
       beforeEnter: async () => {
         await useUserStore().initialize()
       }
     },
-    { path: '/:pathMatch(.*)*', redirect: '/library' }
+    { path: '/:pathMatch(.*)*', redirect: '/workflows' }
   ]
 })

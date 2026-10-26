@@ -1,6 +1,6 @@
 # AstroPhotoFlow
 
-基于 ComfyUI 源码定制的本地天文网页工作台。原生应用在左侧提供素材库、工作流两个主入口，默认进入素材库；设备管理位于素材库“导入”旁。工作流复用节点画布、保存加载和执行队列，切页保留图与视口。
+基于 ComfyUI 源码定制的本地天文网页工作台。原生工作台始终保留节点画布，素材库和工作流按顺序放在节点库下方，共用原生可调整宽度的侧栏。设备管理位于素材库“导入”旁；切换或收起侧栏不替换画布。
 
 已有素材、数据集、项目、设备、使用组合、拍摄预设、固定版本校准关联、预览和回收站功能保留。CLI 与 58 个 MCP 工具通过同一领域服务访问数据。完整 Agent、天文处理适配、结果比较和项目记忆仍属后续范围。
 
@@ -31,7 +31,7 @@ uv run --locked --no-sync apf status --workspace .artifacts/workspaces/redesign
 uv run --locked --no-sync apf stop --workspace .artifacts/workspaces/redesign
 ```
 
-打开 `http://127.0.0.1:32388/#/library`。首次初始化准备固定 CPU 依赖；无需下载生成式图像模型。安装发行 wheel 后无需 Node.js、Git 或另行安装 ComfyUI。原生运行环境与旧版 CPU runtime 分开，业务数据保存在指定 workspace。
+打开 `http://127.0.0.1:32388/#/workflows`。首次初始化准备固定 CPU 依赖；无需下载生成式图像模型。安装发行 wheel 后无需 Node.js、Git 或另行安装 ComfyUI。原生运行环境与旧版 CPU runtime 分开，业务数据保存在指定 workspace。
 
 ```powershell
 uv run --locked --no-sync python scripts/build_release.py

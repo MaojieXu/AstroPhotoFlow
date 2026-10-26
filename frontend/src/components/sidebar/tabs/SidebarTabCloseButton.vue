@@ -7,7 +7,7 @@
     class="shrink-0"
     data-testid="sidebar-close-button"
     :aria-label="$t('sideToolbar.closeSidebar')"
-    @click="sidebarTabStore.activeSidebarTabId = null"
+    @click="sidebarTabStore.closeSidebarTab()"
   >
     <i class="icon-[lucide--x] size-4" />
   </Button>

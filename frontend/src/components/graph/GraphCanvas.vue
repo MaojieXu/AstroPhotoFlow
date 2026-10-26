@@ -12,6 +12,9 @@
         <WorkflowTabs />
       </div>
     </template>
+    <template #side-toolbar>
+      <SideToolbar v-if="showUI && !isBuilderMode && !linearMode" />
+    </template>
     <template v-if="betaMenuEnabled" #side-bar-panel>
       <div
         :inert="canvasStore.isPickingNodes"
@@ -131,6 +134,7 @@ import {
   watchEffect
 } from 'vue'
 import { useI18n } from 'vue-i18n'
+import SideToolbar from '@/components/sidebar/SideToolbar.vue'
 
 import {
   isMiddleButtonEvent,

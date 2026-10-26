@@ -38,19 +38,37 @@ await context.route("**/*", (route) => {
 async function navigate(destination) {
     if (destination === "equipment") {
         await page.getByRole("button", { name: "设备管理", exact: true }).click();
+        await expect(page.getByRole("heading", { name: "设备管理", exact: true })).toBeVisible();
     } else {
-        await page.locator(`[data-testid="native-navigation"] a[href^="#/${destination}"]`).click();
+        const id = destination === "nodes" ? "node-library" : destination;
+        await page.getByTestId(id + "-tab-button").click();
+        if (destination === "library")
+            await expect(page.getByTestId("library-sidebar")).toBeVisible();
+        if (destination === "workflows")
+            await expect(page.getByTestId("workflows-sidebar")).toBeVisible();
     }
-    await expect(page).toHaveURL(new RegExp(`#/${destination}(\\?.*)?$`));
 }
 
 try {
     await page.goto(origin, { waitUntil: "domcontentloaded" });
-    await expect(page).toHaveURL(/#\/library$/);
-    await expect(
-        page.getByTestId("native-navigation").getByRole("link", { name: "素材库", exact: true }),
-    ).toBeVisible();
-    await expect(page.locator("#graph-canvas")).toHaveCount(0);
+    await expect(page).toHaveURL(/#\/workflows$/);
+    await expect(page.getByTestId("library-sidebar")).toBeVisible({ timeout: 45000 });
+    await expect(page.locator("#graph-canvas")).toBeVisible();
+    const ordered = await page
+        .getByTestId("sidebar-top-group")
+        .locator("button[data-testid$='-tab-button']")
+        .evaluateAll((nodes) => nodes.map((node) => node.dataset.testid));
+    assert.ok(ordered.indexOf("node-library-tab-button") < ordered.indexOf("library-tab-button"));
+    assert.ok(ordered.indexOf("library-tab-button") < ordered.indexOf("workflows-tab-button"));
+    const panel = await page.getByTestId("library-sidebar").boundingBox();
+    const viewport = page.viewportSize();
+    assert.ok(panel.width < viewport.width / 2);
+    const frame = await page.locator(".graph-canvas-panel").boundingBox();
+    assert.ok(frame.width > 300 && frame.x >= panel.x + panel.width - 2);
+    await page.screenshot({
+        path: fileURLToPath(new URL("library-sidebar-wide.png", report)),
+        fullPage: true,
+    });
     const health = await page.request.get(origin + "/astrophotoflow/api/v1/health");
     assert.equal(health.status(), 200);
     assert.equal((await health.json()).schema_revision, "0009_remove_legacy_capture_profiles");
@@ -58,17 +76,10 @@ try {
     assert.equal(health.headers().authorization, undefined);
     checks.push("native default page and authenticated gateway");
 
-    await page.setViewportSize({ width: 414, height: 1000 });
-    const navBounds = await page.getByTestId("native-navigation").boundingBox();
-    assert.ok(navBounds.x < 64 && navBounds.width <= 64);
-    await expect(page.getByRole("button", { name: "设备管理", exact: true })).toBeInViewport();
-    await expect(page.getByRole("button", { name: "导入", exact: true })).toBeInViewport();
-    await expect(page.getByTestId("native-navigation").getByRole("link")).toHaveCount(2);
-    await page.screenshot({
-        path: fileURLToPath(new URL("navigation-narrow.png", report)),
-        fullPage: true,
-    });
-    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.getByTestId("library-sidebar").getByTestId("sidebar-close-button").click();
+    await expect(page.getByTestId("library-sidebar")).toHaveCount(0);
+    await expect(page.locator("#graph-canvas")).toBeVisible();
+    await navigate("library");
     await navigate("equipment");
     await expect(page.getByRole("heading", { name: "设备管理", exact: true })).toBeVisible();
     await expect(page.locator(".apf-management-tabs button[aria-current='page']")).toHaveText(
@@ -86,15 +97,15 @@ try {
     await page.getByRole("button", { name: "新建项目", exact: true }).click();
     await editor.getByLabel("名称", { exact: true }).fill("unsaved native draft");
     page.once("dialog", (dialog) => dialog.dismiss());
-    await page.locator('[data-testid="native-navigation"] a[href^="#/library"]').click();
-    await expect(page).toHaveURL(/#\/equipment$/);
+    await page.getByTestId("workflows-tab-button").click();
+    await expect(page.getByTestId("library-sidebar")).toBeVisible();
     await expect(editor.getByLabel("名称", { exact: true })).toHaveValue("unsaved native draft");
     page.once("dialog", (dialog) => dialog.accept());
     await navigate("workflows");
     await expect(page.getByTestId("side-toolbar")).toBeVisible({ timeout: 45000 });
     const toolsBounds = await page.getByTestId("side-toolbar").boundingBox();
     assert.ok(toolsBounds.x < 64 && toolsBounds.width <= 64);
-    const mainBounds = await page.locator("#graph-canvas-container").boundingBox();
+    const mainBounds = await page.locator(".graph-canvas-panel").boundingBox();
     assert.ok(mainBounds.x >= 64);
     checks.push("project creation and draft navigation protection");
 
@@ -127,6 +138,7 @@ try {
             offset: Array.from(app.canvas.ds.offset),
         };
     }, sourceName);
+    await navigate("nodes");
     await navigate("library");
     await navigate("equipment");
     await navigate("workflows");
@@ -224,6 +236,8 @@ try {
     await expect(row).toBeVisible();
     assert.deepEqual(await readFile(new URL("../fixtures/native-web.png", import.meta.url)), image);
     await page.reload({ waitUntil: "domcontentloaded" });
+    await expect(page.getByTestId("library-sidebar")).toBeVisible({ timeout: 45000 });
+    await expect(page.locator("#graph-canvas")).toBeVisible();
     await expect(row).toBeVisible();
     await page.screenshot({ path: fileURLToPath(new URL("library.png", report)), fullPage: true });
     checks.push("trash restore, original-byte protection and hash-route reload");

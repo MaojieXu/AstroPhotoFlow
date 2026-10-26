@@ -27,7 +27,7 @@ uv run --locked --no-sync apf status --workspace .artifacts/workspaces/redesign
 uv run --locked --no-sync apf stop --workspace .artifacts/workspaces/redesign
 ```
 
-重新构建后，在停止测试实例时再次运行 `apf init ... --reuse-runtime --no-activate`，同步完整网页目录并复用已准备的原生 CPU 环境。浏览器地址为 `http://127.0.0.1:32388/#/library`。
+重新构建后，在停止测试实例时再次运行 `apf init ... --reuse-runtime --no-activate`，同步完整网页目录并复用已准备的原生 CPU 环境。浏览器地址为 `http://127.0.0.1:32388/#/workflows`。
 
 配置解析继续由 `astrophotoflow.config` 统一负责。显式 workspace 优先；`.env` 与默认 workspace 指针不因这组命令改变。`[comfyui].allowed_origins` 继续描述网页服务来源，`storage.data_dir` 相对 TOML 解析。令牌保存在 workspace/data/service.token。
 

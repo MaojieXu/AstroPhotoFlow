@@ -2,6 +2,7 @@ import { watch } from 'vue'
 
 import { useJobHistorySidebarTab } from '@/composables/sidebarTabs/useJobHistorySidebarTab'
 import { useNodeLibrarySidebarTab } from '@/composables/sidebarTabs/useNodeLibrarySidebarTab'
+import { useLibrarySidebarTab } from '@/composables/sidebarTabs/useLibrarySidebarTab'
 import { useSettingStore } from '@/platform/settings/settingStore'
 import { useWorkflowsSidebarTab } from '@/platform/workflow/management/composables/useWorkflowsSidebarTab'
 import { useMenuItemStore } from '@/stores/menuItemStore'
@@ -31,6 +32,7 @@ export function registerCoreSidebarTabs() {
   )
 
   sidebarTabStore.registerSidebarTab(useNodeLibrarySidebarTab())
+  sidebarTabStore.registerSidebarTab(useLibrarySidebarTab())
   sidebarTabStore.registerSidebarTab(useWorkflowsSidebarTab())
 
   const menuStore = useMenuItemStore()

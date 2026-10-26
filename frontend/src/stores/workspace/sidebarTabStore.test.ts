@@ -29,6 +29,38 @@ describe('useSidebarTabStore', () => {
   }
 
   describe('toggle command', () => {
+    it('keeps the current panel when its draft prevents leaving', async () => {
+      const store = registerTab()
+      store.registerSidebarTab({
+        id: 'library',
+        title: 'library',
+        type: 'vue',
+        component: {},
+        canClose: () => false
+      })
+      store.activeSidebarTabId = 'library'
+      await runToggleCommand()
+      expect(store.activeSidebarTabId).toBe('library')
+      await store.closeSidebarTab()
+      expect(store.activeSidebarTabId).toBe('library')
+    })
+
+    it('allows switching and closing after the current panel permits leaving', async () => {
+      const store = registerTab()
+      store.registerSidebarTab({
+        id: 'library',
+        title: 'library',
+        type: 'vue',
+        component: {},
+        canClose: () => true
+      })
+      store.activeSidebarTabId = 'library'
+      await runToggleCommand()
+      expect(store.activeSidebarTabId).toBe('tab')
+      await store.closeSidebarTab()
+      expect(store.activeSidebarTabId).toBeNull()
+    })
+
     it.for([
       { hook: 'none', onToggle: undefined, activeTabId: 'tab' },
       { hook: 'declines', onToggle: async () => false, activeTabId: 'tab' },

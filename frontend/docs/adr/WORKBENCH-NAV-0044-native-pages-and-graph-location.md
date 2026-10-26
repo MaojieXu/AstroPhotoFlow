@@ -23,16 +23,16 @@ conflicting with the product's hash-based page navigation.
 
 ## Decision
 
-- Use a native Vue shell with Library and Workflows in one left navigation
-  rail. Open equipment management from the button beside Library import,
-  defaulting to equipment while retaining setups, presets and projects. Reuse
-  the existing business components and a single Vue/Pinia runtime.
+- Keep one graph workspace mounted. Register Library immediately after Node
+  Library and before Workflows as native Vue sidebar tabs, reusing the existing
+  splitter, width controls and close behavior. Library is initially selected.
+  Equipment management opens within the Library panel beside its import action.
 - Keep FastAPI as an internal domain service behind the engine's same-origin
   gateway. One launcher owns both processes.
-- Initialize the graph on first use and retain its mounted instance across
-  page transitions. Preserve the existing form navigation guards.
-- Reserve the route hash for product pages. Store the existing graph locator
-  in the `graph` route query and preserve that query across top-level links.
+- Preserve form drafts by checking the active panel before switching or closing
+  it. The graph remains visible and retains its contents and viewport.
+- Use one workspace route and keep the graph locator in the `graph` route
+  query. Sidebar changes do not perform page navigation.
 
 ## Consequences
 

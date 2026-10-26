@@ -25,8 +25,14 @@ type InputField = { key: string; label: string; type?: string; options?: string[
 type WorkspaceArea = 'library' | 'nodes' | 'software' | 'agent' | 'settings'
 
 const store = useWorkspaceStore()
-const props = defineProps<{ native?: boolean }>()
+const props = defineProps<{ native?: boolean; sidebar?: boolean }>()
 const emit = defineEmits<{ 'manage-equipment': []; 'back-to-library': [] }>()
+if (props.sidebar) {
+  store.selectSection('library')
+  store.setQuery('')
+  store.activeProjectId = null
+  store.activeProjectRevision = null
+}
 const activeArea = ref<WorkspaceArea>('library')
 const lastManagementSection = ref<WorkspaceSection>('projects')
 const capabilities = ref<ReturnType<typeof capabilitiesSchema.parse>>()
@@ -1688,7 +1694,7 @@ onBeforeUnmount(() => {
               <button v-if="activeDataset" type="button" @click="closeDataset">← 返回素材库</button>
               <button v-else-if="viewingProjectAssets || viewingProjectDatasets" type="button" @click="leaveProjectAssets">← 返回项目</button>
               <button v-else-if="props.native && activeArea === 'settings'" type="button" @click="emit('back-to-library')">← 返回素材库</button>
-              <h1>{{ activeDataset ? '素材库 / '+activeDataset.name : activeArea === 'library' ? '素材库' : (viewingProjectAssets ? '项目资产' : viewingProjectDatasets ? '项目数据集' : props.native ? '设备管理' : '设置') }}</h1>
+              <h1 v-if="!props.sidebar || activeDataset || activeArea !== 'library'">{{ activeDataset ? '素材库 / '+activeDataset.name : activeArea === 'library' ? '素材库' : (viewingProjectAssets ? '项目资产' : viewingProjectDatasets ? '项目数据集' : props.native ? '设备管理' : '设置') }}</h1>
               <span v-if="activeDataset" class="apf-state">图像组 · {{activeDataset.version?.members?.length??activeDataset.member_count??0}} 张</span>
               <div v-if="isLibraryItemsView" class="apf-heading-actions">
                 <template v-if="bulkSelectMode">
