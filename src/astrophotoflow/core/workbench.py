@@ -320,7 +320,7 @@ def start(workspace_config: Path | None = None, *, activate: bool = True) -> str
         _state_path(workspace).write_text(json.dumps({"processes": records}, indent=2), encoding="utf-8")
         if activate:
             _activate_workspace(config_path)
-        return f"AstroPhotoFlow 已启动：{web_url}/#/library"
+        return f"AstroPhotoFlow 已启动：{web_url}/#/workflows"
     except (OSError, subprocess.SubprocessError) as exc:
         for process in reversed(launched):
             if process.poll() is None:

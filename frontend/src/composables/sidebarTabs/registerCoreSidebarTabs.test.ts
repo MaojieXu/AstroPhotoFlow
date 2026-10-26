@@ -20,48 +20,30 @@ const stubTab = (id: string): SidebarTabExtension => ({
   component: {}
 })
 
-vi.mock(import('@/composables/sidebarTabs/useAssetsSidebarTab'), () => ({
-  useAssetsSidebarTab: () => stubTab('assets')
-}))
 vi.mock(import('@/composables/sidebarTabs/useJobHistorySidebarTab'), () => ({
   useJobHistorySidebarTab: () => stubTab('job-history')
 }))
 vi.mock(import('@/composables/sidebarTabs/useNodeLibrarySidebarTab'), () => ({
   useNodeLibrarySidebarTab: () => stubTab('node-library')
 }))
-vi.mock(import('@/composables/sidebarTabs/useModelLibrarySidebarTab'), () => ({
-  useModelLibrarySidebarTab: () => stubTab('model-library')
+vi.mock(import('@/platform/astrophotoflow'), () => ({
+  useLibrarySidebarTab: () => stubTab('library')
 }))
 vi.mock(
   import('@/platform/workflow/management/composables/useWorkflowsSidebarTab'),
   () => ({ useWorkflowsSidebarTab: () => stubTab('workflows') })
 )
-vi.mock(
-  import('@/platform/workflow/management/composables/useAppsSidebarTab'),
-  () => ({ useAppsSidebarTab: () => stubTab('apps') })
-)
-
-const coreTabIds = [
-  'assets',
-  'node-library',
-  'model-library',
-  'workflows',
-  'apps'
-]
+const coreTabIds = ['node-library', 'library', 'workflows']
 
 const coreToggleCommandIds = [
-  'Workspace.ToggleSidebarTab.apps',
-  'Workspace.ToggleSidebarTab.assets',
-  'Workspace.ToggleSidebarTab.model-library',
+  'Workspace.ToggleSidebarTab.library',
   'Workspace.ToggleSidebarTab.node-library',
   'Workspace.ToggleSidebarTab.workflows'
 ]
 
 const allToggleCommandIds = [
-  'Workspace.ToggleSidebarTab.apps',
-  'Workspace.ToggleSidebarTab.assets',
   'Workspace.ToggleSidebarTab.job-history',
-  'Workspace.ToggleSidebarTab.model-library',
+  'Workspace.ToggleSidebarTab.library',
   'Workspace.ToggleSidebarTab.node-library',
   'Workspace.ToggleSidebarTab.workflows'
 ]

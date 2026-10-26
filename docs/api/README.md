@@ -6,7 +6,7 @@ HTTP 服务前缀为 `/api/v1`；浏览器经原生网页服务的 `/astrophotof
 
 ```powershell
 uv run --locked --no-sync python scripts/export_openapi.py
-uv run --locked --no-sync pytest tests/backend/test_service.py -k openapi
+uv run --locked --no-sync pytest tests/modules/data/test_service.py -k openapi
 ```
 
 CLI 保留 `apf init/start/status/stop`、`mcp-config`、`mcp`、`import-photo`、`task`、`assets list/get/parameters`。服务 CLI 保留 `apf-service serve`、`db status/upgrade` 和 `previews backfill`。

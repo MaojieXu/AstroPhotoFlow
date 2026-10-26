@@ -71,7 +71,7 @@ def test_initialize_copies_native_web_and_start_uses_builtin_gateway(tmp_path, m
     monkeypatch.setattr(workbench, "_record", lambda process, role, cwd, command: {"role": role, "command": command})
     monkeypatch.setattr(workbench, "_web_health", lambda url: True)
 
-    workbench.start(config_path, activate=False)
+    assert workbench.start(config_path, activate=False) == "AstroPhotoFlow 已启动：http://127.0.0.1:18188/#/workflows"
     assert activations == []
     assert commands[0][1:] == ["-m", "astrophotoflow.interfaces.http.cli", "serve"]
     assert commands[1][commands[1].index("--base-directory") + 1] == str(workspace / "comfyui-data")

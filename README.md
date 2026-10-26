@@ -21,18 +21,18 @@ pnpm test
 
 七模块源码落点见[模块导航](docs/architecture/module-map.md)，文件迁移与边界见[文件架构](docs/architecture/repository-layout.md)。
 
-详细入口见[文档索引](docs/README.md)、[开发流程](docs/development/README.md)及[原生网页架构与验收](docs/development/native-web.md)。
+详细入口见[文档索引](docs/README.md)、[开发流程](docs/development/README.md)及[实现与验证矩阵](docs/development/test-matrix.md)。
 
 ## 运行与发行
 
 ```powershell
-uv run --locked --no-sync apf init --workspace .artifacts/workspaces/redesign --service-port 32390 --comfyui-port 32388 --frontend-assets .artifacts/build/frontend --no-activate
-uv run --locked --no-sync apf start --workspace .artifacts/workspaces/redesign --no-activate
-uv run --locked --no-sync apf status --workspace .artifacts/workspaces/redesign
-uv run --locked --no-sync apf stop --workspace .artifacts/workspaces/redesign
+uv run --locked --no-sync apf init --workspace .artifacts/workspaces/dev --service-port 31390 --comfyui-port 31388 --frontend-assets .artifacts/build/frontend --no-activate
+uv run --locked --no-sync apf start --workspace .artifacts/workspaces/dev --no-activate
+uv run --locked --no-sync apf status --workspace .artifacts/workspaces/dev
+uv run --locked --no-sync apf stop --workspace .artifacts/workspaces/dev
 ```
 
-打开 `http://127.0.0.1:32388/#/workflows`。首次初始化准备固定 CPU 依赖；无需下载生成式图像模型。安装发行 wheel 后无需 Node.js、Git 或另行安装 ComfyUI。原生运行环境与旧版 CPU runtime 分开，业务数据保存在指定 workspace。
+打开 `http://127.0.0.1:31388/#/workflows`。首次初始化准备固定 CPU 依赖；无需下载生成式图像模型。安装发行 wheel 后无需 Node.js、Git 或另行安装 ComfyUI。原生运行环境与旧版 CPU runtime 分开，业务数据保存在指定 workspace。
 
 ```powershell
 uv run --locked --no-sync python scripts/build_release.py
@@ -43,4 +43,4 @@ wheel 与 sdist 携带完整已构建网页资源及定制引擎归档；从 sdi
 
 ## 来源与许可
 
-保留上游 LICENSE 与版权通知。ComfyUI 0.42.0 和前端 1.57.1 的来源、提交及归档散列记录在 [vendor 清单](src/astrophotoflow/vendor/comfyui-source.json)。前端上游许可证随发行包保存。冻结需求与历史记录见 [docs/requirements](docs/requirements/README.md) 和 [docs/archive](docs/archive/README.md)。
+保留上游 LICENSE 与版权通知。ComfyUI 0.42.0 和前端 1.57.1 的来源、提交及归档散列记录在 [vendor 清单](src/astrophotoflow/vendor/comfyui-source.json)。前端上游许可证随发行包保存。冻结需求与历史附件见 [docs/requirements](docs/requirements/README.md) 和 [docs/archive](docs/archive/README.md)。

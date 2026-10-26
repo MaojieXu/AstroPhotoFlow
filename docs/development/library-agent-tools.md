@@ -6,7 +6,7 @@ The Python `AssetClient`, `apf` CLI and `apf mcp` stdio server share explicit do
 
 - `client.py` owns config, authentication, HTTP transport, request serialization and service errors.
 - `interfaces/client/imports.py`, `library.py`, and `organization.py` own named business methods and endpoint paths.
-- `cli_commands.py` maps named CLI commands to those methods; `interfaces/mcp/tools/` contains explicit typed MCP functions over the same methods.
+- `interfaces/cli/commands.py` maps named CLI commands to those methods; `interfaces/mcp/tools/` contains explicit typed MCP functions over the same methods.
 - Pydantic request models from `contracts/` are reused directly; the old backend schema paths are retired. `PhotoImportOptions` describes upload metadata only; file names and sizes are built from supplied local paths and validated by `UploadImportCreate`.
 
 Complex CLI requests use `--data '<JSON>'` or `--data '@request.json'` for UTF-8 JSON. MCP requests use a typed `body` object, except `import_photo`/`import_photos` use optional `options`, and the original `update_asset_parameters` retains `asset_id`, `base_revision`, `parameters`. Published MCP schemas contain the full nested backend contracts, including equipment discriminators and revision fields. Unknown fields fail validation before HTTP.
@@ -21,7 +21,7 @@ apf imports roots
 apf imports browse science --path '2026-10-25' --limit 50 --offset 0
 ```
 
-There is no arbitrary-HTTP MCP tool. Legacy capture-profile endpoints, FITS HDU/header inspection, every numeric library filter and service-admin endpoints are not separately exposed as new tools in this change. Existing service administration commands remain available.
+There is no arbitrary-HTTP MCP tool. Legacy capture-profile endpoints, FITS HDU/header inspection, every numeric library filter and service-admin endpoints are not exposed as dedicated MCP tools. Existing service administration commands remain available.
 
 ## Command and tool inventory
 
@@ -170,34 +170,6 @@ Backend fingerprints, reference checks, active-task protection, partial cleanup 
 
 ## Project Skill and verification
 
-[The project Skill](../../.agents/skills/astrophotoflow-library/SKILL.md) is versioned in this repository and included in the source distribution with this reference. It uses normal implicit discovery and needs no global installation, profile update or installer framework.
+[The project Skill](../../.agents/skills/astrophotoflow-library/SKILL.md) is versioned here and included in the source distribution with this reference. It needs no global installation.
 
-Tests use the tools worktree's private Python environment, synthetic PNG/FITS originals, temporary config/token/SQLite and the real `apf-service` + SDK stdio process. No CUA or full real import is required. See the acceptance evidence below for actual commands and outcomes.
-
-
-### Acceptance evidence
-
-Implementation base: `bda6047a89da55f50f28cc70db0d366f9bf553e6`; synchronized the exact integrated preview source `b6370979669ceb3bc15d2b58272c33753bb5ed2c` before final protocol verification. Worktree: `C:/Users/Administrator/.codex/worktrees/apf-library-agent-tools/ComfyUI-AstroPhotoFlow`; all generated environments, configs, databases, reports, dependencies and assets remained private to it. The source identity check resolves `astrophotoflow.__file__` inside this worktree. No global profile, active-workspace pointer or MCP registration was changed.
-
-```powershell
-.artifacts/venvs/dev/Scripts/python.exe -m pytest tests/backend tests/comfyui/test_proxy.py tests/integration/test_client_operations.py tests/integration/test_cli_mcp_protocol.py tests/workbench tests/packaging -q --basetemp=.artifacts/pytest-tools-full --junitxml=.artifacts/reports/tools-full.xml
-.artifacts/venvs/dev/Scripts/python.exe -m pytest tests/integration/test_client_operations.py tests/integration/test_cli_mcp_protocol.py -q --basetemp=.artifacts/pytest-tools-preview-integrated --junitxml=.artifacts/reports/tools-preview-integrated.xml
-.artifacts/venvs/dev/Scripts/python.exe C:/Users/Administrator/.codex/skills/.system/skill-creator/scripts/quick_validate.py .agents/skills/astrophotoflow-library
-corepack pnpm install --frozen-lockfile
-corepack pnpm build
-.artifacts/venvs/dev/Scripts/python.exe -m build --sdist --wheel --outdir .artifacts/tools-dist
-```
-
-| Check | Result |
-|---|---|
-| Backend/proxy/client/CLI/real stdio/workbench/package regression before preview synchronization | 202 passed, 1 skipped in 98.58s; existing SQLAlchemy cyclic-FK comparison warning |
-| Final synchronized client/CLI/real stdio regression | 16 passed in 41.85s (11 client checks and 5 real-process workflows), including wrong-MIME rejection with request ID and exclusive export preserving original bytes |
-| Real stdio workflow | Six equipment kinds, inline/registered setups, frozen presets, bulk upload, automatic FITS Master Dark, configured-root folder import and selected repaired retry, fixed groups/calibration maps/member edits, project references, trash restore and fresh-fingerprint cleanup; terminal cancel/resume errors preserve request IDs |
-| Real display preview protocol | Initial DISPLAY_NOT_GENERATED, explicit schedule/poll, available 1080×540 JPEG from a 1600×800 source, native SDK ImageContent, cached reschedule, CLI export of exact cached bytes, actual source-path collision exits 1 and retains all original bytes |
-| New structured CLI workflow | Equipment/setup/preset, multi-upload, paged task items, group versions, fixed project dataset references, archival, invalid-body exit status |
-| Skill validator | Passed |
-| Private frontend typecheck/production assets | Passed; used only to satisfy the existing wheel builder |
-| Wheel/sdist build and archive layout | Passed; domain client/CLI/MCP modules in wheel; Skill and reference in sdist; wheel CLI/MCP import exposes 58 tools |
-| Source/diff scope | No backend handler or frontend source changes; no new dependencies; whitespace check passed |
-
-The final real-process preview verification uses the synchronized service implementation. Frontend behavior tests are unchanged by this branch and retain the integrated preview branch evidence. No real photo batch, interactive host, or CUA run was performed.
+Run `uv run --locked --no-sync pytest tests/integration -q` for the named client, CLI and real SDK stdio workflows. Tests use temporary services and synthetic originals. Current results and coverage limits are maintained in the [verification matrix](test-matrix.md).

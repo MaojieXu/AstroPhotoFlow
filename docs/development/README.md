@@ -1,55 +1,55 @@
-# 原生网页版本开发
+# 开发、测试与发行
 
-开发分支为 `branch/redesign`。Python 环境使用 `.artifacts/venvs/dev`；依赖锁为根 `uv.lock`、原生前端 `frontend/pnpm-lock.yaml`。
+开发分支为 `dev`，Python 环境为 `.artifacts/venvs/dev`。需要 Python 3.12、uv、Node `>=26.8.2 <27` 和 pnpm 11.13.1；依赖锁为根 `uv.lock` 与 `frontend/pnpm-lock.yaml`。
 
-## 构建与测试
-
-需要 Python 3.12、uv、Node.js `>=26.8.2 <27`、pnpm 11.13.1。
+## 安装与构建
 
 ```powershell
 $env:UV_PROJECT_ENVIRONMENT = "$PWD/.artifacts/venvs/dev"
 pnpm --dir frontend install --frozen-lockfile --ignore-scripts
 pnpm build
 uv sync --locked --extra dev --python 3.12
+```
+
+根 package.json 只提供任务入口，不执行根 pnpm install。`pnpm build` 生成固定引擎归档、检查私有 UI 包和原生应用类型，再构建完整网页。网页输出为 `.artifacts/build/frontend`；`frontend/build` 是上游构建源码。
+
+## 验证入口
+
+```powershell
 uv run --locked --no-sync pytest -q
 pnpm test
+pnpm check:boundaries
 ```
 
-`pnpm build` 更新定制引擎归档，并运行原生前端类型检查与生产构建。完整网页产物位于 `.artifacts/build/frontend`，包括 HTML、分块脚本、样式、语言及静态文件。原生前端复用上游构建与依赖；业务组件通过构建去重使用同一个 Vue/Pinia。
+根 `pnpm test`／`typecheck` 委托私有 UI 包，完整原生类型检查包含在构建中。模块依赖方向由 `check:boundaries` 检查。测试位置见[模块导航](../architecture/module-map.md)，结果与缺口见[验证矩阵](test-matrix.md)。
 
-## 隔离运行
-
-```powershell
-uv run --locked --no-sync apf init --workspace .artifacts/workspaces/redesign --service-port 32390 --comfyui-port 32388 --frontend-assets .artifacts/build/frontend --no-activate
-uv run --locked --no-sync apf start --workspace .artifacts/workspaces/redesign --no-activate
-uv run --locked --no-sync apf status --workspace .artifacts/workspaces/redesign
-uv run --locked --no-sync apf stop --workspace .artifacts/workspaces/redesign
-```
-
-重新构建后，在停止测试实例时再次运行 `apf init ... --reuse-runtime --no-activate`，同步完整网页目录并复用已准备的原生 CPU 环境。浏览器地址为 `http://127.0.0.1:32388/#/workflows`。
-
-配置解析继续由 `astrophotoflow.config` 统一负责。显式 workspace 优先；`.env` 与默认 workspace 指针不因这组命令改变。`[comfyui].allowed_origins` 继续描述网页服务来源，`storage.data_dir` 相对 TOML 解析。令牌保存在 workspace/data/service.token。
-
-当前 `.env` 和既有 MCP 注册仍可指向原开发实例。访问原生实例的业务 CLI/MCP 时，在该进程环境中显式设置 ASTROPHOTOFLOW_CONFIG 为 redesign 的 config.toml，不修改全局注册。
-
-## 浏览器验收与发行
+## 隔离运行与浏览器验收
 
 ```powershell
-$env:APF_WEB_URL = 'http://127.0.0.1:32388'
+uv run --locked --no-sync apf init --workspace .artifacts/workspaces/docs-update --service-port 32590 --comfyui-port 32588 --frontend-assets .artifacts/build/frontend --no-activate
+uv run --locked --no-sync apf start --workspace .artifacts/workspaces/docs-update --no-activate
+uv run --locked --no-sync apf status --workspace .artifacts/workspaces/docs-update
+$env:APF_WEB_URL = 'http://127.0.0.1:32588'
 pnpm --dir frontend exec playwright install chromium
 pnpm test:browser
+uv run --locked --no-sync apf stop --workspace .artifacts/workspaces/docs-update
+```
+
+已有完整固定 runtime 时，初始化可加 `--reuse-runtime`，只同步网页；重建后先停止目标实例，再同步并启动。`--no-activate` 保持默认 workspace 选择。已有 Chromium 时可用 `PLAYWRIGHT_CHROMIUM_EXECUTABLE` 指定可执行文件。
+
+浏览器使用隔离 workspace 与合成 PNG，默认报告在 `.artifacts/reports/native-web`。真实开发数据不用于导入、回收站或工作流写入验收。正常 dev 使用 31388／31390，本机工具与状态见[当前上下文](current-context.md)。
+
+配置由 `astrophotoflow.core.config` 统一解析：显式 workspace、环境、默认指针、默认配置依次优先。`storage.data_dir` 相对 TOML 解析；令牌位于 workspace/data/service.token。CLI/MCP 用进程级 `ASTROPHOTOFLOW_CONFIG` 选择隔离实例，不改全局注册。
+
+## 发行与安装验证
+
+```powershell
 uv run --locked --no-sync python scripts/build_release.py
 uv run --locked --no-sync python scripts/verify_distribution.py
 ```
 
-已有本机 Chromium 时可通过 PLAYWRIGHT_CHROMIUM_EXECUTABLE 指定完整可执行路径。浏览器验收仅使用隔离 workspace 与合成 PNG，记录位于 `.artifacts/reports/native-web`。
+发行脚本安装锁定前端依赖、构建网页并生成 wheel／sdist。Python 中间产物为 `.artifacts/build/python`，发行物为 `.artifacts/dist`。网页已构建、仅重新打 Python 包时，可用 `python -m build --installer uv --outdir .artifacts/dist`。
 
-新报告、临时数据和缓存放在 `.artifacts`。原始照片、真实数据集、既有 dev workspace 和旧 runtime 保留。固定源码、构建边界与验收记录见 [native-web.md](native-web.md)。
+wheel 携带完整网页与固定引擎；sdist 携带预构建网页，支持无 Node 的 wheel 重建。验证脚本在源码目录外安装两份 wheel，检查入口、迁移、资源和源码包范围。用户安装步骤见[工作台使用](workbench.md)。
 
-## 模块与产物入口
-
-[七模块导航](../architecture/module-map.md)列出代码、公开入口和验证范围。根命令 pnpm test／typecheck 委托私有 UI 包；pnpm check:boundaries 检查 Python 与界面依赖方向。根无前端运行依赖，不执行根 pnpm install。
-
-Python 中间产物为 .artifacts/build/python，发行物为 .artifacts/dist。直接构建使用 `uv run --locked --no-sync python -m build --installer uv --outdir .artifacts/dist`；scripts/build_release.py 先构建网页再生成发行物。
-
-本次重构的实际验收环境、命令文件占用说明和证据见[文件重构验收](restructure-acceptance.md)。需要复用验收环境时显式设置 `UV_PROJECT_ENVIRONMENT="$PWD/.artifacts/venvs/restructure"`；不修改已有默认 workspace 或 MCP 注册。
+新日志、临时数据、缓存和报告进入 `.artifacts`。保留原件、既有 workspace、令牌与旧 runtime；未验证的平台和依赖不得写成通过。

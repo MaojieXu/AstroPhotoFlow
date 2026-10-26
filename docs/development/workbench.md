@@ -4,7 +4,7 @@
 
 ```powershell
 py -3.12 -m venv .apf-env
-.\.apf-env\Scripts\python.exe -m pip install .\dist\astrophotoflow-0.1.0-py3-none-any.whl
+.\.apf-env\Scripts\python.exe -m pip install .\.artifacts\dist\astrophotoflow-0.1.0-py3-none-any.whl
 .\.apf-env\Scripts\apf.exe init --workspace D:\AstroPhotoFlow\workspace --service-port 18190 --comfyui-port 18188
 .\.apf-env\Scripts\apf.exe start --workspace D:\AstroPhotoFlow\workspace
 .\.apf-env\Scripts\apf.exe status --workspace D:\AstroPhotoFlow\workspace

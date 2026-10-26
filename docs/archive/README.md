@@ -1,10 +1,7 @@
-# 历史归档
+# 历史附件
 
-这些文件保留当时的计划、指令、实现状态和验收结果。旧分支、旧目录、双尺寸预览、旧 schema 和“尚无 MCP”等文字不是当前规范，也不构成新的执行授权。
+本目录保留早期 [CPU 工作台验收 JSON](acceptance/cpu-workbench-2026-10-23.json) 和[侧栏截图](acceptance/sidebar-2026-10-22/astrophotoflow-sidebar.jpg)。它们描述当时的候选，不是当前架构、命令或运行状态。
 
-- `phase-plans/`：原开发计划、阶段设计、执行 Prompt、服务说明、旧格式矩阵和工作台快速开始。
-- `acceptance/`：阶段交付、CPU 工作台验收 JSON/Markdown，以及原 `test-results` 的侧栏截图与说明。
-- [main 功能快照](snapshots/main-2026-10-23.md)：用户原有文档，保留原文，描述当时 main。
-- 原始 v1.0 需求包移至 [requirements/v1.0](../requirements/v1.0/README.md)，文件内容和散列清单不改。
+旧阶段计划、执行 Prompt、快照和重复验收 Markdown 已从当前文件树清理，可通过 Git 历史查询。必要结论集中在[验证矩阵](../development/test-matrix.md)，当前操作从[文档索引](../README.md)进入。
 
-归档正文的旧路径属于历史上下文；当前可执行命令请从[开发入口](../development/README.md)查阅。本地旧日志与本轮详细执行日志不作为产品文件分发，关键实际结果写入当前验收记录。
+[冻结 v1.0 需求](../requirements/v1.0/README.md)及散列清单保持原样。历史附件中的旧路径、数据数量、schema 和功能状态不构成新的执行要求。

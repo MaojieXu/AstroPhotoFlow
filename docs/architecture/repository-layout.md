@@ -1,6 +1,6 @@
-# 七模块文件架构与迁移记录
+# 七模块文件架构
 
-日期：2026-10-25。实施分支：`branch/redesign`。本次将已有代码迁入七模块的长期位置，保持业务行为和公开协议；验收证据另见[当前上下文](../development/current-context.md)。
+本文规定当前源码归属、依赖与产物位置。实现状态见[模块导航](module-map.md)，有效待办见[当前上下文](../development/current-context.md)，实际证据见[验证矩阵](../development/test-matrix.md)。
 
 ## 决策与范围
 
@@ -11,7 +11,7 @@
 - 内部导入路径迁移，不添加旧 backend schema 兼容层。公开客户端、命令、HTTP 和 MCP 行为保持。
 - 产品构建输出归 `.artifacts`；原件、数据库、默认 workspace、全局 MCP 注册、虚拟环境、依赖缓存和参考仓库不迁移。
 
-选择保留主干而未采用 apps 式整体搬迁，是为了保持固定上游的来源边界，并将变化集中在实际归属问题。采用私有 UI 包而未直接混入原生 src，是为了提供可独立定位的源码、测试和消费入口。此次没有拆解现有大组件、导入流水线或改变算法。
+选择保留主干而未采用 apps 式整体搬迁，是为了保持固定上游的来源边界，并将变化集中在实际归属问题。采用私有 UI 包而未直接混入原生 src，是为了提供可独立定位的源码、测试和消费入口。模块布局不要求拆解现有组件、导入流水线或改变算法。
 
 ## 最终位置
 
@@ -34,29 +34,6 @@
 根 `package.json` 只提供任务命令。根 `pnpm-workspace.yaml` 的空 packages 列表与 `verifyDepsBeforeRun: false` 用于 pnpm 11 的任务入口，防止它自动重装已退役的根前端依赖；真正的依赖 workspace 和唯一前端锁文件位于 frontend。
 
 `frontend/build` 是上游构建辅助源码，不能作为产物归档或删除。包中 `web/`、`vendor/` 的安装资源位置保持，源码位置迁移不改变用户 workspace 布局。
-
-## 迁移对照
-
-下表左侧均为旧位置，后续任务不得恢复旧树。
-
-| 原位置 | 新位置 |
-|---|---|
-| `src/astrophotoflow/frontend` | `frontend/packages/astrophotoflow-ui/src/modules/data` |
-| 前端 `assets/client.ts`、`contracts.ts`、`host-client.ts` | 数据界面 `api/client.ts`、`api/contracts.ts`、`api/index.ts` |
-| 原生 `NativeShell.vue`、`LibrarySidebarTab.vue`、`useLibrarySidebarTab.ts` | 原生产品桥接目录，由其 index.ts 对外导出 |
-| `config.py`、`workbench.py` | `core/config.py`、`core/workbench.py` |
-| `backend/db.py`、`schema.py`、`alembic.ini`、`alembic/` | `core/database/`，九份历史迁移内容保持 |
-| `backend/models.py` 的 Base | `core/database/base.py`；具体数据模型留在 data/models.py |
-| `backend/errors.py`、`dependencies.py` | `core/errors.py`、`core/http.py` |
-| `backend/api.py`、`cli.py`、`system.py` | `interfaces/http/app.py`、`cli.py`、`system.py` |
-| 其余 backend 数据业务文件 | `modules/data/`，保留主要文件名、函数与业务实现 |
-| backend 各 schema 文件、预览模型、PhotoImportOptions | `contracts/` 的 common、assets、imports、datasets、projects、equipment、setups、calibration、trash、previews |
-| `cli.py` 实现、`cli_commands.py` | `interfaces/cli/main.py`、`commands.py`；根 cli.py 保留入口 |
-| `client_domains`、`agent_tools`、`mcp_server.py` | `interfaces/client`、`interfaces/mcp/tools`、`interfaces/mcp/server.py` |
-| `tests/frontend` 与其真实 API 样例 | UI 包 `tests/modules/data` 与 `tests/fixtures` |
-| `tests/backend`、`tests/workbench`、`tests/comfyui` | `tests/modules/data`、`tests/core`、`tests/interfaces/comfyui` |
-
-服务的公开命令仍为 apf／apf-service，浏览器网关仍为 `/astrophotoflow/api/v1`，领域 API 仍为 `/api/v1`。内部模块路径和打包资源检查随迁移更新，不产生数据库 schema 升级。
 
 ## 依赖与装配
 

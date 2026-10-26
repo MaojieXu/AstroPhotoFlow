@@ -49,6 +49,6 @@ workspace/
 | SER／已录制视频 | 首帧静态封面，视频解码依赖现有 FFmpeg |
 | NumPy | 内容登记与散列，不提供数组查看／预览 |
 
-扩展名和实际解码规则以 backend 实现、[对应测试](../development/test-matrix.md)为准；历史双尺寸预览记录保留在归档，不作为当前规格。
+扩展名和实际解码规则以 modules/data 实现、[对应测试](../development/test-matrix.md)为准；历史双尺寸预览记录保留在归档，不作为当前规格。
 
 FITS RGB 识别兼容显式 CTYPE 通道标记、既有 RA/DEC 三平面布局，以及 `PROGRAM=PixInsight …` 且未声明 CTYPE3 的三平面导出。明确声明其他第三轴的文件、其他来源的无标记三维数据保持不支持，不仅按维度长度猜测 RGB。已识别为 RGB 时不因残留 BAYERPAT 再做去拜耳。

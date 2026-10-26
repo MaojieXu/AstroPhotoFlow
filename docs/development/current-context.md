@@ -1,35 +1,45 @@
 # 当前开发上下文
 
-更新时间：2026-10-25。当前实施分支为 **branch/redesign**，起点 dev `b6759abd800052f0c1d41693e5385a428db755a3`，保留起点未提交的自动拉伸预览改动。main 起点为 `c8366e640eeab97f3336a6b3c12c80678a235f69`；本轮所有修改与提交限定在 redesign。
+更新时间：2026-10-26。开发分支为 **dev**。原生网页和七模块源码迁移基线为 `16025dd89f2c3c2b25bae58bcc241e5202863c87`，已从原 dev `b6759ab` 快进合入；main 不属于本轮交付范围。
 
-## 当前架构
+仓库为 [MaojieXu/AstroPhotoFlow](https://github.com/MaojieXu/AstroPhotoFlow)，origin 已使用新地址。本地目录已改为 `C:/Users/Administrator/Desktop/WorkSpace/AstroPhotoFlow`。目录改名和快进合并均已销项，不再执行旧目录切换脚本。
 
-项目已转为基于固定 ComfyUI 前后端源码的天文专用网页软件。原生前端始终显示画布，节点库下方依次注册素材库、工作流侧栏；启动默认打开素材库面板，设备管理置于导入按钮旁。内部 FastAPI 继续保存业务权威，定制 ComfyUI 服务直接注册同源网关。
+## 当前实现
 
-固定引擎0.42.0／前端1.57.1；原生前端开发使用 Node26.8.2–26.x 和 pnpm11.13.1。源码与构建见[架构](../architecture/overview.md)和[开发流程](README.md)。
+- 固定 ComfyUI 0.42.0 和前端 1.57.1 的原生网页平台。画布始终挂载，节点库下依次为素材库、工作流；启动打开素材库，设备管理位于导入旁。
+- Python 已按 core、contracts、modules/data、interfaces 归位；自研 UI 与原生桥接分开。其他五个业务模块只有文档占位，不表示已实现。
+- 已有资产与集合版本、项目固定引用、导入、设备快照、校准关联、预览和回收站。schema 为 `0009_remove_legacy_capture_profiles`，数据 MCP 为 58 个工具。
+- 单图自动拉伸从原件计算 RGB 背景白平衡和 MTF 配方，同步大图与缩略图；不修改原件、科学参数、版本身份和其他成员。
 
-## 运行与数据边界
+当前边界见[架构概览](../architecture/overview.md)、[模块导航](../architecture/module-map.md)和[素材行为](../architecture/assets.md)。
 
-- Python：`.artifacts/venvs/dev`，根 uv.lock。
-- 本轮隔离 workspace：`.artifacts/workspaces/redesign`，网页32388／领域服务32390。
-- 独立 runtime：LocalAppData/AstroPhotoFlow/runtime/native-web-0.1.0。
-- 原 dev workspace、31388／31390实例、根.env、默认 workspace 指针和全局 MCP 注册保持。
-- schema仍为0009，58个MCP工具，原件只读、固定版本、设备快照、校准关联和回收站保护保持。
+## 当前运行基线
 
-当前旧的0.1.0 CPU依赖可只读复用；本轮实际运行环境使用独立目录。完整网页资源由 workspace/web 提供，启动不再依赖 AstroPhotoFlow custom node 或 ComfyUI 侧栏扩展加载。
+- 开发 Python：`.artifacts/venvs/dev`，使用根 `uv.lock`；Node 26.8.2、pnpm 11.13.1，前端锁文件为 `frontend/pnpm-lock.yaml`。
+- 正常 dev workspace：`.artifacts/workspaces/dev`，网页 31388、领域服务 31390；根 `.env` 与默认指针仍选择同一 workspace。
+- 固定 CPU runtime：真实用户 LocalAppData 下的 `AstroPhotoFlow/runtime/native-web-0.1.0`，与旧 0.1.0 runtime 分离。
+- 产品输出：`.artifacts/build/frontend`、`.artifacts/build/python`、`.artifacts/dist`。完整网页由 workspace/web 提供，不依赖 custom node 或扩展加载业务界面。
+- 本轮隔离验收：`.artifacts/workspaces/docs-update`，网页 32588、领域服务 32590，不激活为默认 workspace。
 
-自动拉伸仍采用打开单图时计算 RGB 背景白平衡和 MTF 配方，并同步大图与缩略图；原件、版本身份及其他成员不变。
+目录改名后已按锁文件重新安装 dev，修复 editable 安装和命令入口；AstroPhotoFlow MCP、默认指针、编辑器和项目工具脚本中的有效旧路径已修正，其他 MCP 配置保持。本机固定工具入口为 `.artifacts/redesign/bin` 与其 Node 26 目录，不使用系统中版本不同的 Node/pnpm。
 
-## 验证与后续范围
+受限执行环境会将 LOCALAPPDATA 重定向到沙箱目录；本机维护使用正常用户环境访问已有 runtime，不修改产品路径解析，不新建另一套 CPU runtime。
 
-已有 Python 回归、前端组件、原生生产构建、浏览器验收和发行安装的实际证据集中到[原生网页记录](native-web.md)。未实际运行的平台或依赖不得标为通过。
+本轮已验证 dev 网页、HTTP、CLI 和真实 MCP 访问同一库，112 条存量资产在重启前后保持；这里的数量是本轮观察值，不是后续固定验收条件。正常 dev 保持运行，隔离实例已停止，32588／32590 已释放。启动回执已修正为 `#/workflows`。
 
-完整 Agent、天文软件适配、项目工作流版本权威、结果比较和项目记忆仍需后续实施。本轮原生工作流保留 ComfyUI 引擎能力，不将普通引擎执行冒充已实现的天文处理及来源追溯闭环。
+原件、令牌、配置与锁文件保持；SQLite 主文件字节在启停后变化，但 17 张逻辑表与改名前快照的行级摘要一致，外键检查通过。运行与发行证据统一记录于[验证矩阵](test-matrix.md)。
 
-## 七模块文件架构迁移
+wheel 源码目录外安装、无 Node 的 sdist 重建与重装已通过。本轮仍只验证 Windows／CPU；首次引导体验与 Linux 验收没有因此标为完成。
 
-现有 Python 源码已按 core、modules/data、contracts、interfaces 归位，私有 UI 包和原生桥接分开。其余业务模块仅有 README／AGENTS，不增加实际能力。布局与入口见[模块导航](../architecture/module-map.md)及[文件架构](../architecture/repository-layout.md)。
+## 已取消的旧任务
 
-产品输出为 .artifacts/build/frontend、.artifacts/build/python 和 .artifacts/dist。root package.json 只提供任务入口，前端依赖由 frontend workspace 管理。固定引擎网关路径及包内 web／vendor 资源保持。
+2026-10-26 用户确认：不重建历史 restructure 验收环境，不恢复 redesign 实例常驻运行，不恢复或继续保留 `branch/redesign`。已有环境、workspace 和证据保留。旧页面、固定照片数量和旧分支合入清单退出待办；有效业务场景进入验证矩阵。
 
-本次迁移的 OpenAPI 与 58 个 MCP 工具结构一致；Python 286 项、构建回归 1 项、UI 144 项、原生侧栏与画布 21 项及浏览器 5 组通过。源码外安装和无 Node 的 sdist 重建已验证。正式验收位于 .artifacts/venvs/restructure，原 dev 环境刷新存在 Windows 命令文件占用，未强制覆盖。详见[文件重构验收](restructure-acceptance.md)。未提交或推送。
+## 后续有效待办
+
+- 按[开发路线](platform-roadmap.md)细化数据引用、节点定义、工作流版本和运行回执，再验证首个真实外部软件操作。
+- 补齐节点输入输出交接、软件适配、节点制作发布、项目工作流版本、托管运行、结果来源、画布同步和用户接管。
+- 热发布需要原型验证；结果比较和项目记忆仍未实现。普通 CPU 图执行不能作为这些能力的完成证据。
+- Linux 尚无本轮证据。FFmpeg 视频验证结果单独记录；XISF 全帧解码和拉伸开销属于已知限制，未承诺本轮优化。
+
+真实 dev 不用于导入、删除或工作流写入验收；合成素材只写入隔离 workspace。不清库、不重新导入原件、不新增数据库备份。

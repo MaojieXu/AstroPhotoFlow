@@ -24,9 +24,11 @@ flowchart LR
 | `client.py` / `cli.py` | 保留公开客户端和命令模块入口 |
 | `comfyui/proxy` / `vendor` | 固定同源网关与随包运行资源 |
 
+固定引擎为 0.42.0，原生前端为 1.57.1；来源、提交和归档散列见 [vendor 清单](../../src/astrophotoflow/vendor/comfyui-source.json)。页面与图定位取舍见[原生网页 ADR](../../frontend/docs/adr/WORKBENCH-NAV-0044-native-pages-and-graph-location.md)。
+
 完整落点、依赖和目标模块状态见[七模块导航](module-map.md)与[文件架构](repository-layout.md)。其余五个业务模块已有文档位置，不表示新增业务功能已经实现。
 
-原生工作台使用 `#/workflows`，启动时打开素材库侧栏。左栏顺序为节点库、素材库、工作流；后两者作为原生 Vue 侧栏注册，和节点库共用分栏、宽度调整与收起行为。设备管理在素材库侧栏内打开，表单保留未保存保护。画布始终挂载。
+原生工作台使用 `#/workflows`，启动时打开素材库侧栏。左栏顺序为节点库、素材库、工作流；后两者作为原生 Vue 侧栏注册，和节点库共用分栏、宽度调整与收起行为。设备管理在素材库侧栏内打开，表单保留未保存保护。画布始终挂载。子图定位使用 `graph` 查询参数，侧栏切换不改变图定位。
 
 网页经 `/astrophotoflow/api/v1` 网关访问内部 `/api/v1`。网关在服务端添加令牌，浏览器不持有领域服务令牌。CLI/MCP 使用同一 API，不直接写 SQLite。
 

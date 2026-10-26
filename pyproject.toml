@@ -38,8 +38,8 @@ apf = "astrophotoflow.cli:main"
 apf-service = "astrophotoflow.interfaces.http.cli:main"
 
 [project.urls]
-bugs = "https://github.com/MaojieXu/ComfyUI-AstroPhotoFlow/issues"
-homepage = "https://github.com/MaojieXu/ComfyUI-AstroPhotoFlow"
+bugs = "https://github.com/MaojieXu/AstroPhotoFlow/issues"
+homepage = "https://github.com/MaojieXu/AstroPhotoFlow"
 
 [tool.pytest.ini_options]
 minversion = "8.0"
