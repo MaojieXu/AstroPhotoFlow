@@ -111,6 +111,8 @@ import BuilderToolbar from '@/components/builder/BuilderToolbar.vue'
 import LinearView from '@/views/LinearView.vue'
 import ManagerProgressToast from '@/workbench/extensions/manager/components/ManagerProgressToast.vue'
 
+const emit = defineEmits<{ ready: [] }>()
+
 setupAutoQueueHandler()
 useProgressFavicon()
 useProgressTextPreviews()
@@ -341,6 +343,7 @@ void nextTick(() => {
 
 const onGraphReady = () => {
   graphReady.value = true
+  emit('ready')
   runWhenGlobalIdle(() => {
     // Track user login when app is ready in graph view (cloud only)
     if (isCloud && authStore.isAuthenticated && !hasTrackedLogin) {

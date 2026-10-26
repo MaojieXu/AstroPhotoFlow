@@ -10,7 +10,7 @@ py -3.12 -m venv .apf-env
 .\.apf-env\Scripts\apf.exe status --workspace D:\AstroPhotoFlow\workspace
 ```
 
-打开 `http://127.0.0.1:18188/#/library`。页面包含素材库、工作流、设置；工作流页切换后保留图与视口。关闭浏览器保留后台任务，使用 `apf stop --workspace ...` 显式退出。
+打开 `http://127.0.0.1:18188/#/library`。左栏提供素材库、工作流；设备管理在素材库“导入”旁，默认设备列表，保留组合、预设和项目管理。工作流页切换后保留图与视口。关闭浏览器保留后台任务，使用 `apf stop --workspace ...` 显式退出。
 
 ## 运行目录与数据
 

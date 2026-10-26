@@ -12,9 +12,6 @@
         <WorkflowTabs />
       </div>
     </template>
-    <template #side-toolbar>
-      <SideToolbar v-if="showUI && !isBuilderMode && !linearMode" />
-    </template>
     <template v-if="betaMenuEnabled" #side-bar-panel>
       <div
         :inert="canvasStore.isPickingNodes"
@@ -159,7 +156,6 @@ import TitleEditor from '@/components/graph/TitleEditor.vue'
 import NodePropertiesPanel from '@/components/rightSidePanel/RightSidePanel.vue'
 import { useAgentDockMount } from '@/workbench/extensions/agent/composables/useAgentDockMount'
 import NodeSearchboxPopover from '@/components/searchbox/NodeSearchBoxPopover.vue'
-import SideToolbar from '@/components/sidebar/SideToolbar.vue'
 import WorkflowTabs from '@/components/topbar/WorkflowTabs.vue'
 import { useGroupContextMenu } from '@/composables/graph/useGroupContextMenu'
 import { installErrorClearingHooks } from '@/composables/graph/useErrorClearingHooks'

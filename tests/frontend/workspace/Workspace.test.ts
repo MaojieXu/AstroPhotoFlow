@@ -2,6 +2,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia } from 'pinia'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import App from '@frontend/App.vue'
+import Workspace from '@frontend/workspace/Workspace.vue'
 
 const { get } = vi.hoisted(() => ({
   get: vi.fn(async (path: string) => path.endsWith('/capabilities')
@@ -25,6 +26,24 @@ describe('workspace panel', () => {
     wrapper?.unmount()
     wrapper = undefined
     document.body.innerHTML = ''
+  })
+
+  it('opens native equipment management from beside import and starts on equipment', async () => {
+    const native = mount(Workspace, { props: { native: true }, global: { plugins: [createPinia()] } })
+    wrapper = native
+    await flushPromises()
+    expect(native.find('.apf-nav').exists()).toBe(false)
+    const button = native.get('.apf-equipment')
+    expect(button.element.previousElementSibling?.classList.contains('apf-import')).toBe(true)
+    await button.trigger('click')
+    expect(native.emitted('manage-equipment')).toHaveLength(1)
+    await native.vm.selectArea('settings', 'equipment')
+    await flushPromises()
+    expect(native.get('h1').text()).toBe('设备管理')
+    expect(native.get('.apf-management-tabs button[aria-current="page"]').text()).toBe('设备')
+    expect(native.text()).toContain('添加设备')
+    await native.get('.apf-heading > button').trigger('click')
+    expect(native.emitted('back-to-library')).toHaveLength(1)
   })
 
   it('shows five side areas and opens each area in the current panel', async () => {

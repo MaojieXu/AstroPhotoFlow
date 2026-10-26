@@ -23,7 +23,9 @@ conflicting with the product's hash-based page navigation.
 
 ## Decision
 
-- Use a native Vue shell with Library, Workflows and Settings pages. Reuse
+- Use a native Vue shell with Library and Workflows in one left navigation
+  rail. Open equipment management from the button beside Library import,
+  defaulting to equipment while retaining setups, presets and projects. Reuse
   the existing business components and a single Vue/Pinia runtime.
 - Keep FastAPI as an internal domain service behind the engine's same-origin
   gateway. One launcher owns both processes.

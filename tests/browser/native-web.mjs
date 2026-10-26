@@ -36,7 +36,11 @@ await context.route("**/*", (route) => {
 });
 
 async function navigate(destination) {
-    await page.locator(`header nav a[href^="#/${destination}"]`).click();
+    if (destination === "equipment") {
+        await page.getByRole("button", { name: "设备管理", exact: true }).click();
+    } else {
+        await page.locator(`[data-testid="native-navigation"] a[href^="#/${destination}"]`).click();
+    }
     await expect(page).toHaveURL(new RegExp(`#/${destination}(\\?.*)?$`));
 }
 
@@ -44,7 +48,7 @@ try {
     await page.goto(origin, { waitUntil: "domcontentloaded" });
     await expect(page).toHaveURL(/#\/library$/);
     await expect(
-        page.locator("header nav").getByRole("link", { name: "素材库", exact: true }),
+        page.getByTestId("native-navigation").getByRole("link", { name: "素材库", exact: true }),
     ).toBeVisible();
     await expect(page.locator("#graph-canvas")).toHaveCount(0);
     const health = await page.request.get(origin + "/astrophotoflow/api/v1/health");
@@ -54,7 +58,26 @@ try {
     assert.equal(health.headers().authorization, undefined);
     checks.push("native default page and authenticated gateway");
 
-    await navigate("settings");
+    await page.setViewportSize({ width: 414, height: 1000 });
+    const navBounds = await page.getByTestId("native-navigation").boundingBox();
+    assert.ok(navBounds.x < 64 && navBounds.width <= 64);
+    await expect(page.getByRole("button", { name: "设备管理", exact: true })).toBeInViewport();
+    await expect(page.getByRole("button", { name: "导入", exact: true })).toBeInViewport();
+    await expect(page.getByTestId("native-navigation").getByRole("link")).toHaveCount(2);
+    await page.screenshot({
+        path: fileURLToPath(new URL("navigation-narrow.png", report)),
+        fullPage: true,
+    });
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await navigate("equipment");
+    await expect(page.getByRole("heading", { name: "设备管理", exact: true })).toBeVisible();
+    await expect(page.locator(".apf-management-tabs button[aria-current='page']")).toHaveText(
+        "设备",
+    );
+    await page
+        .locator(".apf-management-tabs")
+        .getByRole("button", { name: "项目", exact: true })
+        .click();
     await page.getByRole("button", { name: "新建项目", exact: true }).click();
     const editor = page.getByRole("region", { name: "记录编辑表单" });
     await editor.getByLabel("名称", { exact: true }).fill(name);
@@ -63,12 +86,16 @@ try {
     await page.getByRole("button", { name: "新建项目", exact: true }).click();
     await editor.getByLabel("名称", { exact: true }).fill("unsaved native draft");
     page.once("dialog", (dialog) => dialog.dismiss());
-    await page.locator('header nav a[href^="#/library"]').click();
-    await expect(page).toHaveURL(/#\/settings$/);
+    await page.locator('[data-testid="native-navigation"] a[href^="#/library"]').click();
+    await expect(page).toHaveURL(/#\/equipment$/);
     await expect(editor.getByLabel("名称", { exact: true })).toHaveValue("unsaved native draft");
     page.once("dialog", (dialog) => dialog.accept());
     await navigate("workflows");
     await expect(page.getByTestId("side-toolbar")).toBeVisible({ timeout: 45000 });
+    const toolsBounds = await page.getByTestId("side-toolbar").boundingBox();
+    assert.ok(toolsBounds.x < 64 && toolsBounds.width <= 64);
+    const mainBounds = await page.locator("#graph-canvas-container").boundingBox();
+    assert.ok(mainBounds.x >= 64);
     checks.push("project creation and draft navigation protection");
 
     const uploaded = await page.request.post(origin + "/api/upload/image", {
@@ -76,18 +103,19 @@ try {
     });
     assert.equal(uploaded.status(), 200);
     const sourceName = (await uploaded.json()).name;
+    await page.evaluate(() => window.app.reloadNodeDefs());
     const draft = await page.evaluate((sourceName) => {
         const app = window.app;
         const input = window.LiteGraph.createNode("LoadImage");
         input.title = "Native input";
         input.widgets.find((widget) => widget.name === "image").value = sourceName;
-        input.pos = [160, 160];
+        input.pos = [460, 160];
         app.graph.add(input);
         const output = window.LiteGraph.createNode("SaveImage");
         output.title = "Native output";
         output.widgets.find((widget) => widget.name === "filename_prefix").value =
             "APF-native-validation";
-        output.pos = [520, 160];
+        output.pos = [820, 160];
         app.graph.add(output);
         input.connect(0, output, 0);
         app.canvas.ds.scale = 0.8;
@@ -100,7 +128,7 @@ try {
         };
     }, sourceName);
     await navigate("library");
-    await navigate("settings");
+    await navigate("equipment");
     await navigate("workflows");
     const retained = await page.evaluate(() => ({
         nodes: window.app.graph

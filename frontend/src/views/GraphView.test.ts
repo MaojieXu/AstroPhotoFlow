@@ -333,10 +333,10 @@ describe('GraphView - partner nodes education card', () => {
     distribution.isCloud = false
   })
 
-  it('mounts the card on local builds', () => {
+  it('omits the card in the native local workbench', () => {
     render(GraphView, { global: { plugins: [i18n] } })
 
-    expect(screen.getByTestId('education-card-stub')).toBeInTheDocument()
+    expect(screen.queryByTestId('education-card-stub')).not.toBeInTheDocument()
   })
 
   it('never mounts the card on cloud', () => {

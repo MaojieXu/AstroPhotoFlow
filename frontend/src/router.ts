@@ -8,7 +8,7 @@ export default createRouter({
   routes: [
     { path: '/', redirect: '/library' },
     {
-      path: '/:page(library|workflows|settings)',
+      path: '/:page(library|workflows|equipment)',
       component: NativeShell,
       props: true,
       beforeEnter: async () => {

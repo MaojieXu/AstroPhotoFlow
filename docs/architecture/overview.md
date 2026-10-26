@@ -4,7 +4,7 @@ AstroPhotoFlow 是基于 ComfyUI 源码定制的本地网页软件。产品采�
 
 ```mermaid
 flowchart LR
-  UI[浏览器：素材库 / 工作流 / 设置] --> WEB[定制 ComfyUI / aiohttp]
+  UI[浏览器：左侧素材库 / 工作流，素材库内设备管理] --> WEB[定制 ComfyUI / aiohttp]
   WEB --> ENGINE[原生画布 API 与执行队列]
   WEB --> API[同源网关 → FastAPI 领域服务]
   CLI[CLI / MCP / AssetClient] --> API
@@ -23,7 +23,7 @@ flowchart LR
 | `cli` / `agent_tools` / `mcp_server` | 工作台命令、结构化 CLI 和 58 个 stdio MCP 工具 |
 | `workbench` / `vendor` | 固定源码与 CPU 环境、完整网页资源、进程生命周期 |
 
-原生 hash 路由为 `#/library`、`#/workflows`、`#/settings`。默认素材库；画布首次访问初始化，随后保持挂载，切页保留图、草稿和视口。设置和素材表单沿用未保存保护。
+原生 hash 路由为 `#/library`、`#/workflows`，设备管理使用 `#/equipment`。默认素材库；画布首次访问初始化，随后保持挂载，切页保留图、草稿和视口。设置和素材表单沿用未保存保护。
 
 网页经 `/astrophotoflow/api/v1` 网关访问内部 `/api/v1`。网关在服务端添加令牌，浏览器不持有领域服务令牌。CLI/MCP 使用同一 API，不直接写 SQLite。
 

@@ -26,6 +26,7 @@ type WorkspaceArea = 'library' | 'nodes' | 'software' | 'agent' | 'settings'
 
 const store = useWorkspaceStore()
 const props = defineProps<{ native?: boolean }>()
+const emit = defineEmits<{ 'manage-equipment': []; 'back-to-library': [] }>()
 const activeArea = ref<WorkspaceArea>('library')
 const lastManagementSection = ref<WorkspaceSection>('projects')
 const capabilities = ref<ReturnType<typeof capabilitiesSchema.parse>>()
@@ -623,7 +624,7 @@ async function selectLibraryCategory(category:'all'|'light'|'calibration'){
   await loadRecords()
 }
 
-async function selectArea(area: WorkspaceArea) {
+async function selectArea(area: WorkspaceArea, managementSection: WorkspaceSection = 'projects') {
   if (dirty.value && !window.confirm('当前表单有未保存修改。放弃修改并切换吗？')) return false
   if(!await waitForInlineSave())return false
   leaveDatasetContext()
@@ -653,8 +654,8 @@ async function selectArea(area: WorkspaceArea) {
     void loadRelatedEquipment(true)
     loadRecords()
   } else if (area === 'settings') {
-    lastManagementSection.value = 'projects'
-    store.selectSection('projects')
+    lastManagementSection.value = managementSection
+    store.selectSection(managementSection)
     loadRecords()
   } else {
     loadGeneration++
@@ -665,7 +666,7 @@ async function selectArea(area: WorkspaceArea) {
 }
 
 async function leavePage() {
-  return dirty.value ? selectArea(activeArea.value) : waitForInlineSave()
+  return dirty.value ? selectArea(activeArea.value, store.section) : waitForInlineSave()
 }
 
 defineExpose({ selectArea, activeArea, leavePage })
@@ -1686,7 +1687,8 @@ onBeforeUnmount(() => {
             <div class="apf-heading">
               <button v-if="activeDataset" type="button" @click="closeDataset">← 返回素材库</button>
               <button v-else-if="viewingProjectAssets || viewingProjectDatasets" type="button" @click="leaveProjectAssets">← 返回项目</button>
-              <h1>{{ activeDataset ? '素材库 / '+activeDataset.name : activeArea === 'library' ? '素材库' : (viewingProjectAssets ? '项目资产' : viewingProjectDatasets ? '项目数据集' : '设置') }}</h1>
+              <button v-else-if="props.native && activeArea === 'settings'" type="button" @click="emit('back-to-library')">← 返回素材库</button>
+              <h1>{{ activeDataset ? '素材库 / '+activeDataset.name : activeArea === 'library' ? '素材库' : (viewingProjectAssets ? '项目资产' : viewingProjectDatasets ? '项目数据集' : props.native ? '设备管理' : '设置') }}</h1>
               <span v-if="activeDataset" class="apf-state">图像组 · {{activeDataset.version?.members?.length??activeDataset.member_count??0}} 张</span>
               <div v-if="isLibraryItemsView" class="apf-heading-actions">
                 <template v-if="bulkSelectMode">
@@ -1698,6 +1700,7 @@ onBeforeUnmount(() => {
                   title="选择文件或文件夹">
                   <i class="pi pi-upload" aria-hidden="true"></i><span>导入</span>
                 </button>
+                <button v-if="props.native" type="button" class="apf-equipment" @click="emit('manage-equipment')">设备管理</button>
                 <button type="button" aria-label="刷新" @click="refreshLibrary"><i class="pi pi-refresh" aria-hidden="true"></i><span>刷新</span></button>
                 <button type="button" :disabled="savingInline>0||Boolean(inlineSaveFailure)" @click="enterBulkSelectMode">批量删除</button>
                 <button type="button" aria-label="打开回收站" title="回收站" @click="trashOpen=true">回收站</button>
@@ -1711,8 +1714,8 @@ onBeforeUnmount(() => {
             <nav v-if="activeArea==='library'&&!activeDataset" class="apf-library-categories" aria-label="素材用途">
               <button v-for="(label,category) in {all:'全部素材',light:'亮场',calibration:'校准库'}" :key="category" type="button" :aria-current="libraryCategory===category?'page':undefined" @click="selectLibraryCategory(category)">{{label}}</button>
             </nav>
-            <div v-if="activeArea === 'settings' && !viewingProjectAssets && !viewingProjectDatasets" class="apf-management-tabs" aria-label="设置类别">
-              <button v-for="(title, section) in { projects: '项目', equipment: '设备', 'equipment-setups': '使用组合' }"
+            <div v-if="activeArea === 'settings' && !viewingProjectAssets && !viewingProjectDatasets" class="apf-management-tabs" :aria-label="props.native ? '设备与资料类别' : '设置类别'">
+              <button v-for="(title, section) in (props.native ? {equipment: '设备', 'equipment-setups': '使用组合', projects: '项目'} : { projects: '项目', equipment: '设备', 'equipment-setups': '使用组合' })"
                 :key="section" type="button" :aria-current="store.section === section ? 'page' : undefined"
                 @click="selectSection(section as WorkspaceSection)">{{ title }}</button>
             </div>
@@ -1827,9 +1830,9 @@ onBeforeUnmount(() => {
 .apf-import-row__content strong,.apf-import-row__content span { opacity:.58; }
 .apf-import-row__content progress { grid-column:1/-1; width:100%; height:8px; }
 .apf-toolbar, .apf-error, .apf-state, .apf-disabled, .apf-records, .apf-pagination, .apf-details { margin-left:10px; margin-right:10px; }
-.apf-heading { position:relative; display:flex; flex:1 0 100%; align-items:center; gap:8px; min-width:0; }
+.apf-heading { position:relative; display:flex; flex-wrap:wrap; flex:1 0 100%; align-items:center; gap:8px; min-width:0; }
 .apf-heading h1 { flex:0 0 auto; margin:4px 0; color:var(--input-text,#ddd); font-size:16px; font-weight:600; line-height:1.25; white-space:nowrap; }
-.apf-heading-actions { position:relative; display:flex; flex-wrap:wrap; align-items:center; gap:5px; margin-left:auto; }
+.apf-heading-actions { position:relative; display:flex; flex:0 1 auto; flex-wrap:wrap; min-width:0; align-items:center; gap:5px; margin-left:auto; }
 .apf-trash-confirm-backdrop { position:fixed; inset:0; z-index:30; display:grid; place-items:center; padding:16px; background:#000a; }
 .apf-trash-confirm { max-width:560px; max-height:80vh; overflow:auto; padding:18px; border:1px solid var(--border-color,#555); border-radius:10px; background:var(--comfy-menu-bg,#292929); box-shadow:0 8px 40px #0009; }
 .apf-trash-confirm h2 { margin:0 0 10px; font-size:16px; }
