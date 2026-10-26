@@ -5,6 +5,7 @@
 | 需求范围 | 当前实现 | 自动化证据 |
 |---|---|---|
 | FR-01 项目基础管理 | 创建、编辑、回收站、素材及数据集固定版本引用；旧拍摄配置已移除，完整托管工作流未实现 | `tests/backend/test_service.py`、前端 Workspace/Settings 测试 |
+| FR-02/09 原生工作流基础 | 内置画布、节点与视口跨页保留、保存加载及CPU队列；项目托管工作流与天文适配仍未实现 | `tests/browser/native-web.mjs`、原生前端子图定位/视口60项回归 |
 | FR-04 素材管理 | 分阶段异步导入、Header 分类、任务、预设快照、数据集、筛选排序与编辑 | backend ingestion/import_pipeline/service/library_sort；frontend Workspace/ImportDialog/ImportTasks；integration import_presets |
 | FR-04/11 删除与恢复 | 已接受的组／照片回收站、确认范围、部分清理、R4、身份和固定版本保留 | backend service 的 trash 回归；frontend LibraryTrashDialog |
 | FR-05 当前显示子集 | 100 px 缩略图、1080 px按需缓存、组基准拉伸、打开大图自动拉伸及RGB白平衡并更新缩略图、已有配方/任务复用、项目固定成员浏览；完整比较未实现 | backend auto_stretch/fits_preview/display_previews/video_preview；frontend PhotoPreviewDialog |
@@ -15,10 +16,10 @@
 | FR-14 当前服务边界 | 本地认证、代理来源／路径约束、原图和共享文件保护 | `tests/comfyui/`、backend service/ingestion |
 | FR-15 契约与可重复构建 | 根锁文件、OpenAPI 快照、Zod、wheel/sdist | OpenAPI 等式和代理白名单测试、前端契约测试、发行验证 |
 
-现有前端真实 API JSON 是 mock fixture，不能称为真实 31 图端到端验收。真实大素材不进入快速测试；本轮不重导入全量 Astro Dataset，也不自动点击前端。
+现有前端真实 API JSON 是 mock fixture，不能称为真实31图端到端验收。原生网页轮新增了基于隔离实例与合成PNG的5组真实浏览器场景，不重导入全量Astro Dataset。实际结果及边界见[原生网页验收](native-web.md)。
 
 待补的未来产品验收：FR-02/03/06/09/10/12，以及其他 FR 中未完成部分。AT-01 至 AT-28 保留在[冻结需求](../requirements/v1.0/07_实施路线与验收清单.md)，只有实际实现并取得对应证据后才能标记通过。
 
-新增回归聚焦本轮真实风险：模块入口、插件复制路径、CLI/MCP 进程协议和从源码目录外安装；不为假想业务或未来能力编写测试。FFmpeg 不可用导致的视频用例跳过需在报告中单列，不能当作通过。
+新增回归聚焦真实风险：原生模块入口、完整网页复制、内置网关、CLI/MCP进程协议、停止排空和从源码目录外安装；不为假想业务或未来能力编写测试。FFmpeg不可用导致的视频用例跳过需在报告中单列，不能当作通过。
 
 本轮设备任务快照、删除后重试／恢复及历史显示：`tests/backend/test_equipment_snapshots.py`；删除拉伸参考图：`test_display_previews.py`；组合／预设筛选草稿保护：`SettingsOrganization.test.ts`。实际结果见[最终修复验收](final-bugfix-acceptance.md)。
