@@ -23,18 +23,18 @@ def check_wheel(path: Path) -> None:
         names = set(archive.namelist())
         prefix = "astrophotoflow/"
         required = {
-            "backend/cli.py", "backend/alembic.ini", "backend/alembic/env.py",
-            "backend/alembic/versions/0008_asset_equipment_snapshot.py",
-            "backend/alembic/versions/0009_remove_legacy_capture_profiles.py",
+            "interfaces/http/cli.py", "core/database/alembic.ini", "core/database/alembic/env.py", "contracts/assets.py", "modules/data/public.py", "modules/data/routes.py",
+            "core/database/alembic/versions/0008_asset_equipment_snapshot.py",
+            "core/database/alembic/versions/0009_remove_legacy_capture_profiles.py",
             "comfyui/proxy.py", "web/index.html", "vendor/comfyui-source.json",
             "vendor/comfyui-0.42.0.zip", "vendor/comfyui-0.42.0-windows-py312.lock",
         }
         assert {prefix + name for name in required} <= names, f"Missing product resources in {path.name}"
-        assert not any(name.startswith(("astrophotoflow_service/", "tests/", "astrophotoflow/frontend/")) for name in names)
+        assert not any(name.startswith(("astrophotoflow_service/", "tests/", "astrophotoflow/frontend/", "astrophotoflow/backend/", "astrophotoflow/agent_tools/", "astrophotoflow/client_domains/")) for name in names)
         assert not any("node_modules/" in name or "/__pycache__/" in name for name in names)
         assert prefix + "backend/capture_profiles.py" not in names
         assert not any(name.startswith(prefix + "comfyui/extension/") for name in names)
-        resources = ROOT / "build/frontend"
+        resources = ROOT / ".artifacts/build/frontend"
         expected = {path.relative_to(resources).as_posix() for path in resources.rglob("*") if path.is_file()}
         actual = {name.removeprefix(prefix + "web/") for name in names if name.startswith(prefix + "web/")}
         assert actual == expected
@@ -51,8 +51,8 @@ def run(command: list[str], *, cwd: Path, env: dict[str, str]) -> None:
 def main() -> None:
     project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]
     stem = f"{project['name']}-{project['version']}"
-    wheel = next((ROOT / "dist").glob(stem + "-*.whl"))
-    sdist = ROOT / "dist" / (stem + ".tar.gz")
+    wheel = next((ROOT / ".artifacts" / "dist").glob(stem + "-*.whl"))
+    sdist = ROOT / ".artifacts" / "dist" / (stem + ".tar.gz")
     check_wheel(wheel)
     artifacts = ROOT / ".artifacts"
     artifacts.mkdir(exist_ok=True)
@@ -78,16 +78,16 @@ from importlib.resources import files
 from pathlib import Path
 import sys
 import astrophotoflow
-from astrophotoflow.backend.schema import SCHEMA_REVISION, upgrade_database, current_revision
-from astrophotoflow.config import Settings
+from astrophotoflow.core.database.schema import SCHEMA_REVISION, upgrade_database, current_revision
+from astrophotoflow.core.config import Settings
 import astrophotoflow.comfyui
-import astrophotoflow.mcp_server
+import astrophotoflow.interfaces.mcp.server
 assert 'server' not in sys.modules
 assert Path(astrophotoflow.__file__).resolve().is_relative_to(Path(sys.prefix).resolve())
 assert importlib.util.find_spec('astrophotoflow_service') is None
 assert files('astrophotoflow').joinpath('web/index.html').is_file()
-assert importlib.util.find_spec('astrophotoflow.backend.capture_profiles') is None
-from astrophotoflow.backend.models import Base
+assert importlib.util.find_spec('astrophotoflow.backend') is None
+from astrophotoflow.modules.data.models import Base
 assert 'capture_profile' not in Base.metadata.tables
 assert 'project_capture_profile' not in Base.metadata.tables
 assert 'capture_profile_id' not in Base.metadata.tables['asset_version'].c
@@ -98,9 +98,19 @@ assert 'capture_profile_id' not in Base.metadata.tables['asset_version'].c
         smoke()
         report["installed_wheel"] = "passed"
         with tarfile.open(sdist) as archive:
+            members = archive.getmembers()
+            artifact_files = [member.name for member in members if member.isfile() and "/.artifacts/" in member.name]
+            assert artifact_files and all("/.artifacts/build/frontend/" in name for name in artifact_files)
+            assert not any("/node_modules/" in member.name or Path(member.name).name in {".env", "service.token"} for member in members)
             archive.extractall(work / "source", filter="data")
         source = work / "source" / stem
-        assert (source / "build/frontend/index.html").is_file()
+        assert (source / ".artifacts/build/frontend/index.html").is_file()
+        assert (source / "frontend/packages/astrophotoflow-ui/src/index.ts").is_file()
+        assert (source / "frontend/packages/shared-frontend-utils/src/formatUtil.ts").is_file()
+        assert (source / "frontend/packages/account-ui/package.json").is_file()
+        assert (source / "docs/api/openapi.json").is_file()
+        assert not (source / "src/astrophotoflow/backend").exists()
+        assert not (source / "src/astrophotoflow/frontend").exists()
         # Only Python launchers and OS utilities remain on PATH during rebuild.
         env["PATH"] = str(Path(sys.executable).parent)
         if os.name == "nt":

@@ -2,10 +2,13 @@
 
 当前说明描述 AstroPhotoFlow 已实现的行为；冻结需求和历史验收不代表本次已完成全部产品目标。
 
+目标架构与后续开发流程单独记录在[七模块开发路线](development/platform-roadmap.md)，其中的目标和待验证能力不代表已交付。长期 Agent 开发约定见[根目录 AGENTS.md](../AGENTS.md)。
+
 | 分类 | 入口 | 用途 |
 |---|---|---|
 | 需求 | [需求基线](requirements/README.md) | v1.0 愿景、FR/AT 编号与后续范围 |
-| 架构 | [模块与数据流](architecture/overview.md)、[素材行为](architecture/assets.md) | 当前模块职责、存储和用户可见规则 |
+| 架构 | [模块与数据流](architecture/overview.md)、[七模块导航](architecture/module-map.md)、[文件架构](architecture/repository-layout.md)、[素材行为](architecture/assets.md) | 当前模块职责、存储和用户可见规则 |
+| 目标架构与开发路线 | [七模块开发路线](development/platform-roadmap.md)、[Agent 开发约定](../AGENTS.md) | 产品方向、模块边界、耦合与顺序图、阶段验收和长期执行规则；明确区分现状与目标 |
 | 接口 | [接口说明](api/README.md)、[OpenAPI](api/openapi.json) | HTTP、CLI、58 个 MCP 工具及契约维护 |
 | 开发 | [开发流程](development/README.md)、[工作台使用](development/workbench.md) | 构建、测试、安装与诊断 |
 | 上下文 | [当前状态](development/current-context.md) | 当前工作基线、明确未实现内容和交接边界 |
@@ -23,3 +26,5 @@
 - [最终 bug 修复与设备资料解耦验收](development/final-bugfix-acceptance.md)
 
 - [原生网页软件架构与验收](development/native-web.md)
+
+- [七模块文件架构验收](development/restructure-acceptance.md)

@@ -25,3 +25,11 @@
 已有 Python 回归、前端组件、原生生产构建、浏览器验收和发行安装的实际证据集中到[原生网页记录](native-web.md)。未实际运行的平台或依赖不得标为通过。
 
 完整 Agent、天文软件适配、项目工作流版本权威、结果比较和项目记忆仍需后续实施。本轮原生工作流保留 ComfyUI 引擎能力，不将普通引擎执行冒充已实现的天文处理及来源追溯闭环。
+
+## 七模块文件架构迁移
+
+现有 Python 源码已按 core、modules/data、contracts、interfaces 归位，私有 UI 包和原生桥接分开。其余业务模块仅有 README／AGENTS，不增加实际能力。布局与入口见[模块导航](../architecture/module-map.md)及[文件架构](../architecture/repository-layout.md)。
+
+产品输出为 .artifacts/build/frontend、.artifacts/build/python 和 .artifacts/dist。root package.json 只提供任务入口，前端依赖由 frontend workspace 管理。固定引擎网关路径及包内 web／vendor 资源保持。
+
+本次迁移的 OpenAPI 与 58 个 MCP 工具结构一致；Python 286 项、构建回归 1 项、UI 144 项、原生侧栏与画布 21 项及浏览器 5 组通过。源码外安装和无 Node 的 sdist 重建已验证。正式验收位于 .artifacts/venvs/restructure，原 dev 环境刷新存在 Windows 命令文件占用，未强制覆盖。详见[文件重构验收](restructure-acceptance.md)。未提交或推送。

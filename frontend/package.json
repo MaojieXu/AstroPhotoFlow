@@ -155,7 +155,8 @@
     "wwobjloader2": "catalog:",
     "yjs": "catalog:",
     "zod": "catalog:",
-    "zod-validation-error": "catalog:"
+    "zod-validation-error": "catalog:",
+    "@astrophotoflow/ui": "workspace:*"
   },
   "devDependencies": {
     "@comfyorg/ingest-types": "workspace:*",

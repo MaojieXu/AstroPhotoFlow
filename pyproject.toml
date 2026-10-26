@@ -35,7 +35,7 @@ dev = ["aiohttp>=3.10,<4", "build>=1.2,<2", "pytest>=8,<9"]
 
 [project.scripts]
 apf = "astrophotoflow.cli:main"
-apf-service = "astrophotoflow.backend.cli:main"
+apf-service = "astrophotoflow.interfaces.http.cli:main"
 
 [project.urls]
 bugs = "https://github.com/MaojieXu/ComfyUI-AstroPhotoFlow/issues"
@@ -61,12 +61,11 @@ package-dir = {"" = "src"}
 [tool.setuptools.packages.find]
 where = ["src"]
 include = ["astrophotoflow", "astrophotoflow.*"]
-exclude = ["astrophotoflow.frontend", "astrophotoflow.frontend.*"]
 namespaces = false
 
 [tool.setuptools.package-data]
 astrophotoflow = ["vendor/*.zip", "vendor/*.json", "vendor/*.lock", "vendor/*LICENSE"]
-"astrophotoflow.backend" = ["alembic.ini", "alembic/*.py", "alembic/versions/*.py"]
+"astrophotoflow.core.database" = ["alembic.ini", "alembic/*.py", "alembic/versions/*.py"]
 
 [tool.ruff.lint.flake8-quotes]
 inline-quotes = "double"

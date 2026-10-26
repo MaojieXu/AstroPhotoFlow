@@ -50,6 +50,10 @@ async function navigate(destination) {
 }
 
 try {
+    const profile = await page.request.post(origin + "/api/settings", {
+        data: { "Comfy.TutorialCompleted": true },
+    });
+    assert.equal(profile.status(), 200);
     await page.goto(origin, { waitUntil: "domcontentloaded" });
     await expect(page).toHaveURL(/#\/workflows$/);
     await expect(page.getByTestId("library-sidebar")).toBeVisible({ timeout: 45000 });

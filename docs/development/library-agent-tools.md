@@ -5,9 +5,9 @@ The Python `AssetClient`, `apf` CLI and `apf mcp` stdio server share explicit do
 ## Structure and request contracts
 
 - `client.py` owns config, authentication, HTTP transport, request serialization and service errors.
-- `client_domains/imports.py`, `library.py`, and `organization.py` own named business methods and endpoint paths.
-- `cli_commands.py` maps named CLI commands to those methods; `agent_tools/` contains explicit typed MCP functions over the same methods.
-- Backend Pydantic request models from `import_schemas.py`, `schemas.py`, and `setup_schemas.py` are reused directly. `PhotoImportOptions` describes upload metadata only; file names and sizes are built from supplied local paths and validated by `UploadImportCreate`.
+- `interfaces/client/imports.py`, `library.py`, and `organization.py` own named business methods and endpoint paths.
+- `cli_commands.py` maps named CLI commands to those methods; `interfaces/mcp/tools/` contains explicit typed MCP functions over the same methods.
+- Pydantic request models from `contracts/` are reused directly; the old backend schema paths are retired. `PhotoImportOptions` describes upload metadata only; file names and sizes are built from supplied local paths and validated by `UploadImportCreate`.
 
 Complex CLI requests use `--data '<JSON>'` or `--data '@request.json'` for UTF-8 JSON. MCP requests use a typed `body` object, except `import_photo`/`import_photos` use optional `options`, and the original `update_asset_parameters` retains `asset_id`, `base_revision`, `parameters`. Published MCP schemas contain the full nested backend contracts, including equipment discriminators and revision fields. Unknown fields fail validation before HTTP.
 

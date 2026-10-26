@@ -7,11 +7,13 @@ from uuid import uuid4
 import httpx
 import pytest
 
-from astrophotoflow.backend.import_schemas import AssetPatch, DatasetMembersCreate, ImportCreate
+from astrophotoflow.contracts.assets import AssetPatch
+from astrophotoflow.contracts.datasets import DatasetMembersCreate
+from astrophotoflow.contracts.imports import ImportCreate
 from astrophotoflow.client import AssetClient, ServiceApiError
-from astrophotoflow.client_domains.imports import PhotoImportOptions
-from astrophotoflow.cli import _parser
-from astrophotoflow.cli_commands import run
+from astrophotoflow.contracts.imports import PhotoImportOptions
+from astrophotoflow.interfaces.cli.main import _parser
+from astrophotoflow.interfaces.cli.commands import run
 
 
 @pytest.fixture
@@ -149,7 +151,7 @@ def test_display_preview_reads_bytes_and_exports_without_scheduling(tmp_path):
 def test_mcp_display_image_uses_sdk_content_conversion(monkeypatch):
     import asyncio
     from base64 import b64decode
-    from astrophotoflow import mcp_server
+    from astrophotoflow.interfaces.mcp import server as mcp_server
 
     jpeg = b"\xff\xd8jpeg\xff\xd9"
     api = AssetClient.__new__(AssetClient)
@@ -163,7 +165,7 @@ def test_mcp_display_image_uses_sdk_content_conversion(monkeypatch):
 
 
 def test_preview_export_preserves_existing_destination_and_cli_fails(client, tmp_path, monkeypatch, capsys):
-    from astrophotoflow import cli
+    from astrophotoflow.interfaces.cli import main as cli
 
     api, _ = client
     output = tmp_path / "original.fits"

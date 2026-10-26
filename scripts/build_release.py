@@ -9,7 +9,7 @@ import tomllib
 
 
 ROOT = Path(__file__).resolve().parents[1]
-DIST = ROOT / "dist"
+DIST = ROOT / ".artifacts" / "dist"
 
 
 def main() -> None:
@@ -19,10 +19,9 @@ def main() -> None:
         raise SystemExit("Native frontend release build requires Node.js 26 and the pnpm version pinned in package.json.")
     env = os.environ.copy()
     env["CI"] = "true"
-    subprocess.run([pnpm, "install", "--frozen-lockfile"], cwd=ROOT, env=env, check=True)
     subprocess.run([pnpm, "--dir", "frontend", "install", "--frozen-lockfile", "--ignore-scripts"], cwd=ROOT, env=env, check=True)
     subprocess.run([pnpm, "run", "build"], cwd=ROOT, env=env, check=True)
-    subprocess.run([sys.executable, "-m", "build", "--installer", "uv", str(ROOT)], check=True)
+    subprocess.run([sys.executable, "-m", "build", "--installer", "uv", "--outdir", str(DIST), str(ROOT)], check=True)
     project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]
     artifacts = sorted(DIST.glob(f"{project['name']}-{project['version']}*"))
     if not any(path.suffix == ".whl" for path in artifacts) or not any(path.name.endswith(".tar.gz") for path in artifacts):

@@ -6,6 +6,8 @@ Phase wall/CPU sums overlap and must not be added to derive elapsed wall time.
 """
 from __future__ import annotations
 
+import ast
+
 import argparse
 import cProfile
 from concurrent.futures import ThreadPoolExecutor
@@ -33,13 +35,47 @@ ARTIFACTS = ROOT / ".artifacts" / "import-phase-benchmark"
 TOKEN = "phase-benchmark-only"
 
 
+def relocate_historical_imports(source):
+    owners = {}
+    for contract in (ROOT / "src/astrophotoflow/contracts").glob("*.py"):
+        for node in ast.parse(contract.read_text(encoding="utf-8")).body:
+            if isinstance(node, (ast.ClassDef, ast.FunctionDef)):
+                owners[node.name] = "astrophotoflow.contracts." + contract.stem
+            elif isinstance(node, ast.Assign) and isinstance(node.targets[0], ast.Name):
+                owners[node.targets[0].id] = "astrophotoflow.contracts." + contract.stem
+    lines = source.splitlines(keepends=True)
+    edits = []
+    for node in ast.walk(ast.parse(source)):
+        if not isinstance(node, ast.ImportFrom) or not node.level:
+            continue
+        if node.module is None:
+            statements = []
+            for alias in node.names:
+                module = "astrophotoflow.core" if alias.name == "dependencies" else "astrophotoflow.modules.data"
+                name = "http" if alias.name == "dependencies" else alias.name
+                statements.append("from " + module + " import " + name + (" as " + (alias.asname or alias.name) if name != (alias.asname or alias.name) else ""))
+        elif node.module in {"schemas", "import_schemas", "setup_schemas"}:
+            statements = ["from " + owners[alias.name] + " import " + alias.name + (" as " + alias.asname if alias.asname else "") for alias in node.names]
+        else:
+            target = {"db": "astrophotoflow.core.database.db", "dependencies": "astrophotoflow.core.http", "errors": "astrophotoflow.core.errors", "config": "astrophotoflow.core.config"}.get(node.module)
+            if target is None:
+                continue
+            names = [alias.name + (" as " + alias.asname if alias.asname else "") for alias in node.names]
+            statements = ["from " + target + " import " + ", ".join(names)]
+        indent = " " * node.col_offset
+        edits.append((node.lineno - 1, node.end_lineno, indent + ("\n" + indent).join(statements) + "\n"))
+    for start, end, statement in sorted(edits, reverse=True):
+        lines[start:end] = [statement]
+    return "".join(lines)
+
+
 def load_modules(revision):
     import astrophotoflow
-    import astrophotoflow.backend as backend
+    import astrophotoflow.modules.data as backend
     assert Path(astrophotoflow.__file__).is_relative_to(ROOT), astrophotoflow.__file__
     modules = {}
     for name in ("fits_preview", "ingestion", "imports"):
-        full_name = f"astrophotoflow.backend.{name}"
+        full_name = f"astrophotoflow.modules.data.{name}"
         if revision == "working":
             module = importlib.import_module(full_name)
         else:
@@ -49,7 +85,7 @@ def load_modules(revision):
             module.__file__ = f"git:{revision}/{relative}"
             sys.modules[full_name] = module
             setattr(backend, name, module)
-            exec(compile(source, module.__file__, "exec"), module.__dict__)
+            exec(compile(relocate_historical_imports(source), module.__file__, "exec"), module.__dict__)
         modules[name] = module
     return modules
 
@@ -91,7 +127,7 @@ class Measurements:
 
 
 def instrument(modules, measurements):
-    from astrophotoflow.backend.db import Database
+    from astrophotoflow.core.database.db import Database
     ingestion = modules["ingestion"]
     for name, phase in (
         ("_read_hash_and_copy", "hash_copy"),
@@ -162,10 +198,10 @@ def worker(args):
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
     from sqlalchemy import func, select
-    from astrophotoflow.backend.db import Database
-    from astrophotoflow.backend.models import AssetTask, AssetTaskItem, AssetVersion
-    from astrophotoflow.backend.schema import database_lock, upgrade_database
-    from astrophotoflow.config import ImportRoot, Settings
+    from astrophotoflow.core.database.db import Database
+    from astrophotoflow.modules.data.models import AssetTask, AssetTaskItem, AssetVersion
+    from astrophotoflow.core.database.schema import database_lock, upgrade_database
+    from astrophotoflow.core.config import ImportRoot, Settings
 
     paths = [Path(path) for path in args.source]
     # Real samples are one direct source, never a corpus directory traversal.

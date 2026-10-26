@@ -13,15 +13,18 @@ flowchart LR
 
 | 模块 | 职责 |
 |---|---|
-| `engine/ComfyUI` | 固定 ComfyUI 0.42.0 源码，核心启动直接注册业务网关 |
-| `frontend` | 固定前端 1.57.1 的完整 Vue workspace、原生产品外壳和画布 |
-| `src/astrophotoflow/frontend` | 已有素材与设置业务组件，由原生应用直接编译，共用 Vue/Pinia |
-| `config` | 配置定位、TOML 解析、workspace 路径 |
-| `backend` | FastAPI、SQLAlchemy/SQLite、导入、资产、组、设备、校准、预览、回收站与迁移 |
-| `comfyui/proxy` | 原生网页服务的受限同源业务网关，不启动领域服务 |
-| `client` / `client_domains` | HTTP 传输、错误与类型化领域操作 |
-| `cli` / `agent_tools` / `mcp_server` | 工作台命令、结构化 CLI 和 58 个 stdio MCP 工具 |
-| `workbench` / `vendor` | 固定源码与 CPU 环境、完整网页资源、进程生命周期 |
+| `engine/ComfyUI` | 固定引擎源码，负责图调度与节点执行 |
+| `frontend` | 完整原生 Vue workspace，共用一份前端锁文件 |
+| `frontend/packages/astrophotoflow-ui` | 按模块组织的私有源码组件包，目前包含数据界面 |
+| `frontend/src/platform/astrophotoflow` | 原生外壳、素材侧栏和公开挂载桥接 |
+| `core` | 配置、进程、认证、数据库基础及迁移 |
+| `modules/data` | 资产、集合、设备资料、导入、预览、校准引用及回收站 |
+| `contracts` | 标准库与 Pydantic 构成的公共模型和纯校验器 |
+| `interfaces` | HTTP 装配、CLI、客户端领域操作、58 个 MCP 工具 |
+| `client.py` / `cli.py` | 保留公开客户端和命令模块入口 |
+| `comfyui/proxy` / `vendor` | 固定同源网关与随包运行资源 |
+
+完整落点、依赖和目标模块状态见[七模块导航](module-map.md)与[文件架构](repository-layout.md)。其余五个业务模块已有文档位置，不表示新增业务功能已经实现。
 
 原生工作台使用 `#/workflows`，启动时打开素材库侧栏。左栏顺序为节点库、素材库、工作流；后两者作为原生 Vue 侧栏注册，和节点库共用分栏、宽度调整与收起行为。设备管理在素材库侧栏内打开，表单保留未保存保护。画布始终挂载。
 

@@ -6,7 +6,7 @@ import aiohttp
 from aiohttp import web
 
 
-from ..config import ConfigurationError, load_settings
+from astrophotoflow.core.config import ConfigurationError, load_settings
 BASE_PATH = "/astrophotoflow/api/v1"
 
 # Public route, corresponding API path, and method. No wildcard proxy route is registered.

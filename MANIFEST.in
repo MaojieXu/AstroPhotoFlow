@@ -1,26 +1,19 @@
 include LICENSE
-include README.md
+include README.md AGENTS.md
 include uv.lock
 include .env.example config.example.toml
-include package.json pnpm-lock.yaml vitest.config.ts tsconfig.json
-recursive-include src/astrophotoflow/backend *.py *.ini
-recursive-include src/astrophotoflow/frontend *.ts *.vue *.css
+include package.json
+include pnpm-workspace.yaml
+recursive-include src/astrophotoflow *.py *.ini *.md
 recursive-include src/astrophotoflow/vendor *.zip *.json *.lock
 include src/astrophotoflow/vendor/comfyui-frontend-LICENSE
-graft build/frontend
 graft engine/ComfyUI
-graft frontend
-prune frontend/node_modules
-prune frontend/packages/*/node_modules
-prune frontend/apps/*/node_modules
-prune frontend/tools/*/node_modules
-prune frontend/.git
 global-exclude .env
-include scripts/build_release.py
-include scripts/build_engine.py
+recursive-include scripts *.py
 include .agents/skills/astrophotoflow-library/SKILL.md
-include docs/development/library-agent-tools.md
+graft docs
 global-exclude *.py[cod]
 prune web
 prune tests
 prune .artifacts
+graft .artifacts/build/frontend

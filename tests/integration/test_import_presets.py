@@ -6,9 +6,9 @@ from fastapi.testclient import TestClient
 import numpy as np
 import pytest
 
-from astrophotoflow.backend.api import create_app
-from astrophotoflow.backend.schema import upgrade_database
-from astrophotoflow.config import Settings
+from astrophotoflow.interfaces.http.app import create_app
+from astrophotoflow.core.database.schema import upgrade_database
+from astrophotoflow.core.config import Settings
 
 
 @pytest.mark.parametrize("manual_classification", [None, {"frame_class": "masterframe", "frame_type": "flat"},

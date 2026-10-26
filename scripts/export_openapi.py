@@ -4,8 +4,8 @@ import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from astrophotoflow.backend.api import create_app
-from astrophotoflow.config import Settings
+from astrophotoflow.interfaces.http.app import create_app
+from astrophotoflow.core.config import Settings
 
 
 def main() -> None:

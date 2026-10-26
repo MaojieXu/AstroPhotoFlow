@@ -10,22 +10,23 @@
 
 ```powershell
 $env:UV_PROJECT_ENVIRONMENT = "$PWD/.artifacts/venvs/dev"
-uv sync --locked --extra dev --python 3.12
-pnpm install --frozen-lockfile
 pnpm --dir frontend install --frozen-lockfile --ignore-scripts
 pnpm build
+uv sync --locked --extra dev --python 3.12
 uv run --locked --no-sync pytest -q
 pnpm test
 ```
 
-`engine/ComfyUI` 为固定版本引擎源码，`frontend` 为原生前端完整 workspace，`src/astrophotoflow` 保存领域服务、客户端、启动器及已有业务组件。根前端测试继续覆盖业务组件；产品构建使用原生前端，共用 Vue/Pinia。
+`engine/ComfyUI` 为固定版本引擎源码，`frontend` 为原生前端完整 workspace，`src/astrophotoflow` 保存按模块组织的平台 Python 源码、客户端与启动器。业务界面与组件测试位于 frontend/packages/astrophotoflow-ui，产品构建共用原生 Vue/Pinia；模块位置见 docs/architecture/module-map.md。
+
+七模块源码落点见[模块导航](docs/architecture/module-map.md)，文件迁移与边界见[文件架构](docs/architecture/repository-layout.md)。
 
 详细入口见[文档索引](docs/README.md)、[开发流程](docs/development/README.md)及[原生网页架构与验收](docs/development/native-web.md)。
 
 ## 运行与发行
 
 ```powershell
-uv run --locked --no-sync apf init --workspace .artifacts/workspaces/redesign --service-port 32390 --comfyui-port 32388 --frontend-assets build/frontend --no-activate
+uv run --locked --no-sync apf init --workspace .artifacts/workspaces/redesign --service-port 32390 --comfyui-port 32388 --frontend-assets .artifacts/build/frontend --no-activate
 uv run --locked --no-sync apf start --workspace .artifacts/workspaces/redesign --no-activate
 uv run --locked --no-sync apf status --workspace .artifacts/workspaces/redesign
 uv run --locked --no-sync apf stop --workspace .artifacts/workspaces/redesign

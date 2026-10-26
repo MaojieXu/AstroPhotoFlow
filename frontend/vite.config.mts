@@ -628,7 +628,7 @@ export default defineConfig({
   ],
 
   build: {
-    outDir: resolve('../build/frontend'),
+    outDir: resolve('../.artifacts/build/frontend'),
     emptyOutDir: true,
     minify: SHOULD_MINIFY,
     target: 'es2022',
@@ -815,7 +815,6 @@ export default defineConfig({
   resolve: {
     dedupe: ['vue', 'pinia'],
     alias: {
-      '@astrophotoflow': resolve('../src/astrophotoflow/frontend'),
       '@/base/credits/comfyCredits':
         '/packages/shared-frontend-utils/src/creditsUtil.ts',
       '@/utils/formatUtil': '/packages/shared-frontend-utils/src/formatUtil.ts',

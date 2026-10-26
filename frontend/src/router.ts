@@ -1,7 +1,7 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
 
 import { useUserStore } from '@/stores/userStore'
-import NativeShell from '@/views/NativeShell.vue'
+import { NativeShell } from '@/platform/astrophotoflow'
 
 export default createRouter({
   history: createWebHashHistory(),

@@ -20,7 +20,6 @@
     "allowJs": true,
     "verbatimModuleSyntax": true,
     "paths": {
-      "@astrophotoflow/*": ["../src/astrophotoflow/frontend/*"],
       "@/*": ["./src/*"],
       "@e2e/*": ["./browser_tests/*"],
       "@/utils/formatUtil": [
@@ -43,7 +42,7 @@
       "@testing-library/jest-dom/vitest"
     ],
     "outDir": "./dist",
-    "rootDir": "../"
+    "rootDir": "."
   },
   "include": [
     "__mocks__/**/*.ts",

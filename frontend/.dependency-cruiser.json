@@ -6,6 +6,36 @@
       "severity": "warn",
       "from": {},
       "to": { "circular": true }
+    },
+    {
+      "name": "apf-ui-does-not-import-native-application",
+      "severity": "error",
+      "from": {
+        "path": "^packages/astrophotoflow-ui/src/"
+      },
+      "to": {
+        "path": "^src/"
+      }
+    },
+    {
+      "name": "apf-native-consumes-ui-public-entry",
+      "severity": "error",
+      "from": {
+        "path": "^src/"
+      },
+      "to": {
+        "path": "^packages/astrophotoflow-ui/src/(?!index\\.ts$)"
+      }
+    },
+    {
+      "name": "apf-module-data-public-entry",
+      "severity": "error",
+      "from": {
+        "path": "^packages/astrophotoflow-ui/src/modules/(?!data/)"
+      },
+      "to": {
+        "path": "^packages/astrophotoflow-ui/src/modules/data/(?!index\\.ts$)"
+      }
     }
   ],
   "options": {

@@ -6,12 +6,12 @@ from typing import Any
 import httpx
 from pydantic import BaseModel
 
-from .client_domains.imports import ImportOperations
-from .client_domains.library import LibraryOperations
-from .client_domains.organization import OrganizationOperations
+from astrophotoflow.interfaces.client.imports import ImportOperations
+from astrophotoflow.interfaces.client.library import LibraryOperations
+from astrophotoflow.interfaces.client.organization import OrganizationOperations
 
 
-from .config import load_settings, resolve_config_path
+from astrophotoflow.core.config import load_settings, resolve_config_path
 
 
 class ServiceApiError(RuntimeError):

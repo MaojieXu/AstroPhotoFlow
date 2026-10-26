@@ -16,7 +16,7 @@ workspace/
   logs/
   context/
   comfyui-user/
-  comfyui-data/custom_nodes/AstroPhotoFlow/
+  comfyui-data/
   run/
 ```
 

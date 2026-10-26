@@ -29,7 +29,6 @@ jobs:
           enable-cache: false
       - name: Build frontend
         run: |
-          corepack pnpm install --frozen-lockfile
           corepack pnpm --dir frontend install --frozen-lockfile --ignore-scripts
           corepack pnpm build
       - name: Prepare Python project
@@ -40,7 +39,7 @@ jobs:
         run: corepack pnpm test
       - name: Build and verify distributions
         run: |
-          uv run --locked --no-sync python -m build --installer uv
+          uv run --locked --no-sync python -m build --installer uv --outdir .artifacts/dist
           uv run --locked --no-sync python scripts/verify_distribution.py
       - uses: actions/upload-artifact@v4
         if: always()
