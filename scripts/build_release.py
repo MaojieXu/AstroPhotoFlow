@@ -13,14 +13,15 @@ DIST = ROOT / "dist"
 
 
 def main() -> None:
-    corepack = shutil.which("corepack.cmd" if os.name == "nt" else "corepack") or shutil.which("corepack")
+    pnpm = shutil.which("pnpm.cmd" if os.name == "nt" else "pnpm")
     node = shutil.which("node") or shutil.which("node.exe")
-    if corepack is None or node is None:
-        raise SystemExit("Frontend release build requires Node.js and Corepack for the pnpm version pinned in package.json.")
+    if pnpm is None or node is None:
+        raise SystemExit("Native frontend release build requires Node.js 26 and the pnpm version pinned in package.json.")
     env = os.environ.copy()
     env["CI"] = "true"
-    subprocess.run([corepack, "pnpm", "install", "--frozen-lockfile"], cwd=ROOT, env=env, check=True)
-    subprocess.run([corepack, "pnpm", "run", "build"], cwd=ROOT, env=env, check=True)
+    subprocess.run([pnpm, "install", "--frozen-lockfile"], cwd=ROOT, env=env, check=True)
+    subprocess.run([pnpm, "--dir", "frontend", "install", "--frozen-lockfile", "--ignore-scripts"], cwd=ROOT, env=env, check=True)
+    subprocess.run([pnpm, "run", "build"], cwd=ROOT, env=env, check=True)
     subprocess.run([sys.executable, "-m", "build", "--installer", "uv", str(ROOT)], check=True)
     project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]
     artifacts = sorted(DIST.glob(f"{project['name']}-{project['version']}*"))

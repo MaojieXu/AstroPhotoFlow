@@ -27,6 +27,19 @@ from astrophotoflow.comfyui.proxy import ROUTES
 
 TOKEN="test-token"
 def auth(): return {"Authorization":f"Bearer {TOKEN}"}
+
+
+def test_internal_shutdown_requires_token_and_is_not_a_public_api(service):
+    _, client, _ = service
+    calls = []
+    client.app.state.shutdown = lambda: calls.append("stop")
+    assert client.post("/internal/shutdown").status_code == 401
+    assert calls == []
+    assert "/internal/shutdown" not in client.app.openapi()["paths"]
+    assert client.post("/internal/shutdown", headers=auth()).json() == {"status": "stopping"}
+    assert calls == ["stop"]
+
+
 @pytest.fixture
 def service(tmp_path):
     settings=Settings("127.0.0.1",8190,tmp_path,("http://127.0.0.1:8188",))
@@ -950,6 +963,7 @@ def test_openapi_snapshot_matches_service_and_proxy_allowlist(service):
     assert not any(
         method in {"POST", "PATCH", "PUT", "DELETE"} and "/library/assets/" in path and "/versions" in path
         and not (method == "POST" and path == "/library/assets/{asset_id}/versions/{version_id}/previews/display")
+        and not (method == "POST" and path == "/library/assets/{asset_id}/versions/{version_id}/previews/display/auto-stretch")
         for method, path, _ in ROUTES
     )
 

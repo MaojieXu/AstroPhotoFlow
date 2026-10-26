@@ -4,13 +4,15 @@
   "type": "module",
   "packageManager": "pnpm@11.13.1",
   "engines": {
-    "node": ">=22.13"
+    "node": ">=26.8.2 <27",
+    "pnpm": ">=11.3"
   },
   "scripts": {
     "typecheck": "vue-tsc --noEmit",
-    "build": "vue-tsc --noEmit && vite build",
-    "build:watch": "vite build --watch",
+    "build": "python scripts/build_engine.py && pnpm --dir frontend build",
+    "build:watch": "pnpm --dir frontend dev",
     "test": "vitest run --config vitest.config.ts",
+    "test:browser": "node tests/browser/native-web.mjs",
     "test:watch": "vitest --config vitest.config.ts"
   },
   "dependencies": {

@@ -65,7 +65,9 @@ def main() -> None:
             interrupted = mark_interrupted_tasks(app.state.database)
             if interrupted:
                 print(f"interrupted_tasks: {interrupted}")
-            uvicorn.run(app, host=settings.host, port=settings.port, log_level="info")
+            server = uvicorn.Server(uvicorn.Config(app, host=settings.host, port=settings.port, log_level="info"))
+            app.state.shutdown = lambda: setattr(server, "should_exit", True)
+            server.run()
     except (ConfigurationError, SchemaError, OSError) as exc:
         print(str(exc), file=sys.stderr)
         raise SystemExit(1) from exc

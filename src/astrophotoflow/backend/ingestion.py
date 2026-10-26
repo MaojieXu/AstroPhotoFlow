@@ -370,7 +370,7 @@ def _ordinary_image(path: Path, stretch: tuple[float, float] | None = None) -> t
         return image.convert("RGB").copy(), None
 
 
-def _xisf_image(path: Path, stretch: tuple[float, float] | None = None) -> tuple[Image.Image, dict]:
+def _xisf_pixels(path: Path) -> np.ndarray:
     from xisf import XISF
 
     reader = XISF(str(path))
@@ -388,6 +388,11 @@ def _xisf_image(path: Path, stretch: tuple[float, float] | None = None) -> tuple
             raise ValueError("XISF RGB 图像必须包含三个通道。")
     else:
         raise ValueError(f"不支持 XISF 色彩布局：{metadata.get('colorSpace', 'unknown')}")
+    return array
+
+
+def _xisf_image(path: Path, stretch: tuple[float, float] | None = None) -> tuple[Image.Image, dict]:
+    array = _xisf_pixels(path)
     low, high = stretch if stretch is not None else stretch_bounds(array)
     return _display(array, (low, high)), {"stretch_low": low, "stretch_high": high}
 

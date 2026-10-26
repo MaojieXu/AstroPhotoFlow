@@ -66,6 +66,171 @@ def picture(path, width=1600, height=1200):
     Image.new("RGB", (width, height), (20, 80, 160)).save(path)
 
 
+@pytest.mark.parametrize("category", ["png", "fits", "fits-rgb", "xisf", "tif"])
+def test_auto_stretch_updates_both_previews_and_rebuilds_without_accumulating(service, category):
+    settings, app, client, root = service
+    path = root / f"photo.{'fits' if category == 'fits-rgb' else category}"
+    mono = np.random.default_rng(123).normal(100, 3, (240, 320)).astype(np.float32)
+    mono[::15, ::15] = 1500
+    if category == "png":
+        pixels = np.clip(mono[..., None] * [.5, 1, .8], 0, 255).astype(np.uint8)
+        Image.fromarray(pixels).save(path)
+    elif category == "fits":
+        pixels = mono
+        fits.PrimaryHDU(pixels).writeto(path)
+    elif category == "fits-rgb":
+        pixels = mono[..., None] * np.asarray([2, 4, 1], dtype=np.float32)
+        hdu = fits.PrimaryHDU(np.moveaxis(pixels, -1, 0))
+        hdu.header["CTYPE3"] = "RGB"
+        hdu.writeto(path)
+    elif category == "tif":
+        pixels = mono.astype(np.uint16)
+        Image.fromarray(pixels).save(path)
+    else:
+        pixels = mono[..., None] * np.asarray([2, 4, 1], dtype=np.float32)
+        XISF.write(str(path), pixels)
+    original = path.read_bytes()
+    item = imported(client, path.name)
+    url = base(item)
+    old_small = client.get(url + "/thumbnail", headers=AUTH).content
+    client.post(url + "/display", headers=AUTH, json={})
+    assert finished(client, url)["stretch"] is None
+    response = client.post(url + "/display/auto-stretch", headers=AUTH, json={})
+    assert response.status_code in {200, 202}, response.text
+    parameters = finished(client, url)["stretch"]
+    assert parameters == previews.calculate_stretch(pixels)
+    assert len(parameters["white_balance"]) == (3 if pixels.ndim == 3 else 1)
+    changed = client.get(url + "/display", headers=AUTH).content
+    expected = BytesIO()
+    previews.render_stretch(pixels, parameters).save(expected, format="JPEG", quality=85, optimize=False)
+    assert changed == expected.getvalue()
+    assert client.get(url + "/thumbnail", headers=AUTH).content != old_small
+    assert client.post(url + "/display", headers=AUTH, json={}).json()["stretch"] == parameters
+    for _ in range(2):
+        client.post(url + "/display/auto-stretch", headers=AUTH, json={})
+        assert finished(client, url)["stretch"] == parameters
+        assert client.get(url + "/display", headers=AUTH).content == changed
+    with app.state.database.write_session() as session:
+        display = session.scalar(select(Preview).where(Preview.asset_version_id == item["asset_version_id"], Preview.size == "display"))
+        thumbnail = session.scalar(select(Preview).where(Preview.asset_version_id == item["asset_version_id"], Preview.size == "thumbnail"))
+        assert display.display_parameters == thumbnail.display_parameters
+        assert thumbnail.display_parameters["auto_stretch"] == parameters
+        with Image.open(settings.data_dir / thumbnail.storage_path) as image:
+            assert max(image.size) <= 100
+        (settings.data_dir / display.storage_path).unlink()
+    client.post(url + "/display", headers=AUTH, json={})
+    assert finished(client, url)["stretch"] == parameters
+    assert client.get(url + "/display", headers=AUTH).content == changed
+    assert path.read_bytes() == original
+    app.state.import_workers[1].submit(lambda: None).result(5)
+    with app.state.database.read_session() as session:
+        version = session.get(AssetVersion, item["asset_version_id"])
+        assert (settings.data_dir / version.storage_location).read_bytes() == original
+        assert len(list((settings.data_dir / "previews" / version.id).glob("*.jpg"))) == 2
+
+
+def test_auto_stretch_uses_this_photo_instead_of_its_group_reference(service):
+    _, app, client, root = service
+    first = np.random.default_rng(1).normal(30, 1, (100, 120)).astype(np.float32)
+    second = np.random.default_rng(2).normal(900, 7, (100, 120)).astype(np.float32)
+    first[::10, ::10], second[::10, ::10] = 1000, 10000
+    fits.PrimaryHDU(first).writeto(root / "a.fits")
+    fits.PrimaryHDU(second).writeto(root / "b.fits")
+    accepted = client.post("/api/v1/imports", headers=AUTH, json={
+        "sources": [{"root_id": "science", "path": ""}], "storage_mode": "managed",
+    })
+    task = client.get("/api/v1/asset-tasks/" + accepted.json()["task_id"], headers=AUTH).json()
+    a, b = task["items"]
+    original_small = client.get(base(a) + "/thumbnail", headers=AUTH).content
+    with app.state.database.read_session() as session:
+        original_recipe = dict(session.scalar(select(Preview).where(Preview.asset_version_id == a["asset_version_id"])).display_parameters)
+        other_recipe = session.scalar(select(Preview).where(Preview.asset_version_id == b["asset_version_id"])).display_parameters
+        assert other_recipe["stretch_low"] == original_recipe["stretch_low"]
+    client.post(base(b) + "/display/auto-stretch", headers=AUTH, json={})
+    assert finished(client, base(b))["stretch"] == previews.calculate_stretch(second)
+    assert client.get(base(a) + "/thumbnail", headers=AUTH).content == original_small
+    with app.state.database.read_session() as session:
+        assert session.scalar(select(Preview).where(Preview.asset_version_id == a["asset_version_id"])).display_parameters == original_recipe
+
+
+def test_auto_stretch_scope_and_failure_keep_old_thumbnail(service, monkeypatch):
+    _, app, client, root = service
+    picture(root / "a.png")
+    picture(root / "b.png")
+    item, other = imported(client, "a.png"), imported(client, "b.png")
+    url = base(item)
+    original_small = client.get(url + "/thumbnail", headers=AUTH).content
+    assert client.post(url.replace(item["asset_id"], other["asset_id"]) + "/display/auto-stretch", headers=AUTH, json={}).status_code == 404
+    assert client.post(url + "/display/auto-stretch", json={}).status_code == 401
+    decode = app.state.display_previews._pixels
+    def broken(job):
+        raise ValueError("auto stretch decode failure")
+    monkeypatch.setattr(app.state.display_previews, "_pixels", broken)
+    client.post(url + "/display/auto-stretch", headers=AUTH, json={})
+    assert finished(client, url)["status"] == "failed"
+    assert client.get(url + "/thumbnail", headers=AUTH).content == original_small
+    monkeypatch.setattr(app.state.display_previews, "_pixels", decode)
+    client.post(url + "/display/auto-stretch", headers=AUTH, json={})
+    assert finished(client, url)["stretch"]["algorithm"] == "auto-mtf-1"
+
+
+def test_auto_stretch_coalesces_in_flight_requests_and_reuses_saved_result(service, monkeypatch):
+    settings, app, client, root = service
+    picture(root / "a.png")
+    item = imported(client, "a.png")
+    url = base(item)
+    client.post(url + "/display", headers=AUTH, json={})
+    assert finished(client, url)["status"] == "available"
+    original = client.get(url + "/thumbnail", headers=AUTH).content
+    entered, release = Event(), Event()
+    decode = app.state.display_previews._pixels
+    calls = []
+    def blocked(job):
+        calls.append(1)
+        entered.set()
+        assert release.wait(5)
+        return decode(job)
+    monkeypatch.setattr(app.state.display_previews, "_pixels", blocked)
+    try:
+        client.post(url + "/display/auto-stretch", headers=AUTH, json={})
+        assert entered.wait(5)
+        duplicate = client.post(url + "/display/auto-stretch", headers=AUTH, json={})
+        assert duplicate.status_code == 202 and duplicate.json()["status"] == "generating"
+        assert client.get(url + "/thumbnail", headers=AUTH).content == original
+    finally:
+        release.set()
+    parameters = finished(client, url)["stretch"]
+    assert client.post(url + "/display/auto-stretch", headers=AUTH, json={}).json()["stretch"] == parameters
+    assert calls == [1]
+
+
+def test_auto_stretch_thumbnail_publication_is_atomic(service, monkeypatch):
+    settings, app, client, root = service
+    picture(root / "a.png")
+    item = imported(client, "a.png")
+    url = base(item)
+    client.post(url + "/display", headers=AUTH, json={})
+    assert finished(client, url)["status"] == "available"
+    old_small = client.get(url + "/thumbnail", headers=AUTH).content
+    app.state.import_workers[1].submit(lambda: None).result(5)
+    with app.state.database.read_session() as session:
+        old_paths = {row.size: row.storage_path for row in session.scalars(select(Preview).where(Preview.asset_version_id == item["asset_version_id"]))}
+    replace = previews.os.replace
+    def fail_thumbnail(src, dst):
+        if "-thumbnail-" in str(dst):
+            raise OSError("thumbnail publication failure")
+        return replace(src, dst)
+    monkeypatch.setattr(previews.os, "replace", fail_thumbnail)
+    client.post(url + "/display/auto-stretch", headers=AUTH, json={})
+    assert finished(client, url)["status"] == "failed"
+    assert client.get(url + "/thumbnail", headers=AUTH).content == old_small
+    with app.state.database.read_session() as session:
+        for row in session.scalars(select(Preview).where(Preview.asset_version_id == item["asset_version_id"])):
+            assert row.storage_path == old_paths[row.size]
+            assert "auto_stretch" not in row.display_parameters
+    assert len(list((settings.data_dir / "previews" / item["asset_version_id"]).glob("*.jpg"))) == 2
+
+
 @pytest.mark.parametrize("kind", ["image", "small", "depth", "xisf", "mono", "bayer", "planar", "interleaved", "video"])
 def test_display_is_lazy_sized_cached_and_keeps_thumbnail(service, monkeypatch, kind):
     settings, app, client, root = service
@@ -316,6 +481,14 @@ def test_project_reference_uses_pinned_private_version_and_rejects_wrong_scope(s
     assert state["asset_version_id"] == old["asset_version_id"]
     with Image.open(BytesIO(client.get(project_base + "/display", headers=AUTH).content)) as image:
         assert image.size == (240, 160)
+    assert client.post(project_base + "/display/auto-stretch", headers=AUTH, json={}).status_code in {200, 202}
+    parameters = finished(client, project_base)["stretch"]
+    assert parameters["algorithm"] == "auto-mtf-1"
+    assert client.post(base(old) + "/display/auto-stretch", headers=AUTH, json={}).status_code == 404
+    with app.state.database.read_session() as session:
+        old_thumb = session.scalar(select(Preview).where(Preview.asset_version_id == old["asset_version_id"], Preview.size == "thumbnail"))
+        assert old_thumb.display_parameters["auto_stretch"] == parameters
+        assert not session.scalar(select(Preview).where(Preview.asset_version_id == current_id))
     wrong = str(uuid4())
     assert client.get(project_base.replace(project["id"], wrong) + "/display/status", headers=AUTH).status_code == 404
 

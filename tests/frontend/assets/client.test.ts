@@ -10,6 +10,14 @@ const response = (value: unknown, status = 200) =>
   new Response(JSON.stringify(value), { status, headers: { 'Content-Type': 'application/json' } })
 
 describe('AstroPhotoFlow API client', () => {
+  it('fetches updated preview bytes without cache and still enforces JPEG', async () => {
+    const fetchApi = vi.fn().mockImplementation(async () => new Response('pixels', {headers: {'Content-Type':'image/jpeg'}}))
+    const client = createApiClient(fetchApi)
+    await expect(client.getBlob('/display')).resolves.toMatchObject({type:'image/jpeg',size:6})
+    expect(fetchApi).toHaveBeenLastCalledWith('/display',{cache:'no-store'})
+    fetchApi.mockResolvedValue(new Response('pixels', {headers: {'Content-Type':'image/png'}}))
+    await expect(client.getBlob('/display')).rejects.toMatchObject({kind:'contract'})
+  })
   it('accepts a real empty page response', async () => {
     const client = createApiClient(vi.fn().mockResolvedValue(response({ items: [], total: 0, limit: 50, offset: 0 })))
     await expect(client.get('/projects', pageSchema(projectSchema))).resolves.toEqual({ items: [], total: 0, limit: 50, offset: 0 })

@@ -62,7 +62,7 @@ export function createApiClient(fetchApi: FetchApi) {
   async function getBlob(path: string): Promise<Blob> {
     let response: Response
     try {
-      response = await fetchApi(path)
+      response = await fetchApi(path, {cache: 'no-store'})
     } catch (error) {
       if (error instanceof TypeError) throw new ApiClientError('无法连接 AstroPhotoFlow 服务。', 'network')
       throw error

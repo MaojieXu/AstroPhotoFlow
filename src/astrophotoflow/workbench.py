@@ -36,7 +36,7 @@ def _app_data() -> Path:
 
 
 def _runtime_dir() -> Path:
-    return _app_data() / "runtime" / "0.1.0"
+    return _app_data() / "runtime" / "native-web-0.1.0"
 
 
 def _active_config() -> Path:
@@ -83,21 +83,14 @@ def _run(command: list[str], env: dict[str, str] | None = None) -> None:
     subprocess.run(command, check=True, env=env)
 
 
-def install_extension(workspace: Path, frontend_assets: Path | None = None) -> Path:
-    """Install this checkout/package's plugin into this workspace only."""
+def install_frontend(workspace: Path, frontend_assets: Path | None = None) -> Path:
     package = Path(__file__).resolve().parent
-    plugin = workspace / "comfyui-data" / "custom_nodes" / "AstroPhotoFlow"
-    shutil.copytree(package / "comfyui" / "extension", plugin, dirs_exist_ok=True,
-                    ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
-    if frontend_assets is not None:
-        for name in ("astrophotoflow.js", "astrophotoflow.css"):
-            source = frontend_assets / name
-            if not source.is_file():
-                raise WorkbenchError(f"前端构建资源不存在：{source}")
-        (plugin / "assets").mkdir(exist_ok=True)
-        for name in ("astrophotoflow.js", "astrophotoflow.css"):
-            shutil.copy2(frontend_assets / name, plugin / "assets" / name)
-    return plugin
+    source = frontend_assets if frontend_assets is not None else package / "web"
+    if not (source / "index.html").is_file():
+        raise WorkbenchError(f"原生网页资源不存在：{source / 'index.html'}")
+    target = workspace / "web"
+    shutil.copytree(source, target, dirs_exist_ok=True)
+    return target
 
 
 def initialize(workspace: Path, service_port: int = 8190, comfyui_port: int = 8188, *,
@@ -119,8 +112,13 @@ def initialize(workspace: Path, service_port: int = 8190, comfyui_port: int = 81
     if manifest["sha256"] != digest or manifest["commit"] != COMFY_COMMIT:
         raise WorkbenchError("内置 ComfyUI 源码归档与固定来源清单不匹配。")
 
-    for relative in ("data", "input", "output", "logs", "context", "comfyui-user", "run"):
+    for relative in ("data", "input", "output", "logs", "context", "comfyui-user", "comfyui-data", "run"):
         (workspace / relative).mkdir(parents=True, exist_ok=True)
+    for relative in ("workflows", "subgraphs"):
+        (workspace / "comfyui-user/default" / relative).mkdir(parents=True, exist_ok=True)
+    templates = workspace / "comfyui-user/default/comfy.templates.json"
+    if not templates.exists():
+        templates.write_text("[]\n", encoding="utf-8")
     if not config_path.exists():
         config_path.write_text(
             "[server]\n"
@@ -134,26 +132,26 @@ def initialize(workspace: Path, service_port: int = 8190, comfyui_port: int = 81
     runtime = _runtime_dir()
     comfyui = runtime / "ComfyUI"
     runtime.mkdir(parents=True, exist_ok=True)
-    commit_marker = comfyui / ".apf-commit"
+    commit_marker = comfyui / ".apf-native-build"
     env_dir = runtime / "comfyui-env"
     comfy_python = env_dir / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
     if reuse_runtime:
-        if not commit_marker.is_file() or commit_marker.read_text(encoding="utf-8").strip() != COMFY_COMMIT or not comfy_python.is_file():
+        if not commit_marker.is_file() or commit_marker.read_text(encoding="utf-8").strip() != digest or not comfy_python.is_file():
             raise WorkbenchError("可复用的固定 CPU runtime 不完整；请先正常执行 apf init。")
-        install_extension(workspace, frontend_assets)
+        install_frontend(workspace, frontend_assets)
         if activate:
             _activate_workspace(config_path)
         return config_path
     uv_env = _uv_environment(runtime)
-    if not commit_marker.is_file() or commit_marker.read_text(encoding="utf-8").strip() != COMFY_COMMIT:
+    if not commit_marker.is_file() or commit_marker.read_text(encoding="utf-8").strip() != digest:
         if comfyui.exists():
             shutil.rmtree(comfyui)
         comfyui.mkdir(parents=True)
         with zipfile.ZipFile(source_archive) as archive:
             archive.extractall(runtime)
-        (comfyui / ".apf-commit").write_text(COMFY_COMMIT, encoding="utf-8")
+        commit_marker.write_text(digest, encoding="utf-8")
 
-    install_extension(workspace, frontend_assets)
+    install_frontend(workspace, frontend_assets)
     if not (env_dir / ("Scripts/python.exe" if os.name == "nt" else "bin/python")).is_file():
         _run([_uv(), "venv", "--managed-python", "--python", "3.12", str(env_dir)], env=uv_env)
     comfy_python = env_dir / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
@@ -253,6 +251,15 @@ def _health(config_path: Path) -> bool:
         return False
 
 
+def _web_health(url: str) -> bool:
+    try:
+        page = httpx.get(url, timeout=1)
+        health = httpx.get(url + "/astrophotoflow/api/v1/health", headers={"Origin": url}, timeout=1)
+        return page.status_code == 200 and "AstroPhotoFlow" in page.text and health.status_code == 200
+    except httpx.HTTPError:
+        return False
+
+
 def start(workspace_config: Path | None = None, *, activate: bool = True) -> str:
     config_path = (workspace_config or _active_config()).resolve()
     workspace = _workspace_for_config(config_path)
@@ -273,14 +280,13 @@ def start(workspace_config: Path | None = None, *, activate: bool = True) -> str
     runtime = _runtime_dir()
     comfyui = runtime / "ComfyUI"
     base_dir = workspace / "comfyui-data"
-    if not (base_dir / "custom_nodes" / "AstroPhotoFlow" / "__init__.py").is_file():
-        raise WorkbenchError("当前 workspace 未安装插件；请先运行 apf init。")
+    if not (workspace / "web" / "index.html").is_file():
+        raise WorkbenchError("当前 workspace 缺少原生网页资源；请先运行 apf init。")
     env = os.environ.copy()
     env.update({
         "ASTROPHOTOFLOW_CONFIG": str(config_path),
         "APF_WORKSPACE": str(workspace),
-        "APF_PACKAGE_ROOT": str(package_root),
-        "APF_WORKBENCH_MANAGED": "1",
+        "PYTHONPATH": str(package_root.parent),
     })
     service_command = [sys.executable, "-m", "astrophotoflow.backend.cli", "serve"]
     comfy_python = runtime / "comfyui-env" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
@@ -288,6 +294,7 @@ def start(workspace_config: Path | None = None, *, activate: bool = True) -> str
         str(comfy_python), str(comfyui / "main.py"), "--cpu", "--listen", "127.0.0.1", "--port", str(comfy_port),
         "--base-directory", str(base_dir), "--user-directory", str(workspace / "comfyui-user"),
         "--input-directory", str(workspace / "input"), "--output-directory", str(workspace / "output"),
+        "--front-end-root", str(workspace / "web"), "--disable-all-custom-nodes", "--disable-api-nodes",
     ]
     launched: list[subprocess.Popen] = []
     records: list[dict] = []
@@ -305,18 +312,15 @@ def start(workspace_config: Path | None = None, *, activate: bool = True) -> str
         launched.append(comfy)
         records.append(_record(comfy, "comfyui", workspace, comfy_command))
         deadline = time.monotonic() + 180
-        while time.monotonic() < deadline and comfy.poll() is None:
-            try:
-                with socket.create_connection(("127.0.0.1", comfy_port), timeout=0.5):
-                    break
-            except OSError:
-                time.sleep(0.5)
-        else:
-            raise WorkbenchError("ComfyUI 未能在 180 秒内启动；请查看 workspace/logs/comfyui.log。")
+        web_url = f"http://127.0.0.1:{comfy_port}"
+        while time.monotonic() < deadline and comfy.poll() is None and not _web_health(web_url):
+            time.sleep(0.5)
+        if comfy.poll() is not None or not _web_health(web_url):
+            raise WorkbenchError("原生网页未能在 180 秒内启动；请查看 workspace/logs/comfyui.log。")
         _state_path(workspace).write_text(json.dumps({"processes": records}, indent=2), encoding="utf-8")
         if activate:
             _activate_workspace(config_path)
-        return f"工作台已启动：资产服务 {service_host}:{service_port}，ComfyUI 127.0.0.1:{comfy_port}。"
+        return f"AstroPhotoFlow 已启动：{web_url}/#/library"
     except (OSError, subprocess.SubprocessError) as exc:
         for process in reversed(launched):
             if process.poll() is None:
@@ -341,9 +345,19 @@ def stop(workspace_config: Path | None = None) -> str:
     config_path = (workspace_config or _active_config()).resolve()
     workspace = _workspace_for_config(config_path)
     records = _read_state(workspace).get("processes", [])
+    native = any(record["role"] == "comfyui" and "--front-end-root" in record["command"] for record in records)
     for record in reversed(records):
         process = _identity(record)
         if process is None:
+            continue
+        if native and record["role"] == "asset-service":
+            settings = load_settings(config_path)
+            token = settings.token_path.read_text(encoding="utf-8").strip()
+            httpx.post(settings.service_url + "/internal/shutdown", headers={"Authorization": f"Bearer {token}"}, timeout=5).raise_for_status()
+            try:
+                process.wait(timeout=30)
+            except psutil.TimeoutExpired as exc:
+                raise WorkbenchError("后台任务仍在排空，进程记录已保留；稍后再次运行 apf stop。") from exc
             continue
         family = []
         for member in [process, *process.children(recursive=True)]:

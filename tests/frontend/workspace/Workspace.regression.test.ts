@@ -4,6 +4,7 @@ import { nextTick } from 'vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiClientError } from '@frontend/assets/client'
 import App from '@frontend/App.vue'
+import PhotoPreviewDialog from '@frontend/workspace/PhotoPreviewDialog.vue'
 import { useWorkspaceStore } from '@frontend/workspace/store'
 
 const { get, getBlob, send } = vi.hoisted(() => ({ get: vi.fn(), getBlob: vi.fn(), send: vi.fn() }))
@@ -184,12 +185,17 @@ describe('first-stage regression fixes', () => {
     expect(thumb.element.tagName).toBe('BUTTON')
     expect(thumb.get('img').attributes('src')).toBe('blob:thumb')
     const requests=getBlob.mock.calls.length
-    send.mockResolvedValue({asset_version_id:version.id,size:'display',status:'available',width:240,height:160,error:null})
+    send.mockResolvedValue({asset_version_id:version.id,size:'display',status:'available',width:240,height:160,error:null,
+      stretch:{algorithm:'auto-mtf-1',input_offset:0,white_balance:[1],shadows:0,highlights:255,midtones:.2}})
     await thumb.trigger('click')
     await flushPromises()
-    expect(getBlob).toHaveBeenCalledTimes(requests+1)
+    expect(getBlob).toHaveBeenCalledTimes(requests+2)
     expect(wrapper.find('[role="dialog"]').exists()).toBe(true)
     expect(send.mock.calls[0][0]).toContain('/versions/'+version.id+'/previews/display')
+    wrapper.getComponent(PhotoPreviewDialog).vm.$emit('updated',{assetId:asset.id,versionId:version.id,title:asset.name})
+    await flushPromises()
+    expect(getBlob).toHaveBeenCalledTimes(requests+3)
+    expect(getBlob).toHaveBeenLastCalledWith('/astrophotoflow/api/v1/library/assets/'+asset.id+'/versions/'+version.id+'/previews/thumbnail')
     await wrapper.get('button[aria-label="关闭大图预览"]').trigger('click')
     await flushPromises()
   })

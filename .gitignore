@@ -126,6 +126,11 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
+!frontend/build/
+!frontend/build/**
+!frontend/**/lib/
+!frontend/**/lib/**
+
 # Windows
 Thumbs.db
 ehthumbs.db

@@ -1,0 +1,342 @@
+<template>
+  <SidebarTabTemplate :title="$t('sideToolbar.modelLibrary')">
+    <template #tool-buttons>
+      <Button
+        :tooltip="$t('g.refresh')"
+        tooltip-side="bottom"
+        variant="muted-textonly"
+        size="icon"
+        :aria-label="$t('g.refresh')"
+        @click="withLoadFailureToast(() => modelStore.refresh())"
+      >
+        <i class="icon-[lucide--refresh-cw] size-4" />
+      </Button>
+      <Button
+        v-if="!flags.assetsEnabled"
+        :tooltip="$t('g.loadAllFolders')"
+        tooltip-side="bottom"
+        variant="muted-textonly"
+        size="icon"
+        :aria-label="$t('g.loadAllFolders')"
+        @click="withLoadFailureToast(() => modelStore.loadModels())"
+      >
+        <i class="icon-[lucide--cloud-download] size-4" />
+      </Button>
+    </template>
+    <template #header>
+      <SidebarTopArea>
+        <SearchInput
+          ref="searchBoxRef"
+          v-model:model-value="searchQuery"
+          :placeholder="
+            $t('g.searchPlaceholder', {
+              subject: $t('sideToolbar.labels.models')
+            })
+          "
+          @search="handleSearch"
+        />
+        <p
+          v-if="searchResults.capped"
+          role="status"
+          class="mx-2 my-1 text-xs text-muted"
+        >
+          {{
+            $t('sideToolbar.searchResultsCapped', {
+              limit: SEARCH_RESULT_LIMIT
+            })
+          }}
+        </p>
+      </SidebarTopArea>
+    </template>
+    <template #body>
+      <ElectronDownloadItems v-if="isDesktop" />
+
+      <TreeExplorer
+        v-model:expanded-keys="expandedKeys"
+        class="model-lib-tree-explorer"
+        :aria-label="$t('sideToolbar.modelLibrary')"
+        :root="renderedRoot"
+      >
+        <template #preview="{ node }">
+          <ModelPreview
+            v-if="node.data && hasPreviewDetails(node.data)"
+            :model-def="node.data"
+          />
+        </template>
+      </TreeExplorer>
+    </template>
+  </SidebarTabTemplate>
+</template>
+
+<script setup lang="ts">
+import { computed, onMounted, ref, toRef, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
+
+import SearchInput from '@/components/ui/search-input/SearchInput.vue'
+import SidebarTopArea from '@/components/sidebar/tabs/SidebarTopArea.vue'
+import TreeExplorer from '@/components/common/TreeExplorer.vue'
+import SidebarTabTemplate from '@/components/sidebar/tabs/SidebarTabTemplate.vue'
+import ElectronDownloadItems from '@/components/sidebar/tabs/modelLibrary/ElectronDownloadItems.vue'
+import ModelPreview from '@/components/sidebar/tabs/modelLibrary/ModelPreview.vue'
+import Button from '@/components/ui/button/Button.vue'
+import { startModelLoaderDrag } from '@/composables/node/startModelNodeDragFromAsset'
+import { useFeatureFlags } from '@/composables/useFeatureFlags'
+import { useTreeExpansion } from '@/composables/useTreeExpansion'
+import { useSettingStore } from '@/platform/settings/settingStore'
+import { useToast } from '@/components/ui/toast/toastStore'
+import { useAssetDownloadStore } from '@/stores/assetDownloadStore'
+import type { ComfyModelDef } from '@/stores/modelStore'
+import {
+  ModelFolder,
+  ResourceState,
+  getModelPreviewUrl,
+  useModelStore
+} from '@/stores/modelStore'
+import { useModelToNodeStore } from '@/stores/modelToNodeStore'
+import type { TreeExplorerNode, TreeNode } from '@/types/treeExplorerTypes'
+import { isDesktop } from '@/platform/distribution/types'
+import { buildTree } from '@/utils/treeUtil'
+
+const modelStore = useModelStore()
+const modelToNodeStore = useModelToNodeStore()
+const settingStore = useSettingStore()
+const toast = useToast()
+const { t } = useI18n()
+const { flags } = useFeatureFlags()
+const assetDownloadStore = useAssetDownloadStore()
+const searchBoxRef = ref()
+const searchQuery = ref<string>('')
+/**
+ * The committed query the tree derives from. SearchInput debounces its
+ * `search` emit, so the full recompute-and-mount cost of a query change runs
+ * once per typing pause instead of on every keystroke of `searchQuery`.
+ */
+const activeSearchQuery = ref<string>('')
+const expandedKeys = ref<Record<string, boolean>>({})
+const { toggleNodeOnEvent } = useTreeExpansion(expandedKeys)
+
+// Search results render expanded and un-virtualized, and the tree's cost is
+// O(n^2) in mounted rows, so an unbounded result set hangs the tab on large
+// libraries (measured: seconds at 5k models). Cap what renders; refining the
+// query is the path to the tail.
+const SEARCH_RESULT_LIMIT = 500
+
+const searchResults = computed<{ models: ComfyModelDef[]; capped: boolean }>(
+  () => {
+    const search = activeSearchQuery.value.toLocaleLowerCase()
+    if (!search) return { models: [], capped: false }
+    const matches: ComfyModelDef[] = []
+    for (const model of modelStore.models) {
+      if (!model.searchable.includes(search)) continue
+      if (matches.length === SEARCH_RESULT_LIMIT) {
+        return { models: matches, capped: true }
+      }
+      matches.push(model)
+    }
+    return { models: matches, capped: false }
+  }
+)
+
+const handleSearch = async (query: string) => {
+  autoExpandedSearchKeys.clear()
+  activeSearchQuery.value = query
+  if (!query) {
+    expandedKeys.value = {}
+    return
+  }
+  // Load all models to ensure results cover folders not yet opened
+  await modelStore.loadModels()
+}
+
+type ModelOrFolder = ComfyModelDef | ModelFolder
+
+const root = computed<TreeNode<ModelOrFolder>>(() => {
+  const allNodes: ModelOrFolder[] = activeSearchQuery.value
+    ? searchResults.value.models
+    : [...modelStore.visibleModelFolders, ...modelStore.models]
+  return buildTree(allNodes, (modelOrFolder: ModelOrFolder) =>
+    modelOrFolder.key.split('/')
+  )
+})
+
+/**
+ * Folder keys already auto-expanded for the current query. Expansion runs
+ * once per key: the query's initial result set opens on commit, and a
+ * background reload (e.g. a scan completing mid-search) opens only folders
+ * newly appearing in the results. A folder the user collapsed keeps its key
+ * here and stays collapsed, and an unchanged tree costs no expand pass.
+ */
+const autoExpandedSearchKeys = new Set<string>()
+
+function expandNewSearchFolders(node: TreeNode<ModelOrFolder>) {
+  if (node.leaf) return
+  if (!autoExpandedSearchKeys.has(node.key)) {
+    autoExpandedSearchKeys.add(node.key)
+    expandedKeys.value[node.key] = true
+  }
+  for (const child of node.children ?? []) {
+    expandNewSearchFolders(child)
+  }
+}
+
+watch(root, (newRoot) => {
+  if (!activeSearchQuery.value) return
+  expandNewSearchFolders(newRoot)
+})
+
+const renderedRoot = computed<TreeExplorerNode<ComfyModelDef>>(() => {
+  const nameFormat = settingStore.get('Comfy.ModelLibrary.NameFormat')
+  const fillNodeInfo = (
+    node: TreeNode<ModelOrFolder>
+  ): TreeExplorerNode<ComfyModelDef> => {
+    const children = node.children?.map(fillNodeInfo)
+    const folder = node.data instanceof ModelFolder ? node.data : undefined
+    const model = node.data instanceof ModelFolder ? undefined : node.data
+
+    return {
+      key: node.key,
+      label: model
+        ? nameFormat === 'title'
+          ? model.title
+          : model.simplified_file_name
+        : node.label,
+      leaf: node.leaf,
+      data: model,
+      getIcon() {
+        if (model) {
+          return model.image ? 'pi pi-image' : 'pi pi-file'
+        }
+        if (folder) {
+          return folder.state === ResourceState.Loading
+            ? 'pi pi-spin pi-spinner'
+            : 'pi pi-folder'
+        }
+        return 'pi pi-folder'
+      },
+      getIconImage() {
+        return (model && getModelPreviewUrl(model)) || undefined
+      },
+      getBadgeText() {
+        // Return undefined to apply default badge text
+        // Return empty string to hide badge
+        if (!folder) {
+          return
+        }
+        return folder.state === ResourceState.Loaded ? undefined : ''
+      },
+      children,
+      draggable: node.leaf,
+      handleClick(e: MouseEvent) {
+        if (this.leaf && model) {
+          const provider = modelToNodeStore.getNodeProvider(model.directory)
+          if (provider) {
+            startModelLoaderDrag(provider, model.file_name)
+          }
+        } else {
+          toggleNodeOnEvent(e, node)
+        }
+      }
+    }
+  }
+
+  return fillNodeInfo(root.value)
+})
+
+function hasPreviewDetails(model: ComfyModelDef) {
+  return (
+    model.has_loaded_metadata &&
+    Boolean(
+      model.author ||
+      model.simplified_file_name != model.title ||
+      model.description ||
+      model.usage_hint ||
+      model.trigger_phrase ||
+      model.image
+    )
+  )
+}
+
+const visibleModels = computed(() => {
+  const models: ComfyModelDef[] = []
+  const collect = (node: TreeNode<ModelOrFolder>) => {
+    for (const child of node.children ?? []) {
+      if (child.leaf) {
+        if (child.data && !(child.data instanceof ModelFolder)) {
+          models.push(child.data)
+        }
+      } else if (expandedKeys.value[child.key]) {
+        collect(child)
+      }
+    }
+  }
+  collect(root.value)
+  return models
+})
+
+watch(visibleModels, (models) => {
+  for (const model of models) void model.load()
+})
+
+watch(
+  toRef(expandedKeys, 'value'),
+  (newExpandedKeys) => {
+    Object.entries(newExpandedKeys).forEach(([key, isExpanded]) => {
+      if (isExpanded) {
+        const folderPath = key.split('/').slice(1).join('/')
+        if (folderPath && !folderPath.includes('/')) {
+          // Trigger (async) load of model data for this folder
+          void modelStore.getLoadedModelFolder(folderPath)
+        }
+      }
+    })
+  },
+  { deep: true }
+)
+
+watch(
+  () => assetDownloadStore.lastCompletedDownload,
+  (completed) => {
+    if (!completed) return
+    void modelStore.refreshModelFolder(completed.modelType)
+  }
+)
+
+async function withLoadFailureToast(action: () => Promise<unknown>) {
+  try {
+    await action()
+  } catch (error) {
+    console.error('Model library load failed', error)
+    toast.error(t('g.error'), {
+      description: t('sideToolbar.modelLibraryLoadFailed'),
+      duration: 5000
+    })
+  }
+}
+
+onMounted(async () => {
+  searchBoxRef.value?.focus()
+  // In asset mode the whole library resolves from one cached walk, so eager
+  // loading is cheap and keeps search and folder badges complete from the
+  // start; AutoLoadAll remains the opt-in for the request-per-folder legacy path.
+  if (
+    flags.assetsEnabled ||
+    settingStore.get('Comfy.ModelLibrary.AutoLoadAll')
+  ) {
+    await withLoadFailureToast(() => modelStore.loadModels())
+  }
+})
+
+watch(
+  () => flags.assetsEnabled,
+  async (enabled) => {
+    if (enabled) await withLoadFailureToast(() => modelStore.loadModels())
+  }
+)
+</script>
+
+<style scoped>
+:deep(.pi-fake-spacer) {
+  height: 1px;
+  width: 16px;
+}
+</style>

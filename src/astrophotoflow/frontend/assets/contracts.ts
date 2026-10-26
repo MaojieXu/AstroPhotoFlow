@@ -228,9 +228,14 @@ export const assetParametersSchema = z.object({
   cfa_pattern: z.enum(['MONO', 'RGGB', 'BGGR', 'GRBG', 'GBRG', 'XTRANS', 'QUAD_BAYER']).nullable()
 }).strict()
 
+export const previewStretchSchema = z.object({
+  algorithm: z.literal('auto-mtf-1'), input_offset: z.number(), white_balance: z.array(z.number()).min(1).max(3),
+  shadows: z.number(), highlights: z.number(), midtones: z.number()
+}).strict()
 export const displayPreviewSchema = z.object({
   asset_version_id: z.uuid(), size: z.literal('display'),
   status: z.enum(['not_ready', 'generating', 'available', 'failed', 'unsupported']),
   width: z.number().int().nonnegative().nullable(), height: z.number().int().nonnegative().nullable(),
-  error: z.object({code: z.string(), message: z.string()}).nullable()
+  error: z.object({code: z.string(), message: z.string()}).nullable(),
+  stretch: previewStretchSchema.nullable().default(null)
 })

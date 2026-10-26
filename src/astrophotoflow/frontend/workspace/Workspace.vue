@@ -4,7 +4,7 @@ import { z } from 'zod'
 import {
   assetSchema, capabilitiesSchema, datasetReferenceSchema, datasetSchema, libraryEntriesRemoveRequestSchema,
   libraryEntriesRemoveSchema,
-  datasetVersionSchema, datasetMemberParametersUpdateSchema, equipmentSchema, importAcceptedSchema, pageSchema, projectAssetReferenceSchema,
+  datasetVersionSchema, datasetMemberParametersUpdateSchema, equipmentSchema, pageSchema, projectAssetReferenceSchema,
   projectSchema, libraryItemSchema, taskSchema, equipmentSetupSchema, type Asset
 } from '../assets/contracts'
 import { ApiClientError } from '../assets/client'
@@ -25,6 +25,7 @@ type InputField = { key: string; label: string; type?: string; options?: string[
 type WorkspaceArea = 'library' | 'nodes' | 'software' | 'agent' | 'settings'
 
 const store = useWorkspaceStore()
+const props = defineProps<{ native?: boolean }>()
 const activeArea = ref<WorkspaceArea>('library')
 const lastManagementSection = ref<WorkspaceSection>('projects')
 const capabilities = ref<ReturnType<typeof capabilitiesSchema.parse>>()
@@ -428,7 +429,10 @@ async function loadThumbnails(items: RecordData[], generation: number) {
       )
       const url = URL.createObjectURL(blob)
       if (generation !== loadGeneration) URL.revokeObjectURL(url)
-      else previewUrls.value[row.id] = url
+      else {
+        if (previewUrls.value[row.id]) URL.revokeObjectURL(previewUrls.value[row.id]!)
+        previewUrls.value[row.id] = url
+      }
     } catch {
       // Unsupported or missing previews remain unavailable in the row.
     }
@@ -452,6 +456,16 @@ async function openPhotoPreview(row: RecordData) {
   } catch (cause) { if (current === photoPreviewRequest) error.value = presentError(cause) }
 }
 function closePhotoPreview() { photoPreviewRequest++; photoPreview.value = undefined }
+async function refreshPhotoThumbnails(photo: PreviewPhoto) {
+  const generation = loadGeneration
+  try {
+    for (const row of rows.value) {
+      const member = await previewMember(row)
+      if (generation !== loadGeneration) return
+      if (member?.version.id === photo.versionId) await loadThumbnails([row], generation)
+    }
+  } catch (cause) { if (generation === loadGeneration) error.value = presentError(cause) }
+}
 watch(() => JSON.stringify([
   activeArea.value, store.section, libraryCategory.value, activeDataset.value?.id, activeDataset.value?.current_version_id,
   store.activeProjectId, viewingProjectAssets.value, viewingProjectDatasets.value, addingProjectAssets.value, addingProjectDatasets.value,
@@ -610,8 +624,8 @@ async function selectLibraryCategory(category:'all'|'light'|'calibration'){
 }
 
 async function selectArea(area: WorkspaceArea) {
-  if (dirty.value && !window.confirm('当前表单有未保存修改。放弃修改并切换吗？')) return
-  if(!await waitForInlineSave())return
+  if (dirty.value && !window.confirm('当前表单有未保存修改。放弃修改并切换吗？')) return false
+  if(!await waitForInlineSave())return false
   leaveDatasetContext()
   editorType.value = undefined
   editingId.value = undefined
@@ -647,7 +661,14 @@ async function selectArea(area: WorkspaceArea) {
     loading.value = false
     error.value = undefined
   }
+  return true
 }
+
+async function leavePage() {
+  return dirty.value ? selectArea(activeArea.value) : waitForInlineSave()
+}
+
+defineExpose({ selectArea, activeArea, leavePage })
 
 function startImport(kind:'files'|'folder') {
   importMenuOpen.value=false
@@ -1652,7 +1673,7 @@ onBeforeUnmount(() => {
   <section class="apf-workspace" aria-label="AstroPhotoFlow 天文资产工作台"
     @pointerdown.stop @pointerup.stop @mousedown.stop @mouseup.stop
     @click.stop @contextmenu.stop @keydown.stop @keyup.stop>
-      <nav class="apf-nav" aria-label="AstroPhotoFlow 模块">
+      <nav v-if="!props.native" class="apf-nav" aria-label="AstroPhotoFlow 模块">
         <button v-for="(title, area) in areaTitles" :key="area" type="button"
           :aria-label="title" :title="title" :aria-current="activeArea === area ? 'page' : undefined"
           @click="selectArea(area as WorkspaceArea)">
@@ -1743,7 +1764,7 @@ onBeforeUnmount(() => {
           <p>{{ areaMessages[activeArea] }}</p>
         </section>
     </main>
-      <PhotoPreviewDialog :photo="photoPreview" @close="closePhotoPreview" />
+      <PhotoPreviewDialog :photo="photoPreview" @close="closePhotoPreview" @updated="refreshPhotoThumbnails" />
       <LibraryTrashDialog :open="trashOpen" @close="trashOpen=false" @changed="refreshLibrary" />
       <SettingsTrashDialog :open="managementTrashOpen" @close="managementTrashOpen=false" @changed="managementTrashChanged" />
       <div v-if="bulkConfirmOpen" class="apf-trash-confirm-backdrop" role="presentation" @click.self="bulkConfirmOpen=false">

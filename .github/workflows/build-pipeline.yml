@@ -22,7 +22,7 @@ jobs:
           python-version: '3.12'
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '26.8.2'
       - uses: astral-sh/setup-uv@v6
         with:
           version: '0.11.29'
@@ -30,6 +30,7 @@ jobs:
       - name: Build frontend
         run: |
           corepack pnpm install --frozen-lockfile
+          corepack pnpm --dir frontend install --frozen-lockfile --ignore-scripts
           corepack pnpm build
       - name: Prepare Python project
         run: uv sync --locked --extra dev

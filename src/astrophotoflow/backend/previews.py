@@ -8,15 +8,17 @@ from typing import Literal
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, Request, Response
-from PIL import Image
+import numpy as np
+from PIL import Image, ImageOps
 from sqlalchemy import select
 
 from . import dependencies as deps
+from .auto_stretch import AutoStretch, calculate_stretch, render_stretch
 from .common import _asset_version_scope
 from .errors import ApiError, not_found
 from .files import find_root, resolve_relative
-from .fits_preview import PREVIEW_ALGORITHM_VERSION, create_preview
-from .ingestion import _ordinary_image, _raw_image, _xisf_image
+from .fits_preview import PREVIEW_ALGORITHM_VERSION, create_preview, read_preview_pixels
+from .ingestion import _ordinary_image, _raw_image, _xisf_image, _xisf_pixels
 from .models import AssetVersion, FitsHduMetadata, LibraryEntryRemoval, Preview, ProjectAssetReference
 from .schemas import StrictModel
 from .video_preview import first_video_frame
@@ -38,6 +40,7 @@ class DisplayPreviewState(StrictModel):
     width: int | None = None
     height: int | None = None
     error: PreviewIssue | None = None
+    stretch: AutoStretch | None = None
 
 
 def owned_preview_locations(preview, settings) -> list[str]:
@@ -68,7 +71,7 @@ class DisplayPreviews:
             for row in session.scalars(select(Preview).where(Preview.size == "display", Preview.status == "generating")).all():
                 row.status, row.error = "failed", "服务中断，大图预览尚未完成，请重试。"
 
-    def _resolve(self, session, version_id):
+    def _resolve(self, session, version_id, *, refresh=False):
         version = session.get(AssetVersion, version_id)
         if version is None:
             raise not_found()
@@ -80,7 +83,7 @@ class DisplayPreviews:
                Preview.algorithm_version == PREVIEW_ALGORITHM_VERSION)
         display = session.scalar(select(Preview).where(*key, Preview.size == "display"))
         if display is not None:
-            if display.status == "available" and (self.settings.data_dir / display.storage_path).is_file():
+            if not refresh and display.status == "available" and (self.settings.data_dir / display.storage_path).is_file():
                 return display, None, {"status": "available", "width": display.width, "height": display.height, "error": None}
             if display.status == "generating":
                 return display, None, {"status": "generating", "error": None}
@@ -118,21 +121,31 @@ class DisplayPreviews:
 
     def status(self, version_id):
         with self.database.read_session() as session:
-            _, _, state = self._resolve(session, version_id)
-        return {"asset_version_id": UUID(version_id), "size": "display", **state}
+            row, _, state = self._resolve(session, version_id)
+            stretch = (row.display_parameters or {}).get("auto_stretch") if row and state["status"] == "available" else None
+        return {"asset_version_id": UUID(version_id), "size": "display", **state,
+                "stretch": AutoStretch(**stretch) if stretch is not None else None}
 
-    def schedule(self, version_id):
+    def schedule(self, version_id, *, auto=False):
         with self.database.write_session() as session:
             row, job, state = self._resolve(session, version_id)
+            if auto and state["status"] == "available" and "auto_stretch" not in (row.display_parameters or {}):
+                row, job, state = self._resolve(session, version_id, refresh=True)
             if job is None:
-                return {"asset_version_id": UUID(version_id), "size": "display", **state}
+                return {"asset_version_id": UUID(version_id), "size": "display", **state,
+                        "stretch": (row.display_parameters or {}).get("auto_stretch")
+                        if row and state["status"] == "available" else None}
+            if auto and "auto_stretch" not in job["recipe"]:
+                job["auto"] = True
+                job["update_thumbnail"] = True
             if row is None:
                 row = Preview(id=str(uuid4()), asset_version_id=version_id, hdu_index=job["hdu_index"], size="display",
                               algorithm_version=PREVIEW_ALGORITHM_VERSION, width=0, height=0, storage_path="",
                               mime_type="image/jpeg", display_parameters=job["recipe"], status="generating", error=None)
                 session.add(row)
             row.status, row.error = "generating", None
-            row.storage_path = (Path("previews") / version_id / f"{PREVIEW_ALGORITHM_VERSION}-{job['hdu_index']}-display.jpg").as_posix()
+            if not row.storage_path:
+                row.storage_path = (Path("previews") / version_id / f"{PREVIEW_ALGORITHM_VERSION}-{job['hdu_index']}-display.jpg").as_posix()
             preview_id = row.id
         try:
             self.executor.submit(self._generate, preview_id, job)
@@ -147,30 +160,59 @@ class DisplayPreviews:
             if row is not None:
                 row.status, row.error = "failed", message
 
-    def _generate(self, preview_id, job):
-        try:
-            recipe = dict(job["recipe"])
-            stretch = (recipe["stretch_low"], recipe["stretch_high"]) if "stretch_low" in recipe else None
-            path, category = job["path"], job["category"]
-            if category == "fits":
-                parameters = {**job["parameters"], "cfa_pattern": recipe.get("cfa_pattern") or job["parameters"].get("cfa_pattern")}
-                image, computed = create_preview(path, job["hdu_index"], job["kind"], parameters, DISPLAY_EDGE, stretch)
-                recipe.update(computed)
-            elif category == "xisf":
-                image, _ = _xisf_image(path, stretch)
-            elif category == "raw":
-                image = _raw_image(path, DISPLAY_EDGE)
-            elif category == "video":
-                if path.suffix.lower() == ".ser" and stretch is None:
-                    # Existing SER thumbnails predate stored bounds. Reproduce
-                    # their fixed 100px first-frame recipe before larger sampling.
-                    _, original = first_video_frame(path, 100)
-                    stretch = original["stretch_low"], original["stretch_high"]
-                    recipe.update(original)
-                image, _ = first_video_frame(path, DISPLAY_EDGE, stretch)
-            else:
-                image, _ = _ordinary_image(path, stretch)
+    def _pixels(self, job):
+        path, category = job["path"], job["category"]
+        if category == "fits":
+            parameters = {**job["parameters"], "cfa_pattern": job["recipe"].get("cfa_pattern") or job["parameters"].get("cfa_pattern")}
+            pixels, _ = read_preview_pixels(path, job["hdu_index"], job["kind"], parameters, DISPLAY_EDGE)
+        elif category == "xisf":
+            pixels = _xisf_pixels(path)
+        elif category == "raw":
+            pixels = np.asarray(_raw_image(path, DISPLAY_EDGE))
+        elif category == "video":
+            pixels = np.asarray(first_video_frame(path, DISPLAY_EDGE)[0])
+        else:
+            with Image.open(path) as source:
+                image = ImageOps.exif_transpose(source)
+                if image.mode not in {"L", "I;16", "I;16B", "I;16L", "I", "F"}:
+                    image = image.convert("RGB")
+                pixels = np.array(image)
+        stride = max(1, (max(pixels.shape[:2]) + DISPLAY_EDGE - 1) // DISPLAY_EDGE)
+        return pixels[::stride, ::stride]
+
+    def _render(self, job):
+        recipe = dict(job["recipe"])
+        if job.get("auto") or "auto_stretch" in recipe:
+            pixels = self._pixels(job)
+            parameters = calculate_stretch(pixels) if job.get("auto") else recipe["auto_stretch"]
+            image = render_stretch(pixels, parameters)
             image.thumbnail((DISPLAY_EDGE, DISPLAY_EDGE), Image.Resampling.LANCZOS)
+            return image, {**recipe, "auto_stretch": parameters}
+        stretch = (recipe["stretch_low"], recipe["stretch_high"]) if "stretch_low" in recipe else None
+        path, category = job["path"], job["category"]
+        if category == "fits":
+            parameters = {**job["parameters"], "cfa_pattern": recipe.get("cfa_pattern") or job["parameters"].get("cfa_pattern")}
+            image, computed = create_preview(path, job["hdu_index"], job["kind"], parameters, DISPLAY_EDGE, stretch)
+            recipe.update(computed)
+        elif category == "xisf":
+            image, _ = _xisf_image(path, stretch)
+        elif category == "raw":
+            image = _raw_image(path, DISPLAY_EDGE)
+        elif category == "video":
+            if path.suffix.lower() == ".ser" and stretch is None:
+                _, original = first_video_frame(path, 100)
+                stretch = original["stretch_low"], original["stretch_high"]
+                recipe.update(original)
+            image, _ = first_video_frame(path, DISPLAY_EDGE, stretch)
+        else:
+            image, _ = _ordinary_image(path, stretch)
+        image.thumbnail((DISPLAY_EDGE, DISPLAY_EDGE), Image.Resampling.LANCZOS)
+        return image.convert("RGB"), recipe
+
+    def _generate(self, preview_id, job):
+        created, replaced = [], []
+        try:
+            image, recipe = self._render(job)
             # The DB write lock covers ownership verification, file publication
             # and row availability, so cleanup cannot unlink/delete between them.
             with self.database.write_session() as session:
@@ -178,7 +220,12 @@ class DisplayPreviews:
                 version = session.get(AssetVersion, job["version_id"])
                 if row is None or version is None or row.status != "generating":
                     return
-                final = self.settings.data_dir / row.storage_path
+                relative = Path(row.storage_path)
+                if job.get("update_thumbnail"):
+                    relative = relative.with_name(f"{PREVIEW_ALGORITHM_VERSION}-{job['hdu_index']}-display-{uuid4()}.jpg")
+                    replaced.append(self.settings.data_dir / row.storage_path)
+                    created.append(self.settings.data_dir / relative)
+                final = self.settings.data_dir / relative
                 final.parent.mkdir(parents=True, exist_ok=True)
                 temporary = Path(str(final) + ".tmp")
                 try:
@@ -186,11 +233,36 @@ class DisplayPreviews:
                     os.replace(temporary, final)
                 finally:
                     Path(temporary).unlink(missing_ok=True)
+                row.storage_path = relative.as_posix()
                 row.width, row.height = image.size
                 row.display_parameters, row.status, row.error = recipe, "available", None
+                if job.get("update_thumbnail"):
+                    thumbnail = session.scalar(select(Preview).where(
+                        Preview.asset_version_id == job["version_id"], Preview.hdu_index == job["hdu_index"],
+                        Preview.algorithm_version == PREVIEW_ALGORITHM_VERSION, Preview.size == "thumbnail"))
+                    small = image.copy()
+                    small.thumbnail((100, 100), Image.Resampling.LANCZOS)
+                    replaced.append(self.settings.data_dir / thumbnail.storage_path)
+                    small_relative = relative.with_name(relative.name.replace("-display-", "-thumbnail-"))
+                    target = self.settings.data_dir / small_relative
+                    created.append(target)
+                    temporary = Path(str(target) + ".tmp")
+                    try:
+                        small.save(temporary, format="JPEG", quality=80, optimize=False)
+                        os.replace(temporary, target)
+                    finally:
+                        temporary.unlink(missing_ok=True)
+                    thumbnail.width, thumbnail.height = small.size
+                    thumbnail.storage_path = small_relative.as_posix()
+                    thumbnail.display_parameters = recipe
         except Exception as exc:
+            for path in created:
+                path.unlink(missing_ok=True)
             logger.exception("display preview failed version_id=%s", job["version_id"])
             self._fail(preview_id, f"大图预览生成失败：{exc}")
+            return
+        for path in replaced:
+            path.unlink(missing_ok=True)
 
 
 def _library_version(session, asset_id, version_id):
@@ -222,6 +294,14 @@ def display_status(asset_id: UUID, version_id: UUID, request: Request, session: 
     return request.app.state.display_previews.status(_library_version(session, asset_id, version_id))
 
 
+@router.post("/library/assets/{asset_id}/versions/{version_id}/previews/display/auto-stretch", response_model=DisplayPreviewState,
+            responses={202: {"model": DisplayPreviewState}}, dependencies=[Depends(deps.authenticate)])
+def auto_stretch(asset_id: UUID, version_id: UUID, request: Request, response: Response, session: deps.ReadSession):
+    state = request.app.state.display_previews.schedule(_library_version(session, asset_id, version_id), auto=True)
+    response.status_code = 202 if state["status"] == "generating" else 200
+    return state
+
+
 @router.post("/projects/{project_id}/asset-references/{reference_id}/previews/display", response_model=DisplayPreviewState,
              responses={202: {"model": DisplayPreviewState}}, dependencies=[Depends(deps.authenticate)])
 def request_project_display(project_id: UUID, reference_id: UUID, request: Request, response: Response, session: deps.ReadSession):
@@ -234,3 +314,11 @@ def request_project_display(project_id: UUID, reference_id: UUID, request: Reque
             dependencies=[Depends(deps.authenticate)])
 def project_display_status(project_id: UUID, reference_id: UUID, request: Request, session: deps.ReadSession):
     return request.app.state.display_previews.status(_project_version(session, project_id, reference_id))
+
+
+@router.post("/projects/{project_id}/asset-references/{reference_id}/previews/display/auto-stretch", response_model=DisplayPreviewState,
+            responses={202: {"model": DisplayPreviewState}}, dependencies=[Depends(deps.authenticate)])
+def project_auto_stretch(project_id: UUID, reference_id: UUID, request: Request, response: Response, session: deps.ReadSession):
+    state = request.app.state.display_previews.schedule(_project_version(session, project_id, reference_id), auto=True)
+    response.status_code = 202 if state["status"] == "generating" else 200
+    return state

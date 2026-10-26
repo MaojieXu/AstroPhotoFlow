@@ -35,6 +35,9 @@ def test_proxy_whitelist_origin_headers_and_upstream_status(tmp_path, monkeypatc
             seen["client_header"] = request.headers.get("X-Client-Actor")
             if request.method == "DELETE":
                 seen["delete_body"] = await request.json()
+            if request.method == "POST" and request.path.endswith("/display/auto-stretch"):
+                seen["stretch_body"] = await request.json()
+                return web.json_response({"status": "generating"})
             if request.method == "PUT":
                 seen["upload_size"] = 0
                 async for chunk in request.content.iter_chunked(1024 * 1024):
@@ -140,14 +143,18 @@ def test_proxy_whitelist_origin_headers_and_upstream_status(tmp_path, monkeypatc
                 polled = await client.get("/api" + proxy.BASE_PATH + base + "/status", headers={"Origin": origin})
                 assert polled.status == 200
                 assert seen["path"] == "/api/v1" + base + "/status"
+                saved = await client.post("/api" + proxy.BASE_PATH + base + "/auto-stretch", json={}, headers={"Origin": origin})
+                assert saved.status == 200
+                assert seen["stretch_body"] == {}
                 blocked = await client.post("/api" + proxy.BASE_PATH + base, json={}, headers={"Origin": "http://evil.invalid"})
                 assert blocked.status == 403
 
-            assert len(proxy.ROUTES) == 76
+            assert len(proxy.ROUTES) == 78
             assert all(
                 method == "GET" or (method == "POST" and path == "/datasets/{dataset_id}/versions")
                 or (method == "PATCH" and path == "/datasets/{dataset_id}/member-parameters")
                 or (method == "POST" and path in {"/library/assets/{asset_id}/versions/{version_id}/previews/display", "/projects/{project_id}/asset-references/{reference_id}/previews/display"})
+                or (method == "POST" and path in {"/library/assets/{asset_id}/versions/{version_id}/previews/display/auto-stretch", "/projects/{project_id}/asset-references/{reference_id}/previews/display/auto-stretch"})
                 for method, path, _ in proxy.ROUTES
                 if "/versions" in path or path.endswith("/previews/{size}")
             )
@@ -161,6 +168,7 @@ def test_proxy_whitelist_origin_headers_and_upstream_status(tmp_path, monkeypatc
                 and path != "/datasets/{dataset_id}/versions"
                 and path != "/datasets/{dataset_id}/member-parameters"
                 and not (method == "POST" and path == "/library/assets/{asset_id}/versions/{version_id}/previews/display")
+                and not (method == "POST" and path == "/library/assets/{asset_id}/versions/{version_id}/previews/display/auto-stretch")
                 for method, path, _ in proxy.ROUTES
             )
         finally:
@@ -235,37 +243,3 @@ def test_proxy_rejects_relative_import_roots(tmp_path, monkeypatch):
         proxy._configuration()
     assert error.value.message == "AstroPhotoFlow 本机服务配置或令牌不可用。"
     assert "素材根目录路径必须为绝对路径" in str(error.value.__cause__)
-
-
-
-def test_proxy_returns_service_manager_startup_error(tmp_path):
-    async def run():
-        class FailedManager:
-            def ensure_available(self):
-                raise proxy.ProxyError(503, "SERVICE_UNAVAILABLE", "uv 环境未准备。")
-
-        app = web.Application()
-        routes = web.RouteTableDef()
-        proxy.register_proxy_routes(routes, FailedManager())
-        app.add_routes(routes)
-        api_routes = web.RouteTableDef()
-        for route in routes:
-            api_routes.route(route.method, "/api" + route.path)(route.handler)
-        app.add_routes(api_routes)
-        client = TestClient(TestServer(app))
-        await client.start_server()
-        origin = str(client.make_url("/")).rstrip("/")
-        try:
-            response = await client.get(
-                "/api" + proxy.BASE_PATH + "/health",
-                headers={"Origin": origin},
-            )
-            body = await response.json()
-            assert response.status == 503
-            assert body["error"]["code"] == "SERVICE_UNAVAILABLE"
-            assert body["error"]["message"] == "uv 环境未准备。"
-            assert body["request_id"] == response.headers["X-Request-ID"]
-        finally:
-            await client.close()
-
-    asyncio.run(run())

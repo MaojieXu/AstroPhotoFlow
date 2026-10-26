@@ -65,7 +65,7 @@ exclude = ["astrophotoflow.frontend", "astrophotoflow.frontend.*"]
 namespaces = false
 
 [tool.setuptools.package-data]
-astrophotoflow = ["vendor/*.zip", "vendor/*.json", "vendor/*.lock"]
+astrophotoflow = ["vendor/*.zip", "vendor/*.json", "vendor/*.lock", "vendor/*LICENSE"]
 "astrophotoflow.backend" = ["alembic.ini", "alembic/*.py", "alembic/versions/*.py"]
 
 [tool.ruff.lint.flake8-quotes]

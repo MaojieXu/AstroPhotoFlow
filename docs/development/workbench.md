@@ -1,6 +1,6 @@
-# CPU 工作台使用
+# 原生网页工作台使用
 
-面向 Windows x64、Python 3.12。安装已有发行 wheel 无需 Node 或 Git；首次 `apf init` 下载固定 CPU 依赖，准备 ComfyUI 0.42.0、前端 1.57.1 和独立运行环境，不下载生成式图像模型。固定来源见包内 vendor 清单。
+首轮运行验收面向 Windows x64/Python 3.12/CPU。最终用户安装发行 wheel 无需 Node 或 Git；首次初始化准备固定 CPU 依赖，工作流不要求生成式图像模型。
 
 ```powershell
 py -3.12 -m venv .apf-env
@@ -10,26 +10,17 @@ py -3.12 -m venv .apf-env
 .\.apf-env\Scripts\apf.exe status --workspace D:\AstroPhotoFlow\workspace
 ```
 
-打开 `http://127.0.0.1:18188/` 的“天文”侧栏。运行环境位于 LocalAppData 下的 AstroPhotoFlow/runtime，业务数据位于指定 workspace。已安装的工作台启动资产服务后，ComfyUI 插件只连接该服务，不重复启动。
+打开 `http://127.0.0.1:18188/#/library`。页面包含素材库、工作流、设置；工作流页切换后保留图与视口。关闭浏览器保留后台任务，使用 `apf stop --workspace ...` 显式退出。
 
-## CLI 与 MCP
+## 运行目录与数据
 
-```powershell
-$env:ASTROPHOTOFLOW_CONFIG = 'D:\AstroPhotoFlow\workspace\config.toml'
-.\.apf-env\Scripts\apf.exe import-photo D:\AstroData\photo.fit
-.\.apf-env\Scripts\apf.exe task <task-id>
-.\.apf-env\Scripts\apf.exe assets list
-.\.apf-env\Scripts\apf.exe assets get <asset-id>
-.\.apf-env\Scripts\apf.exe assets parameters <asset-id> --base-revision 1 --exposure-seconds 0
-.\.apf-env\Scripts\apf.exe assets parameters <asset-id> --base-revision 2 --clear exposure_seconds
-.\.apf-env\Scripts\apf.exe mcp-config --workspace D:\AstroPhotoFlow\workspace
-```
+固定原生引擎位于 LocalAppData/AstroPhotoFlow/runtime/native-web-0.1.0，与旧 0.1.0 runtime 分离。业务数据仍在指定 workspace；网页资源在 workspace/web，ComfyUI 用户工作流在 workspace/comfyui-user，科学原件和预览仍在 data。
 
-使用响应中的当前 revision 继续更新，不能假定始终为示例数值。MCP 注册信息包含绝对命令路径和 workspace 配置；`apf mcp` 启动 stdio 服务。已有注册不需要重复添加；代码更新后重连该MCP服务器刷新工具清单，资料修改后刷新前端查看。完整58工具和领域命令见[操作参考](library-agent-tools.md)。
+原生服务直接注册业务网关，默认禁用外部 Custom Nodes；不需要链接 custom_nodes，不再安装 AstroPhotoFlow 插件。领域服务仍为内部 FastAPI 进程，由工作台先启动并检查健康，再启动网页引擎。
 
-## 数据与维护
+## CLI、MCP 与维护
 
-先 `apf stop --workspace ...`，再复制整份 workspace；重新启动时指定新目录。不要只复制 SQLite 主文件，原图、预览、令牌、WAL 和 ComfyUI 用户文件都属于该 workspace。MCP 连接需改用新配置路径。
+CLI 命令与58个 MCP 工具保持。使用 ASTROPHOTOFLOW_CONFIG 指定目标 workspace 的 config.toml；读取当前 revision 后再编辑。接口与例子见[操作参考](library-agent-tools.md)。
 
 ```powershell
 .\.apf-env\Scripts\apf.exe stop --workspace D:\AstroPhotoFlow\workspace
@@ -37,6 +28,8 @@ $env:ASTROPHOTOFLOW_CONFIG = 'D:\AstroPhotoFlow\workspace\config.toml'
 .\.apf-env\Scripts\apf-service.exe db upgrade
 ```
 
-服务启动不会自动升级已有数据库；显式 upgrade 沿用现有备份机制，当前 revision 是 `0007_setups_and_calibration`。诊断先看 workspace/logs/service.log、comfyui.log 和健康检查；不要输出 service.token 内容。
+服务不会自动升级已有数据库；当前 schema 为 `0009_remove_legacy_capture_profiles`。workspace 搬迁前停止所有服务，复制整份 workspace 后以新路径启动，更新客户端配置路径。不要只复制 SQLite 主文件。
 
-开发用历史数据库可按用户授权删除重建；原始照片和 ZIP 不属于可清理测试缓存。CI配置包含Linux的Python／构建检查，本轮未远端执行，不能声称Windows CPU安装流程已在Linux完成产品验收。
+停止时工作台请求领域服务退出并等待导入／预览排空。超过等待时限会明确报错并保留进程记录，稍后再次运行 stop；不会将仍在排空的任务假报完成。
+
+诊断查看 workspace/logs/service.log、comfyui.log、健康检查及 apf status。不要输出 service.token。桌面安装包、完整 Agent、天文处理适配和结果比较不属于本轮交付。

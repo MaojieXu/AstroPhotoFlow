@@ -69,8 +69,10 @@ ROUTES = [
     ("GET", "/library/assets/{asset_id}/versions/{version_id}/previews/{size}", "/library/assets/{asset_id}/versions/{version_id}/previews/{size}"),
     ("POST", "/library/assets/{asset_id}/versions/{version_id}/previews/display", "/library/assets/{asset_id}/versions/{version_id}/previews/display"),
     ("GET", "/library/assets/{asset_id}/versions/{version_id}/previews/display/status", "/library/assets/{asset_id}/versions/{version_id}/previews/display/status"),
+    ("POST", "/library/assets/{asset_id}/versions/{version_id}/previews/display/auto-stretch", "/library/assets/{asset_id}/versions/{version_id}/previews/display/auto-stretch"),
     ("POST", "/projects/{project_id}/asset-references/{reference_id}/previews/display", "/projects/{project_id}/asset-references/{reference_id}/previews/display"),
     ("GET", "/projects/{project_id}/asset-references/{reference_id}/previews/display/status", "/projects/{project_id}/asset-references/{reference_id}/previews/display/status"),
+    ("POST", "/projects/{project_id}/asset-references/{reference_id}/previews/display/auto-stretch", "/projects/{project_id}/asset-references/{reference_id}/previews/display/auto-stretch"),
     ("GET", "/datasets", "/datasets"),
     ("POST", "/datasets", "/datasets"),
     ("GET", "/calibration/targets", "/calibration/targets"),
@@ -135,14 +137,9 @@ def _error_response(request_id: str, status: int, code: str, message: str) -> we
     return web.json_response(body, status=status, headers={"X-Request-ID": request_id})
 
 
-async def forward(request: web.Request, path_template: str, service_manager=None) -> web.Response:
+async def forward(request: web.Request, path_template: str) -> web.Response:
     request_id = str(uuid4())
     try:
-        if service_manager is not None:
-            try:
-                await asyncio.to_thread(service_manager.ensure_available)
-            except ProxyError as exc:
-                return _error_response(request_id, exc.status, exc.code, exc.message)
         upstream, allowed_origins, token = _configuration()
         _deny_origin(request, allowed_origins)
         values = {key: quote(value, safe="-") for key, value in request.match_info.items()}
@@ -170,12 +167,11 @@ async def forward(request: web.Request, path_template: str, service_manager=None
         return _error_response(request_id, 503, "SERVICE_UNAVAILABLE", "AstroPhotoFlow 服务当前不可用。")
 
 
-def register_proxy_routes(routes: web.RouteTableDef, service_manager=None) -> None:
+def register_proxy_routes(routes: web.RouteTableDef) -> None:
     for method, public_path, upstream_path in ROUTES:
         async def handler(
             request: web.Request,
             template: str = upstream_path,
-            manager=service_manager,
         ) -> web.Response:
-            return await forward(request, template, manager)
+            return await forward(request, template)
         routes.route(method, BASE_PATH + public_path)(handler)

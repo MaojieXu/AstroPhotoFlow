@@ -228,7 +228,7 @@ def _display(array: np.ndarray, stretch: tuple[float, float] | None = None) -> I
     raise ValueError("预览数据形状不受支持。")
 
 
-def create_preview(path: Path, hdu_index: int, kind: str, parameters: dict, max_edge: int, stretch: tuple[float, float] | None = None) -> tuple[Image.Image, dict]:
+def read_preview_pixels(path: Path, hdu_index: int, kind: str, parameters: dict, max_edge: int) -> tuple[np.ndarray, dict]:
     if kind in {"xtrans", "quad_bayer"}:
         raise ValueError(f"{kind} CFA 已登记；当前暂不支持其马赛克彩色预览。")
     with fits.open(path, memmap=False, lazy_load_hdus=True) as file:
@@ -257,15 +257,16 @@ def create_preview(path: Path, hdu_index: int, kind: str, parameters: dict, max_
                 sample, pattern,
                 int(hdu.header.get("XBAYROFF", 0)), int(hdu.header.get("YBAYROFF", 0)), stride,
             )
-        low, high = stretch if stretch is not None else stretch_bounds(sample)
-        image = _display(sample, (low, high))
-        image.thumbnail((max_edge, max_edge), Image.Resampling.LANCZOS)
-        display_parameters = {
-            "stretch": "percentile_1_99",
-            "stretch_low": low,
-            "stretch_high": high,
+        return sample, {
             "downsample_stride": stride,
             "cfa_pattern": parameters.get("cfa_pattern") if kind == "bayer" else None,
             "algorithm": PREVIEW_ALGORITHM_VERSION,
         }
-        return image, display_parameters
+
+
+def create_preview(path: Path, hdu_index: int, kind: str, parameters: dict, max_edge: int, stretch: tuple[float, float] | None = None) -> tuple[Image.Image, dict]:
+    sample, display_parameters = read_preview_pixels(path, hdu_index, kind, parameters, max_edge)
+    low, high = stretch if stretch is not None else stretch_bounds(sample)
+    image = _display(sample, (low, high))
+    image.thumbnail((max_edge, max_edge), Image.Resampling.LANCZOS)
+    return image, {**display_parameters, "stretch": "percentile_1_99", "stretch_low": low, "stretch_high": high}

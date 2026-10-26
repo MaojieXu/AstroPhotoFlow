@@ -11,7 +11,8 @@ vi.mock('@frontend/assets/host-client',()=>({assetApi:{get,send,getBlob}}))
 const assetId='00000000-0000-4000-8000-000000000001'
 const versionId='00000000-0000-4000-8000-000000000002'
 const photo={assetId,versionId,title:'Pinned photo'}
-const state=(status:string,error:unknown=null)=>({asset_version_id:versionId,size:'display',status,width:status==='available'?1080:null,height:status==='available'?720:null,error})
+const recipe={algorithm:'auto-mtf-1',input_offset:0,white_balance:[2,1,3],shadows:10,highlights:900,midtones:.1}
+const state=(status:string,error:unknown=null)=>({asset_version_id:versionId,size:'display',status,width:status==='available'?1080:null,height:status==='available'?720:null,error,stretch:status==='available'?recipe:null})
 let wrapper:ReturnType<typeof mount>|undefined
 let createUrl:ReturnType<typeof vi.fn>
 let revokeUrl:ReturnType<typeof vi.fn>
@@ -26,6 +27,53 @@ beforeEach(()=>{
 afterEach(()=>{wrapper?.unmount();wrapper=undefined;vi.useRealTimers();vi.unstubAllGlobals()})
 
 describe('lightweight photo preview',()=>{
+  it('automatically computes this photo once and notifies thumbnail consumers when ready',async()=>{
+    send.mockResolvedValue(state('generating'))
+    wrapper=mount(PhotoPreviewDialog,{props:{photo}});await flushPromises()
+    expect(wrapper.findAll('input[type="range"]')).toHaveLength(0)
+    expect(wrapper.find('footer').exists()).toBe(false)
+    expect(wrapper.find('.apf-auto-stretch').exists()).toBe(false)
+    expect(send).toHaveBeenCalledTimes(1)
+    const parameters={algorithm:'auto-mtf-1',input_offset:0,white_balance:[2,1,3],shadows:10,highlights:900,midtones:.1}
+    get.mockResolvedValue({...state('available'),stretch:parameters})
+    expect(send).toHaveBeenLastCalledWith(expect.stringContaining('/display/auto-stretch'),displayPreviewSchema,'POST',{})
+    expect(wrapper.emitted('updated')).toBeUndefined()
+    await vi.advanceTimersByTimeAsync(500);await flushPromises()
+    expect(wrapper.emitted('updated')).toEqual([[photo]])
+    expect(wrapper.find('[role="status"]').exists()).toBe(false)
+    expect(send).toHaveBeenCalledTimes(1)
+    expect(getBlob).toHaveBeenCalledTimes(1)
+    expect(wrapper.findAll('button')).toHaveLength(1)
+  })
+  it('reads the saved per-photo recipe when reopened without recomputing',async()=>{
+    const parameters={algorithm:'auto-mtf-1',input_offset:0,white_balance:[1],shadows:10,highlights:900,midtones:.1}
+    expect(displayPreviewSchema.parse({...state('available'),stretch:parameters}).stretch).toEqual(parameters)
+    send.mockResolvedValue({...state('available'),stretch:parameters})
+    wrapper=mount(PhotoPreviewDialog,{props:{photo}});await flushPromises()
+    expect(wrapper.get('img').attributes('src')).toBe('blob:display')
+    expect(send).toHaveBeenCalledTimes(1)
+    expect(send.mock.calls[0][0]).toMatch(/previews\/display\/auto-stretch$/)
+  })
+  it('reports an automatic stretch failure and retries from the error action',async()=>{
+    send.mockRejectedValueOnce(new Error('分析失败')).mockResolvedValue(state('available'))
+    wrapper=mount(PhotoPreviewDialog,{props:{photo}});await flushPromises()
+    expect(wrapper.get('[role="alert"]').text()).toBe('分析失败')
+    expect(wrapper.find('img').exists()).toBe(false)
+    expect(wrapper.get('button[aria-label="关闭大图预览"]').attributes('disabled')).toBeUndefined()
+    await wrapper.findAll('button').find(button=>button.text()==='重试')!.trigger('click');await flushPromises()
+    expect(wrapper.emitted('updated')).toEqual([[photo]])
+  })
+  it('finishes an existing legacy preview job before ensuring its own automatic recipe',async()=>{
+    send.mockResolvedValue(state('generating'))
+    get.mockResolvedValueOnce({...state('available'),stretch:null}).mockResolvedValue(state('available'))
+    wrapper=mount(PhotoPreviewDialog,{props:{photo}});await flushPromises()
+    await vi.advanceTimersByTimeAsync(500);await flushPromises()
+    expect(send).toHaveBeenCalledTimes(2)
+    expect(getBlob).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(500);await flushPromises()
+    expect(getBlob).toHaveBeenCalledTimes(1)
+    expect(wrapper.emitted('updated')).toEqual([[photo]])
+  })
   it('closes from the focused button inside a workspace that stops keyboard bubbling',async()=>{
     const host=document.createElement('div')
     document.body.append(host)
@@ -84,7 +132,7 @@ describe('lightweight photo preview',()=>{
     send.mockResolvedValue(state('available'))
     const basePath='/astrophotoflow/api/v1/projects/project/asset-references/reference/previews'
     wrapper=mount(PhotoPreviewDialog,{props:{photo:{...photo,basePath}}});await flushPromises()
-    expect(send.mock.calls[0][0]).toBe(basePath+'/display')
+    expect(send.mock.calls[0][0]).toBe(basePath+'/display/auto-stretch')
     expect(getBlob).toHaveBeenCalledWith(basePath+'/display')
   })
 })
@@ -101,6 +149,10 @@ describe('project fixed version member browser',()=>{
     await wrapper.get('button[aria-label="查看 A member 0 大图"]').trigger('click');await flushPromises()
     expect(send.mock.calls[0][0]).toContain('/versions/'+versionId+'/previews/display')
     expect(send.mock.calls[0][0]).not.toContain('current-B')
+    const before=getBlob.mock.calls.length
+    wrapper.getComponent(PhotoPreviewDialog).vm.$emit('updated',{assetId,versionId,title:'A member 0'})
+    await flushPromises()
+    expect(getBlob.mock.calls.length).toBe(before+1)
     await wrapper.get('button[aria-label="关闭大图预览"]').trigger('click')
     await wrapper.findAll('button').find(button=>button.text()==='下一页')!.trigger('click');await flushPromises()
     expect(wrapper.get('[aria-label="固定版本照片"]').findAll('li')).toHaveLength(1)
@@ -143,6 +195,6 @@ it('keeps project dataset member browsing pinned to A while the current dataset 
   await wrapper.findAll('button').find(button=>button.text()==='查看固定版本 · 1 张')!.trigger('click');await flushPromises()
   expect(wrapper.get('[aria-label="固定版本照片"]').text()).toContain('Pinned A photo')
   await wrapper.get('[aria-label="固定版本照片"] button[aria-label="查看 Pinned A photo 大图"]').trigger('click');await flushPromises()
-  expect(send.mock.calls[0][0]).toBe('/astrophotoflow/api/v1/library/assets/'+assetId+'/versions/'+versionId+'/previews/display')
+  expect(send.mock.calls[0][0]).toBe('/astrophotoflow/api/v1/library/assets/'+assetId+'/versions/'+versionId+'/previews/display/auto-stretch')
   expect(get.mock.calls.every(([path])=>!String(path).includes('/versions/'+datasetB))).toBe(true)
 })

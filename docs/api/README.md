@@ -1,6 +1,6 @@
 # 接口与契约
 
-HTTP 服务前缀为 `/api/v1`；浏览器经 ComfyUI 的 `/astrophotoflow/api/v1` 同源代理访问。认证、版本冲突、错误 envelope 和请求 ID 延续当前实现。
+HTTP 服务前缀为 `/api/v1`；浏览器经原生网页服务的 `/astrophotoflow/api/v1` 同源代理访问。认证、版本冲突、错误 envelope 和请求 ID 延续当前实现。
 
 [openapi.json](openapi.json) 是实际应用生成的契约快照。修改接口时同时核对处理逻辑、Pydantic 模型、代理白名单、前端 Zod 和相关测试；不能用路由数量相等代替行为一致。
 
@@ -10,6 +10,8 @@ uv run --locked --no-sync pytest tests/backend/test_service.py -k openapi
 ```
 
 CLI 保留 `apf init/start/status/stop`、`mcp-config`、`mcp`、`import-photo`、`task`、`assets list/get/parameters`。服务 CLI 保留 `apf-service serve`、`db status/upgrade` 和 `previews backfill`。
+
+单图自动显示拉伸：前端打开大图时调用 `/api/v1/library/assets/{asset_id}/versions/{version_id}/previews/display/auto-stretch`（POST，无用户参数），后台单独分析当前照片；RGB自动估计白平衡，并计算MTF曲线，同时更新该版本的大图和缩略图。已有结果直接返回200，已有生成任务复用并返回202，前端沿用状态轮询；不强制重新计算。`/display/status` 及已有生成接口返回 `stretch`：未执行或生成中为null，成功后为 `algorithm/input_offset/white_balance/shadows/highlights/midtones` 计算结果。前端等待旧基准大图任务时，会在该任务完成后补齐自动配方，再显示最终图像。项目固定引用在 `/projects/{project_id}/asset-references/{reference_id}/previews` 下具有同名POST接口，作用于引用版本。MCP工具集合、CLI命令及科学素材参数不变。
 
 MCP 通过 `apf mcp` 提供 stdio 服务，现有五个名称保持兼容：`import_photo`、`get_import_task`、`list_assets`、`get_asset`、`update_asset_parameters`。结构化 HTTP 客户端、CLI 和 58 个 MCP 工具覆盖批量上传、配置根目录导入、任务、资产及逻辑组、项目固定版本引用、设备、使用组合／所属预设、校准关联、按需预览和回收站。
 

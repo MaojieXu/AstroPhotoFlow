@@ -89,9 +89,10 @@ describe('dataset group member table',()=>{
     const pinned=member(asset,8002,0,9004)
     configureLibrary([{dataset:group,version:version(group.id,8002,[pinned])}])
     await mountLibrary();await enterGroup('Preview group')
-    send.mockResolvedValue({asset_version_id:pinned.version.id,size:'display',status:'available',width:1080,height:720,error:null})
+    send.mockResolvedValue({asset_version_id:pinned.version.id,size:'display',status:'available',width:1080,height:720,error:null,
+      stretch:{algorithm:'auto-mtf-1',input_offset:0,white_balance:[1],shadows:0,highlights:255,midtones:.2}})
     await wrapper.get('button.apf-thumb').trigger('click');await flushPromises()
-    expect(send.mock.calls.at(-1)![0]).toBe('/astrophotoflow/api/v1/library/assets/'+asset.id+'/versions/'+pinned.version.id+'/previews/display')
+    expect(send.mock.calls.at(-1)![0]).toBe('/astrophotoflow/api/v1/library/assets/'+asset.id+'/versions/'+pinned.version.id+'/previews/display/auto-stretch')
     expect(wrapper.get('[role="dialog"]').text()).toContain('Pinned member.fit')
     expect(wrapper.get('[role="dialog"] img').attributes('src')).toContain('blob:')
   })

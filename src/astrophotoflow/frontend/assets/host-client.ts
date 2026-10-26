@@ -1,4 +1,3 @@
-import { api } from '../../../scripts/api.js'
 import { createApiClient } from './client'
 
-export const assetApi = createApiClient(api.fetchApi.bind(api))
+export const assetApi = createApiClient((path, init) => fetch(path, init))

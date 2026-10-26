@@ -1,0 +1,118 @@
+name: Bug Report
+description: 'Report something that is not working correctly'
+labels: ['Potential Bug']
+type: Bug
+
+body:
+  - type: checkboxes
+    attributes:
+      label: Prerequisites
+      options:
+        - label: I am running the latest version of ComfyUI
+          required: true
+        - label: I have custom nodes enabled
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: A clear and concise description of the bug. Include screenshots or videos if helpful.
+      placeholder: |
+        Example: "When I connect a VAE Decode node to a KSampler, the connection line appears but the workflow fails to execute with an error message..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to Reproduce
+      description: How can we reproduce this issue?
+      placeholder: |
+        1. Add a KSampler node
+        2. Connect it to...
+        3. Click Queue Prompt
+        4. See error
+      value: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+
+  - type: textarea
+    id: workflow
+    attributes:
+      label: Workflow
+      description: |
+        **This is the single most useful thing you can give us.** A workflow that reproduces the
+        bug lets us write a regression test matching your exact setup, so the bug stays fixed.
+
+        Export it with **Workflow → Export** in the menu, then drag the `.json` file into this box.
+        A PNG saved by ComfyUI also works — it has the workflow embedded.
+
+        If the bug has nothing to do with a specific workflow, write "N/A".
+      placeholder: Drag your workflow .json or .png here, or write N/A
+    validations:
+      required: true
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: How is this affecting you?
+      options:
+        - Crashes ComfyUI completely
+        - Workflow won't execute
+        - Feature doesn't work as expected
+        - Visual/UI issue only
+        - Minor inconvenience
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: ComfyUI Frontend Version
+      description: Open **Settings → About** and copy the frontend version shown there. Please give the actual version, not the example.
+      placeholder: 'e.g. 1.49.2'
+    validations:
+      required: true
+
+  - type: dropdown
+    id: browser
+    attributes:
+      label: Browser
+      description: Which browser are you using?
+      options:
+        - Chrome/Chromium
+        - Firefox
+        - Safari
+        - Edge
+        - Other
+    validations:
+      required: true
+
+  - type: markdown
+    attributes:
+      value: |
+        ## Additional Information (Optional)
+        *The following fields help us debug complex issues but are not required for most bug reports.*
+
+  - type: textarea
+    id: console-errors
+    attributes:
+      label: Console Errors
+      description: If you see red error messages in the browser console (F12), paste them here
+      render: javascript
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: If relevant, paste any terminal/server logs here
+      render: shell
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional Context
+      description: Any other information that might help (OS, GPU, specific nodes involved, etc.)

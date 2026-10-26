@@ -26,17 +26,20 @@ def check_wheel(path: Path) -> None:
             "backend/cli.py", "backend/alembic.ini", "backend/alembic/env.py",
             "backend/alembic/versions/0008_asset_equipment_snapshot.py",
             "backend/alembic/versions/0009_remove_legacy_capture_profiles.py",
-            "comfyui/extension/__init__.py", "comfyui/extension/assets/astrophotoflow.js",
-            "comfyui/extension/assets/astrophotoflow.css", "vendor/comfyui-source.json",
+            "comfyui/proxy.py", "web/index.html", "vendor/comfyui-source.json",
             "vendor/comfyui-0.42.0.zip", "vendor/comfyui-0.42.0-windows-py312.lock",
         }
         assert {prefix + name for name in required} <= names, f"Missing product resources in {path.name}"
         assert not any(name.startswith(("astrophotoflow_service/", "tests/", "astrophotoflow/frontend/")) for name in names)
         assert not any("node_modules/" in name or "/__pycache__/" in name for name in names)
         assert prefix + "backend/capture_profiles.py" not in names
-        for extension in ("js", "css"):
-            bundled = archive.read(f"{prefix}comfyui/extension/assets/astrophotoflow.{extension}")
-            assert bundled == (ROOT / "build" / "frontend" / f"astrophotoflow.{extension}").read_bytes()
+        assert not any(name.startswith(prefix + "comfyui/extension/") for name in names)
+        resources = ROOT / "build/frontend"
+        expected = {path.relative_to(resources).as_posix() for path in resources.rglob("*") if path.is_file()}
+        actual = {name.removeprefix(prefix + "web/") for name in names if name.startswith(prefix + "web/")}
+        assert actual == expected
+        for name in expected:
+            assert archive.read(prefix + "web/" + name) == (resources / name).read_bytes()
 
 
 def run(command: list[str], *, cwd: Path, env: dict[str, str]) -> None:
@@ -82,8 +85,7 @@ import astrophotoflow.mcp_server
 assert 'server' not in sys.modules
 assert Path(astrophotoflow.__file__).resolve().is_relative_to(Path(sys.prefix).resolve())
 assert importlib.util.find_spec('astrophotoflow_service') is None
-plugin = files('astrophotoflow.comfyui').joinpath('extension')
-assert plugin.joinpath('assets/astrophotoflow.js').is_file()
+assert files('astrophotoflow').joinpath('web/index.html').is_file()
 assert importlib.util.find_spec('astrophotoflow.backend.capture_profiles') is None
 from astrophotoflow.backend.models import Base
 assert 'capture_profile' not in Base.metadata.tables
@@ -98,7 +100,7 @@ assert 'capture_profile_id' not in Base.metadata.tables['asset_version'].c
         with tarfile.open(sdist) as archive:
             archive.extractall(work / "source", filter="data")
         source = work / "source" / stem
-        assert (source / "build/frontend/astrophotoflow.js").is_file()
+        assert (source / "build/frontend/index.html").is_file()
         # Only Python launchers and OS utilities remain on PATH during rebuild.
         env["PATH"] = str(Path(sys.executable).parent)
         if os.name == "nt":

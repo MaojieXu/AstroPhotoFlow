@@ -7,7 +7,7 @@
 | FR-01 项目基础管理 | 创建、编辑、回收站、素材及数据集固定版本引用；旧拍摄配置已移除，完整托管工作流未实现 | `tests/backend/test_service.py`、前端 Workspace/Settings 测试 |
 | FR-04 素材管理 | 分阶段异步导入、Header 分类、任务、预设快照、数据集、筛选排序与编辑 | backend ingestion/import_pipeline/service/library_sort；frontend Workspace/ImportDialog/ImportTasks；integration import_presets |
 | FR-04/11 删除与恢复 | 已接受的组／照片回收站、确认范围、部分清理、R4、身份和固定版本保留 | backend service 的 trash 回归；frontend LibraryTrashDialog |
-| FR-05 当前显示子集 | 100 px 缩略图、1080 px按需缓存、固定拉伸和项目固定成员浏览；完整比较未实现 | backend fits_preview/display_previews/video_preview；frontend PhotoPreviewDialog |
+| FR-05 当前显示子集 | 100 px 缩略图、1080 px按需缓存、组基准拉伸、打开大图自动拉伸及RGB白平衡并更新缩略图、已有配方/任务复用、项目固定成员浏览；完整比较未实现 | backend auto_stretch/fits_preview/display_previews/video_preview；frontend PhotoPreviewDialog |
 | FR-07 资料管理 MCP | 58工具及 CLI 共用领域客户端，覆盖素材／配置／校准；完整软件工作流未实现 | integration cli_mcp_protocol/client_operations |
 | 设备组合与校准关系 | 内联设备、所属预设、固定校准版本、组默认／成员覆盖、历史引用保护 | backend setups/calibration/domain_foundation；frontend SettingsOrganization/CalibrationLibrary |
 | FR-08 当前并发子集 | 参数 revision、过期请求拒绝；完整接管／撤销未实现 | backend service/ingestion、CLI/MCP 协议回归 |

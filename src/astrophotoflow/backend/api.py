@@ -2,12 +2,13 @@ import logging
 from contextlib import asynccontextmanager
 from uuid import UUID, uuid4
 
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from .db import Database
 from .errors import ApiError
+from .dependencies import authenticate
 from ..config import Settings
 from . import calibration, datasets, equipment, imports, library, management_trash, projects, previews, setups, system, trash
 
@@ -29,6 +30,11 @@ def create_app(settings: Settings, token: str) -> FastAPI:
     app.state.settings = settings
     app.state.token = token
     app.state.database = Database(settings.database_path)
+
+    @app.post("/internal/shutdown", dependencies=[Depends(authenticate)], include_in_schema=False)
+    async def shutdown(request: Request):
+        request.app.state.shutdown()
+        return {"status": "stopping"}
 
     @app.middleware("http")
     async def add_request_id(request: Request, call_next):
