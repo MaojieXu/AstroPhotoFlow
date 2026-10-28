@@ -32,6 +32,7 @@ export const configValuesSchema = z
 export const configStateSchema = z
   .object({
     config_path: z.string(),
+    data_dir_absolute: z.string(),
     default_workspace: z.string().nullable(),
     saved: configValuesSchema,
     config_token: z.string(),
@@ -51,6 +52,8 @@ export const configSaveSchema = z
 export type ConfigValues = z.infer<typeof configValuesSchema>
 export type ConfigState = z.infer<typeof configStateSchema>
 export type ConfigSave = z.infer<typeof configSaveSchema>
+
+export const directorySelectionSchema = z.object({ path: z.string().nullable() }).strict()
 
 export const workbenchResultSchema = z
   .object({

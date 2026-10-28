@@ -5,19 +5,25 @@ import {
   onBeforeUnmount,
   ref,
   shallowRef,
-  toRaw
+  toRaw,
+  watch
 } from 'vue'
+
+import type { Component } from 'vue'
 
 import { ApiClientError } from './client'
 import type { WorkbenchClient } from './client'
 import type { ConfigSave, ConfigState, ConfigValues } from './contracts'
 
-const { client, translate } = defineProps<{
+const { client, translate, controls } = defineProps<{
   client: WorkbenchClient
+  controls: { formItem: Component; button: Component; input: Component }
   translate: (key: string) => string
 }>()
 
-const phase = ref<'loading' | 'ready' | 'saving' | 'restarting'>('loading')
+const phase = ref<'loading' | 'ready' | 'saving' | 'restarting' | 'selecting'>(
+  'loading'
+)
 const configuration = ref<ConfigState | null>(null)
 const form = ref<ConfigValues | null>(null)
 const defaultWorkspace = ref('')
@@ -31,6 +37,9 @@ const hasUnsavedChanges = computed(() =>
       defaultWorkspace.value !== (configuration.value.default_workspace ?? ''))
   )
 )
+watch(hasUnsavedChanges, (changed) => {
+  if (changed) saved.value = false
+})
 const requestError = computed(() =>
   error.value instanceof ApiClientError ? error.value : null
 )
@@ -46,6 +55,23 @@ const serviceUrl = computed(() => {
     ? `[${effective.host}]`
     : effective.host
   return `http://${host}:${effective.service_port}`
+})
+
+const workspaceHint = computed(
+  () => `${translate('apfWorkbench.defaultHelp')}\n\n${defaultWorkspace.value}`
+)
+const dataDirectoryHint = computed(() => {
+  if (!configuration.value || !form.value) return ''
+  const content = [
+    translate('apfWorkbench.dataDirectoryHelp'),
+    `${translate('apfWorkbench.absoluteDataDirectory')}: ${configuration.value.data_dir_absolute}`
+  ]
+  if (form.value.data_dir !== configuration.value.saved.data_dir) {
+    content.push(
+      `${translate('apfWorkbench.currentDataDirectory')}: ${form.value.data_dir}`
+    )
+  }
+  return content.join('\n\n')
 })
 
 async function reload() {
@@ -88,6 +114,28 @@ async function save() {
     form.value = structuredClone(current.saved)
     defaultWorkspace.value = current.default_workspace ?? ''
     saved.value = true
+  } catch (cause) {
+    error.value = cause
+  } finally {
+    phase.value = 'ready'
+  }
+}
+
+async function chooseDirectory(target: 'default_workspace' | 'data_dir') {
+  if (!form.value) return
+  phase.value = 'selecting'
+  error.value = null
+  try {
+    const selected = await client.selectDirectory(
+      target === 'default_workspace'
+        ? defaultWorkspace.value
+        : form.value.data_dir
+    )
+    if (selected !== null) {
+      if (target === 'default_workspace') defaultWorkspace.value = selected
+      else form.value.data_dir = selected
+      saved.value = false
+    }
   } catch (cause) {
     error.value = cause
   } finally {
@@ -162,13 +210,40 @@ onMounted(reload)
 
 <template>
   <section
-    class="space-y-5 p-4 text-sm font-normal text-base-foreground"
+    class="space-y-6 text-sm text-base-foreground"
     data-testid="workbench-settings"
   >
-    <header class="block min-w-0 space-y-2 font-normal">
-      <p class="m-0 text-sm opacity-70">
-        {{ translate('apfWorkbench.saveHelp') }}
-      </p>
+    <header class="flex items-start justify-between gap-4">
+      <div class="flex items-center gap-1">
+        <h2 class="m-0 text-lg font-semibold">
+          {{ translate('apfWorkbench.title') }}
+        </h2>
+        <component
+          :is="controls.button"
+          type="button"
+          size="icon-sm"
+          variant="muted-textonly"
+          icon="icon-[lucide--info]"
+          :tooltip="translate('apfWorkbench.saveHelp')"
+          :aria-label="translate('apfWorkbench.configurationHelp')"
+          @click.stop
+        >
+          <template #tooltip
+            ><span class="block max-w-sm break-all whitespace-pre-line">{{
+              translate('apfWorkbench.saveHelp')
+            }}</span></template
+          >
+        </component>
+      </div>
+      <component
+        :is="controls.button"
+        type="button"
+        variant="muted-textonly"
+        :disabled="phase !== 'ready'"
+        @click="reload"
+      >
+        {{ translate('apfWorkbench.reload') }}
+      </component>
     </header>
 
     <div
@@ -189,250 +264,334 @@ onMounted(reload)
         {{ translate('apfWorkbench.requestId') }}: {{ requestError.requestId }}
       </p>
     </div>
-
     <p v-if="phase === 'loading'" role="status">
       {{ translate('apfWorkbench.loading') }}
     </p>
-    <div
+    <p
+      v-if="phase === 'selecting'"
+      role="status"
+      class="text-sm text-muted-foreground"
+    >
+      {{ translate('apfWorkbench.selectingDirectory') }}
+    </p>
+    <p
       v-if="configuration"
-      class="rounded-lg border border-interface-stroke p-3"
+      class="m-0 flex items-center gap-2 text-sm"
+      data-testid="configuration-state"
     >
-      <p class="m-0 font-medium" data-testid="configuration-state">
-        {{
-          translate(
-            configuration.restart_required
-              ? 'apfWorkbench.restartRequired'
-              : 'apfWorkbench.inSync'
-          )
-        }}
-      </p>
-      <dl
-        v-if="configuration.effective"
-        class="mb-0 grid grid-cols-1 gap-y-1 text-sm [&_dt]:mt-2 [&_dt]:text-xs [&_dt]:text-muted-foreground"
-      >
-        <dt>{{ translate('apfWorkbench.webAddress') }}</dt>
-        <dd class="m-0 break-all">
-          <a
-            :href="configuration.effective.allowed_origins[0]"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="underline decoration-interface-stroke underline-offset-4 hover:text-muted-foreground"
-            >{{ configuration.effective.allowed_origins[0] }}</a
-          >
-        </dd>
-        <dt>{{ translate('apfWorkbench.serviceAddress') }}</dt>
-        <dd class="m-0 break-all">{{ serviceUrl }}</dd>
-      </dl>
-      <p v-else class="mb-0 text-sm opacity-70">
-        {{ translate('apfWorkbench.noRunningValues') }}
-      </p>
-    </div>
+      <i
+        :class="
+          configuration.restart_required
+            ? 'icon-[lucide--clock-3]'
+            : 'icon-[lucide--check]'
+        "
+        class="size-4 shrink-0"
+        aria-hidden="true"
+      />
+      {{
+        translate(
+          configuration.restart_required
+            ? 'apfWorkbench.restartRequired'
+            : 'apfWorkbench.inSync'
+        )
+      }}
+    </p>
 
-    <form
-      v-if="form && configuration"
-      class="space-y-5"
-      @submit.prevent="save"
-      @input="saved = false"
-      @click="saved = false"
-    >
+    <form v-if="form && configuration" class="space-y-6" @submit.prevent="save">
       <fieldset
         :disabled="phase !== 'ready'"
-        class="m-0 space-y-5 border-0 p-0"
+        class="m-0 space-y-6 border-0 p-0"
       >
-        <div class="grid grid-cols-1 gap-4">
-          <label class="block min-w-0 space-y-2 font-normal">
-            <span class="block text-sm">{{
-              translate('apfWorkbench.fileWorkers')
-            }}</span>
-            <input
-              v-model.number="form.file_workers"
-              name="file_workers"
-              type="number"
-              min="1"
-              step="1"
-              required
-              class="h-9 w-full min-w-0 rounded-lg border-none bg-secondary-background px-3 text-sm font-normal text-base-foreground focus-visible:ring-1 focus-visible:ring-border-default focus-visible:outline-none"
+        <div class="space-y-4">
+          <div>
+            <component
+              :is="controls.formItem"
+              id="file_workers"
+              v-model:form-value="form.file_workers"
+              :item="{
+                name: translate('apfWorkbench.fileWorkers'),
+                type: 'number',
+                tooltip: translate('apfWorkbench.fileWorkersHelp'),
+                attrs: { min: 1, step: 1, name: 'file_workers' }
+              }"
             />
-            <span
-              v-if="configuration.effective"
-              class="text-xs opacity-70"
+            <p
+              v-if="
+                configuration.effective &&
+                form.file_workers !== configuration.effective.file_workers
+              "
+              class="m-0 text-xs text-muted-foreground"
               data-testid="effective-file-workers"
             >
               {{ translate('apfWorkbench.effective') }}:
               {{ configuration.effective.file_workers }}
-            </span>
-          </label>
-          <label class="block min-w-0 space-y-2 font-normal">
-            <span class="block text-sm">{{
-              translate('apfWorkbench.previewWorkers')
-            }}</span>
-            <input
-              v-model.number="form.preview_workers"
-              name="preview_workers"
-              type="number"
-              min="1"
-              step="1"
-              required
-              class="h-9 w-full min-w-0 rounded-lg border-none bg-secondary-background px-3 text-sm font-normal text-base-foreground focus-visible:ring-1 focus-visible:ring-border-default focus-visible:outline-none"
+            </p>
+          </div>
+          <div>
+            <component
+              :is="controls.formItem"
+              id="preview_workers"
+              v-model:form-value="form.preview_workers"
+              :item="{
+                name: translate('apfWorkbench.previewWorkers'),
+                type: 'number',
+                tooltip: translate('apfWorkbench.previewWorkersHelp'),
+                attrs: { min: 1, step: 1, name: 'preview_workers' }
+              }"
             />
-            <span v-if="configuration.effective" class="text-xs opacity-70">
+            <p
+              v-if="
+                configuration.effective &&
+                form.preview_workers !== configuration.effective.preview_workers
+              "
+              class="m-0 text-xs text-muted-foreground"
+            >
               {{ translate('apfWorkbench.effective') }}:
               {{ configuration.effective.preview_workers }}
-            </span>
-          </label>
+            </p>
+          </div>
         </div>
 
-        <details class="rounded-lg border border-interface-stroke p-3">
-          <summary class="cursor-pointer font-medium">
-            {{ translate('apfWorkbench.advanced') }}
-          </summary>
-          <div class="mt-4 min-w-0 space-y-5">
-            <p
-              v-if="configuration"
-              class="m-0 text-xs break-all text-muted-foreground"
+        <section class="border-t border-border-default pt-4">
+          <div class="flex items-center gap-1">
+            <h3 class="m-0 text-base font-medium">
+              {{ translate('apfWorkbench.advanced') }}
+            </h3>
+            <component
+              :is="controls.button"
+              type="button"
+              size="icon-sm"
+              variant="muted-textonly"
+              icon="icon-[lucide--info]"
+              :tooltip="configuration.config_path"
+              :aria-label="translate('apfWorkbench.configurationPath')"
+              @click.stop
             >
-              {{ configuration.config_path }}
-            </p>
-            <label class="block min-w-0 space-y-2 font-normal">
-              <span class="block text-sm">{{
-                translate('apfWorkbench.defaultWorkspace')
-              }}</span>
-              <input
-                v-model="defaultWorkspace"
-                name="default_workspace"
-                type="text"
-                class="h-9 w-full min-w-0 rounded-lg border-none bg-secondary-background px-3 text-sm font-normal text-base-foreground focus-visible:ring-1 focus-visible:ring-border-default focus-visible:outline-none"
-              />
-              <span class="block text-xs opacity-70">{{
-                translate('apfWorkbench.defaultHelp')
-              }}</span>
-            </label>
-            <div class="grid grid-cols-1 gap-4">
-              <label class="block min-w-0 space-y-2 font-normal">
-                <span class="block text-sm">{{
-                  translate('apfWorkbench.host')
-                }}</span>
-                <input
-                  v-model="form.host"
-                  name="host"
-                  required
-                  class="h-9 w-full min-w-0 rounded-lg border-none bg-secondary-background px-3 text-sm font-normal text-base-foreground focus-visible:ring-1 focus-visible:ring-border-default focus-visible:outline-none"
-                />
-              </label>
-              <label class="block min-w-0 space-y-2 font-normal">
-                <span class="block text-sm">{{
-                  translate('apfWorkbench.servicePort')
-                }}</span>
-                <input
-                  v-model.number="form.service_port"
-                  name="service_port"
-                  type="number"
-                  min="1"
-                  max="65535"
-                  required
-                  class="h-9 w-full min-w-0 rounded-lg border-none bg-secondary-background px-3 text-sm font-normal text-base-foreground focus-visible:ring-1 focus-visible:ring-border-default focus-visible:outline-none"
-                />
-              </label>
+              <template #tooltip
+                ><span class="block max-w-sm break-all whitespace-pre-line">{{
+                  configuration.config_path
+                }}</span></template
+              >
+            </component>
+          </div>
+          <div class="mt-4 space-y-4">
+            <div class="flex flex-wrap items-center gap-2">
+              <component
+                :is="controls.formItem"
+                id="default_workspace"
+                class="min-w-0 flex-1"
+                v-model:form-value="defaultWorkspace"
+                :item="{
+                  name: translate('apfWorkbench.defaultWorkspace'),
+                  type: 'text',
+                  attrs: { name: 'default_workspace' }
+                }"
+              >
+                <template #name-suffix>
+                  <component
+                    :is="controls.button"
+                    type="button"
+                    size="icon-sm"
+                    variant="muted-textonly"
+                    class="ml-1 align-middle"
+                    icon="icon-[lucide--info]"
+                    :tooltip="workspaceHint"
+                    :aria-label="translate('apfWorkbench.workspaceHelp')"
+                    @click.stop
+                  >
+                    <template #tooltip
+                      ><span
+                        class="block max-w-sm break-all whitespace-pre-line"
+                        >{{ workspaceHint }}</span
+                      ></template
+                    >
+                  </component>
+                </template>
+              </component>
+              <component
+                :is="controls.button"
+                type="button"
+                :aria-label="translate('apfWorkbench.chooseWorkspace')"
+                @click="chooseDirectory('default_workspace')"
+              >
+                {{ translate('apfWorkbench.chooseDirectory') }}
+              </component>
             </div>
-            <label class="block min-w-0 space-y-2 font-normal">
-              <span class="block text-sm">{{
-                translate('apfWorkbench.dataDir')
-              }}</span>
-              <input
-                v-model="form.data_dir"
-                name="data_dir"
-                required
-                class="h-9 w-full min-w-0 rounded-lg border-none bg-secondary-background px-3 text-sm font-normal text-base-foreground focus-visible:ring-1 focus-visible:ring-border-default focus-visible:outline-none"
-              />
-            </label>
-            <div class="block min-w-0 space-y-2 font-normal">
-              <p class="m-0 text-sm">{{ translate('apfWorkbench.origins') }}</p>
+            <component
+              :is="controls.formItem"
+              id="host"
+              v-model:form-value="form.host"
+              :item="{
+                name: translate('apfWorkbench.host'),
+                type: 'text',
+                attrs: { name: 'host', required: true }
+              }"
+            />
+            <component
+              :is="controls.formItem"
+              id="service_port"
+              v-model:form-value="form.service_port"
+              :item="{
+                name: translate('apfWorkbench.servicePort'),
+                type: 'number',
+                attrs: { min: 1, max: 65535, step: 1, name: 'service_port' }
+              }"
+            />
+            <div class="flex flex-wrap items-center gap-2">
+              <component
+                :is="controls.formItem"
+                id="data_dir"
+                class="min-w-0 flex-1"
+                v-model:form-value="form.data_dir"
+                :item="{
+                  name: translate('apfWorkbench.dataDir'),
+                  type: 'text',
+                  attrs: { name: 'data_dir', required: true }
+                }"
+              >
+                <template #name-suffix>
+                  <component
+                    :is="controls.button"
+                    type="button"
+                    size="icon-sm"
+                    variant="muted-textonly"
+                    class="ml-1 align-middle"
+                    icon="icon-[lucide--info]"
+                    :tooltip="dataDirectoryHint"
+                    data-testid="data-directory-hint"
+                    :aria-label="translate('apfWorkbench.dataDirectoryDetails')"
+                    @click.stop
+                  >
+                    <template #tooltip
+                      ><span
+                        class="block max-w-sm break-all whitespace-pre-line"
+                        >{{ dataDirectoryHint }}</span
+                      ></template
+                    >
+                  </component>
+                </template>
+              </component>
+              <component
+                :is="controls.button"
+                type="button"
+                :aria-label="translate('apfWorkbench.chooseDataDirectory')"
+                @click="chooseDirectory('data_dir')"
+              >
+                {{ translate('apfWorkbench.chooseDirectory') }}
+              </component>
+            </div>
+            <div class="space-y-2">
+              <p class="m-0 text-sm text-muted">
+                {{ translate('apfWorkbench.origins') }}
+              </p>
               <div
                 v-for="(_, index) in form.allowed_origins"
                 :key="index"
-                class="flex min-w-0 items-center gap-2"
+                class="flex items-center gap-2"
               >
-                <input
+                <component
+                  :is="controls.input"
                   v-model="form.allowed_origins[index]"
                   :aria-label="translate('apfWorkbench.origins')"
                   required
-                  class="h-9 min-w-0 flex-1 rounded-lg border-none bg-secondary-background px-3 text-sm font-normal text-base-foreground focus-visible:ring-1 focus-visible:ring-border-default focus-visible:outline-none"
+                  class="min-w-0 flex-1"
                 />
-                <button
+                <component
+                  :is="controls.button"
                   type="button"
-                  class="inline-flex h-9 shrink-0 items-center justify-center rounded-lg border-none bg-secondary-background px-3 text-xs font-medium hover:bg-secondary-background-hover"
+                  variant="muted-textonly"
                   @click="form.allowed_origins.splice(index, 1)"
+                  >{{ translate('apfWorkbench.remove') }}</component
                 >
-                  {{ translate('apfWorkbench.remove') }}
-                </button>
               </div>
-              <button
+              <component
+                :is="controls.button"
                 type="button"
-                class="inline-flex min-h-8 items-center justify-center rounded-lg border-none bg-secondary-background px-3 py-2 text-xs font-medium hover:bg-secondary-background-hover"
                 @click="form.allowed_origins.push('')"
+                >{{ translate('apfWorkbench.addOrigin') }}</component
               >
-                {{ translate('apfWorkbench.addOrigin') }}
-              </button>
             </div>
-            <div class="block min-w-0 space-y-2 font-normal">
-              <p class="m-0 text-sm">
+            <div class="space-y-2">
+              <p class="m-0 text-sm text-muted">
                 {{ translate('apfWorkbench.importRoots') }}
               </p>
               <div
                 v-for="(root, index) in form.import_roots"
                 :key="index"
-                class="flex min-w-0 flex-wrap items-center gap-2"
+                class="flex flex-wrap items-center gap-2"
               >
-                <input
+                <component
+                  :is="controls.input"
                   v-model="root.id"
                   :aria-label="translate('apfWorkbench.rootId')"
                   :placeholder="translate('apfWorkbench.rootId')"
                   required
-                  class="h-9 w-full min-w-0 rounded-lg border-none bg-secondary-background px-3 text-sm font-normal text-base-foreground focus-visible:ring-1 focus-visible:ring-border-default focus-visible:outline-none"
+                  class="min-w-0 flex-1"
                 />
-                <input
+                <component
+                  :is="controls.input"
                   v-model="root.path"
                   :aria-label="translate('apfWorkbench.rootPath')"
                   :placeholder="translate('apfWorkbench.rootPath')"
                   required
-                  class="h-9 min-w-0 flex-1 rounded-lg border-none bg-secondary-background px-3 text-sm font-normal text-base-foreground focus-visible:ring-1 focus-visible:ring-border-default focus-visible:outline-none"
+                  class="min-w-0 flex-1"
                 />
-                <button
+                <component
+                  :is="controls.button"
                   type="button"
-                  class="inline-flex h-9 shrink-0 items-center justify-center rounded-lg border-none bg-secondary-background px-3 text-xs font-medium hover:bg-secondary-background-hover"
-                  @click="form.import_roots.splice(index, 1)"
+                  size="icon-sm"
+                  variant="muted-textonly"
+                  icon="icon-[lucide--info]"
+                  :tooltip="root.path"
+                  :aria-label="translate('apfWorkbench.importRootDetails')"
+                  @click.stop
                 >
-                  {{ translate('apfWorkbench.remove') }}
-                </button>
+                  <template #tooltip
+                    ><span
+                      class="block max-w-sm break-all whitespace-pre-line"
+                      >{{ root.path }}</span
+                    ></template
+                  >
+                </component>
+                <component
+                  :is="controls.button"
+                  type="button"
+                  variant="muted-textonly"
+                  @click="form.import_roots.splice(index, 1)"
+                  >{{ translate('apfWorkbench.remove') }}</component
+                >
               </div>
-              <button
+              <component
+                :is="controls.button"
                 type="button"
-                class="inline-flex min-h-8 items-center justify-center rounded-lg border-none bg-secondary-background px-3 py-2 text-xs font-medium hover:bg-secondary-background-hover"
                 @click="form.import_roots.push({ id: '', path: '' })"
+                >{{ translate('apfWorkbench.addRoot') }}</component
               >
-                {{ translate('apfWorkbench.addRoot') }}
-              </button>
             </div>
           </div>
-        </details>
+        </section>
       </fieldset>
-      <p v-if="saved" role="status" class="m-0 text-sm text-base-foreground">
+
+      <p v-if="saved" role="status" class="m-0 text-sm">
         {{ translate('apfWorkbench.saved') }}
       </p>
-      <div class="grid grid-cols-2 gap-2">
-        <button
+      <div class="flex flex-wrap gap-2 border-t border-border-default pt-4">
+        <component
+          :is="controls.button"
           type="submit"
+          variant="primary"
           :disabled="phase !== 'ready'"
-          class="inline-flex h-9 items-center justify-center rounded-lg border-none bg-primary-background px-3 text-xs font-medium text-base-foreground hover:bg-primary-background-hover disabled:opacity-50"
         >
           {{
             translate(
               phase === 'saving' ? 'apfWorkbench.saving' : 'apfWorkbench.save'
             )
           }}
-        </button>
-        <button
+        </component>
+        <component
+          :is="controls.button"
           type="button"
+          variant="secondary"
           :disabled="phase !== 'ready' || hasUnsavedChanges"
           data-testid="workbench-restart"
           :title="
@@ -440,12 +599,29 @@ onMounted(reload)
               ? translate('apfWorkbench.saveFirst')
               : translate('apfWorkbench.restart')
           "
-          class="inline-flex h-9 items-center justify-center gap-2 rounded-lg border-none bg-secondary-background px-3 text-xs font-medium text-base-foreground hover:bg-secondary-background-hover disabled:opacity-50"
           @click="restartWorkbench"
         >
-          <i class="icon-[lucide--rotate-cw] size-4" aria-hidden="true" />
-          {{ translate('apfWorkbench.restart') }}
-        </button>
+          <i class="icon-[lucide--rotate-cw] size-4" aria-hidden="true" />{{
+            translate('apfWorkbench.restart')
+          }}
+        </component>
+        <component
+          :is="controls.button"
+          type="button"
+          size="icon-sm"
+          variant="muted-textonly"
+          class="self-center"
+          icon="icon-[lucide--info]"
+          :tooltip="translate('apfWorkbench.restartHelp')"
+          :aria-label="translate('apfWorkbench.restartDetails')"
+          @click.stop
+        >
+          <template #tooltip
+            ><span class="block max-w-sm break-all whitespace-pre-line">{{
+              translate('apfWorkbench.restartHelp')
+            }}</span></template
+          >
+        </component>
       </div>
       <p
         v-if="hasUnsavedChanges"
@@ -461,9 +637,6 @@ onMounted(reload)
       >
         {{ restartMessage }}
       </p>
-      <p class="m-0 text-xs text-muted-foreground">
-        {{ translate('apfWorkbench.restartHelp') }}
-      </p>
       <p v-if="portChanges" class="m-0 text-xs text-muted-foreground">
         {{ translate('apfWorkbench.portChangeHelp') }}
         <a
@@ -475,13 +648,31 @@ onMounted(reload)
         >
       </p>
     </form>
-    <button
-      type="button"
-      :disabled="phase !== 'ready'"
-      class="w-full rounded-lg border-none bg-transparent px-3 py-2 text-xs font-normal text-muted-foreground hover:bg-secondary-background-hover disabled:opacity-50"
-      @click="reload"
-    >
-      {{ translate('apfWorkbench.reload') }}
-    </button>
+
+    <section v-if="configuration" class="border-t border-border-default pt-4">
+      <h3 class="m-0 text-base font-medium">
+        {{ translate('apfWorkbench.runtimeInfo') }}
+      </h3>
+      <dl
+        v-if="configuration.effective"
+        class="mb-0 grid gap-y-1 text-sm [&_dt]:mt-2 [&_dt]:text-xs [&_dt]:text-muted-foreground"
+      >
+        <dt>{{ translate('apfWorkbench.webAddress') }}</dt>
+        <dd class="m-0 break-all">
+          <a
+            :href="configuration.effective.allowed_origins[0]"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="underline"
+            >{{ configuration.effective.allowed_origins[0] }}</a
+          >
+        </dd>
+        <dt>{{ translate('apfWorkbench.serviceAddress') }}</dt>
+        <dd class="m-0 break-all">{{ serviceUrl }}</dd>
+      </dl>
+      <p v-else class="text-sm text-muted-foreground">
+        {{ translate('apfWorkbench.noRunningValues') }}
+      </p>
+    </section>
   </section>
 </template>

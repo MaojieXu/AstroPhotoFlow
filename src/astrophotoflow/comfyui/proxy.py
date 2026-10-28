@@ -19,6 +19,7 @@ ROUTES = [
     ("POST", "/settings/workbench/restart", "/settings/workbench/restart"),
     ("GET", "/settings/workbench/restart/{operation_id}", "/settings/workbench/restart/{operation_id}"),
     ("PATCH", "/settings/workbench", "/settings/workbench"),
+    ("POST", "/settings/workbench/select-directory", "/settings/workbench/select-directory"),
     ("GET", "/health", "/health"),
     ("GET", "/capabilities", "/capabilities"),
     ("GET", "/projects", "/projects"),
@@ -161,7 +162,8 @@ async def forward(request: web.Request, path_template: str) -> web.Response:
             headers["Content-Type"] = request.headers.get("Content-Type", "application/json")
         streaming_upload = request.method == "PUT" and "/uploads/" in request.path
         body = request.content if streaming_upload else await request.read() if request.method in {"POST", "PATCH", "DELETE", "PUT"} else None
-        timeout = aiohttp.ClientTimeout(total=None, sock_connect=10, sock_read=None) if streaming_upload else aiohttp.ClientTimeout(total=10)
+        directory_selection = request.method == "POST" and path_template == "/settings/workbench/select-directory"
+        timeout = aiohttp.ClientTimeout(total=None, sock_connect=10, sock_read=None) if streaming_upload or directory_selection else aiohttp.ClientTimeout(total=10)
         async with aiohttp.ClientSession(timeout=timeout) as client:
             async with client.request(request.method, url, params=query, data=body, headers=headers, allow_redirects=False) as response:
                 response_body = await response.read()

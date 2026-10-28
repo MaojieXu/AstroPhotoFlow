@@ -123,6 +123,7 @@ def test_configuration_read_has_no_side_effects_and_workspace_is_not_data_dir(tm
     assert state.default_workspace is None
     assert state.effective is None and not state.restart_required
     assert state.saved.data_dir == "data"
+    assert state.data_dir_absolute == str((path.parent / "data").resolve())
     assert config.load_settings(path).workspace == path.parent
     assert config.load_settings(path).data_dir == path.parent / "data"
     assert not config.CONFIG_PATH.parent.exists()
@@ -338,3 +339,18 @@ def test_startup_process_registration_preserves_an_entered_maintenance_marker(tm
     config._update_running_state(path.parent, {"processes": [{"role": "asset-service"}, {"role": "comfyui"}]})
     current = json.loads(marker.read_text(encoding="utf-8"))
     assert current["maintenance_operation_id"] == owner and len(current["processes"]) == 2
+
+
+@pytest.mark.parametrize("cancelled", [False, True])
+def test_system_directory_selection_returns_absolute_path_or_cancellation(tmp_path, monkeypatch, cancelled):
+    import subprocess
+    selected = tmp_path / "天文 素材"
+    commands = []
+    def run(command, **kwargs):
+        commands.append(command)
+        return subprocess.CompletedProcess(command, 0, stdout=b"" if cancelled else str(selected).encode("utf-8"))
+    monkeypatch.setattr(config.subprocess, "run", run)
+    result = config.select_directory(tmp_path)
+    assert result == (None if cancelled else selected.resolve())
+    assert commands[0][0] == "powershell.exe" and "-STA" in commands[0]
+    assert not selected.exists()

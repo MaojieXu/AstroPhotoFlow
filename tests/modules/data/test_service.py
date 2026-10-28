@@ -1795,3 +1795,28 @@ def test_workbench_restart_requires_auth_and_exposes_correlated_result(service, 
     assert calls == [client.app.state.settings.workspace / "config.toml"]
     assert client.get(path + "/" + str(result.operation_id), headers=auth()).json()["state"] == "in_progress"
     assert client.get(path + "/" + str(uuid4()), headers=auth()).json() is None
+
+
+def test_workbench_directory_selection_is_authenticated_and_does_not_save_config(service, monkeypatch):
+    from astrophotoflow.interfaces.http import system
+    settings, client, database = service
+    selected = settings.workspace / "selected"
+    initial_paths = []
+    def choose(initial_path):
+        initial_paths.append(initial_path)
+        return selected
+    monkeypatch.setattr(system, "select_directory", choose)
+    endpoint = "/api/v1/settings/workbench/select-directory"
+    assert client.post(endpoint, json={"path": "data"}).status_code == 401
+    assert initial_paths == []
+    response = client.post(endpoint, headers=auth(), json={"path": "data"})
+    assert response.status_code == 200 and response.json() == {"path": str(selected)}
+    assert initial_paths == [(settings.workspace / "data").resolve()]
+    assert not selected.exists()
+    monkeypatch.setattr(system, "select_directory", lambda initial_path: None)
+    assert client.post(endpoint, headers=auth(), json={"path": ""}).json() == {"path": None}
+    def unavailable(initial_path):
+        raise OSError("desktop unavailable")
+    monkeypatch.setattr(system, "select_directory", unavailable)
+    response = client.post(endpoint, headers=auth(), json={"path": "data"})
+    assert response.status_code == 503 and response.json()["error"]["code"] == "DIRECTORY_PICKER_UNAVAILABLE"

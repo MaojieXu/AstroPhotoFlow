@@ -39,8 +39,17 @@ class RestartRequest(StrictModel):
     operation_id: UuidInput
 
 
+class DirectorySelectionRequest(StrictModel):
+    path: str
+
+
+class DirectorySelectionResult(StrictModel):
+    path: str | None
+
+
 class ConfigState(StrictModel):
     config_path: str
+    data_dir_absolute: str
     default_workspace: str | None
     saved: ConfigValues
     config_token: str

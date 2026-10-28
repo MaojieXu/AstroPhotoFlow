@@ -9,9 +9,10 @@ from sqlalchemy.exc import SQLAlchemyError
 from pathlib import Path
 from uuid import UUID
 import psutil
+import subprocess
 from astrophotoflow.core.workbench import request_restart, restart_result, WorkbenchError
-from astrophotoflow.contracts.workbench import ConfigSave, ConfigState, WorkbenchResult, RestartRequest
-from astrophotoflow.core.config import ConfigurationError, get_configuration, save_configuration
+from astrophotoflow.contracts.workbench import ConfigSave, ConfigState, WorkbenchResult, RestartRequest, DirectorySelectionRequest, DirectorySelectionResult
+from astrophotoflow.core.config import ConfigurationError, get_configuration, save_configuration, select_directory
 from astrophotoflow.core.errors import ApiError
 from astrophotoflow.core.database.schema import SCHEMA_REVISION, current_revision
 
@@ -51,6 +52,18 @@ def restart_workbench(body: RestartRequest, request: Request):
 @router.get("/settings/workbench/restart/{operation_id}", response_model=WorkbenchResult | None, dependencies=[Depends(authenticate)])
 def get_workbench_restart(operation_id: UUID, request: Request):
     return restart_result(request.app.state.settings.workspace / "config.toml", operation_id)
+
+
+@router.post("/settings/workbench/select-directory", response_model=DirectorySelectionResult, dependencies=[Depends(authenticate)])
+def select_workbench_directory(body: DirectorySelectionRequest, request: Request):
+    path = Path(body.path).expanduser()
+    if not path.is_absolute():
+        path = request.app.state.settings.workspace / path
+    try:
+        selected = select_directory(path.resolve())
+    except (OSError, ConfigurationError, subprocess.CalledProcessError) as exc:
+        raise ApiError(503, "DIRECTORY_PICKER_UNAVAILABLE", "无法打开系统文件夹选择窗口。请检查本机桌面会话或直接填写路径。") from exc
+    return DirectorySelectionResult(path=str(selected) if selected is not None else None)
 
 
 @router.get("/health", dependencies=[Depends(authenticate)])

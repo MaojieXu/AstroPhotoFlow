@@ -132,7 +132,7 @@ describe('useSettingUI', () => {
       () => env.state.workspaceRole
     )
 
-    Object.assign(useSettingStore(), { settingsById: mockSettings })
+    Object.assign(useSettingStore(), { settingsById: { ...mockSettings } })
   })
 
   function findCategory(
@@ -196,6 +196,63 @@ describe('useSettingUI', () => {
     expect(defaultCategory.value.key).toBe('about')
   })
 
+  it('offers the workbench panel while hiding unrelated settings and their deep links', () => {
+    const store = useSettingStore()
+    const hiddenIds = [
+      'Comfy.Execution.PreviewMethod',
+      'Comfy.EditAttention.Delta',
+      'Comfy.NodeBadge.ShowApiPricing',
+      'Comfy.ModelLibrary.AutoLoadAll',
+      'Comfy.ModelLibrary.NameFormat'
+    ] as const
+    for (const id of hiddenIds) {
+      store.addSetting({
+        id,
+        name: id,
+        type: 'text',
+        defaultValue: 'unchanged'
+      })
+    }
+    store.addSetting({
+      id: 'Comfy.Load3D.ShowGrid',
+      category: ['3D', 'Scene'],
+      name: 'Grid',
+      type: 'boolean',
+      defaultValue: true
+    })
+    const { navGroups, findPanelByKey, defaultCategory, settingCategories } =
+      useSettingUI('workbench')
+    expect(defaultCategory.value.key).toBe('workbench')
+    expect(findPanelByKey('workbench')).not.toBeNull()
+    expect(navGroups.value.flatMap((g) => g.items.map((i) => i.id))).toContain(
+      'workbench'
+    )
+    expect(JSON.stringify(settingCategories.value)).not.toContain(
+      'PreviewMethod'
+    )
+    expect(settingCategories.value.some((c) => c.label === '3D')).toBe(false)
+    for (const panel of [
+      'user',
+      'credits',
+      'workspace',
+      'workspace-members',
+      'workspace-allowlist',
+      'secrets',
+      'skill-packs'
+    ] as const) {
+      expect(findPanelByKey(panel)).toBeNull()
+      expect(
+        useSettingUI(panel as Parameters<typeof useSettingUI>[0])
+          .defaultCategory.value.key
+      ).toBe('root/Comfy')
+    }
+    expect(
+      useSettingUI(undefined, 'Comfy.EditAttention.Delta').defaultCategory.value
+        .key
+    ).toBe('root/Comfy')
+    for (const id of hiddenIds) expect(store.get(id)).toBe('unchanged')
+  })
+
   describe('workspace panels', () => {
     beforeEach(() => {
       useCurrentUser().isLoggedIn = computed(() => true)
@@ -225,15 +282,14 @@ describe('useSettingUI', () => {
       })
     })
 
-    it('shows only Plan & Credits in the local Workspace group', () => {
+    it('hides cloud workspace panels in the local workbench', () => {
       const { findPanelByKey, navGroups } = useSettingUI()
       const workspaceItems = navGroups.value
         .find((group) => group.title === 'Workspace')
         ?.items.map(({ id, label }) => ({ id, label }))
 
-      expect(workspaceItems).toEqual([
-        { id: 'workspace', label: 'PlanCredits' }
-      ])
+      expect(workspaceItems).toBeUndefined()
+      expect(findPanelByKey('workspace')).toBeNull()
       expect(findPanelByKey('workspace-members')).toBeNull()
       expect(findPanelByKey('workspace-allowlist')).toBeNull()
     })
@@ -245,7 +301,7 @@ describe('useSettingUI', () => {
         const { navGroups } = useSettingUI()
 
         expect(navGroups.value.map(({ title }) => title)).toEqual([
-          'Workspace',
+          ...(isCloud ? ['Workspace'] : []),
           'General'
         ])
         expect(
@@ -253,9 +309,9 @@ describe('useSettingUI', () => {
             .find((group) => group.title === 'General')
             ?.items.map(({ id }) => id)
         ).toEqual([
-          'user',
+          ...(isCloud ? ['user'] : []),
           'root/Comfy',
-          'secrets',
+          ...(isCloud ? ['secrets'] : ['workbench']),
           'root/LiteGraph',
           'root/Appearance',
           'keybinding',
@@ -266,6 +322,7 @@ describe('useSettingUI', () => {
     )
 
     it('keeps the hidden legacy Credits panel reachable by deep link', () => {
+      env.state.isCloud = true
       const { defaultCategory, navGroups } = useSettingUI('credits')
 
       expect(
@@ -341,11 +398,11 @@ describe('useSettingUI', () => {
       expect(allowlistItem?.suffixIcon).toBeUndefined()
     })
 
-    it('uses Plan & Credits for logged-in local users', () => {
+    it('keeps cloud accounts out of local settings even when logged in', () => {
       env.state.isCloud = false
       const { navGroups } = useSettingUI()
 
-      expect(navKeys(navGroups.value)).toContain('workspace')
+      expect(navKeys(navGroups.value)).not.toContain('workspace')
       expect(navKeys(navGroups.value)).not.toContain('credits')
       expect(navKeys(navGroups.value)).not.toContain('workspace-members')
       expect(navKeys(navGroups.value)).not.toContain('workspace-allowlist')

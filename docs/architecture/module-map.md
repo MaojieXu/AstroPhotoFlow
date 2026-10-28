@@ -27,6 +27,7 @@ Python 根为 `src/astrophotoflow`，自研 UI 根为 `frontend/packages/astroph
 ### ① 公共基础设施
 
 - **概要设计**：[唯一公共模块概要](../../src/astrophotoflow/core/README.md)维护十二类能力、七条交接链路、需求覆盖及阶段缺口；[前端归属](../../frontend/packages/astrophotoflow-ui/src/core/README.md)只补充界面和原生桥接分工。
+- **设置入口**：`WorkbenchSettingsPanel.vue`通过UI包公开导出挂载`WorkbenchSettings`，注入原生FormItem／Button／Input；`settingsPresentation.ts`统一设置导航、搜索和定位的呈现规则。旧工作台侧栏移除；目录选择由`core.config.select_directory`经认证HTTP／固定代理和具名客户端提供，选择不保存或搬迁数据。
 - **入口与调用**：core/config.py 解析配置；core/workbench.py 管理安装、启动停止；core/http.py、errors.py 和 database 提供认证、错误、连接与迁移。HTTP 应用装配在 interfaces/http/app.py，不能让 core 反向导入业务；Alembic 元数据装配例外见文件架构。
 - **消费契约**：contracts/common.py和已有HTTP错误、认证、request ID规则；request ID不保证防重，数据revision不代表工作流版本。M1配置／采用值、CLI重启、维护互斥及网页表单已实现；MCP控制、网页诊断、日志轮转／清理和检索资源管理仍待后续；原生进度可复用，领域状态桥接待验证，检索用途及索引归⑤。
 - **验证位置**：[tests/core](../../tests/core)、[tests/packaging](../../tests/packaging)、[代理回归](../../tests/interfaces/comfyui/test_proxy.py)、[数据服务中的认证／锁／备份测试](../../tests/modules/data/test_service.py)及架构导入检查。M1重启／采用值／公共界面测试见tests/core、私有UI tests/core/workbench.test.ts及tests/browser/platform-workflows.mjs，真实证据见[矩阵](../development/test-matrix.md#m1-foundation)；原生进度测试不代替跨进程桥接。

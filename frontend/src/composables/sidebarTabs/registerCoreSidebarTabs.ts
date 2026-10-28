@@ -2,10 +2,7 @@ import { watch } from 'vue'
 
 import { useJobHistorySidebarTab } from '@/composables/sidebarTabs/useJobHistorySidebarTab'
 import { useNodeLibrarySidebarTab } from '@/composables/sidebarTabs/useNodeLibrarySidebarTab'
-import {
-  useLibrarySidebarTab,
-  useWorkbenchSidebarTab
-} from '@/platform/astrophotoflow'
+import { useLibrarySidebarTab } from '@/platform/astrophotoflow'
 import { useSettingStore } from '@/platform/settings/settingStore'
 import { useWorkflowsSidebarTab } from '@/platform/workflow/management/composables/useWorkflowsSidebarTab'
 import { useMenuItemStore } from '@/stores/menuItemStore'
@@ -37,7 +34,6 @@ export function registerCoreSidebarTabs() {
   sidebarTabStore.registerSidebarTab(useNodeLibrarySidebarTab())
   sidebarTabStore.registerSidebarTab(useLibrarySidebarTab())
   sidebarTabStore.registerSidebarTab(useWorkflowsSidebarTab())
-  sidebarTabStore.registerSidebarTab(useWorkbenchSidebarTab())
 
   const menuStore = useMenuItemStore()
 

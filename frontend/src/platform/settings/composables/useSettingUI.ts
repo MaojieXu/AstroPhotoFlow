@@ -7,6 +7,10 @@ import { useFeatureFlags } from '@/composables/useFeatureFlags'
 import { useVueFeatureFlags } from '@/composables/useVueFeatureFlags'
 import { isCloud, isDesktop } from '@/platform/distribution/types'
 import {
+  isSettingPanelVisible,
+  isSettingVisible
+} from '@/platform/astrophotoflow/settingsPresentation'
+import {
   getSettingInfo,
   useSettingStore
 } from '@/platform/settings/settingStore'
@@ -36,6 +40,7 @@ const CATEGORY_ICONS: Record<string, string> = {
   'skill-packs': 'icon-[lucide--book-open-text]',
   'server-config': 'icon-[lucide--server]',
   user: 'icon-[lucide--user]',
+  workbench: 'icon-[lucide--sliders-horizontal]',
   workspace: 'icon-[lucide--building-2]',
   'workspace-allowlist': 'icon-[comfy--ai-model]',
   'workspace-members': 'icon-[lucide--users]'
@@ -66,6 +71,7 @@ export function useSettingUI(
     const root = buildTree(
       Object.values(settingStore.settingsById).filter(
         (setting: SettingParams) =>
+          isSettingVisible(setting) &&
           setting.type !== 'hidden' &&
           !(shouldRenderVueNodes.value && setting.hideInVueNodes)
       ),
@@ -269,17 +275,27 @@ export function useSettingUI(
     )
   }
 
-  const panels = computed<SettingPanelItem[]>(() => [
-    aboutPanel,
-    creditsPanel,
-    userPanel,
-    ...visibleWorkspacePanels.value,
-    keybindingPanel,
-    extensionPanel,
-    ...(isDesktop ? [serverConfigPanel] : []),
-    ...(shouldShowSecretsPanel.value ? [secretsPanel] : []),
-    ...(shouldShowSkillPacksPanel.value ? [skillPacksPanel] : [])
-  ])
+  const workbenchPanel: SettingPanelItem = {
+    node: { key: 'workbench', label: 'Workbench', children: [] },
+    component: defineAsyncComponent(
+      () => import('@/platform/astrophotoflow/WorkbenchSettingsPanel.vue')
+    )
+  }
+
+  const panels = computed<SettingPanelItem[]>(() =>
+    [
+      workbenchPanel,
+      aboutPanel,
+      creditsPanel,
+      userPanel,
+      ...visibleWorkspacePanels.value,
+      keybindingPanel,
+      extensionPanel,
+      ...(isDesktop ? [serverConfigPanel] : []),
+      ...(shouldShowSecretsPanel.value ? [secretsPanel] : []),
+      ...(shouldShowSkillPacksPanel.value ? [skillPacksPanel] : [])
+    ].filter((panel) => isSettingPanelVisible(panel.node.key))
+  )
 
   /**
    * The default category to show when the dialog is opened.
@@ -298,7 +314,10 @@ export function useSettingUI(
     }
 
     if (scrollToSettingId) {
-      if (Object.hasOwn(settingStore.settingsById, scrollToSettingId)) {
+      if (
+        Object.hasOwn(settingStore.settingsById, scrollToSettingId) &&
+        isSettingVisible(settingStore.settingsById[scrollToSettingId])
+      ) {
         const setting = settingStore.settingsById[scrollToSettingId]
         const { category } = getSettingInfo(setting)
         const found = settingCategories.value.find((c) => c.label === category)
@@ -317,43 +336,51 @@ export function useSettingUI(
     )
   })
 
-  const workspaceMenuTreeNodes = computed<SettingTreeNode[]>(() => [
-    translateCategory({
-      key: 'workspace',
-      label: 'Workspace',
-      children: visibleWorkspacePanels.value
-        .map((panel) => panel.node)
-        .map(translateCategory)
-    }),
-    translateCategory({
-      key: 'general',
-      label: 'General',
-      children: [
-        translateCategory(userPanel.node),
-        ...coreSettingCategories.value.slice(0, 1).map(translateCategory),
-        ...(shouldShowSecretsPanel.value
-          ? [translateCategory(secretsPanel.node)]
-          : []),
-        ...(shouldShowSkillPacksPanel.value
-          ? [translateCategory(skillPacksPanel.node)]
-          : []),
-        ...coreSettingCategories.value.slice(1).map(translateCategory),
-        translateCategory(keybindingPanel.node),
-        translateCategory(extensionPanel.node),
-        translateCategory(aboutPanel.node),
-        ...(isDesktop ? [translateCategory(serverConfigPanel.node)] : [])
-      ]
-    }),
-    ...(customNodeSettingCategories.value.length > 0
-      ? [
-          translateCategory({
-            key: 'other',
-            label: 'Other',
-            children: customNodeSettingCategories.value.map(translateCategory)
-          })
+  const workspaceMenuTreeNodes = computed<SettingTreeNode[]>(() =>
+    [
+      translateCategory({
+        key: 'workspace',
+        label: 'Workspace',
+        children: visibleWorkspacePanels.value
+          .map((panel) => panel.node)
+          .map(translateCategory)
+      }),
+      translateCategory({
+        key: 'general',
+        label: 'General',
+        children: [
+          translateCategory(userPanel.node),
+          ...coreSettingCategories.value.slice(0, 1).map(translateCategory),
+          translateCategory(workbenchPanel.node),
+          ...(shouldShowSecretsPanel.value
+            ? [translateCategory(secretsPanel.node)]
+            : []),
+          ...(shouldShowSkillPacksPanel.value
+            ? [translateCategory(skillPacksPanel.node)]
+            : []),
+          ...coreSettingCategories.value.slice(1).map(translateCategory),
+          translateCategory(keybindingPanel.node),
+          translateCategory(extensionPanel.node),
+          translateCategory(aboutPanel.node),
+          ...(isDesktop ? [translateCategory(serverConfigPanel.node)] : [])
         ]
-      : [])
-  ])
+      }),
+      ...(customNodeSettingCategories.value.length > 0
+        ? [
+            translateCategory({
+              key: 'other',
+              label: 'Other',
+              children: customNodeSettingCategories.value.map(translateCategory)
+            })
+          ]
+        : [])
+    ].map((group) => ({
+      ...group,
+      children: group.children?.filter((node) =>
+        isSettingPanelVisible(node.key)
+      )
+    }))
+  )
 
   const groupedMenuTreeNodes = workspaceMenuTreeNodes
 

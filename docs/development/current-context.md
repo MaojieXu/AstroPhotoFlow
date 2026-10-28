@@ -1,5 +1,15 @@
 # 当前开发上下文
 
+2026-10-28用户已确认“设置这部分可以了”，并授权将demo修订合入dev、删除feature/database_management，随后创建`codex/m2-ui-acceptance`进行M2 UI／操作优化与功能验收。此授权覆盖本次设置修订提交及本地Git集成，不表示M2 Milestone已通过，也未要求推送。B31／B32／B41等其余未提交内容继续保留，不纳入本次设置集成。
+
+2026-10-28用户明确确认“设置这部分可以了”：demo原生设置入口、展开section、目录选择与绝对路径展示、说明／路径悬停呈现按当前已展示候选的设置范围记为用户接受。用户要求继续M2数据与资产管理验收，尚不表示M2通过；本次提交／集成按用户随后授权执行。M2隔离验收使用demo-preview和`.artifacts/acceptance/m2-user-20261028/`，首轮仅准备两份合成FITS，尚未导入。
+
+2026-10-28 demo工作台提示候选：长说明与完整路径改为字段／标题／重启操作旁的原生ⓘ悬停提示，保留section、字段输入、目录选择、运行地址和关键状态。提示区分已保存绝对路径与当前输入，不更改路径解析或后端接口；保存状态只因实际编辑失效。定向组件11项及生产构建通过，浏览器证据见`.artifacts/implementation/demo-settings-tooltips/`；用户已确认设置范围，后续Git集成按最新授权执行。
+
+2026-10-28用户验收调整：工作台中的“工作区、端口和目录”及“运行信息”改为直接显示的section，不再使用折叠控件；配置行为保持。
+
+2026-10-28 demo设置入口候选：工作台配置已迁入原生设置窗口的“工作台”页面，移除独立侧栏；通过宿主传入原生FormItem／Button／Input，整组保存、冲突和显式重启保持。APF本地设置按明确清单隐藏3D、生成预览、提示权重、API价格、模型库展示及云账户相关面板，导航／搜索／直接定位同一规则，不重置设置值。真实隔离浏览器7类检查通过，类型检查／生产构建和依赖边界通过，证据见`.artifacts/implementation/demo-settings/`。用户已确认设置范围，后续Git集成按最新授权执行。
+
 更新时间：2026-10-28。集成分支为 **dev**，当前M1候选分支为 **codex/workbench-settings-ui**，继承B11 `6b10657`和B12中间提交`c23e10d`；M1已获用户人工验收通过及合入dev、删除当前功能分支授权。设计基线`9d4c729`已同步远端。原生网页及平台源码基线为 `16025dd89f2c3c2b25bae58bcc241e5202863c87`，已从原 dev `b6759ab` 快进合入；main 不属于本轮交付范围。
 
 仓库为 [MaojieXu/AstroPhotoFlow](https://github.com/MaojieXu/AstroPhotoFlow)，本地目录为 `C:/Users/Administrator/Desktop/WorkSpace/AstroPhotoFlow`。本文维护当前实现、运行基线和有效待办；产品范围见[现行需求](../requirements/README.md)，历史测试证据见[验证矩阵](test-matrix.md)。
@@ -8,7 +18,7 @@
 
 验收反馈已修复UUID字符串请求、重启受理回执及未保存配置误用；实际网页已验证导入3／预览6保存并重启生效，地址可点击，原生风格输入及移除按钮对齐。证据为`.artifacts/implementation/M1/restart-browser.json`、`restart-python-final.xml`（115通过）、`restart-build-final2.log`和`restart-build-final3.log`。用户要求修复后停止追加测试，已遵从；网页重启第三轮独立审查因此中止，不宣称该轮完成。跨端口自动重连仍按界面提示及CLI核对。
 
-M1界面按用户验收反馈调整为左侧“工作台配置”，位于工作流之后；复用原生侧栏和主题，取消顶部按钮及弹窗。侧栏注册5项、配置表单4项测试、类型检查和生产构建通过，真实浏览器5类检查通过；本次界面调整已由用户验证通过，随M1整体集成。证据见`.artifacts/implementation/M1/sidebar-update.md`。
+M1历史界面（已由上述原生设置页替代）按用户验收反馈调整为左侧“工作台配置”，位于工作流之后；复用原生侧栏和主题，取消顶部按钮及弹窗。侧栏注册5项、配置表单4项测试、类型检查和生产构建通过，真实浏览器5类检查通过；本次界面调整已由用户验证通过，随M1整体集成。证据见`.artifacts/implementation/M1/sidebar-update.md`。
 
 **M1用户验收通过，交付合入dev**：用户确认修订后，启动失败已统一复用stop排空；待登记进程提前留痕，身份暂不可读时保留核对依据，控制结果写入失败不遮盖启动及清理错误。新迭代第三轮独立审查无剩余阻断。全量Python为336 passed、2项显式真实测试另行通过；浏览器五类检查通过。真实在途导入在模拟引擎启动失败后完整完成并正常退出。最新报告为`.artifacts/implementation/M1/delivery-report.md`及`iteration2-round3-review.md`；旧轮次失败证据保留。原dev已恢复31388／31390，隔离候选实际网页为32592；用户已于2026-10-28在当前聊天确认“通过测试，可以将结果merge到dev，并删除目前这个branch”；B11～B13及本轮修复整体交付dev。
 

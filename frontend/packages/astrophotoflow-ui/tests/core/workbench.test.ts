@@ -1,10 +1,25 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
+import { defineComponent } from 'vue'
 
 import WorkbenchSettings from '@ui/core/WorkbenchSettings.vue'
 import { ApiClientError, createWorkbenchClient } from '@ui/core/client'
 import type { ConfigState } from '@ui/core/contracts'
 import { ApiClientError as DataApiClientError } from '@ui/modules/data/api/client'
+
+const controls = {
+  formItem: defineComponent({
+    props: ['item', 'id', 'formValue'],
+    emits: ['update:formValue'],
+    template: `<div><span>{{ item.name }}<slot name="name-suffix" /></span><input :id="id" :name="id" :type="item.type === 'number' ? 'number' : 'text'" :value="formValue" @input="$emit('update:formValue', item.type === 'number' ? Number($event.target.value) : $event.target.value)" /></div>`
+  }),
+  button: defineComponent({ template: '<button><slot /></button>' }),
+  input: defineComponent({
+    props: ['modelValue'],
+    emits: ['update:modelValue'],
+    template: `<input :value="modelValue" @input="$emit('update:modelValue', $event.target.value)" />`
+  })
+}
 
 function configuration(): ConfigState {
   const values = {
@@ -18,6 +33,7 @@ function configuration(): ConfigState {
   }
   return {
     config_path: 'C:/isolated/config.toml',
+    data_dir_absolute: 'C:/isolated/data',
     default_workspace: null,
     saved: structuredClone(values),
     effective: structuredClone(values),
@@ -62,13 +78,14 @@ describe('workbench configuration', () => {
     next.config_token = 'new'
     next.restart_required = true
     const client = {
+      selectDirectory: vi.fn(),
       restart: vi.fn(),
       restartResult: vi.fn(),
       getConfiguration: vi.fn().mockResolvedValue(initial),
       saveConfiguration: vi.fn().mockResolvedValue(next)
     }
     const wrapper = mount(WorkbenchSettings, {
-      props: { client, translate: (key) => key }
+      props: { client, controls, translate: (key) => key }
     })
     await flushPromises()
     await wrapper.get('input[name="file_workers"]').setValue(4)
@@ -94,6 +111,7 @@ describe('workbench configuration', () => {
 
   it('keeps user input after a conflict and does not silently reload or resubmit', async () => {
     const client = {
+      selectDirectory: vi.fn(),
       restart: vi.fn(),
       restartResult: vi.fn(),
       getConfiguration: vi.fn().mockResolvedValue(configuration()),
@@ -110,7 +128,7 @@ describe('workbench configuration', () => {
         )
     }
     const wrapper = mount(WorkbenchSettings, {
-      props: { client, translate: (key) => key }
+      props: { client, controls, translate: (key) => key }
     })
     await flushPromises()
     await wrapper.get('input[name="file_workers"]').setValue(5)
@@ -126,17 +144,177 @@ describe('workbench configuration', () => {
     wrapper.unmount()
   })
 
+  it('shows field errors without losing edits after validation fails', async () => {
+    const client = {
+      selectDirectory: vi.fn(),
+      restart: vi.fn(),
+      restartResult: vi.fn(),
+      getConfiguration: vi.fn().mockResolvedValue(configuration()),
+      saveConfiguration: vi
+        .fn()
+        .mockRejectedValue(
+          new ApiClientError(
+            'invalid',
+            'service',
+            422,
+            'INVALID_CONFIGURATION',
+            'validation-request',
+            [{ path: 'values.host', message: 'loopback required' }]
+          )
+        )
+    }
+    const wrapper = mount(WorkbenchSettings, {
+      props: { client, controls, translate: (key) => key }
+    })
+    await flushPromises()
+    await wrapper.get('input[name="host"]').setValue('0.0.0.0')
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+    expect(wrapper.get('[role="alert"]').text()).toContain(
+      'values.host: loopback required'
+    )
+    expect(
+      (wrapper.get('input[name="host"]').element as HTMLInputElement).value
+    ).toBe('0.0.0.0')
+    expect(client.restart).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
+  it('selects folders into the form, preserves cancellation, and requires an explicit save', async () => {
+    const client = {
+      selectDirectory: vi
+        .fn()
+        .mockResolvedValueOnce('C:/workspace')
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce('D:/data'),
+      restart: vi.fn(),
+      restartResult: vi.fn(),
+      getConfiguration: vi.fn().mockResolvedValue(configuration()),
+      saveConfiguration: vi.fn()
+    }
+    const wrapper = mount(WorkbenchSettings, {
+      props: { client, controls, translate: (key) => key }
+    })
+    await flushPromises()
+    expect(
+      wrapper.get('[data-testid="data-directory-hint"]').attributes('tooltip')
+    ).toContain('C:/isolated/data')
+    await wrapper
+      .get('[aria-label="apfWorkbench.chooseWorkspace"]')
+      .trigger('click')
+    await flushPromises()
+    expect(
+      (
+        wrapper.get('input[name="default_workspace"]')
+          .element as HTMLInputElement
+      ).value
+    ).toBe('C:/workspace')
+    await wrapper
+      .get('[aria-label="apfWorkbench.chooseDataDirectory"]')
+      .trigger('click')
+    await flushPromises()
+    expect(
+      (wrapper.get('input[name="data_dir"]').element as HTMLInputElement).value
+    ).toBe('data')
+    await wrapper
+      .get('[aria-label="apfWorkbench.chooseDataDirectory"]')
+      .trigger('click')
+    await flushPromises()
+    expect(
+      (wrapper.get('input[name="data_dir"]').element as HTMLInputElement).value
+    ).toBe('D:/data')
+    expect(client.selectDirectory.mock.calls).toEqual([
+      [''],
+      ['data'],
+      ['data']
+    ])
+    expect(client.saveConfiguration).not.toHaveBeenCalled()
+    expect(client.restart).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
+  it('keeps full paths in hints and preserves saved status when a hint is clicked', async () => {
+    const initial = configuration()
+    initial.default_workspace = 'C:/a very long workspace/selected folder'
+    initial.saved.import_roots = [
+      { id: 'night', path: 'D:/raw inputs/very long night directory' }
+    ]
+    const client = {
+      selectDirectory: vi.fn(),
+      restart: vi.fn(),
+      restartResult: vi.fn(),
+      getConfiguration: vi.fn().mockResolvedValue(initial),
+      saveConfiguration: vi.fn().mockResolvedValue(initial)
+    }
+    const wrapper = mount(WorkbenchSettings, {
+      props: { client, controls, translate: (key) => key }
+    })
+    await flushPromises()
+    expect(wrapper.text()).not.toContain(initial.config_path)
+    expect(wrapper.text()).not.toContain(initial.data_dir_absolute)
+    expect(wrapper.text()).not.toContain('apfWorkbench.defaultHelp')
+    expect(wrapper.text()).not.toContain('apfWorkbench.saveHelp')
+    expect(wrapper.text()).not.toContain('apfWorkbench.restartHelp')
+    expect(wrapper.text()).toContain('http://127.0.0.1:31390')
+    expect(
+      wrapper
+        .get('[aria-label="apfWorkbench.workspaceHelp"]')
+        .attributes('tooltip')
+    ).toContain(initial.default_workspace)
+    expect(
+      wrapper
+        .get('[aria-label="apfWorkbench.importRootDetails"]')
+        .attributes('tooltip')
+    ).toBe(initial.saved.import_roots[0].path)
+    const hint = wrapper.get('[data-testid="data-directory-hint"]')
+    expect(hint.attributes('tooltip')).toContain(initial.data_dir_absolute)
+    expect(hint.attributes('tooltip')).not.toContain(
+      'apfWorkbench.currentDataDirectory'
+    )
+    await wrapper.get('input[name="data_dir"]').setValue('D:/draft directory')
+    expect(hint.attributes('tooltip')).toContain(
+      'apfWorkbench.currentDataDirectory: D:/draft directory'
+    )
+    expect(hint.attributes('tooltip')).toContain(initial.data_dir_absolute)
+    expect(client.saveConfiguration).not.toHaveBeenCalled()
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+    expect(wrapper.text()).toContain('apfWorkbench.saved')
+    await hint.trigger('click')
+    expect(wrapper.text()).toContain('apfWorkbench.saved')
+    expect(client.saveConfiguration).toHaveBeenCalledTimes(1)
+    expect(client.restart).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
+  it('uses the fixed directory selection endpoint and preserves cancellation', async () => {
+    const fetchApi = vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify({ path: null })))
+    expect(
+      await createWorkbenchClient(fetchApi).selectDirectory('data')
+    ).toBeNull()
+    expect(fetchApi).toHaveBeenCalledWith(
+      '/astrophotoflow/api/v1/settings/workbench/select-directory',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ path: 'data' })
+      })
+    )
+  })
+
   it('shows missing adopted values without presenting saved addresses as current', async () => {
     const initial = configuration()
     initial.effective = null
     const client = {
+      selectDirectory: vi.fn(),
       restart: vi.fn(),
       restartResult: vi.fn(),
       getConfiguration: vi.fn().mockResolvedValue(initial),
       saveConfiguration: vi.fn()
     }
     const wrapper = mount(WorkbenchSettings, {
-      props: { client, translate: (key) => key }
+      props: { client, controls, translate: (key) => key }
     })
     await flushPromises()
     expect(wrapper.text()).toContain('apfWorkbench.noRunningValues')
@@ -153,6 +331,7 @@ describe('workbench configuration', () => {
         blockers: state === 'rejected' ? ['busy import'] : []
       }
       const client = {
+        selectDirectory: vi.fn(),
         getConfiguration: vi.fn().mockResolvedValue(configuration()),
         saveConfiguration: vi.fn(),
         restart: vi
@@ -164,7 +343,7 @@ describe('workbench configuration', () => {
           .mockResolvedValue(result)
       }
       const wrapper = mount(WorkbenchSettings, {
-        props: { client, translate: (key) => key }
+        props: { client, controls, translate: (key) => key }
       })
       await flushPromises()
       expect(wrapper.get('a').attributes('href')).toBe('http://127.0.0.1:31388')

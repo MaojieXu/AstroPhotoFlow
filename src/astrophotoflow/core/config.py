@@ -4,6 +4,8 @@ import ipaddress
 import json
 import logging
 import os
+import base64
+import subprocess
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 import tomllib
@@ -229,9 +231,39 @@ def get_configuration(config_path: Path | None = None) -> ConfigState:
             raise ApiError(503, "RUNNING_CONFIGURATION_UNAVAILABLE", str(exc)) from exc
     return ConfigState(
         config_path=str(config_path), default_workspace=str(default) if default is not None else None,
+        data_dir_absolute=str(saved_settings.data_dir),
         saved=_values_from_raw(raw), config_token=hashlib.sha256(token_content).hexdigest(),
         effective=effective, restart_required=restart_required,
     )
+
+
+def select_directory(initial_path: Path) -> Path | None:
+    if os.name != "nt":
+        raise ConfigurationError("系统文件夹选择窗口目前仅支持Windows。")
+    encoded_path = base64.b64encode(str(initial_path).encode("utf-8")).decode("ascii")
+    script = """
+$ErrorActionPreference = 'Stop'
+[Console]::OutputEncoding = [Text.Encoding]::UTF8
+Add-Type -AssemblyName System.Windows.Forms
+[Windows.Forms.Application]::EnableVisualStyles()
+$dialog = New-Object Windows.Forms.FolderBrowserDialog
+$dialog.Description = '选择文件夹'
+$dialog.SelectedPath = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('""" + encoded_path + """'))
+try {
+    if ($dialog.ShowDialog() -eq [Windows.Forms.DialogResult]::OK) {
+        [Console]::Write($dialog.SelectedPath)
+    }
+} finally {
+    $dialog.Dispose()
+}
+"""
+    command = base64.b64encode(script.encode("utf-16-le")).decode("ascii")
+    result = subprocess.run(
+        ["powershell.exe", "-NoProfile", "-STA", "-EncodedCommand", command],
+        capture_output=True, check=True, creationflags=subprocess.CREATE_NO_WINDOW,
+    )
+    selected = result.stdout.decode("utf-8-sig").strip()
+    return Path(selected).resolve() if selected else None
 
 
 def _write_configuration_file(path: Path, text: str) -> None:

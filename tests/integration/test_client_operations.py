@@ -203,7 +203,7 @@ def test_typed_workbench_client_uses_fixed_routes_and_omits_default_when_not_req
     from astrophotoflow.contracts.workbench import ConfigSave, ConfigState
     values = {"host": "127.0.0.1", "service_port": 31390, "data_dir": "data",
               "allowed_origins": ["http://127.0.0.1:31388"], "import_roots": [], "file_workers": 2, "preview_workers": 1}
-    state = {"config_path": "C:/isolated/config.toml", "default_workspace": None, "saved": values,
+    state = {"config_path": "C:/isolated/config.toml", "data_dir_absolute": "C:/isolated/data", "default_workspace": None, "saved": values,
              "effective": values, "config_token": "current", "restart_required": False}
     requests = []
     def handle(request):
@@ -218,3 +218,18 @@ def test_typed_workbench_client_uses_fixed_routes_and_omits_default_when_not_req
     assert [(request.method, request.url.path) for request in requests] == [
         ("GET", "/api/v1/settings/workbench"), ("PATCH", "/api/v1/settings/workbench")]
     assert body(requests[1]) == {"config_token": "current", "values": values}
+
+
+def test_workbench_directory_client_preserves_selected_path_and_cancel():
+    requests = []
+    def handle(request):
+        requests.append(request)
+        assert request.extensions["timeout"]["read"] is None
+        return httpx.Response(200, json={"path": "C:/selected" if len(requests) == 1 else None})
+    api = AssetClient.__new__(AssetClient)
+    api.client = httpx.Client(base_url="http://service/api/v1", transport=httpx.MockTransport(handle))
+    with api:
+        assert api.select_workbench_directory("data").path == "C:/selected"
+        assert api.select_workbench_directory("").path is None
+    assert all(request.url.path == "/api/v1/settings/workbench/select-directory" for request in requests)
+    assert body(requests[0]) == {"path": "data"}

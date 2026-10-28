@@ -263,6 +263,7 @@ export interface ISettingGroup {
 }
 
 export type SettingPanelType =
+  | 'workbench'
   | 'about'
   | 'credits'
   | 'extension'

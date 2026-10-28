@@ -4,7 +4,9 @@
 
 数据引用、节点定义、当前工作流保存及运行结果的责任和语义统一见[总架构的四类边界](../architecture/overview.md#5-四类跨模块契约)。具体输入输出、失败含义及未来 HTTP／MCP 设计集中在[契约文档](platform-contracts.md)，不向 OpenAPI 添加占位。
 
-M1新增 `GET/PATCH /api/v1/settings/workbench`：读取固定当前workspace的保存／采用值，PATCH携带config_token，冲突409、显式null默认位置或无效字段422；保存不重启。网页重启扩展后共82项公共HTTP操作。M2新增素材内容观察与确认两个HTTP操作，当前共84项；对应代理、Python客户端、前端确认交互及OpenAPI快照已同步。内部maintenance和shutdown不进入公共OpenAPI或MCP。
+M1新增 `GET/PATCH /api/v1/settings/workbench`：读取固定当前workspace的保存／采用值，PATCH携带config_token，冲突409、显式null默认位置或无效字段422；保存不重启。网页重启扩展后共82项公共HTTP操作。M2新增素材内容观察与确认两个HTTP操作，加上工作台目录选择后当前共85项；对应代理、Python客户端、前端确认交互及OpenAPI快照已同步。内部maintenance和shutdown不进入公共OpenAPI或MCP。
+
+工作台目录选择：认证后的 `POST /api/v1/settings/workbench/select-directory` 接收 `{path: string}`，Windows本机选择窗口返回完整路径或取消时的null；失败503。选择只填表、不保存或迁移数据。配置响应的`data_dir_absolute`表示已保存数据目录的绝对路径；默认工作区只决定以后默认启动位置，当前工作区与数据库不搬迁。工作台配置从原生设置的“工作台”页进入，说明和完整路径通过提示查看。
 
 网页重启新增 `POST /api/v1/settings/workbench/restart`（请求为 `{operation_id: UUID字符串}`，202受理）及 `GET /api/v1/settings/workbench/restart/{operation_id}`（当前网页请求回执，尚未登记为null）。前端先持有编号；POST断连只查询，不重发。控制互斥409、启动控制器失败503；子进程执行原有restart，繁忙／未知／实际完成分别回执。少量最新受理结果保存在workspace的`run/web-restart.json`，不建立历史账本。内部维护与shutdown仍不公开；现有MCP保持。
 HTTP 服务前缀为 `/api/v1`；浏览器经原生网页服务的 `/astrophotoflow/api/v1` 同源代理访问。认证、版本冲突、错误 envelope 和请求 ID 延续当前实现。

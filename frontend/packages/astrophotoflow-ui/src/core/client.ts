@@ -1,6 +1,7 @@
 import type { ZodType, z } from 'zod'
 import {
   configStateSchema,
+  directorySelectionSchema,
   errorSchema,
   workbenchResultSchema
 } from './contracts'
@@ -167,6 +168,7 @@ export function createApiClient(fetchApi: FetchApi) {
 }
 
 export interface WorkbenchClient {
+  selectDirectory(path: string): Promise<string | null>
   getConfiguration(): Promise<ConfigState>
   saveConfiguration(body: ConfigSave): Promise<ConfigState>
   restart(operationId: string): Promise<WorkbenchResult>
@@ -177,6 +179,10 @@ export function createWorkbenchClient(fetchApi: FetchApi): WorkbenchClient {
   const client = createApiClient(fetchApi)
   const path = '/astrophotoflow/api/v1/settings/workbench'
   return {
+    selectDirectory: async (directory) => {
+      const result = await client.send(path + '/select-directory', directorySelectionSchema, 'POST', { path: directory })
+      return result.path
+    },
     getConfiguration: () => client.get(path, configStateSchema),
     saveConfiguration: (body) =>
       client.send(path, configStateSchema, 'PATCH', body),

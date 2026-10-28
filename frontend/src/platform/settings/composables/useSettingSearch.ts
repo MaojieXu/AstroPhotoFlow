@@ -1,6 +1,7 @@
 import { computed, ref, watch } from 'vue'
 
 import { st } from '@/i18n'
+import { isSettingVisible } from '@/platform/astrophotoflow/settingsPresentation'
 import {
   getSettingInfo,
   useSettingStore
@@ -67,6 +68,7 @@ export function useSettingSearch() {
     const filteredSettings = allSettings.filter((setting) => {
       // Filter out hidden and deprecated settings, just like in normal settings tree
       if (
+        !isSettingVisible(setting) ||
         setting.type === 'hidden' ||
         setting.deprecated ||
         (shouldRenderVueNodes.value && setting.hideInVueNodes)

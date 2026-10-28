@@ -6,7 +6,7 @@ from typing import Any
 
 import httpx
 from pydantic import BaseModel
-from astrophotoflow.contracts.workbench import ConfigSave, ConfigState
+from astrophotoflow.contracts.workbench import ConfigSave, ConfigState, DirectorySelectionResult
 
 from astrophotoflow.interfaces.client.imports import ImportOperations
 from astrophotoflow.interfaces.client.library import LibraryOperations
@@ -57,6 +57,11 @@ class AssetClient(ImportOperations, LibraryOperations, OrganizationOperations):
 
     def save_workbench_configuration(self, body: ConfigSave) -> ConfigState:
         return ConfigState.model_validate(self.request("PATCH", "/settings/workbench", json=body))
+
+    def select_workbench_directory(self, path: str) -> DirectorySelectionResult:
+        return DirectorySelectionResult.model_validate(self._result(self.client.post(
+            "/settings/workbench/select-directory", json={"path": path}, timeout=None,
+        )))
 
     def _result(self, response: httpx.Response) -> Any:
         try:

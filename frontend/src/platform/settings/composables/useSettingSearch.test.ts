@@ -63,6 +63,33 @@ describe('useSettingSearch', () => {
     vi.mocked(st).mockImplementation((_: string, fallback: string) => fallback)
   })
 
+  it('excludes product-hidden settings from search without changing their registration', () => {
+    const ids = [
+      'Comfy.Execution.PreviewMethod',
+      'Comfy.EditAttention.Delta',
+      'Comfy.NodeBadge.ShowApiPricing',
+      'Comfy.ModelLibrary.AutoLoadAll',
+      'Comfy.ModelLibrary.NameFormat',
+      'Comfy.Load3D.ShowGrid'
+    ] as const
+    for (const id of ids) {
+      mockSettings[id] = {
+        id,
+        name: 'Hidden product option',
+        type: 'text',
+        defaultValue: 'unchanged',
+        category: id.includes('Load3D') ? ['3D', 'Scene'] : ['Comfy', 'Other']
+      }
+    }
+    const search = useSettingSearch()
+    search.handleSearch('Hidden product option')
+    expect(search.filteredSettingIds.value).toEqual([])
+    for (const id of ids)
+      expect(mockSettingStore.settingsById[id].defaultValue).toBe('unchanged')
+    search.handleSearch('workbench', [{ key: 'workbench', label: 'Workbench' }])
+    expect(search.matchedNavItemKeys.value.has('workbench')).toBe(true)
+  })
+
   describe('initialization', () => {
     it('initializes with default state', () => {
       const search = useSettingSearch()

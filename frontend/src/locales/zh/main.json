@@ -1,5 +1,21 @@
 {
   "apfWorkbench": {
+    "configurationHelp": "工作台配置说明",
+    "configurationPath": "当前配置文件路径",
+    "workspaceHelp": "默认工作区说明和完整路径",
+    "dataDirectoryDetails": "数据目录说明和完整路径",
+    "restartDetails": "重启工作台说明",
+    "importRootDetails": "导入目录完整路径",
+    "currentDataDirectory": "当前输入的数据目录",
+    "chooseDirectory": "选择文件夹",
+    "chooseWorkspace": "选择默认工作区文件夹",
+    "chooseDataDirectory": "选择数据目录文件夹",
+    "selectingDirectory": "请在系统文件夹窗口中选择目录，或取消。",
+    "absoluteDataDirectory": "已保存的数据目录绝对路径",
+    "dataDirectoryHelp": "数据目录保存数据库和托管素材。修改路径不会迁移已有数据，重启后使用新目录。",
+    "runtimeInfo": "运行信息",
+    "fileWorkersHelp": "同时处理的导入任务数。较高并发会增加资源占用。",
+    "previewWorkersHelp": "同时生成的预览数。较高并发会增加资源占用。",
     "title": "工作台配置",
     "saveHelp": "保存不会自动重启；启动参数在下一次重启后生效。",
     "unexpectedError": "无法读取或保存配置，请重试。",
@@ -8,7 +24,7 @@
     "requestId": "请求编号",
     "loading": "正在读取配置…",
     "restartRequired": "已保存的配置与当前生效值不同，需要重启。",
-    "inSync": "没有待重启应用的配置",
+    "inSync": "配置已生效",
     "webAddress": "当前网页地址",
     "serviceAddress": "当前服务地址",
     "noRunningValues": "没有当前运行采用记录，下方显示已保存配置。",
@@ -4190,6 +4206,7 @@
     "troubleshoot": "故障排除"
   },
   "settingsCategories": {
+    "Workbench": "工作台",
     "3D": "3D",
     "3DViewer": "3D查看器",
     "API Nodes": "API 节点",
