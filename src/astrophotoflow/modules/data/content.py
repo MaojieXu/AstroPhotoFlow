@@ -19,4 +19,4 @@ def observe_content(asset_id: UUID, request: Request):
 
 @router.post("/library/assets/{asset_id}/content-accept", response_model=AssetOut, status_code=201, dependencies=[Depends(authenticate)])
 def accept_content(asset_id: UUID, body: AssetContentAccept, request: Request):
-    return accept_asset_content(request.app.state.database, request.app.state.settings, asset_id, body)\n
+    return accept_asset_content(request.app.state.database, request.app.state.settings, asset_id, body)

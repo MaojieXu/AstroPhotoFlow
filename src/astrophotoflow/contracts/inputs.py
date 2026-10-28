@@ -127,4 +127,4 @@ class CheckedOutput(StrictModel):
     byte_size: int = Field(ge=0)
     content_hash: str
     checked_at: datetime
-    scientific_metadata: dict | None = None\n
+    scientific_metadata: dict | None = None
