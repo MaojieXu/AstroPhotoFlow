@@ -32,4 +32,4 @@ CLI 命令与58个 MCP 工具保持。使用 ASTROPHOTOFLOW_CONFIG 指定目标 
 
 停止时工作台请求领域服务退出并等待导入／预览排空。超过等待时限会明确报错并保留进程记录，稍后再次运行 stop；不会将仍在排空的任务假报完成。
 
-诊断查看 workspace/logs/service.log、comfyui.log、健康检查及 apf status。不要输出 service.token。桌面安装包、完整 Agent、天文处理适配和结果比较不属于本轮交付。
+诊断查看 workspace/logs/service.log、comfyui.log、健康检查及 apf status。不要输出 service.token。软件适配、节点制作、工作流级MCP、结果比较与本地上下文尚待实施；产品使用外部Agent，不提供内置聊天或Agent推理／生成式模型后端。目标中的软件MCP和本地检索embedding按[③概要](../../src/astrophotoflow/modules/software/README.md)及⑤后续设计管理，目前没有相应安装或查询命令，不改变现有平台CPU runtime和58个数据工具。完整范围与阶段以[现行需求](../requirements/README.md)为准，桌面安装包不是网页交付前置条件。

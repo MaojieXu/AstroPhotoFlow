@@ -1,5 +1,7 @@
 # 开发、测试与发行
 
+产品范围与阶段验收以[现行需求](../requirements/README.md)为准，模块权威与调用边界见[总架构](../architecture/overview.md)，阶段依赖与联调出口见[开发路线](platform-roadmap.md)。本文维护当前开发及发行命令，不把待实现目标写成现有能力。
+
 开发分支为 `dev`，Python 环境为 `.artifacts/venvs/dev`。需要 Python 3.12、uv、Node `>=26.8.2 <27` 和 pnpm 11.13.1；依赖锁为根 `uv.lock` 与 `frontend/pnpm-lock.yaml`。
 
 ## 安装与构建
