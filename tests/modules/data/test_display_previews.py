@@ -861,3 +861,33 @@ def test_failed_metadata_retry_leaves_cache_pending_until_backfill_without_histo
     client.post(base(item) + "/display", headers=AUTH, json={})
     assert finished(client, base(item))["status"] == "available"
     assert client.get("/api/v1/asset-tasks/" + retry_id, headers=AUTH).json() == history
+
+
+
+def test_real_preview_generation_blocks_maintenance_and_then_releases(service, monkeypatch):
+    import httpx
+    from astrophotoflow.modules.data.public import data_busy
+    settings, app, client, root = service
+    picture(root / "busy.png")
+    item = imported(client, "busy.png")
+    entered, release = Event(), Event()
+    original = app.state.display_previews._render
+    def paused(job):
+        entered.set()
+        assert release.wait(5)
+        return original(job)
+    async def empty_queue(self, url, **kwargs):
+        return httpx.Response(200, json={"queue_running": [], "queue_pending": []}, request=httpx.Request("GET", url))
+    monkeypatch.setattr(app.state.display_previews, "_render", paused)
+    monkeypatch.setattr(httpx.AsyncClient, "get", empty_queue)
+    try:
+        assert client.post(base(item) + "/display", headers=AUTH).status_code == 202
+        assert entered.wait(5)
+        state = data_busy(app.state.database)
+        assert state.busy and any("预览" in blocker for blocker in state.blockers)
+        denied = client.post("/internal/maintenance", headers=AUTH, json={"action": "enter"}).json()
+        assert denied["busy"] and not app.state.maintenance
+    finally:
+        release.set()
+    assert finished(client, base(item))["status"] == "available"
+    assert not data_busy(app.state.database).busy

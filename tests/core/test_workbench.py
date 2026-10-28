@@ -6,8 +6,19 @@ from pathlib import Path
 import zipfile
 import httpx
 import pytest
+from filelock import FileLock
+from datetime import datetime, timezone
+from uuid import uuid4
 
 from astrophotoflow.core import workbench
+from astrophotoflow.contracts.workbench import WorkbenchState
+
+
+@pytest.fixture(autouse=True)
+def isolated_default(tmp_path, monkeypatch):
+    monkeypatch.setattr(workbench.app_config, "CONFIG_PATH", tmp_path / "user/config.toml")
+    monkeypatch.delenv("APF_WORKSPACE", raising=False)
+    monkeypatch.delenv("ASTROPHOTOFLOW_CONFIG", raising=False)
 
 
 def test_initialize_copies_native_web_and_start_uses_builtin_gateway(tmp_path, monkeypatch):
@@ -70,10 +81,13 @@ def test_initialize_copies_native_web_and_start_uses_builtin_gateway(tmp_path, m
     monkeypatch.setattr(workbench, "_port_available", lambda host, port: True)
     monkeypatch.setattr(workbench, "_health", lambda path: True)
     monkeypatch.setattr(workbench, "_launch", lambda command, cwd, env, log_path: (commands.append(command) or FakeProcess()))
-    monkeypatch.setattr(workbench, "_record", lambda process, role, cwd, command: {"role": role, "command": command})
-    monkeypatch.setattr(workbench, "_web_health", lambda url: True)
+    monkeypatch.setattr(workbench, "_record", lambda process, role, cwd, command: {
+        "role": role, "command": command, "pid": process.pid, "create_time": 1.0, "executable": command[0],
+        "workspace": str(cwd), "started_at": datetime.now(timezone.utc).isoformat()})
+    monkeypatch.setattr(workbench, "_web_health", lambda url, workspace: True)
 
-    assert workbench.start(config_path, activate=False) == "AstroPhotoFlow 已启动：http://127.0.0.1:18188/#/workflows"
+    result = workbench.start(config_path)
+    assert result.state == "completed" and result.web_url == "http://127.0.0.1:18188"
     assert activations == []
     assert commands[0][1:] == ["-m", "astrophotoflow.interfaces.http.cli", "serve"]
     assert commands[1][commands[1].index("--base-directory") + 1] == str(workspace / "comfyui-data")
@@ -133,7 +147,7 @@ def test_stop_terminates_legacy_children_before_clearing_process_state(tmp_path,
     workbench.stop(tmp_path / "config.toml")
     assert terminated == [2, 1]
     assert not parent.running and not child.running
-    assert json.loads(state.read_text(encoding="utf-8")) == {"processes": []}
+    assert json.loads(state.read_text(encoding="utf-8"))["processes"] == []
 
 
 def test_stop_waits_for_domain_service_before_clearing_state(tmp_path, monkeypatch):
@@ -144,7 +158,8 @@ def test_stop_waits_for_domain_service_before_clearing_state(tmp_path, monkeypat
     config.write_text('[server]\nhost="127.0.0.1"\nport=8190\n[storage]\ndata_dir="data"\n'
                       '[comfyui]\nallowed_origins=["http://127.0.0.1:8188"]\n', encoding="utf-8")
     state = tmp_path / "run/processes.json"
-    state.write_text(json.dumps({"processes": [
+    state.write_text(json.dumps({"workspace": str(tmp_path), "config_path": str(config),
+        "effective_settings": workbench.app_config.get_configuration(config).saved.model_dump(), "processes": [
         {"pid": 1, "role": "asset-service", "command": ["python", "serve"]},
         {"pid": 2, "role": "comfyui", "command": ["python", "main.py", "--front-end-root", "web"]},
     ]}), encoding="utf-8")
@@ -165,4 +180,133 @@ def test_stop_waits_for_domain_service_before_clearing_state(tmp_path, monkeypat
     monkeypatch.setattr(workbench.httpx, "post", shutdown)
     workbench.stop(config)
     assert calls == ["requested", "drained"]
-    assert json.loads(state.read_text(encoding="utf-8")) == {"processes": []}
+    assert json.loads(state.read_text(encoding="utf-8"))["processes"] == []
+
+
+
+def write_workspace(path):
+    path.mkdir(parents=True, exist_ok=True)
+    config = path / "config.toml"
+    config.write_text('[server]\nhost="127.0.0.1"\nport=31390\n[storage]\ndata_dir="data"\n'
+                      '[comfyui]\nallowed_origins=["http://127.0.0.1:31388"]\n', encoding="utf-8")
+    (path / "run").mkdir()
+    return config
+
+
+def test_port_choice_skips_occupied_and_other_service_port(monkeypatch):
+    checked = []
+    def available(host, port):
+        checked.append(port)
+        return port not in {31388, 31389}
+    monkeypatch.setattr(workbench, "_port_available", available)
+    assert workbench._choose_port("127.0.0.1", 31388, exclude=31390) == 31391
+    assert checked == [31388, 31389, 31391]
+
+
+def test_actual_port_writeback_preserves_newly_saved_performance_and_current_values(tmp_path):
+    config = write_workspace(tmp_path / "workspace")
+    before = workbench.app_config.get_configuration(config)
+    adopted = {"workspace": str(config.parent), "config_path": str(config),
+               "effective_settings": before.saved.model_dump(), "processes": [{"role": "asset-service"}]}
+    workbench._write_state(config.parent, adopted)
+    changed = workbench.app_config.save_configuration(
+        config, before.saved.model_copy(update={"file_workers": 7}), before.config_token)
+    workbench._write_actual_ports(config, 31490, ["http://127.0.0.1:31488"])
+    current = workbench.app_config.get_configuration(config)
+    assert current.saved.file_workers == 7
+    assert current.saved.service_port == 31490
+    assert current.saved.allowed_origins == ["http://127.0.0.1:31488"]
+    assert current.effective == changed.effective
+    assert current.restart_required
+
+
+def test_repeated_start_returns_actual_addresses_without_launch_or_default_change(tmp_path, monkeypatch):
+    config = write_workspace(tmp_path / "workspace")
+    ready = WorkbenchState(workspace=str(config.parent), config_path=str(config), state="running", ready=True,
+                           web_url="http://127.0.0.1:31488", service_url="http://127.0.0.1:31490",
+                           processes=[], effective_settings=None, versions={}, reason=None, recent=None)
+    monkeypatch.setattr(workbench, "status", lambda path: ready)
+    monkeypatch.setattr(workbench, "_launch", lambda *args: pytest.fail("must reuse"))
+    result = workbench.start(config)
+    assert result.reused and result.state == "completed"
+    assert result.web_url == ready.web_url and result.service_url == ready.service_url
+    assert not workbench.app_config.CONFIG_PATH.exists()
+    assert workbench._recent(config.parent).operation_id == result.operation_id
+
+
+def test_same_workspace_control_is_mutually_exclusive(tmp_path):
+    config = write_workspace(tmp_path / "workspace")
+    with FileLock(str(config.parent / "run/control.lock")):
+        with pytest.raises(workbench.WorkbenchError, match="已有启停"):
+            workbench.start(config)
+    assert not workbench._control_path(config.parent).exists()
+
+
+def test_interrupted_control_is_unknown_and_not_reported_completed(tmp_path):
+    config = write_workspace(tmp_path / "workspace")
+    with pytest.raises(KeyboardInterrupt):
+        with workbench._control_operation(config, "start"):
+            raise KeyboardInterrupt()
+    assert workbench._recent(config.parent).state == "unknown"
+    with pytest.raises(workbench.WorkbenchError, match="尚未确认"):
+        workbench.start(config)
+    assert workbench.stop(config).state == "completed"
+    assert workbench._recent(config.parent).action == "stop"
+
+
+def test_explicit_stop_reconciles_partial_interrupted_start_before_replacing_record(tmp_path, monkeypatch):
+    config = write_workspace(tmp_path / "workspace")
+    with pytest.raises(KeyboardInterrupt):
+        with workbench._control_operation(config, "start"):
+            raise KeyboardInterrupt()
+    workbench._write_state(config.parent, {"processes": [{"role": "asset-service"}]})
+    calls = []
+    def stop(path):
+        assert workbench._recent(path.parent).state == "unknown"
+        calls.append(path)
+        workbench._write_state(path.parent, {"processes": []})
+    monkeypatch.setattr(workbench, "_stop", stop)
+    assert workbench.stop(config).state == "completed"
+    assert calls == [config]
+
+
+def test_status_requires_health_and_actual_process_identity(tmp_path, monkeypatch):
+    config = write_workspace(tmp_path / "workspace")
+    records = [{"role": role, "pid": index + 1, "create_time": 1.0, "executable": "python", "command": ["python"],
+                "workspace": str(config.parent), "started_at": datetime.now(timezone.utc).isoformat()}
+               for index, role in enumerate(("asset-service", "comfyui"))]
+    workbench._write_state(config.parent, {"workspace": str(config.parent), "config_path": str(config),
+        "processes": records, "effective_settings": workbench.app_config.get_configuration(config).saved.model_dump(),
+        "web_url": "http://127.0.0.1:31388", "service_url": "http://127.0.0.1:31390"})
+    monkeypatch.setattr(workbench, "_identity", lambda record: object())
+    monkeypatch.setattr(workbench, "_health", lambda path: False)
+    observed = workbench.status(config)
+    assert observed.state == "partial" and not observed.ready
+    monkeypatch.setattr(workbench, "_identity", lambda record: None)
+    assert workbench.status(config).state == "stopped"
+
+
+def test_restart_rejects_busy_without_stopping_or_scheduling(tmp_path, monkeypatch):
+    config = write_workspace(tmp_path / "workspace")
+    (config.parent / "data").mkdir()
+    (config.parent / "data/service.token").write_text("test-token", encoding="utf-8")
+    settings = workbench.app_config.load_settings(config)
+    record = {"role": "asset-service", "pid": 1, "create_time": 1.0, "executable": "python", "command": ["python"],
+              "workspace": str(config.parent), "started_at": datetime.now(timezone.utc).isoformat()}
+    ready = WorkbenchState(workspace=str(config.parent), config_path=str(config), state="running", ready=True,
+                           web_url="http://127.0.0.1:31388", service_url=settings.service_url,
+                           processes=[workbench.ProcessInfo.model_validate_json(json.dumps(record))],
+                           effective_settings=None, versions={}, reason=None, recent=None)
+    monkeypatch.setattr(workbench, "status", lambda path: ready)
+    workbench._write_state(config.parent, {"workspace": str(config.parent), "config_path": str(config),
+        "processes": [record], "effective_settings": workbench.app_config.get_configuration(config).saved.model_dump()})
+    monkeypatch.setattr(workbench.httpx, "post", lambda url, **kwargs:
+        httpx.Response(200, json={"busy": True, "unknown": False, "blockers": ["导入任务 test"]}, request=httpx.Request("POST", url)))
+    monkeypatch.setattr(workbench, "_stop", lambda *args: pytest.fail("busy must not stop"))
+    result = workbench.restart(config)
+    assert result.state == "rejected" and result.blockers == ["导入任务 test"]
+    assert workbench._recent(config.parent).state == "rejected"
+    def unavailable(*args, **kwargs):
+        raise httpx.ConnectError("test maintenance unavailable")
+    monkeypatch.setattr(workbench.httpx, "post", unavailable)
+    assert workbench.restart(config).state == "rejected"

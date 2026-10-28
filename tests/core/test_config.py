@@ -285,3 +285,20 @@ def test_missing_or_wrong_running_record_is_not_replaced_with_saved_values(tmp_p
     record["processes"] = []
     run_path.write_text(json.dumps(record), encoding="utf-8")
     assert config.get_configuration(path).effective is None
+
+
+def test_client_uses_adopted_values_while_running_and_saved_values_after_stop(tmp_path):
+    path = write_config(tmp_path / "workspace/config.toml")
+    state = config.get_configuration(path)
+    run_path = write_running_configuration(path, state.saved)
+    token = path.parent / "data/service.token"
+    token.parent.mkdir()
+    token.write_text("test-token", encoding="utf-8")
+    config.save_configuration(path, state.saved.model_copy(update={"service_port": 31490}), state.config_token)
+    with AssetClient(path) as client:
+        assert client.base_url == "http://127.0.0.1:31390/api/v1"
+    record = json.loads(run_path.read_text(encoding="utf-8"))
+    record["processes"] = []
+    run_path.write_text(json.dumps(record), encoding="utf-8")
+    with AssetClient(path) as client:
+        assert client.base_url == "http://127.0.0.1:31490/api/v1"

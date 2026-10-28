@@ -23,7 +23,8 @@ def health(request: Request):
             connection.exec_driver_sql("SELECT 1")
     except SQLAlchemyError as exc:
         raise ApiError(503, "SERVICE_UNAVAILABLE", "领域服务数据库未就绪。") from exc
-    return {"status": "ok", "api_version": "v1", "database": "ready", "schema_revision": SCHEMA_REVISION}
+    return {"status": "ok", "api_version": "v1", "database": "ready", "schema_revision": SCHEMA_REVISION,
+            "workspace": str(request.app.state.settings.workspace)}
 
 
 @router.get("/capabilities", dependencies=[Depends(authenticate)])

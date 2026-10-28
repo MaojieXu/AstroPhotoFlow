@@ -13,7 +13,7 @@ from astrophotoflow.client import AssetClient, ServiceApiError
 from astrophotoflow.interfaces.cli import commands as cli_commands
 from astrophotoflow.contracts.imports import PhotoImportOptions
 from astrophotoflow.core.config import ConfigurationError, resolve_config_path
-from astrophotoflow.core.workbench import WorkbenchError, initialize, start, status, stop
+from astrophotoflow.core.workbench import WorkbenchError, initialize, start, status, stop, restart
 
 
 PARAMETER_OPTIONS = {
@@ -60,11 +60,9 @@ def _parser() -> argparse.ArgumentParser:
     init.add_argument("--frontend-assets", type=Path, help="Use this checkout's built JS/CSS")
     init.add_argument("--reuse-runtime", action="store_true", help="Reuse the already prepared fixed CPU runtime")
     init.add_argument("--no-activate", action="store_true", help="Do not change the user's default workspace")
-    for name in ("start", "status", "stop"):
+    for name in ("start", "status", "stop", "restart"):
         command = commands.add_parser(name)
         command.add_argument("--workspace", type=Path)
-        if name == "start":
-            command.add_argument("--no-activate", action="store_true")
     mcp_config = commands.add_parser("mcp-config", help="Print the Codex stdio MCP registration details")
     mcp_config.add_argument("--workspace", type=Path)
     photo = commands.add_parser("import-photo", help="Copy and ingest one local photograph")
@@ -143,15 +141,15 @@ def main() -> None:
                                 frontend_assets=args.frontend_assets, activate=not args.no_activate,
                                 reuse_runtime=args.reuse_runtime)
             print(f"workspace 已准备：{result.parent}")
-        elif args.command == "start":
-            print(start(_workspace_config(args.workspace), activate=not args.no_activate))
-        elif args.command == "status":
-            state, processes = status(_workspace_config(args.workspace))
-            print(json.dumps({"status": state, "processes": processes}, ensure_ascii=False, indent=2))
-            if state == "partial":
-                raise WorkbenchError("工作台部分进程未运行；请先 apf stop。")
-        elif args.command == "stop":
-            print(stop(_workspace_config(args.workspace)))
+        elif args.command in {"start", "status", "stop", "restart"}:
+            result = {"start": start, "status": status, "stop": stop, "restart": restart}[args.command](
+                _workspace_config(args.workspace))
+            print(result.model_dump_json(indent=2))
+            if args.command == "status":
+                if result.state in {"partial", "unknown"}:
+                    raise SystemExit(1)
+            elif result.state != "completed":
+                raise SystemExit(1)
         elif args.command == "mcp-config":
             _mcp_registration(_workspace_config(args.workspace))
         else:

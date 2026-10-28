@@ -8,7 +8,9 @@ from astrophotoflow.interfaces.http.app import create_app
 from astrophotoflow.core.database.schema import SCHEMA_REVISION, SchemaError, database_status, database_lock, ensure_schema_for_serve, upgrade_database
 from astrophotoflow.core.database.db import Database
 from astrophotoflow.modules.data.public import backfill_missing_previews, mark_interrupted_tasks
-from astrophotoflow.core.config import ConfigurationError, ensure_service_token, load_settings
+from astrophotoflow.core.config import ConfigurationError, ensure_service_token, load_settings, load_running_settings
+import os
+from pathlib import Path
 
 
 @contextmanager
@@ -32,7 +34,7 @@ def main() -> None:
     previews.add_subparsers(dest="preview_command", required=True).add_parser("backfill")
     args = parser.parse_args()
     try:
-        settings = load_settings()
+        settings = load_running_settings(Path(os.environ["APF_WORKSPACE"])) if "APF_WORKSPACE" in os.environ else load_settings()
         if args.command == "db" and args.db_command == "status":
             result = database_status(settings)
             for key, value in result.items():

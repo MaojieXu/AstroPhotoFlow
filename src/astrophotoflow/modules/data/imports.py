@@ -24,7 +24,7 @@ router = APIRouter(prefix="/api/v1", responses=ERROR_RESPONSES)
 
 
 @router.post("/uploads", status_code=202, dependencies=[Depends(deps.authenticate)])
-def create_upload(body: UploadImportCreate, request: Request, session: deps.WriteSession):
+def create_upload(body: UploadImportCreate, request: Request, admission: deps.TaskAdmission, session: deps.WriteSession):
     validate_import_equipment(session, body.parameters.model_dump(mode="json"))
     defaults_snapshot = capture_defaults_snapshot(session, body.capture_preset_id, body.parameters.model_dump(mode="json", exclude_unset=True))
     task_id = str(uuid4())
@@ -104,7 +104,7 @@ async def upload_file(task_id: UUID, index: int, request: Request):
 
 
 @router.post("/uploads/{task_id}/start", status_code=202, dependencies=[Depends(deps.authenticate)])
-def start_upload_import(task_id: UUID, request: Request, background: BackgroundTasks, session: deps.WriteSession):
+def start_upload_import(task_id: UUID, request: Request, background: BackgroundTasks, admission: deps.TaskAdmission, session: deps.WriteSession):
     task = session.get(AssetTask, shared._id(task_id))
     if task is None or not (task.report or {}).get("upload_manifest"):
         raise not_found()
@@ -198,7 +198,7 @@ def import_root_entries(
 
 
 @router.post("/imports", response_model=ImportAccepted, status_code=202, dependencies=[Depends(deps.authenticate)])
-def create_import(body: ImportCreate, request: Request, background: BackgroundTasks, session: deps.WriteSession):
+def create_import(body: ImportCreate, request: Request, background: BackgroundTasks, admission: deps.TaskAdmission, session: deps.WriteSession):
     validate_import_equipment(session, body.parameters.model_dump(mode="json"))
     sources = []
     is_dataset = len(body.sources) > 1
@@ -286,7 +286,7 @@ def cancel_asset_task(task_id: UUID, request: Request, session: deps.WriteSessio
 
 
 @router.post("/asset-tasks/{task_id}/resume", status_code=202, response_model=ImportAccepted, dependencies=[Depends(deps.authenticate)])
-def resume_asset_task(task_id: UUID, request: Request, background: BackgroundTasks, session: deps.WriteSession):
+def resume_asset_task(task_id: UUID, request: Request, background: BackgroundTasks, admission: deps.TaskAdmission, session: deps.WriteSession):
     task = session.get(AssetTask, shared._id(task_id))
     if task is None:
         raise not_found()
@@ -307,7 +307,7 @@ def resume_asset_task(task_id: UUID, request: Request, background: BackgroundTas
 
 
 @router.post("/asset-tasks/{task_id}/retry", status_code=202, response_model=ImportAccepted, dependencies=[Depends(deps.authenticate)])
-def retry_asset_task(task_id: UUID, body: RetryCreate, request: Request, background: BackgroundTasks, session: deps.WriteSession):
+def retry_asset_task(task_id: UUID, body: RetryCreate, request: Request, background: BackgroundTasks, admission: deps.TaskAdmission, session: deps.WriteSession):
     original = session.get(AssetTask, shared._id(task_id))
     if original is None:
         raise not_found()

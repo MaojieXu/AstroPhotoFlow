@@ -253,6 +253,18 @@ def _set_default_workspace(workspace: Path) -> None:
         _write_default_workspace(workspace.expanduser().resolve())
 
 
+def _configuration_text(values: ConfigValues) -> str:
+    quote = json.dumps
+    roots = ", ".join("{ id = " + quote(root.id) + ", path = " + quote(root.path) + " }" for root in values.import_roots)
+    return (
+        f'[server]\nhost = {quote(values.host)}\nport = {values.service_port}\n\n'
+        f'[storage]\ndata_dir = {quote(values.data_dir)}\n\n'
+        f'[comfyui]\nallowed_origins = [{", ".join(quote(origin) for origin in values.allowed_origins)}]\n\n'
+        f'[imports]\nroots = [{roots}]\n\n'
+        f'[ingestion]\nfile_workers = {values.file_workers}\npreview_workers = {values.preview_workers}\n'
+    )
+
+
 def save_configuration(config_path: Path, values: ConfigValues, config_token: str, *,
                        default_workspace: Path | None = None) -> ConfigState:
     config_path = resolve_config_path(config_path)
@@ -268,16 +280,7 @@ def save_configuration(config_path: Path, values: ConfigValues, config_token: st
         with FileLock(str(CONFIG_PATH) + ".lock", timeout=0):
             if get_configuration(config_path).config_token != config_token:
                 raise ApiError(409, "CONFIGURATION_CONFLICT", "配置已被修改，请重新读取。")
-            quote = json.dumps
-            roots = ", ".join("{ id = " + quote(root.id) + ", path = " + quote(root.path) + " }" for root in values.import_roots)
-            text = (
-                f'[server]\nhost = {quote(values.host)}\nport = {values.service_port}\n\n'
-                f'[storage]\ndata_dir = {quote(values.data_dir)}\n\n'
-                f'[comfyui]\nallowed_origins = [{", ".join(quote(origin) for origin in values.allowed_origins)}]\n\n'
-                f'[imports]\nroots = [{roots}]\n\n'
-                f'[ingestion]\nfile_workers = {values.file_workers}\npreview_workers = {values.preview_workers}\n'
-            )
-            _write_configuration_file(config_path, text)
+            _write_configuration_file(config_path, _configuration_text(values))
             if default_workspace is not None:
                 try:
                     _write_default_workspace(default_workspace.expanduser().resolve())

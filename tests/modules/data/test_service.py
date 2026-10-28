@@ -1600,3 +1600,64 @@ def test_trash_parent_selection_does_not_bypass_a_stale_child_revision(trash_rec
     with group.database.read_session() as session:
         assert set(session.get(LibraryEntryRemoval, ("dataset", group.id)).member_asset_ids) == {photo.id for photo in group.photos}
     assert all(photo.raw.exists() and photo.thumb.exists() for photo in group.photos)
+
+
+
+def test_maintenance_auth_busy_and_new_task_admission(service, monkeypatch):
+    import httpx
+    settings, client, database = service
+    async def empty_queue(self, url, **kwargs):
+        return httpx.Response(200, json={"queue_running": [], "queue_pending": []}, request=httpx.Request("GET", url))
+    monkeypatch.setattr(httpx.AsyncClient, "get", empty_queue)
+    assert client.post("/internal/maintenance", json={"action": "enter"}).status_code == 401
+    assert "/internal/maintenance" not in client.app.openapi()["paths"]
+    entered = client.post("/internal/maintenance", headers=auth(), json={"action": "enter"})
+    assert entered.json() == {"busy": False, "unknown": False, "blockers": []}
+    body = {"files": [{"name": "night.png", "size": 10}]}
+    blocked = client.post("/api/v1/uploads", headers=auth(), json=body)
+    assert blocked.status_code == 409 and blocked.json()["error"]["code"] == "WORKBENCH_MAINTENANCE"
+    preview = client.post(f"/api/v1/library/assets/{uuid4()}/versions/{uuid4()}/previews/display", headers=auth())
+    assert preview.status_code == 409
+    client.post("/internal/maintenance", headers=auth(), json={"action": "release"})
+    created = client.post("/api/v1/uploads", headers=auth(), json=body)
+    assert created.status_code == 202, created.text
+    task = created.json()["task_id"]
+    busy = client.post("/internal/maintenance", headers=auth(), json={"action": "enter"}).json()
+    assert busy["busy"] and any(task in reason for reason in busy["blockers"])
+    assert not client.app.state.maintenance
+
+
+def test_maintenance_rejects_unknown_or_nonempty_native_queue(service, monkeypatch):
+    import httpx
+    _, client, _ = service
+    async def unavailable(self, url, **kwargs):
+        raise httpx.ConnectError("test unavailable")
+    monkeypatch.setattr(httpx.AsyncClient, "get", unavailable)
+    unknown = client.post("/internal/maintenance", headers=auth(), json={"action": "enter"}).json()
+    assert unknown["unknown"] and not client.app.state.maintenance
+    async def queued(self, url, **kwargs):
+        return httpx.Response(200, json={"queue_running": [], "queue_pending": [[1, "prompt"]]}, request=httpx.Request("GET", url))
+    monkeypatch.setattr(httpx.AsyncClient, "get", queued)
+    busy = client.post("/internal/maintenance", headers=auth(), json={"action": "enter"}).json()
+    assert busy["busy"] and not busy["unknown"] and not client.app.state.maintenance
+
+
+def test_maintenance_check_and_task_admission_cannot_cross(service, monkeypatch):
+    import asyncio
+    import httpx
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Event
+    _, client, _ = service
+    entered, release = Event(), Event()
+    async def paused(self, url, **kwargs):
+        entered.set()
+        assert await asyncio.to_thread(release.wait, 5)
+        return httpx.Response(200, json={"queue_running": [], "queue_pending": []}, request=httpx.Request("GET", url))
+    monkeypatch.setattr(httpx.AsyncClient, "get", paused)
+    with ThreadPoolExecutor(max_workers=2) as workers:
+        maintenance = workers.submit(client.post, "/internal/maintenance", headers=auth(), json={"action": "enter"})
+        assert entered.wait(5)
+        importing = workers.submit(client.post, "/api/v1/uploads", headers=auth(), json={"files": [{"name": "x.png", "size": 10}]})
+        release.set()
+        assert not maintenance.result(5).json()["busy"]
+        assert importing.result(5).status_code == 409

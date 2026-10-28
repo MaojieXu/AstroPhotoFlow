@@ -1,4 +1,6 @@
 import asyncio
+import os
+from pathlib import Path
 from urllib.parse import quote
 from uuid import uuid4
 
@@ -6,7 +8,7 @@ import aiohttp
 from aiohttp import web
 
 
-from astrophotoflow.core.config import ConfigurationError, load_settings
+from astrophotoflow.core.config import ConfigurationError, load_settings, load_running_settings
 BASE_PATH = "/astrophotoflow/api/v1"
 
 # Public route, corresponding API path, and method. No wildcard proxy route is registered.
@@ -101,7 +103,7 @@ class ProxyError(Exception):
 
 def _configuration(*, allow_missing_token: bool = False):
     try:
-        settings = load_settings()
+        settings = load_running_settings(Path(os.environ["APF_WORKSPACE"])) if "APF_WORKSPACE" in os.environ else load_settings()
         token_path = settings.token_path
         try:
             token = token_path.read_text(encoding="utf-8").strip()

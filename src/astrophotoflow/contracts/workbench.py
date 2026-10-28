@@ -1,3 +1,7 @@
+from datetime import datetime
+from typing import Literal
+from uuid import UUID
+
 from pydantic import Field, model_validator
 
 from astrophotoflow.contracts.common import StrictModel
@@ -38,3 +42,47 @@ class ConfigState(StrictModel):
     config_token: str
     effective: ConfigValues | None
     restart_required: bool
+
+
+class ProcessInfo(StrictModel):
+    role: Literal["asset-service", "comfyui"]
+    pid: int
+    create_time: float
+    executable: str
+    command: list[str]
+    workspace: str
+    started_at: datetime
+
+
+class BusyState(StrictModel):
+    busy: bool
+    unknown: bool
+    blockers: list[str]
+
+
+class WorkbenchResult(StrictModel):
+    operation_id: UUID
+    action: Literal["initialize", "start", "stop", "restart"]
+    state: Literal["in_progress", "completed", "rejected", "failed", "unknown"]
+    workspace: str
+    config_path: str
+    reused: bool
+    web_url: str | None
+    service_url: str | None
+    detail: str | None
+    blockers: list[str]
+    log_path: str | None
+
+
+class WorkbenchState(StrictModel):
+    workspace: str
+    config_path: str
+    state: Literal["stopped", "starting", "stopping", "running", "partial", "unknown"]
+    ready: bool
+    web_url: str | None
+    service_url: str | None
+    processes: list[ProcessInfo]
+    effective_settings: ConfigValues | None
+    versions: dict[str, str]
+    reason: str | None
+    recent: WorkbenchResult | None

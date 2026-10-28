@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import json
 from typing import Any
 
 import httpx
@@ -11,7 +12,7 @@ from astrophotoflow.interfaces.client.library import LibraryOperations
 from astrophotoflow.interfaces.client.organization import OrganizationOperations
 
 
-from astrophotoflow.core.config import load_settings, resolve_config_path
+from astrophotoflow.core.config import load_settings, load_running_settings, resolve_config_path
 
 
 class ServiceApiError(RuntimeError):
@@ -28,7 +29,10 @@ class ServiceApiError(RuntimeError):
 class AssetClient(ImportOperations, LibraryOperations, OrganizationOperations):
     def __init__(self, path: Path | None = None):
         self.config_path = resolve_config_path(path)
-        settings = load_settings(self.config_path)
+        workspace = self.config_path.parent
+        process_path = workspace / "run/processes.json"
+        active = process_path.is_file() and bool(json.loads(process_path.read_text(encoding="utf-8"))["processes"])
+        settings = load_running_settings(workspace) if active else load_settings(self.config_path)
         token = settings.token_path.read_text(encoding="utf-8").strip()
         if not token:
             raise ValueError("AstroPhotoFlow 本机服务令牌为空。")

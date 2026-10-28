@@ -273,7 +273,7 @@ def _project_version(session, project_id, reference_id):
 
 @router.post("/library/assets/{asset_id}/versions/{version_id}/previews/display", response_model=DisplayPreviewState,
              responses={202: {"model": DisplayPreviewState}}, dependencies=[Depends(deps.authenticate)])
-def request_display(asset_id: UUID, version_id: UUID, request: Request, response: Response, session: deps.ReadSession):
+def request_display(asset_id: UUID, version_id: UUID, request: Request, response: Response, admission: deps.TaskAdmission, session: deps.ReadSession):
     state = request.app.state.display_previews.schedule(_library_version(session, asset_id, version_id))
     response.status_code = 202 if state["status"] == "generating" else 200
     return state
@@ -287,7 +287,7 @@ def display_status(asset_id: UUID, version_id: UUID, request: Request, session: 
 
 @router.post("/library/assets/{asset_id}/versions/{version_id}/previews/display/auto-stretch", response_model=DisplayPreviewState,
             responses={202: {"model": DisplayPreviewState}}, dependencies=[Depends(deps.authenticate)])
-def auto_stretch(asset_id: UUID, version_id: UUID, request: Request, response: Response, session: deps.ReadSession):
+def auto_stretch(asset_id: UUID, version_id: UUID, request: Request, response: Response, admission: deps.TaskAdmission, session: deps.ReadSession):
     state = request.app.state.display_previews.schedule(_library_version(session, asset_id, version_id), auto=True)
     response.status_code = 202 if state["status"] == "generating" else 200
     return state
@@ -295,7 +295,7 @@ def auto_stretch(asset_id: UUID, version_id: UUID, request: Request, response: R
 
 @router.post("/projects/{project_id}/asset-references/{reference_id}/previews/display", response_model=DisplayPreviewState,
              responses={202: {"model": DisplayPreviewState}}, dependencies=[Depends(deps.authenticate)])
-def request_project_display(project_id: UUID, reference_id: UUID, request: Request, response: Response, session: deps.ReadSession):
+def request_project_display(project_id: UUID, reference_id: UUID, request: Request, response: Response, admission: deps.TaskAdmission, session: deps.ReadSession):
     state = request.app.state.display_previews.schedule(_project_version(session, project_id, reference_id))
     response.status_code = 202 if state["status"] == "generating" else 200
     return state
@@ -309,7 +309,7 @@ def project_display_status(project_id: UUID, reference_id: UUID, request: Reques
 
 @router.post("/projects/{project_id}/asset-references/{reference_id}/previews/display/auto-stretch", response_model=DisplayPreviewState,
             responses={202: {"model": DisplayPreviewState}}, dependencies=[Depends(deps.authenticate)])
-def project_auto_stretch(project_id: UUID, reference_id: UUID, request: Request, response: Response, session: deps.ReadSession):
+def project_auto_stretch(project_id: UUID, reference_id: UUID, request: Request, response: Response, admission: deps.TaskAdmission, session: deps.ReadSession):
     state = request.app.state.display_previews.schedule(_project_version(session, project_id, reference_id), auto=True)
     response.status_code = 202 if state["status"] == "generating" else 200
     return state

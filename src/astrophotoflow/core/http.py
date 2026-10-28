@@ -42,8 +42,16 @@ def write_session(request: Request):
         yield session
 
 
+async def task_admission(request: Request):
+    async with request.app.state.maintenance_lock:
+        if request.app.state.maintenance:
+            raise ApiError(409, "WORKBENCH_MAINTENANCE", "工作台正在停止或重启，暂不接受新任务。")
+        yield
+
+
 ReadSession = Annotated[Session, Depends(read_session)]
 WriteSession = Annotated[Session, Depends(write_session, scope="function")]
+TaskAdmission = Annotated[None, Depends(task_admission, scope="function")]
 Limit = Annotated[int, Query(ge=1, le=200)]
 Offset = Annotated[int, Query(ge=0)]
 SortBy = Annotated[Literal["created_at", "name"], Query()]

@@ -1,8 +1,10 @@
 import logging
+import asyncio
 from contextlib import asynccontextmanager
 from uuid import UUID, uuid4
 
 from fastapi import Depends, FastAPI, Request
+import httpx
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
@@ -10,12 +12,19 @@ from astrophotoflow.core.database.db import Database
 from astrophotoflow.core.errors import ApiError
 from astrophotoflow.core.http import authenticate
 from astrophotoflow.core.config import Settings
-from astrophotoflow.modules.data.public import DisplayPreviews, import_workers
+from astrophotoflow.modules.data.public import DisplayPreviews, import_workers, data_busy
+from astrophotoflow.contracts.workbench import BusyState
+from astrophotoflow.contracts.common import StrictModel
+from typing import Literal
 from astrophotoflow.modules.data.routes import router as data_router
 from astrophotoflow.interfaces.http import system
 
 
 logger = logging.getLogger("astrophotoflow.service")
+
+
+class MaintenanceAction(StrictModel):
+    action: Literal["enter", "release"]
 
 
 def create_app(settings: Settings, token: str) -> FastAPI:
@@ -30,10 +39,38 @@ def create_app(settings: Settings, token: str) -> FastAPI:
     app.state.settings = settings
     app.state.token = token
     app.state.database = Database(settings.database_path)
+    app.state.maintenance_lock = asyncio.Lock()
+    app.state.maintenance = False
+
+    @app.post("/internal/maintenance", dependencies=[Depends(authenticate)], include_in_schema=False)
+    async def maintenance(body: MaintenanceAction):
+        async with app.state.maintenance_lock:
+            if body.action == "release":
+                app.state.maintenance = False
+                return BusyState(busy=False, unknown=False, blockers=[])
+            state = data_busy(app.state.database)
+            try:
+                async with httpx.AsyncClient(timeout=3) as client:
+                    response = await client.get(settings.allowed_origins[0] + "/queue")
+                    response.raise_for_status()
+                    queue = response.json()
+                    running, pending = queue["queue_running"], queue["queue_pending"]
+                    if not isinstance(running, list) or not isinstance(pending, list):
+                        raise ValueError("原生队列格式无效。")
+                    if running or pending:
+                        state.busy = True
+                        state.blockers.append("原生队列仍有执行或排队任务")
+            except (httpx.HTTPError, KeyError, TypeError, ValueError):
+                state.unknown = True
+                state.blockers.append("无法确认原生队列空闲")
+            app.state.maintenance = not (state.busy or state.unknown)
+            return state
 
     @app.post("/internal/shutdown", dependencies=[Depends(authenticate)], include_in_schema=False)
     async def shutdown(request: Request):
-        request.app.state.shutdown()
+        async with app.state.maintenance_lock:
+            app.state.maintenance = True
+            request.app.state.shutdown()
         return {"status": "stopping"}
 
     @app.middleware("http")
