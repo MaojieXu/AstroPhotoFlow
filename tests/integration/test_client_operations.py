@@ -119,10 +119,14 @@ def test_cli_rejects_invalid_domain_body_before_http(client):
     assert not calls
 
 
-def test_existing_workbench_flags_remain_available():
+def test_init_flags_remain_and_control_commands_have_no_activation_flag():
     args = _parser().parse_args(["init", "--workspace", "work", "--reuse-runtime", "--frontend-assets", "build/frontend", "--no-activate"])
     assert args.reuse_runtime and args.no_activate and args.frontend_assets == Path("build/frontend")
-    assert _parser().parse_args(["start", "--no-activate"]).no_activate
+    for command in ("start", "status", "stop", "restart"):
+        control = _parser().parse_args([command, "--workspace", "work"])
+        assert control.workspace == Path("work") and not hasattr(control, "no_activate")
+    with pytest.raises(SystemExit):
+        _parser().parse_args(["start", "--no-activate"])
 
 
 def test_display_preview_reads_bytes_and_exports_without_scheduling(tmp_path):
@@ -192,3 +196,25 @@ def test_display_preview_rejects_successful_wrong_mime_with_request_id():
         api.read_display_preview("asset", "version")
     assert caught.value.code == "INVALID_RESPONSE" and caught.value.status == 200
     assert caught.value.request_id == "mime-request" and "image/jpeg" in str(caught.value)
+
+
+
+def test_typed_workbench_client_uses_fixed_routes_and_omits_default_when_not_requested():
+    from astrophotoflow.contracts.workbench import ConfigSave, ConfigState
+    values = {"host": "127.0.0.1", "service_port": 31390, "data_dir": "data",
+              "allowed_origins": ["http://127.0.0.1:31388"], "import_roots": [], "file_workers": 2, "preview_workers": 1}
+    state = {"config_path": "C:/isolated/config.toml", "default_workspace": None, "saved": values,
+             "effective": values, "config_token": "current", "restart_required": False}
+    requests = []
+    def handle(request):
+        requests.append(request)
+        return httpx.Response(200, json=state)
+    api = AssetClient.__new__(AssetClient)
+    api.client = httpx.Client(base_url="http://service/api/v1", transport=httpx.MockTransport(handle))
+    with api:
+        assert isinstance(api.get_workbench_configuration(), ConfigState)
+        result = api.save_workbench_configuration(ConfigSave(config_token="current", values=values))
+        assert result.config_token == "current"
+    assert [(request.method, request.url.path) for request in requests] == [
+        ("GET", "/api/v1/settings/workbench"), ("PATCH", "/api/v1/settings/workbench")]
+    assert body(requests[1]) == {"config_token": "current", "values": values}

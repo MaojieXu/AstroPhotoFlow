@@ -271,6 +271,9 @@ def status(workspace_config: Path | None = None) -> WorkbenchState:
             result.state = "running" if result.ready else "partial"
             if not result.ready:
                 result.reason = "双服务进程或workspace健康核对尚未通过。"
+            if raw.get("maintenance_operation_id") is not None:
+                result.ready = False
+                result.reason = "维护准入仍关闭；请核对控制结果或显式停止。"
         if result.recent is not None and result.recent.state == "in_progress":
             control = json.loads(_control_path(workspace).read_text(encoding="utf-8"))
             controller = control["controller"]
@@ -415,7 +418,7 @@ def _start(config_path: Path, result: WorkbenchResult) -> None:
                      "--front-end-root", str(workspace / "web"), "--disable-all-custom-nodes", "--disable-api-nodes"]
     manifest = json.loads((Path(__file__).resolve().parents[1] / "vendor/comfyui-source.json").read_text(encoding="utf-8"))
     record = {"workspace": str(workspace), "config_path": str(config_path), "effective_settings": values.model_dump(),
-              "web_url": web_url, "service_url": effective.service_url, "processes": [],
+              "web_url": web_url, "service_url": effective.service_url, "processes": [], "maintenance_operation_id": None,
               "versions": {"platform": version("astrophotoflow"), "comfyui": manifest["comfyui_version"]}}
     _write_state(workspace, record)
     launched = []
@@ -425,7 +428,7 @@ def _start(config_path: Path, result: WorkbenchResult) -> None:
             child = _launch(command, cwd, env, workspace / "logs" / ("service.log" if role == "asset-service" else "comfyui.log"))
             launched.append(child)
             record["processes"].append(_record(child, role, workspace, command))
-            _write_state(workspace, record)
+            app_config._update_running_state(workspace, {"processes": record["processes"]})
             deadline = time.monotonic() + timeout
             while True:
                 if child.poll() is not None:
@@ -446,7 +449,7 @@ def _start(config_path: Path, result: WorkbenchResult) -> None:
                     child.kill()
                     child.wait(timeout=5)
         record["processes"] = []
-        _write_state(workspace, record)
+        app_config._update_running_state(workspace, {"processes": []})
         raise
     result.web_url, result.service_url = web_url, effective.service_url
     try:
@@ -458,7 +461,8 @@ def _start(config_path: Path, result: WorkbenchResult) -> None:
 def _stop(config_path: Path) -> None:
     workspace = config_path.parent
     raw = _read_state(workspace)
-    native = any(item["role"] == "comfyui" and "--front-end-root" in item["command"] for item in raw["processes"])
+    native = "effective_settings" in raw or any(
+        item["role"] == "comfyui" and "--front-end-root" in item["command"] for item in raw["processes"])
     for record in reversed(raw["processes"]):
         process = _identity(record)
         if process is None:
@@ -485,7 +489,10 @@ def _stop(config_path: Path) -> None:
         if alive:
             raise WorkbenchError("原生进程尚未退出，保留记录；请查询后再停止。")
     raw["processes"] = []
-    _write_state(workspace, raw)
+    if "effective_settings" in raw:
+        app_config._update_running_state(workspace, {"processes": []})
+    else:
+        _write_state(workspace, raw)
 
 
 def _operate(action: str, workspace_config: Path | None) -> WorkbenchResult:
@@ -500,21 +507,34 @@ def _operate(action: str, workspace_config: Path | None) -> WorkbenchResult:
             observed = status(config_path)
             if observed.processes:
                 if not observed.ready:
-                    result.state, result.blockers = "rejected", ["服务未完全就绪，无法确认空闲"]
+                    result.state, result.blockers = "rejected", [observed.reason or "服务未完全就绪，无法确认空闲"]
                     return result
                 settings = app_config.load_running_settings(config_path.parent)
                 token = settings.token_path.read_text(encoding="utf-8").strip()
                 try:
-                    response = httpx.post(settings.service_url + "/internal/maintenance", json={"action": "enter"},
+                    response = httpx.post(settings.service_url + "/internal/maintenance",
+                                          json={"action": "enter", "operation_id": str(result.operation_id)},
                                           headers={"Authorization": f"Bearer {token}"}, timeout=5)
                     response.raise_for_status()
                     busy = BusyState.model_validate(response.json())
+                    if busy.busy or busy.unknown:
+                        result.state, result.blockers = "rejected", busy.blockers
+                        return result
                 except (httpx.HTTPError, ValueError) as exc:
                     result.state, result.blockers = "rejected", [f"无法确认工作台空闲：{exc}"]
                     return result
-                if busy.busy or busy.unknown:
-                    result.state, result.blockers = "rejected", busy.blockers
-                    return result
+                finally:
+                    if result.state == "rejected":
+                        try:
+                            released = httpx.post(settings.service_url + "/internal/maintenance",
+                                                  json={"action": "release", "operation_id": str(result.operation_id)},
+                                                  headers={"Authorization": f"Bearer {token}"}, timeout=5)
+                            released.raise_for_status()
+                            release_state = BusyState.model_validate(released.json())
+                            if release_state.busy or release_state.unknown:
+                                result.blockers.extend(release_state.blockers)
+                        except (httpx.HTTPError, ValueError) as release_error:
+                            result.blockers.append(f"本次维护释放未确认，需查询或显式停止：{release_error}")
             elif observed.state == "unknown":
                 result.state, result.blockers = "rejected", [observed.reason or "无法确认进程已停止"]
                 return result

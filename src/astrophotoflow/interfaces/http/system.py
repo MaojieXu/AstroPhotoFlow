@@ -6,11 +6,33 @@ from astrophotoflow.core.http import authenticate
 
 from fastapi import Depends, Request
 from sqlalchemy.exc import SQLAlchemyError
+from pathlib import Path
+from astrophotoflow.contracts.workbench import ConfigSave, ConfigState
+from astrophotoflow.core.config import ConfigurationError, get_configuration, save_configuration
 from astrophotoflow.core.errors import ApiError
 from astrophotoflow.core.database.schema import SCHEMA_REVISION, current_revision
 
 
 router = APIRouter(prefix="/api/v1", responses=ERROR_RESPONSES)
+
+
+@router.get("/settings/workbench", response_model=ConfigState, dependencies=[Depends(authenticate)])
+def get_workbench_configuration(request: Request):
+    try:
+        return get_configuration(request.app.state.settings.workspace / "config.toml")
+    except (OSError, ConfigurationError) as exc:
+        raise ApiError(503, "CONFIGURATION_UNAVAILABLE", "无法读取工作台配置，请检查配置文件。") from exc
+
+
+@router.patch("/settings/workbench", response_model=ConfigState, dependencies=[Depends(authenticate)])
+def save_workbench_configuration(body: ConfigSave, request: Request):
+    try:
+        return save_configuration(
+            request.app.state.settings.workspace / "config.toml", body.values, body.config_token,
+            default_workspace=Path(body.default_workspace) if body.default_workspace is not None else None,
+        )
+    except (OSError, ConfigurationError) as exc:
+        raise ApiError(503, "CONFIGURATION_SAVE_FAILED", "无法保存工作台配置，请重新读取并检查文件权限。") from exc
 
 
 @router.get("/health", dependencies=[Depends(authenticate)])

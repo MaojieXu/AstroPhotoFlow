@@ -11,10 +11,11 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from astrophotoflow.core.database.db import Database
 from astrophotoflow.core.errors import ApiError
 from astrophotoflow.core.http import authenticate
-from astrophotoflow.core.config import Settings
+from astrophotoflow.core.config import Settings, ConfigurationError, _update_running_state
 from astrophotoflow.modules.data.public import DisplayPreviews, import_workers, data_busy
 from astrophotoflow.contracts.workbench import BusyState
-from astrophotoflow.contracts.common import StrictModel
+from astrophotoflow.contracts.common import StrictModel, UuidInput
+from sqlalchemy.exc import SQLAlchemyError
 from typing import Literal
 from astrophotoflow.modules.data.routes import router as data_router
 from astrophotoflow.interfaces.http import system
@@ -25,6 +26,7 @@ logger = logging.getLogger("astrophotoflow.service")
 
 class MaintenanceAction(StrictModel):
     action: Literal["enter", "release"]
+    operation_id: UuidInput
 
 
 def create_app(settings: Settings, token: str) -> FastAPI:
@@ -41,15 +43,35 @@ def create_app(settings: Settings, token: str) -> FastAPI:
     app.state.database = Database(settings.database_path)
     app.state.maintenance_lock = asyncio.Lock()
     app.state.maintenance = False
+    app.state.maintenance_owner = None
+    app.state.shutdown_started = False
+
+    def set_maintenance(owner: UUID | None):
+        _update_running_state(settings.workspace, {"maintenance_operation_id": str(owner) if owner is not None else None})
+        app.state.maintenance_owner = owner
+        app.state.maintenance = owner is not None
 
     @app.post("/internal/maintenance", dependencies=[Depends(authenticate)], include_in_schema=False)
     async def maintenance(body: MaintenanceAction):
         async with app.state.maintenance_lock:
+            if app.state.shutdown_started:
+                return BusyState(busy=True, unknown=False, blockers=["领域服务正在排空停止"])
             if body.action == "release":
-                app.state.maintenance = False
+                if app.state.maintenance_owner is None:
+                    return BusyState(busy=False, unknown=False, blockers=[])
+                if app.state.maintenance_owner != body.operation_id:
+                    return BusyState(busy=True, unknown=False, blockers=["维护已归另一控制操作，本次释放未应用"])
+                try:
+                    set_maintenance(None)
+                except (OSError, KeyError, ValueError, ConfigurationError) as exc:
+                    return BusyState(busy=True, unknown=True, blockers=[f"维护标记释放失败：{exc}"])
                 return BusyState(busy=False, unknown=False, blockers=[])
-            state = data_busy(app.state.database)
+            if app.state.maintenance_owner not in {None, body.operation_id}:
+                return BusyState(busy=True, unknown=False, blockers=["已有其他控制操作正在维护"])
+            state = BusyState(busy=False, unknown=False, blockers=[])
             try:
+                set_maintenance(body.operation_id)
+                state = data_busy(app.state.database)
                 async with httpx.AsyncClient(timeout=3) as client:
                     response = await client.get(settings.allowed_origins[0] + "/queue")
                     response.raise_for_status()
@@ -60,16 +82,22 @@ def create_app(settings: Settings, token: str) -> FastAPI:
                     if running or pending:
                         state.busy = True
                         state.blockers.append("原生队列仍有执行或排队任务")
-            except (httpx.HTTPError, KeyError, TypeError, ValueError):
+            except (OSError, httpx.HTTPError, KeyError, TypeError, ValueError, ConfigurationError, SQLAlchemyError) as exc:
                 state.unknown = True
-                state.blockers.append("无法确认原生队列空闲")
-            app.state.maintenance = not (state.busy or state.unknown)
+                state.blockers.append(f"无法确认工作台空闲：{exc}")
+            if state.busy or state.unknown:
+                try:
+                    set_maintenance(None)
+                except (OSError, KeyError, ValueError, ConfigurationError) as exc:
+                    state.unknown = True
+                    state.blockers.append(f"维护标记释放失败：{exc}")
             return state
 
     @app.post("/internal/shutdown", dependencies=[Depends(authenticate)], include_in_schema=False)
     async def shutdown(request: Request):
         async with app.state.maintenance_lock:
             app.state.maintenance = True
+            app.state.shutdown_started = True
             request.app.state.shutdown()
         return {"status": "stopping"}
 

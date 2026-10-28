@@ -282,6 +282,12 @@ def test_status_requires_health_and_actual_process_identity(tmp_path, monkeypatc
     monkeypatch.setattr(workbench, "_health", lambda path: False)
     observed = workbench.status(config)
     assert observed.state == "partial" and not observed.ready
+    monkeypatch.setattr(workbench, "_health", lambda path: True)
+    monkeypatch.setattr(workbench, "_web_health", lambda url, workspace: True)
+    state = workbench._read_state(config.parent)
+    state["maintenance_operation_id"] = str(uuid4())
+    workbench._write_state(config.parent, state)
+    assert not workbench.status(config).ready
     monkeypatch.setattr(workbench, "_identity", lambda record: None)
     assert workbench.status(config).state == "stopped"
 
@@ -300,13 +306,45 @@ def test_restart_rejects_busy_without_stopping_or_scheduling(tmp_path, monkeypat
     monkeypatch.setattr(workbench, "status", lambda path: ready)
     workbench._write_state(config.parent, {"workspace": str(config.parent), "config_path": str(config),
         "processes": [record], "effective_settings": workbench.app_config.get_configuration(config).saved.model_dump()})
-    monkeypatch.setattr(workbench.httpx, "post", lambda url, **kwargs:
-        httpx.Response(200, json={"busy": True, "unknown": False, "blockers": ["导入任务 test"]}, request=httpx.Request("POST", url)))
+    controls = []
+    def maintenance(url, **kwargs):
+        controls.append(kwargs["json"])
+        releasing = kwargs["json"]["action"] == "release"
+        return httpx.Response(200, json={"busy": not releasing, "unknown": False,
+            "blockers": [] if releasing else ["导入任务 test"]}, request=httpx.Request("POST", url))
+    monkeypatch.setattr(workbench.httpx, "post", maintenance)
     monkeypatch.setattr(workbench, "_stop", lambda *args: pytest.fail("busy must not stop"))
     result = workbench.restart(config)
     assert result.state == "rejected" and result.blockers == ["导入任务 test"]
+    assert [item["action"] for item in controls] == ["enter", "release"]
+    assert all(item["operation_id"] == str(result.operation_id) for item in controls)
     assert workbench._recent(config.parent).state == "rejected"
     def unavailable(*args, **kwargs):
         raise httpx.ConnectError("test maintenance unavailable")
     monkeypatch.setattr(workbench.httpx, "post", unavailable)
     assert workbench.restart(config).state == "rejected"
+
+
+
+def test_managed_service_stop_drains_before_engine_has_been_recorded(tmp_path, monkeypatch):
+    config = write_workspace(tmp_path / "workspace")
+    data = config.parent / "data"
+    data.mkdir()
+    (data / "service.token").write_text("test-token", encoding="utf-8")
+    values = workbench.app_config.get_configuration(config).saved.model_dump()
+    workbench._write_state(config.parent, {"workspace": str(config.parent), "config_path": str(config),
+        "effective_settings": values, "processes": [{"role": "asset-service"}]})
+    calls = []
+    class Service:
+        def wait(self, timeout):
+            calls.append("drained")
+        def terminate(self):
+            pytest.fail("must not terminate a managed domain service")
+    monkeypatch.setattr(workbench, "_identity", lambda record: Service())
+    def shutdown(url, **kwargs):
+        calls.append("shutdown")
+        return httpx.Response(200, request=httpx.Request("POST", url))
+    monkeypatch.setattr(workbench.httpx, "post", shutdown)
+    assert workbench.stop(config).state == "completed"
+    assert calls == ["shutdown", "drained"]
+    assert workbench._read_state(config.parent)["processes"] == []

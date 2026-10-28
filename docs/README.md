@@ -10,7 +10,7 @@
 | 数据设计 | [共同入口](architecture/data-models/README.md)及五份模块文档；固定素材、软件包、可编辑节点、唯一原生图／运行／多次预览和当前控制；未定schema或接口 |
 | 使用场景 | [现行需求详细场景](requirements/README.md#scenario-import)：双入口导入、选材／拖入画布、深空／原始行星视频／叠加后期、软件操作／Python／复合节点创作；安静接续须真实客户端验证，Python仍S6，均不代表新增实现完成 |
 | 产品目标与开发顺序 | [现行产品需求与范围](requirements/README.md)、[五模块开发路线](development/platform-roadmap.md) |
-| 近期实施与分支验收 | [第⑤阶段近期实施计划](development/implementation-plan.md)：M1～M6、22个Batch／建议分支，六份任务卡落实文件／函数／顺序／测试与人工操作，区分技术集成和用户批准；计划不代表功能或实际分支已创建 |
+| 近期实施与分支验收 | [第⑤阶段近期实施计划](development/implementation-plan.md)：M1～M6、22个Batch／建议分支，六份任务卡落实文件／函数／顺序／测试与人工操作，区分技术集成和用户批准；计划本身不代表实现，M1已有候选，状态见[验证矩阵](development/test-matrix.md#m1-foundation) |
 | 开发、运行与发行 | [开发流程](development/README.md)、[工作台使用](development/workbench.md) |
 | 数据行为 | [素材与存储](architecture/assets.md)、[导入流水线](development/import-pipeline.md)、[预览](development/library-preview.md) |
 | 项目、设备与校准 | [使用组合与预设](development/settings-organization.md)、[设置与回收站](development/settings-management.md)、[校准关联](development/calibration-library.md) |

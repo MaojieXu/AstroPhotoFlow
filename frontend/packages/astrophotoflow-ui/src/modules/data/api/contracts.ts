@@ -93,13 +93,7 @@ export const projectAssetReferenceSchema = z.object({
   asset: assetSchema, version: assetVersionSchema
 }).strict()
 
-export const errorSchema = z.object({
-  error: z.object({
-    code: z.string(), message: z.string(),
-    fields: z.array(z.object({ path: z.string(), message: z.string() }).strict())
-  }).strict(),
-  request_id: id
-}).strict()
+export { errorSchema } from '../../../core/contracts'
 
 export type Capabilities = z.infer<typeof capabilitiesSchema>
 export type Project = z.infer<typeof projectSchema>

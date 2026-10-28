@@ -2,6 +2,7 @@
 import os
 from pathlib import Path
 import socket
+from uuid import uuid4
 
 import httpx
 import pytest
@@ -39,6 +40,16 @@ def test_native_workspace_lifecycle_and_configuration_adoption():
         adopted = config.load_running_settings(first)
         token = adopted.token_path.read_text(encoding="utf-8").strip()
         with httpx.Client(base_url=started.service_url, headers={"Authorization": f"Bearer {token}"}, timeout=10) as client:
+            operation_id = str(uuid4())
+            entered = client.post("/internal/maintenance", json={"action": "enter", "operation_id": operation_id})
+            assert entered.status_code == 200 and not entered.json()["busy"] and not entered.json()["unknown"]
+            for path in ("/prompt", "/api/prompt"):
+                blocked = httpx.post(started.web_url + path, json={"prompt": {}}, headers={"Origin": started.web_url}, timeout=10)
+                assert blocked.status_code == 409 and blocked.json()["error"]["code"] == "WORKBENCH_MAINTENANCE"
+            released = client.post("/internal/maintenance", json={"action": "release", "operation_id": operation_id})
+            assert released.status_code == 200 and not released.json()["busy"]
+            invalid_prompt = httpx.post(started.web_url + "/prompt", json={"prompt": {}}, headers={"Origin": started.web_url}, timeout=10)
+            assert invalid_prompt.status_code == 400
             queued = client.post("/api/v1/uploads", json={"files": [{"name": "m1-pending.png", "size": 10}]})
             assert queued.status_code == 202
             rejected = workbench.restart(a)

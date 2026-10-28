@@ -1,1 +1,5 @@
 export { Workspace } from './modules/data'
+export { default as WorkbenchSettings } from './core/WorkbenchSettings.vue'
+export { createWorkbenchClient } from './core/client'
+export type { WorkbenchClient } from './core/client'
+export type { ConfigSave, ConfigState, ConfigValues } from './core/contracts'

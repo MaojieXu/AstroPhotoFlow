@@ -44,6 +44,15 @@ def service(tmp_path):
     app=create_app(settings,TOKEN)
     with TestClient(app) as client: yield settings,client,app.state.database
     app.state.database.close()
+
+@pytest.fixture
+def managed_service(service):
+    settings, client, database = service
+    path = settings.workspace / "run/processes.json"
+    path.parent.mkdir(exist_ok=True)
+    path.write_text(json.dumps({"workspace": str(settings.workspace), "maintenance_operation_id": None, "processes": []}), encoding="utf-8")
+    return settings, client, database, str(uuid4())
+
 def add_equipment(c,kind,name,specs=None):
     d={"kind":kind,"name":name}
     if specs is not None: d["specs"]=specs
@@ -1603,51 +1612,51 @@ def test_trash_parent_selection_does_not_bypass_a_stale_child_revision(trash_rec
 
 
 
-def test_maintenance_auth_busy_and_new_task_admission(service, monkeypatch):
+def test_maintenance_auth_busy_and_new_task_admission(managed_service, monkeypatch):
     import httpx
-    settings, client, database = service
+    settings, client, database, operation_id = managed_service
     async def empty_queue(self, url, **kwargs):
         return httpx.Response(200, json={"queue_running": [], "queue_pending": []}, request=httpx.Request("GET", url))
     monkeypatch.setattr(httpx.AsyncClient, "get", empty_queue)
-    assert client.post("/internal/maintenance", json={"action": "enter"}).status_code == 401
+    assert client.post("/internal/maintenance", json={"action": "enter", "operation_id": operation_id}).status_code == 401
     assert "/internal/maintenance" not in client.app.openapi()["paths"]
-    entered = client.post("/internal/maintenance", headers=auth(), json={"action": "enter"})
+    entered = client.post("/internal/maintenance", headers=auth(), json={"action": "enter", "operation_id": operation_id})
     assert entered.json() == {"busy": False, "unknown": False, "blockers": []}
     body = {"files": [{"name": "night.png", "size": 10}]}
     blocked = client.post("/api/v1/uploads", headers=auth(), json=body)
     assert blocked.status_code == 409 and blocked.json()["error"]["code"] == "WORKBENCH_MAINTENANCE"
     preview = client.post(f"/api/v1/library/assets/{uuid4()}/versions/{uuid4()}/previews/display", headers=auth())
     assert preview.status_code == 409
-    client.post("/internal/maintenance", headers=auth(), json={"action": "release"})
+    client.post("/internal/maintenance", headers=auth(), json={"action": "release", "operation_id": operation_id})
     created = client.post("/api/v1/uploads", headers=auth(), json=body)
     assert created.status_code == 202, created.text
     task = created.json()["task_id"]
-    busy = client.post("/internal/maintenance", headers=auth(), json={"action": "enter"}).json()
+    busy = client.post("/internal/maintenance", headers=auth(), json={"action": "enter", "operation_id": operation_id}).json()
     assert busy["busy"] and any(task in reason for reason in busy["blockers"])
     assert not client.app.state.maintenance
 
 
-def test_maintenance_rejects_unknown_or_nonempty_native_queue(service, monkeypatch):
+def test_maintenance_rejects_unknown_or_nonempty_native_queue(managed_service, monkeypatch):
     import httpx
-    _, client, _ = service
+    _, client, _, operation_id = managed_service
     async def unavailable(self, url, **kwargs):
         raise httpx.ConnectError("test unavailable")
     monkeypatch.setattr(httpx.AsyncClient, "get", unavailable)
-    unknown = client.post("/internal/maintenance", headers=auth(), json={"action": "enter"}).json()
+    unknown = client.post("/internal/maintenance", headers=auth(), json={"action": "enter", "operation_id": operation_id}).json()
     assert unknown["unknown"] and not client.app.state.maintenance
     async def queued(self, url, **kwargs):
         return httpx.Response(200, json={"queue_running": [], "queue_pending": [[1, "prompt"]]}, request=httpx.Request("GET", url))
     monkeypatch.setattr(httpx.AsyncClient, "get", queued)
-    busy = client.post("/internal/maintenance", headers=auth(), json={"action": "enter"}).json()
+    busy = client.post("/internal/maintenance", headers=auth(), json={"action": "enter", "operation_id": operation_id}).json()
     assert busy["busy"] and not busy["unknown"] and not client.app.state.maintenance
 
 
-def test_maintenance_check_and_task_admission_cannot_cross(service, monkeypatch):
+def test_maintenance_check_and_task_admission_cannot_cross(managed_service, monkeypatch):
     import asyncio
     import httpx
     from concurrent.futures import ThreadPoolExecutor
     from threading import Event
-    _, client, _ = service
+    _, client, _, operation_id = managed_service
     entered, release = Event(), Event()
     async def paused(self, url, **kwargs):
         entered.set()
@@ -1655,9 +1664,113 @@ def test_maintenance_check_and_task_admission_cannot_cross(service, monkeypatch)
         return httpx.Response(200, json={"queue_running": [], "queue_pending": []}, request=httpx.Request("GET", url))
     monkeypatch.setattr(httpx.AsyncClient, "get", paused)
     with ThreadPoolExecutor(max_workers=2) as workers:
-        maintenance = workers.submit(client.post, "/internal/maintenance", headers=auth(), json={"action": "enter"})
+        maintenance = workers.submit(client.post, "/internal/maintenance", headers=auth(), json={"action": "enter", "operation_id": operation_id})
         assert entered.wait(5)
         importing = workers.submit(client.post, "/api/v1/uploads", headers=auth(), json={"files": [{"name": "x.png", "size": 10}]})
         release.set()
         assert not maintenance.result(5).json()["busy"]
         assert importing.result(5).status_code == 409
+
+
+
+def test_workbench_configuration_http_is_fixed_to_current_workspace_and_preserves_effective_values(service, monkeypatch):
+    from astrophotoflow.core import config
+    settings, client, _ = service
+    monkeypatch.setattr(config, "CONFIG_PATH", settings.workspace / "user/config.toml")
+    path = settings.workspace / "config.toml"
+    path.write_text('[server]\nhost="127.0.0.1"\nport=8190\n[storage]\ndata_dir="."\n'
+                    '[comfyui]\nallowed_origins=["http://127.0.0.1:8188"]\n', encoding="utf-8")
+    initial = config.get_configuration(path)
+    run = settings.workspace / "run/processes.json"
+    run.parent.mkdir()
+    run.write_text(json.dumps({"workspace": str(settings.workspace), "config_path": str(path),
+        "effective_settings": initial.saved.model_dump(), "processes": [{"role": "asset-service"}]}), encoding="utf-8")
+    assert client.get("/api/v1/settings/workbench").status_code == 401
+    current = client.get("/api/v1/settings/workbench", headers=auth())
+    assert current.status_code == 200 and TOKEN not in current.text
+    body = {"config_token": current.json()["config_token"], "values": current.json()["saved"]}
+    body["values"]["file_workers"] = 4
+    assert client.patch("/api/v1/settings/workbench", json=body).status_code == 401
+    saved = client.patch("/api/v1/settings/workbench", headers=auth(), json=body)
+    assert saved.status_code == 200, saved.text
+    assert saved.json()["saved"]["file_workers"] == 4
+    assert saved.json()["effective"]["file_workers"] == 2
+    assert saved.json()["restart_required"]
+    assert settings.file_workers == 2
+    stale = client.patch("/api/v1/settings/workbench", headers=auth(), json=body)
+    assert stale.status_code == 409 and stale.json()["error"]["code"] == "CONFIGURATION_CONFLICT"
+    body["config_token"] = saved.json()["config_token"]
+    body["values"]["file_workers"] = 0
+    invalid = client.patch("/api/v1/settings/workbench", headers=auth(), json=body)
+    assert invalid.status_code == 422 and invalid.json()["error"]["fields"][0]["path"] == "values.file_workers"
+    body["values"]["file_workers"] = 4
+    body["default_workspace"] = None
+    assert client.patch("/api/v1/settings/workbench", headers=auth(), json=body).status_code == 422
+    assert config.get_configuration(path).saved.file_workers == 4
+    assert ("GET", "/settings/workbench", "/settings/workbench") in ROUTES
+    assert ("PATCH", "/settings/workbench", "/settings/workbench") in ROUTES
+
+
+
+def test_maintenance_release_is_bound_to_its_operation_and_cannot_reopen_shutdown(managed_service, monkeypatch):
+    import httpx
+    _, client, _, first = managed_service
+    second = str(uuid4())
+    async def empty_queue(self, url, **kwargs):
+        return httpx.Response(200, json={"queue_running": [], "queue_pending": []}, request=httpx.Request("GET", url))
+    monkeypatch.setattr(httpx.AsyncClient, "get", empty_queue)
+    def control(action, operation):
+        response = client.post("/internal/maintenance", headers=auth(), json={"action": action, "operation_id": operation})
+        assert response.status_code == 200, response.text
+        return response.json()
+    assert not control("enter", first)["busy"]
+    assert control("release", second)["busy"] and client.app.state.maintenance
+    assert not control("release", first)["busy"] and not client.app.state.maintenance
+    assert not control("enter", second)["busy"]
+    assert control("release", first)["busy"] and client.app.state.maintenance
+    client.app.state.shutdown = lambda: None
+    assert client.post("/internal/shutdown", headers=auth()).status_code == 200
+    assert control("release", second)["busy"] and client.app.state.maintenance
+
+
+def test_restart_lost_enter_reply_releases_the_actual_service_gate(managed_service, monkeypatch):
+    import httpx
+    from astrophotoflow.core import config, workbench
+    from astrophotoflow.contracts.workbench import WorkbenchState, ProcessInfo
+    settings, client, _, _ = managed_service
+    monkeypatch.setattr(config, "CONFIG_PATH", settings.workspace / "user/config.toml")
+    path = settings.workspace / "config.toml"
+    path.write_text('[server]\nhost="127.0.0.1"\nport=8190\n[storage]\ndata_dir="."\n'
+                    '[comfyui]\nallowed_origins=["http://127.0.0.1:8188"]\n', encoding="utf-8")
+    settings.token_path.write_text(TOKEN, encoding="utf-8")
+    values = config.get_configuration(path).saved
+    raw = {"workspace": str(settings.workspace), "config_path": str(path), "effective_settings": values.model_dump(),
+           "maintenance_operation_id": None, "processes": []}
+    (settings.workspace / "run/processes.json").write_text(json.dumps(raw), encoding="utf-8")
+    info = ProcessInfo(role="asset-service", pid=1, create_time=1.0, executable="python", command=["python"],
+                       workspace=str(settings.workspace), started_at=datetime.now(timezone.utc))
+    ready = WorkbenchState(workspace=str(settings.workspace), config_path=str(path), state="running", ready=True,
+                           web_url=values.allowed_origins[0], service_url=settings.service_url, processes=[info],
+                           effective_settings=values, versions={}, reason=None, recent=None)
+    monkeypatch.setattr(workbench, "status", lambda target: ready)
+    monkeypatch.setattr(workbench, "_stop", lambda target: pytest.fail("lost reply must not stop or restart"))
+    async def empty_queue(self, url, **kwargs):
+        return httpx.Response(200, json={"queue_running": [], "queue_pending": []}, request=httpx.Request("GET", url))
+    monkeypatch.setattr(httpx.AsyncClient, "get", empty_queue)
+    calls = []
+    def forward_and_lose_enter(url, **kwargs):
+        calls.append(kwargs["json"])
+        response = client.post("/internal/maintenance", headers=auth(), json=kwargs["json"])
+        assert response.status_code == 200, response.text
+        if kwargs["json"]["action"] == "enter":
+            assert client.app.state.maintenance
+            raise httpx.ReadTimeout("test accepted enter response lost")
+        return httpx.Response(200, json=response.json(), request=httpx.Request("POST", url))
+    monkeypatch.setattr(workbench.httpx, "post", forward_and_lose_enter)
+    result = workbench.restart(path)
+    assert result.state == "rejected"
+    assert [body["action"] for body in calls] == ["enter", "release"]
+    assert all(body["operation_id"] == str(result.operation_id) for body in calls)
+    assert not client.app.state.maintenance
+    assert json.loads((settings.workspace / "run/processes.json").read_text(encoding="utf-8"))["maintenance_operation_id"] is None
+    assert client.post("/api/v1/uploads", headers=auth(), json={"files": [{"name": "after-release.png", "size": 10}]}).status_code == 202

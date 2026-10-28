@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from io import BytesIO
+import json
 from pathlib import Path
 import struct
 from threading import Event, Thread
@@ -868,6 +869,10 @@ def test_real_preview_generation_blocks_maintenance_and_then_releases(service, m
     import httpx
     from astrophotoflow.modules.data.public import data_busy
     settings, app, client, root = service
+    operation_id = str(uuid4())
+    marker = settings.workspace / "run/processes.json"
+    marker.parent.mkdir(exist_ok=True)
+    marker.write_text(json.dumps({"workspace": str(settings.workspace), "maintenance_operation_id": None, "processes": []}), encoding="utf-8")
     picture(root / "busy.png")
     item = imported(client, "busy.png")
     entered, release = Event(), Event()
@@ -885,7 +890,7 @@ def test_real_preview_generation_blocks_maintenance_and_then_releases(service, m
         assert entered.wait(5)
         state = data_busy(app.state.database)
         assert state.busy and any("预览" in blocker for blocker in state.blockers)
-        denied = client.post("/internal/maintenance", headers=AUTH, json={"action": "enter"}).json()
+        denied = client.post("/internal/maintenance", headers=AUTH, json={"action": "enter", "operation_id": operation_id}).json()
         assert denied["busy"] and not app.state.maintenance
     finally:
         release.set()

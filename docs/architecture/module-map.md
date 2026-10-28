@@ -12,7 +12,7 @@ Python 根为 `src/astrophotoflow`，自研 UI 根为 `frontend/packages/astroph
 
 | 模块 | Python | 自研 UI | 原生／引擎接入与当前状态 |
 |---|---|---|---|
-| ① 公共基础设施 | [core](../../src/astrophotoflow/core) | [core](../../frontend/packages/astrophotoflow-ui/src/core) | Python 基础已有；前端 core 仅文档，Vue／Pinia 由原生框架提供 |
+| ① 公共基础设施 | [core](../../src/astrophotoflow/core) | [core](../../frontend/packages/astrophotoflow-ui/src/core) | M1候选含配置／启停／维护及网页表单，共用原生Vue；用户验收与集成另记 |
 | ② 数据与资产管理 | [modules/data](../../src/astrophotoflow/modules/data) | [modules/data](../../frontend/packages/astrophotoflow-ui/src/modules/data) | 数据与界面已有，原生素材侧栏挂载 Workspace；节点交接和记忆未实现 |
 | ③ 外部软件接入与环境 | [modules/software](../../src/astrophotoflow/modules/software) | [modules/software](../../frontend/packages/astrophotoflow-ui/src/modules/software) | 概要及前端分工已成文，两侧仍仅文档，无软件MCP／适配器实现 |
 | ④ 节点构建与发布 | [modules/nodes](../../src/astrophotoflow/modules/nodes) | [modules/nodes](../../frontend/packages/astrophotoflow-ui/src/modules/nodes) | 两侧仍仅文档；原生注册／子图可复用，workspace节点、确认更新和连线重映射待实现／验证 |
@@ -28,8 +28,8 @@ Python 根为 `src/astrophotoflow`，自研 UI 根为 `frontend/packages/astroph
 
 - **概要设计**：[唯一公共模块概要](../../src/astrophotoflow/core/README.md)维护十二类能力、七条交接链路、需求覆盖及阶段缺口；[前端归属](../../frontend/packages/astrophotoflow-ui/src/core/README.md)只补充界面和原生桥接分工。
 - **入口与调用**：core/config.py 解析配置；core/workbench.py 管理安装、启动停止；core/http.py、errors.py 和 database 提供认证、错误、连接与迁移。HTTP 应用装配在 interfaces/http/app.py，不能让 core 反向导入业务；Alembic 元数据装配例外见文件架构。
-- **消费契约**：contracts/common.py和已有HTTP错误、认证、request ID规则；request ID不保证防重，数据revision不代表工作流版本。建议目录、待应用配置、网页诊断、CLI／MCP重启、维护互斥、日志轮转／确认清理及固定本地检索模型公共资源机制均待补；原生进度可复用，领域状态桥接待验证，检索用途及索引归⑤。
-- **验证位置**：[tests/core](../../tests/core)、[tests/packaging](../../tests/packaging)、[代理回归](../../tests/interfaces/comfyui/test_proxy.py)、[数据服务中的认证／锁／备份测试](../../tests/modules/data/test_service.py)及架构导入检查。新增能力按概要验收，尚无重启、待应用配置或公共界面测试；原生进度测试不代替跨进程桥接。
+- **消费契约**：contracts/common.py和已有HTTP错误、认证、request ID规则；request ID不保证防重，数据revision不代表工作流版本。M1配置／采用值、CLI重启、维护互斥及网页表单已实现；MCP控制、网页诊断、日志轮转／清理和检索资源管理仍待后续；原生进度可复用，领域状态桥接待验证，检索用途及索引归⑤。
+- **验证位置**：[tests/core](../../tests/core)、[tests/packaging](../../tests/packaging)、[代理回归](../../tests/interfaces/comfyui/test_proxy.py)、[数据服务中的认证／锁／备份测试](../../tests/modules/data/test_service.py)及架构导入检查。M1重启／采用值／公共界面测试见tests/core、私有UI tests/core/workbench.test.ts及tests/browser/platform-workflows.mjs，真实证据见[矩阵](../development/test-matrix.md#m1-foundation)；原生进度测试不代替跨进程桥接。
 - **命令**：`uv run --locked --no-sync pytest tests/core tests/packaging tests/interfaces/comfyui -q`。发行和生命周期集成另按开发流程执行，不由单元检查代替。
 
 <a id="module-2"></a>

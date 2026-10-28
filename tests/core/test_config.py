@@ -1,6 +1,7 @@
 from pathlib import Path
 import json
 import tomllib
+import os
 
 import pytest
 from filelock import FileLock
@@ -302,3 +303,38 @@ def test_client_uses_adopted_values_while_running_and_saved_values_after_stop(tm
     run_path.write_text(json.dumps(record), encoding="utf-8")
     with AssetClient(path) as client:
         assert client.base_url == "http://127.0.0.1:31490/api/v1"
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Regression for the observed Windows open-reader replacement failure")
+@pytest.mark.parametrize("persistent", [False, True])
+def test_windows_atomic_replacement_waits_briefly_and_reports_persistent_failure(tmp_path, monkeypatch, caplog, persistent):
+    path = tmp_path / "control.json"
+    path.write_text("old", encoding="utf-8")
+    replace = os.replace
+    calls = []
+    def occupied(source, target):
+        calls.append(target)
+        if persistent or len(calls) == 1:
+            assert path.read_text(encoding="utf-8") == "old"
+            raise PermissionError(13, "open reader", str(path), 5)
+        replace(source, target)
+    monkeypatch.setattr(config.os, "replace", occupied)
+    if persistent:
+        with pytest.raises(PermissionError):
+            config._write_configuration_file(path, "new")
+        assert len(calls) == 5 and path.read_text(encoding="utf-8") == "old"
+    else:
+        config._write_configuration_file(path, "new")
+        assert len(calls) == 2 and path.read_text(encoding="utf-8") == "new"
+    assert "Windows读句柄" in caplog.text
+    assert list(tmp_path.iterdir()) == [path]
+
+
+def test_startup_process_registration_preserves_an_entered_maintenance_marker(tmp_path):
+    path = write_config(tmp_path / "workspace/config.toml")
+    marker = write_running_configuration(path, config.get_configuration(path).saved)
+    owner = "6d26f2a0-66d8-4c2d-a10f-e3eb2e38814b"
+    config._update_running_state(path.parent, {"maintenance_operation_id": owner})
+    config._update_running_state(path.parent, {"processes": [{"role": "asset-service"}, {"role": "comfyui"}]})
+    current = json.loads(marker.read_text(encoding="utf-8"))
+    assert current["maintenance_operation_id"] == owner and len(current["processes"]) == 2

@@ -1,4 +1,5 @@
 import asyncio
+import json
 from pathlib import Path
 
 from aiohttp import web
@@ -34,6 +35,8 @@ def test_proxy_whitelist_origin_headers_and_upstream_status(tmp_path, monkeypatc
             seen["client_header"] = request.headers.get("X-Client-Actor")
             if request.method == "DELETE":
                 seen["delete_body"] = await request.json()
+            if request.method == "PATCH":
+                seen["patch_body"] = await request.json()
             if request.method == "POST" and request.path.endswith("/display/auto-stretch"):
                 seen["stretch_body"] = await request.json()
                 return web.json_response({"status": "generating"})
@@ -148,7 +151,12 @@ def test_proxy_whitelist_origin_headers_and_upstream_status(tmp_path, monkeypatc
                 blocked = await client.post("/api" + proxy.BASE_PATH + base, json={}, headers={"Origin": "http://evil.invalid"})
                 assert blocked.status == 403
 
-            assert len(proxy.ROUTES) == 78
+            configuration = await client.get("/api" + proxy.BASE_PATH + "/settings/workbench", headers={"Origin": origin})
+            assert configuration.status == 200 and seen["path"] == "/api/v1/settings/workbench"
+            updated = await client.patch("/api" + proxy.BASE_PATH + "/settings/workbench",
+                                         headers={"Origin": origin}, json={"config_token": "current", "values": {}})
+            assert updated.status == 200 and seen["patch_body"] == {"config_token": "current", "values": {}}
+            assert len(proxy.ROUTES) == 80
             assert all(
                 method == "GET" or (method == "POST" and path == "/datasets/{dataset_id}/versions")
                 or (method == "PATCH" and path == "/datasets/{dataset_id}/member-parameters")
@@ -242,3 +250,58 @@ def test_proxy_rejects_relative_import_roots(tmp_path, monkeypatch):
         proxy._configuration()
     assert error.value.message == "AstroPhotoFlow 本机服务配置或令牌不可用。"
     assert "素材根目录路径必须为绝对路径" in str(error.value.__cause__)
+
+
+def test_native_queue_observation_waits_for_accepted_prompt_and_blocks_new_admission(tmp_path, monkeypatch):
+    (tmp_path / "run").mkdir()
+    marker = tmp_path / "run/processes.json"
+    marker.write_text(json.dumps({"maintenance_operation_id": None}), encoding="utf-8")
+    monkeypatch.setenv("APF_WORKSPACE", str(tmp_path))
+    async def run():
+        entered, release = asyncio.Event(), asyncio.Event()
+        pending = []
+        async def prompt(request):
+            entered.set()
+            await release.wait()
+            pending.append([1, "prompt"])
+            return web.json_response({"prompt_id": "prompt"})
+        async def queue(request):
+            return web.json_response({"queue_running": [], "queue_pending": pending})
+        app = web.Application(middlewares=[proxy.native_admission_middleware()])
+        app.router.add_post("/prompt", prompt)
+        app.router.add_post("/api/prompt", prompt)
+        app.router.add_get("/queue", queue)
+        client = TestClient(TestServer(app))
+        await client.start_server()
+        try:
+            accepted = asyncio.create_task(client.post("/prompt", json={"prompt": {}}))
+            await asyncio.wait_for(entered.wait(), 5)
+            marker.write_text(json.dumps({"maintenance_operation_id": "maintenance"}), encoding="utf-8")
+            observing = asyncio.create_task(client.get("/queue"))
+            await asyncio.sleep(0)
+            assert not observing.done()
+            release.set()
+            assert (await accepted).status == 200
+            assert (await (await observing).json())["queue_pending"] == [[1, "prompt"]]
+            for path in ("/prompt", "/api/prompt"):
+                denied = await client.post(path, json={"prompt": {}})
+                assert denied.status == 409
+            assert len(pending) == 1
+            marker.write_text(json.dumps({"maintenance_operation_id": None}), encoding="utf-8")
+            assert (await client.post("/prompt", json={"prompt": {}})).status == 200
+            assert len(pending) == 2
+        finally:
+            release.set()
+            await client.close()
+    asyncio.run(run())
+
+
+def test_native_registration_installs_the_gate_on_the_existing_engine_app(tmp_path, monkeypatch):
+    import sys
+    from types import SimpleNamespace
+    app = web.Application()
+    native = SimpleNamespace(PromptServer=SimpleNamespace(instance=SimpleNamespace(app=app)))
+    monkeypatch.setitem(sys.modules, "server", native)
+    monkeypatch.setenv("APF_WORKSPACE", str(tmp_path))
+    proxy.register_proxy_routes(web.RouteTableDef())
+    assert len(app.middlewares) == 1

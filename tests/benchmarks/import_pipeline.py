@@ -7,6 +7,7 @@ Phase wall/CPU sums overlap and must not be added to derive elapsed wall time.
 from __future__ import annotations
 
 import ast
+import asyncio
 
 import argparse
 import cProfile
@@ -216,6 +217,8 @@ def worker(args):
     instrument(modules, metrics)
     app = FastAPI()
     app.state.database, app.state.settings, app.state.token = database, settings, TOKEN
+    app.state.maintenance_lock = asyncio.Lock()
+    app.state.maintenance = False
     app.include_router(modules["imports"].router)
     task_id = None
     background_start = None

@@ -4,6 +4,8 @@
 
 数据引用、节点定义、当前工作流保存及运行结果的责任和语义统一见[总架构的四类边界](../architecture/overview.md#5-四类跨模块契约)。具体输入输出、失败含义及未来 HTTP／MCP 设计集中在[契约文档](platform-contracts.md)，不向 OpenAPI 添加占位。
 
+M1候选新增 `GET/PATCH /api/v1/settings/workbench`：读取固定当前workspace的保存／采用值，PATCH携带config_token，冲突409、显式null默认位置或无效字段422；保存不重启。与原78项合计80项公共HTTP操作，代理／Python客户端／前端Zod及快照同步。内部maintenance和shutdown不进入公共OpenAPI或MCP。
+
 HTTP 服务前缀为 `/api/v1`；浏览器经原生网页服务的 `/astrophotoflow/api/v1` 同源代理访问。认证、版本冲突、错误 envelope 和请求 ID 延续当前实现。
 
 [openapi.json](openapi.json) 是实际应用生成的契约快照。修改接口时同时核对处理逻辑、Pydantic 模型、代理白名单、前端 Zod 和相关测试；不能用路由数量相等代替行为一致。
@@ -13,7 +15,7 @@ uv run --locked --no-sync python scripts/export_openapi.py
 uv run --locked --no-sync pytest tests/modules/data/test_service.py -k openapi
 ```
 
-CLI 保留 `apf init/start/status/stop`、`mcp-config`、`mcp`、`import-photo`、`task`、`assets list/get/parameters`。服务 CLI 保留 `apf-service serve`、`db status/upgrade` 和 `previews backfill`。
+CLI 提供 `apf init/start/status/stop/restart`、`mcp-config`、`mcp`、`import-photo`、`task`、`assets list/get/parameters`。服务 CLI 保留 `apf-service serve`、`db status/upgrade` 和 `previews backfill`。
 
 单图自动显示拉伸：前端打开大图时调用 `/api/v1/library/assets/{asset_id}/versions/{version_id}/previews/display/auto-stretch`（POST，无用户参数），后台单独分析当前照片；RGB自动估计白平衡，并计算MTF曲线，同时更新该版本的大图和缩略图。已有结果直接返回200，已有生成任务复用并返回202，前端沿用状态轮询；不强制重新计算。`/display/status` 及已有生成接口返回 `stretch`：未执行或生成中为null，成功后为 `algorithm/input_offset/white_balance/shadows/highlights/midtones` 计算结果。前端等待旧基准大图任务时，会在该任务完成后补齐自动配方，再显示最终图像。项目固定引用在 `/projects/{project_id}/asset-references/{reference_id}/previews` 下具有同名POST接口，作用于引用版本。MCP工具集合、CLI命令及科学素材参数不变。
 

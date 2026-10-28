@@ -34,7 +34,7 @@
 
 ## 3. ① 打开工作台、配置与维护
 
-依据 FR-13～15、AT-01／25，S1 补最低基础，S6 完善维护。复用现有本机控制函数；未来 CLI／MCP 调用同一入口，网页读取状态和保存配置。当前 CLI 的 init/start/status/stop 保持，restart 与新 MCP 入口尚不存在。
+依据FR-13～15、AT-01／25，S1补最低基础，S6完善维护。M1候选已有本机init/start/status/stop/restart和网页配置；未来MCP控制调用同一入口，真实接入留B57，不据此新增工具注册。用户M1批准与dev集成仍另行记录。
 
 | 逻辑操作、调用方 → 提供方 | 必要输入 | 输出及失败含义 |
 |---|---|---|
@@ -45,7 +45,7 @@
 
 MCP 的 start／status 必须在创建依赖在线 HTTP 的业务客户端之前可用；不能把它们实现为只调用已停止服务的 HTTP 路由。复用进程文件和少量最新状态文件，不建立维护记录库。当前 start 会更新活动指针，MCP 定向控制的实施须显式避免该副作用。
 
-未来网页配置用 `GET/PATCH /api/v1/settings/workbench` 读取当前 workspace 的保存／有效配置和状态、保存可编辑配置；PATCH 带读取时校验值，响应字段沿上表。停止后的查询与控制继续走本机入口，不为此新增在线控制服务。
+M1网页配置使用 `GET/PATCH /api/v1/settings/workbench` 读取当前workspace保存／有效配置并保存可编辑值；PATCH带读取时校验值，响应字段沿上表。停止后的查询与控制继续走本机入口，不为此新增在线控制服务。
 
 ①向②③⑤查询真实繁忙／排空信息：返回 `busy`、阻塞任务说明及 `unknown` 原因；空闲检查到进入维护间不得再接纳冲突操作。③安装更新及⑤运行在所属模块登记占用，不由①扫描私有业务表；机制随实际模块接入，不创建通用资源调度器。
 
@@ -387,7 +387,7 @@ def find_saved_output(self, asset_version_id: UUID) -> OutputLocator | None: ...
 
 Settings保留现有位置参数次序，新增必填keyword-only的workspace（dataclasses.field(kw_only=True)，无默认／推断）；完整构造形态为`Settings(host: str, port: int, data_dir: Path, allowed_origins: tuple[str, ...], import_roots: tuple[ImportRoot, ...] = (), file_workers: int = 2, preview_workers: int = 1, *, workspace: Path)`。load_settings明确传选定配置父目录；所有显式构造点包括测试、`scripts/export_openapi.py`及`scripts/verify_distribution.py`内嵌验证脚本都传独立测试workspace，不为兼容旧构造器猜data_dir父目录。
 
-公开 Python 签名（拟实现，不是现有函数的返回声明）：
+M1已实现下列Python配置与本机控制签名；后续业务章节的拟实现能力仍按各自批次推进：
 
 ```python
 def get_configuration(config_path: Path | None = None) -> ConfigState: ...
@@ -407,7 +407,9 @@ CLI格式化结构化结果，本机MCP定向控制不写默认位置或旧activ
 3. ASTROPHOTOFLOW_CONFIG标记来源，APF_WORKSPACE固定目标。启动器先写采用值；服务和引擎经load_running_settings读取同份值，HTTP CLI交给create_app，网关／适配及在线AssetClient沿实际运行地址连接，不每请求重读新保存端口。
 4. 就绪后仅将实际端口／允许Origin写回源配置，不覆盖并发保存的其他项。回写失败报告已在线及未写回原因，不再启动。性能设置下次成功重启采用；改默认位置不改已有进程归属。
 5. 网页GET/PATCH /api/v1/settings/workbench固定当前在线目标，PATCH带config_token；本机start/status/stop/restart不依赖HTTP在线。
-6. 本机控制器以Bearer调用 `POST /internal/maintenance`（action=enter/release，不进MCP目录）。app组合②导入／预览、③安装／使用、⑤准备／运行及原生队列，空闲检查至维护期间拒绝冲突准入；busy或unknown拒绝并释放本次准入，不安排自动重启。stop沿原排空。领域离线而引擎／进程仍在时不能假定空闲；身份核对均已停止时启动不需调用离线HTTP。
+6. 本机控制器以Bearer调用 `POST /internal/maintenance`（action=enter/release，operation_id复用本次WorkbenchResult标识，不进MCP目录）。app组合②导入／预览、③安装／使用、⑤准备／运行及原生队列，空闲检查至维护期间拒绝冲突准入；busy或unknown拒绝并释放本次准入，不安排自动重启。enter回执丢失仍按同一operation_id释放，迟到释放不能清除另一操作的维护；释放未确认如实报告。stop沿原排空，包括ComfyUI尚未登记时已经启动的领域服务。领域离线而引擎／进程仍在时不能假定空闲；身份核对均已停止时启动不需调用离线HTTP。
+
+M1实现将当前维护operation_id（可空）合入既有processes.json；进程登记与维护更新共用短文件锁，不另建维护实体。原生桥接为/prompt与/api/prompt受理、/queue与/api/queue观察使用同一短期互斥：先关闭本次准入，再观察已受理的验证／入队，避免空队列检查后又接入新运行。仍调用原生队列，不增加调度器或托管执行上下文；后者归B53。该门禁在既有register_proxy_routes接入，不修改固定引擎归档。
 
 ### 配置结果字段
 
@@ -429,7 +431,7 @@ ConfigValues只映射workspace原有TOML启动字段，默认定位单独表达�
 def initialize(workspace: Path, service_port: int = 8190, comfyui_port: int = 8188, *, frontend_assets: Path | None = None, activate: bool = True, reuse_runtime: bool = False) -> Path: ...
 ```
 
-initialize返回实际config路径；activate表示本次初始化是否把位置设为config默认，沿既有--no-activate选择，不写旧active指针。start只控制目标、不保留activate参数是B12目标。B11已实现本节3个配置函数／Config*类型、初始化默认TOML及配置保存互斥；真实启动采用记录写入、启停互斥与上述结构化控制返回仍待B12，不因读取函数存在视为完成。
+initialize返回实际config路径；activate表示本次初始化是否把位置设为config默认，沿既有--no-activate选择，不写旧active指针。M1候选已实现本节配置函数／类型、启动采用、启停互斥及结构化控制；start只控制目标，没有activate或--no-activate。Windows打开的读句柄会阻止原子替换，已针对实测WinError 5进行最多5次、每次50ms的有限等待并记录警告；持续失败保留旧文件且明确报错，不重做业务或启动。用户批准及MCP控制不由这些测试代签。
 
 各模块经公开查询供app组合维护，core不扫描业务表：
 

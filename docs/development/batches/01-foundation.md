@@ -2,7 +2,7 @@
 
 本文件落实[近期总计划](../implementation-plan.md#m1)，不另定义协议；公开DTO、签名和错误以④为准。文件路径均相对仓库根；N＝计划新增，M＝修改既有，R＝只复用。每卡先读根及所改作用域AGENTS。
 
-B11已在`codex/workbench-config`实施，B12／B13尚未开工；验证结果见[验证矩阵](../test-matrix.md#b11-implementation)。只有总计划获确认、可识别dev基点及本卡真实前置具备后才Ready；Batch自动集成与Milestone用户验收分别记录。测试只在实际文件落位后执行。工作目录/工具及共享runtime维护窗口按[验证环境](../implementation-plan.md#validation-environment)，用户操作/批准按[人工验收门](../implementation-plan.md#acceptance-gates)。维护窗口必须能用原版本入口恢复原dev；tmp_path单元测试无需停止dev。
+M1三卡已组成实现候选；B11→B12→B13依次继承代码，最终候选在`codex/workbench-settings-ui`。验证见[矩阵](../test-matrix.md#m1-foundation)，用户人工批准和dev集成仍待完成，不将中间提交当作单卡最终批准。只有总计划获确认、可识别dev基点及本卡真实前置具备后才Ready；Batch自动集成与Milestone用户验收分别记录。测试只在实际文件落位后执行。工作目录/工具及共享runtime维护窗口按[验证环境](../implementation-plan.md#validation-environment)，用户操作/批准按[人工验收门](../implementation-plan.md#acceptance-gates)。维护窗口必须能用原版本入口恢复原dev；tmp_path单元测试无需停止dev。
 
 <a id="b11"></a>
 
@@ -61,7 +61,7 @@ def load_running_settings(workspace: Path) -> Settings: ...
 
 ## B12：结构化启停、实际地址与基础维护准入
 
-状态：未开工；待确认总计划/前置，满足后才Ready。
+状态：B12已实施并完成双工作区真实验收；中间提交`c23e10d`后的独立审查修复包含在最终M1候选中，不能单独把中间提交视为通过。最终独立复核、用户M1操作及dev集成分别登记，当前不记I(B12)。
 
 1. **结果、分支和追踪**：`codex/workbench-lifecycle`。本机可start/status/stop/restart，返回准确双服务地址/状态/最近结果，自动选择被占用端口；现有导入与预览繁忙拒绝重启。FR-13/14；NFR-01/04/06/08；AT-01近期；A12-1～3、V01/02、G01。
 
@@ -83,6 +83,7 @@ def load_running_settings(workspace: Path) -> Settings: ...
 | `src/astrophotoflow/modules/data/previews.py` | M：修改生成准入，保持DisplayPreviews现有排空及缓存保护 | M：同上 |
 | `src/astrophotoflow/interfaces/http/app.py` | M：修改组合现有②busy及原生queue观察；内部maintenance enter/release；生命周期不泄漏令牌 | data.public、core，无私有ORM |
 | `src/astrophotoflow/contracts/workbench.py` | 扩充已到实际消费者的WorkbenchState/Result/BusyState | ④第11节 |
+| `src/astrophotoflow/core/http.py`、`core/config.py` | 实现TaskAdmission依赖及短锁运行记录更新；原生入队／队列观察屏障在既有proxy接入 | 实际导入／预览和原生消费者 |
 | `tests/core/test_workbench.py` | 扩充控制/身份/双服务/并发及回写测试 | tmp_path、monkeypatch |
 | `tests/core/test_config.py` | M：修改多入口当前采用值测试 | client/proxy/serve |
 | `tests/modules/data/test_service.py` | 扩充maintenance认证/未纳OpenAPI/导入准入 | TestClient夹具 |
@@ -115,7 +116,7 @@ initialize保留activate含义但写唯一默认TOML；start移除旧activate参
 
 ## B13：网页工作台配置
 
-状态：未开工；待确认总计划/前置，满足后才Ready。
+状态：B13已实现配置网页／HTTP／具名客户端及同一共用HTTP实现，真实浏览器验收已执行；最终独立复核与用户M1操作分别登记，dev集成待当前候选获用户批准；当前不记I(B13)或A(M1)。
 
 1. **结果、分支和追踪**：`codex/workbench-settings-ui`。网页显示当前workspace保存值/采用值/实际地址/需重启，允许保存，保存不自动重启或改连接。FR-13/14；NFR-03/04/07；A13-1～3、V02、G01网页部分。
 
@@ -144,6 +145,8 @@ initialize保留activate含义但写唯一默认TOML；start移除旧activate参
 | `frontend/packages/astrophotoflow-ui/tests/modules/data/api/client.test.ts` | M：修改/复用共用client窄搬迁后的方法/错误/fields行为 | 直接重导出的同一类 |
 | `frontend/packages/astrophotoflow-ui/tests/modules/data/api/contracts.test.ts` | R：复用errorSchema同一结构回归 | core schema直接重导出 |
 | `tests/browser/platform-workflows.mjs` | N：新增唯一跨模块浏览器文件，先实现工作台配置场景，后续增量复用 | 获准隔离workspace |
+| `frontend/packages/astrophotoflow-ui/tests/core/workbench.test.ts` | N：配置保存、采用值、冲突及同一错误类的行为验证 | 实际组件／客户端 |
+| `frontend/src/locales/en/main.json`、`zh/main.json` | M：仅新增工作台配置文本，宿主传入翻译函数 | 不向私有UI增加原生依赖 |
 
 5. **准确关键签名（④第10/11节）**：
 

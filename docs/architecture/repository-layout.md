@@ -25,7 +25,7 @@
 | `src/astrophotoflow/contracts` | 标准库和 Pydantic 构成的公共模型与纯校验器 |
 | `src/astrophotoflow/interfaces` | HTTP 应用装配、服务命令、CLI、客户端领域操作、MCP 协议适配 |
 | `src/astrophotoflow/client.py`、`cli.py` | 保留 AssetClient／ServiceApiError 和公开命令模块入口 |
-| `src/astrophotoflow/comfyui` | 固定引擎网关入口，不注册或安装 AstroPhotoFlow 扩展 |
+| `src/astrophotoflow/comfyui` | 固定引擎网关与M1原生准入薄适配，不注册或安装AstroPhotoFlow扩展、不另建队列 |
 | `src/astrophotoflow/vendor` | 随包运行资源与来源清单；引擎归档由构建脚本生成，不手工编辑 |
 | `.artifacts/build/frontend`、`.artifacts/build/python` | 完整网页和 Python 构建中间产物 |
 | `.artifacts/dist` | wheel／sdist 发行物 |

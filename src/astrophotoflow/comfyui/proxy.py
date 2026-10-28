@@ -1,5 +1,7 @@
 import asyncio
 import os
+import json
+import sys
 from pathlib import Path
 from urllib.parse import quote
 from uuid import uuid4
@@ -13,6 +15,8 @@ BASE_PATH = "/astrophotoflow/api/v1"
 
 # Public route, corresponding API path, and method. No wildcard proxy route is registered.
 ROUTES = [
+    ("GET", "/settings/workbench", "/settings/workbench"),
+    ("PATCH", "/settings/workbench", "/settings/workbench"),
     ("GET", "/health", "/health"),
     ("GET", "/capabilities", "/capabilities"),
     ("GET", "/projects", "/projects"),
@@ -170,6 +174,8 @@ async def forward(request: web.Request, path_template: str) -> web.Response:
 
 
 def register_proxy_routes(routes: web.RouteTableDef) -> None:
+    if os.environ.get("APF_WORKSPACE") and (native_server := sys.modules.get("server")) is not None:
+        native_server.PromptServer.instance.app.middlewares.append(native_admission_middleware())
     for method, public_path, upstream_path in ROUTES:
         async def handler(
             request: web.Request,
@@ -177,3 +183,31 @@ def register_proxy_routes(routes: web.RouteTableDef) -> None:
         ) -> web.Response:
             return await forward(request, template)
         routes.route(method, BASE_PATH + public_path)(handler)
+
+
+def native_admission_middleware():
+    queue_admission = asyncio.Lock()
+
+    @web.middleware
+    async def admission(request, handler):
+        if request.method == "POST" and request.path in {"/prompt", "/api/prompt"}:
+            async with queue_admission:
+                try:
+                    workspace = Path(os.environ["APF_WORKSPACE"])
+                    record = json.loads((workspace / "run/processes.json").read_text(encoding="utf-8"))
+                    closed = record["maintenance_operation_id"] is not None
+                    control_path = workspace / "run/control.json"
+                    if control_path.is_file():
+                        control = json.loads(control_path.read_text(encoding="utf-8"))["result"]
+                        closed = closed or control["state"] in {"in_progress", "unknown"}
+                    if closed:
+                        return _error_response(str(uuid4()), 409, "WORKBENCH_MAINTENANCE", "工作台正在维护，暂不接受新运行。")
+                except (OSError, KeyError, TypeError, ValueError):
+                    return _error_response(str(uuid4()), 503, "WORKBENCH_STATE_UNKNOWN", "无法确认工作台维护状态。")
+                return await handler(request)
+        if request.method == "GET" and request.path in {"/queue", "/api/queue"}:
+            async with queue_admission:
+                return await handler(request)
+        return await handler(request)
+
+    return admission

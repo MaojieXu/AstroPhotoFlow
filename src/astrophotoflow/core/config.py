@@ -2,10 +2,12 @@ from dataclasses import dataclass, field
 import hashlib
 import ipaddress
 import json
+import logging
 import os
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 import tomllib
+import time
 from urllib.parse import urlsplit
 
 from filelock import FileLock, Timeout
@@ -16,6 +18,7 @@ from astrophotoflow.core.errors import ApiError
 
 
 CONFIG_PATH = Path.home() / ".config/astrophotoflow/config.toml"
+logger = logging.getLogger("astrophotoflow.configuration")
 
 
 class ConfigurationError(RuntimeError):
@@ -237,7 +240,15 @@ def _write_configuration_file(path: Path, text: str) -> None:
         with NamedTemporaryFile(mode="w", encoding="utf-8", newline="\n", dir=path.parent, delete=False) as stream:
             temporary = Path(stream.name)
             stream.write(text)
-        os.replace(temporary, path)
+        for attempt in range(5):
+            try:
+                os.replace(temporary, path)
+                break
+            except PermissionError as exc:
+                if os.name != "nt" or exc.winerror != 5 or attempt == 4:
+                    raise
+                logger.warning("Windows读句柄暂时阻止配置原子替换 path=%s attempt=%s", path, attempt + 1)
+                time.sleep(0.05)
     finally:
         if temporary is not None:
             temporary.unlink(missing_ok=True)
@@ -263,6 +274,16 @@ def _configuration_text(values: ConfigValues) -> str:
         f'[imports]\nroots = [{roots}]\n\n'
         f'[ingestion]\nfile_workers = {values.file_workers}\npreview_workers = {values.preview_workers}\n'
     )
+
+
+def _update_running_state(workspace: Path, changes: dict) -> None:
+    path = workspace / "run/processes.json"
+    with FileLock(str(workspace / "run/processes.lock"), timeout=5):
+        record = json.loads(path.read_text(encoding="utf-8"))
+        if Path(record["workspace"]).resolve() != workspace.resolve():
+            raise ConfigurationError("运行记录不属于目标workspace。")
+        record.update(changes)
+        _write_configuration_file(path, json.dumps(record, ensure_ascii=False, indent=2))
 
 
 def save_configuration(config_path: Path, values: ConfigValues, config_token: str, *,
