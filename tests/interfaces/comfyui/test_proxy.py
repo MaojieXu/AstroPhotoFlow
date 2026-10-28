@@ -156,7 +156,7 @@ def test_proxy_whitelist_origin_headers_and_upstream_status(tmp_path, monkeypatc
             updated = await client.patch("/api" + proxy.BASE_PATH + "/settings/workbench",
                                          headers={"Origin": origin}, json={"config_token": "current", "values": {}})
             assert updated.status == 200 and seen["patch_body"] == {"config_token": "current", "values": {}}
-            assert len(proxy.ROUTES) == 80
+            assert len(proxy.ROUTES) == 82
             assert all(
                 method == "GET" or (method == "POST" and path == "/datasets/{dataset_id}/versions")
                 or (method == "PATCH" and path == "/datasets/{dataset_id}/member-parameters")

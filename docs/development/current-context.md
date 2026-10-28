@@ -1,18 +1,22 @@
 # 当前开发上下文
 
-更新时间：2026-10-27。集成分支为 **dev**，当前M1候选分支为 **codex/workbench-settings-ui**，继承B11 `6b10657`和B12中间提交`c23e10d`；最终审查修复在候选中，尚未集成dev。设计基线`9d4c729`已同步远端。原生网页及平台源码基线为 `16025dd89f2c3c2b25bae58bcc241e5202863c87`，已从原 dev `b6759ab` 快进合入；main 不属于本轮交付范围。
+更新时间：2026-10-28。集成分支为 **dev**，当前M1候选分支为 **codex/workbench-settings-ui**，继承B11 `6b10657`和B12中间提交`c23e10d`；M1已获用户人工验收通过及合入dev、删除当前功能分支授权。设计基线`9d4c729`已同步远端。原生网页及平台源码基线为 `16025dd89f2c3c2b25bae58bcc241e5202863c87`，已从原 dev `b6759ab` 快进合入；main 不属于本轮交付范围。
 
 仓库为 [MaojieXu/AstroPhotoFlow](https://github.com/MaojieXu/AstroPhotoFlow)，本地目录为 `C:/Users/Administrator/Desktop/WorkSpace/AstroPhotoFlow`。本文维护当前实现、运行基线和有效待办；产品范围见[现行需求](../requirements/README.md)，历史测试证据见[验证矩阵](test-matrix.md)。
 
 ## 当前设计状态
 
-**M1当前阻断**：第三轮独立审查复现启动失败清理仍会强杀已就绪且可能正在导入的领域服务，绕过排空；M1尚未技术收敛，不能批准或集成。已停止自动修复／追加审查，待用户确认复用现有停止流程的最小修订及原验收后开启新迭代。证据与未应用方案在`.artifacts/implementation/M1/review-round3.md`和`startup-cleanup-revision.md`；常规页面可查看，不等于M1通过。
+验收反馈已修复UUID字符串请求、重启受理回执及未保存配置误用；实际网页已验证导入3／预览6保存并重启生效，地址可点击，原生风格输入及移除按钮对齐。证据为`.artifacts/implementation/M1/restart-browser.json`、`restart-python-final.xml`（115通过）、`restart-build-final2.log`和`restart-build-final3.log`。用户要求修复后停止追加测试，已遵从；网页重启第三轮独立审查因此中止，不宣称该轮完成。跨端口自动重连仍按界面提示及CLI核对。
 
-五模块概要、数据设计及[接口契约与文件级详细设计](../api/platform-contracts.md)已成文，第④阶段已通过多Agent独立复核。[第⑤阶段近期实施计划](implementation-plan.md)按六个里程碑细化22个Batch，M1三卡已形成实现候选，其余19卡尚未开工，不表示S0或首个业务闭环已验收。①负责公共基础，②负责素材和项目资料，③负责外部软件，④负责节点定义，⑤统一负责工作流、运行及Agent交互。现有78个HTTP操作保留，新增工作台配置GET／PATCH后共80个公共操作及对应代理，OpenAPI由实际应用生成；58个数据MCP工具及注册保持。第④阶段独立证据保留于`.artifacts/fourth-stage-design`，计划检查进入`.artifacts/implementation-plan`。
+M1界面按用户验收反馈调整为左侧“工作台配置”，位于工作流之后；复用原生侧栏和主题，取消顶部按钮及弹窗。侧栏注册5项、配置表单4项测试、类型检查和生产构建通过，真实浏览器5类检查通过；本次界面调整已由用户验证通过，随M1整体集成。证据见`.artifacts/implementation/M1/sidebar-update.md`。
+
+**M1用户验收通过，交付合入dev**：用户确认修订后，启动失败已统一复用stop排空；待登记进程提前留痕，身份暂不可读时保留核对依据，控制结果写入失败不遮盖启动及清理错误。新迭代第三轮独立审查无剩余阻断。全量Python为336 passed、2项显式真实测试另行通过；浏览器五类检查通过。真实在途导入在模拟引擎启动失败后完整完成并正常退出。最新报告为`.artifacts/implementation/M1/delivery-report.md`及`iteration2-round3-review.md`；旧轮次失败证据保留。原dev已恢复31388／31390，隔离候选实际网页为32592；用户已于2026-10-28在当前聊天确认“通过测试，可以将结果merge到dev，并删除目前这个branch”；B11～B13及本轮修复整体交付dev。
+
+五模块概要、数据设计及[接口契约与文件级详细设计](../api/platform-contracts.md)已成文，第④阶段已通过多Agent独立复核。[第⑤阶段近期实施计划](implementation-plan.md)按六个里程碑细化22个Batch，M1三卡已形成实现候选，其余19卡尚未开工，不表示S0或首个业务闭环已验收。①负责公共基础，②负责素材和项目资料，③负责外部软件，④负责节点定义，⑤统一负责工作流、运行及Agent交互。现有78个HTTP操作保留，新增工作台配置GET／PATCH及网页重启POST／查询GET后共82个公共操作及对应代理，OpenAPI由实际应用生成；58个数据MCP工具及注册保持。第④阶段独立证据保留于`.artifacts/fourth-stage-design`，计划检查进入`.artifacts/implementation-plan`。
 
 第⑤阶段计划联合审查补充六份按M分组的22张任务卡，细化文件N／M／R、关键签名、调用顺序、测试和人工验收；原契约补齐必要的编辑期只读数据校验、Python具名客户端和固定业务ID。用户确认22 Batch内部小步、M3／M4交叉同轮分别批准、共用HTTP归core、维护窗口恢复原dev、普通移除与MCP在B57一次切换；历史证据进入`.artifacts/implementation-plan-review`。后续卡Ready仍须实际前置，首包和模型继续在各自任务前选择。
 
-B11实现：新增ConfigValues／ConfigSave／ConfigState及get_configuration／save_configuration／load_running_settings；用户TOML的workspace.default取代旧active-workspace读取，Settings.workspace显式且必填。保存采用文件锁、配置token与完整文件替换，只保存最新值；运行采用值独立读取，无默认时清楚失败。初始化激活写默认TOML。B12已实现结构化启停／重启、自动端口及安全回写、实际采用值和导入／预览／原生准入屏障，B13已提供原生页面配置表单。全部实现与真实验证见[矩阵](test-matrix.md#m1-foundation)及`.artifacts/implementation/M1`，最终独立复核结果在同一证据目录登记，当前仍待用户人工验收，尚未合入dev，不记I(Bxx)或A(M1)。正常dev用保留的原版本恢复31388／31390，补齐实际恢复启动的运行元数据以保持当前数据客户端可读；配置、默认指针、令牌、业务表行数与引擎散列不变。M1页面使用隔离工作区，实际地址见候选回执；不要把旧dev页面当作M1页面。
+B11实现：新增ConfigValues／ConfigSave／ConfigState及get_configuration／save_configuration／load_running_settings；用户TOML的workspace.default取代旧active-workspace读取，Settings.workspace显式且必填。保存采用文件锁、配置token与完整文件替换，只保存最新值；运行采用值独立读取，无默认时清楚失败。初始化激活写默认TOML。B12已实现结构化启停／重启、自动端口及安全回写、实际采用值和导入／预览／原生准入屏障，B13已提供原生页面配置表单。全部实现与真实验证见[矩阵](test-matrix.md#m1-foundation)及`.artifacts/implementation/M1`，最终独立复核结果在同一证据目录登记，用户已批准A(M1)，B11～B13随本次Git集成记I(B11)／I(B12)／I(B13)。正常dev用保留的原版本恢复31388／31390，补齐实际恢复启动的运行元数据以保持当前数据客户端可读；配置、默认指针、令牌、业务表行数与引擎散列不变。M1页面使用隔离工作区，实际地址见候选回执；不要把旧dev页面当作M1页面。
 
 ⑤复用原生当前图、会话撤销、转换和队列；重要方案另存，每次运行保存实际图与参数。首版Agent针对明确活动画布操作，手动改图即接管，用户明确交回后继续；切图暂停后续编辑或新提交，已受理运行继续。实际执行的图像节点产生多次轻量预览，用户选择完整结果后才交②保存。相关桥接、运行记录及预览仍待实现或验证。
 
@@ -55,7 +59,7 @@ wheel 源码目录外安装、无 Node 的 sdist 重建与重装已在改名收�
 
 ## 后续有效待办
 
-- 按[近期实施计划](implementation-plan.md)完成M1最终独立复核、用户人工操作／批准及dev正常集成后推进M2；首包／操作在B31前由用户选择，固定模型候选在B56原型比较后确定。其余19个Batch尚未开工，不创建空适配或空路由；其余新增HTTP／MCP接口仍未实现，S0尚未整体验收。保留当前实现，不恢复已取消任务。
+- M1已由用户确认通过，本次整体集成dev；随后按[近期实施计划](implementation-plan.md)推进M2；首包／操作在B31前由用户选择，固定模型候选在B56原型比较后确定。其余19个Batch尚未开工，不创建空适配或空路由；其余新增HTTP／MCP接口仍未实现，S0尚未整体验收。保留当前实现，不恢复已取消任务。
 - ①M1候选已补齐默认workspace、保存／采用值、自动端口／实际地址、真实启停／重启、最近控制结果及网页配置；③⑤繁忙和离线MCP仍待各自批次，②固定输入解析、文件变化确认、素材移除提示、所选完整结果保存及偏好仍待实现，原件／校准保护继续保留。
 - ③锁定首个软件包、来源、准确版本和操作并真实验证安装／就绪；④推进共享可编辑定义、可选测试、更新影响确认、全参数新默认及变化端口重映射。
 - ⑤按[统一阶段](../../src/astrophotoflow/modules/workflows/README.md#phases)形成原生当前图项目关联、自动保存／另存、活动网页MCP、当前控制、真实运行记录和逐图像节点自动预览任务；切图后拒绝迟到写，后台结果归原图，无网页只查询。

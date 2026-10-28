@@ -4,7 +4,7 @@ import hashlib
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from importlib.metadata import version
-from uuid import uuid4
+from uuid import UUID, uuid4
 import json
 import os
 from pathlib import Path
@@ -189,18 +189,23 @@ def _port_available(host: str, port: int) -> bool:
 def _identity(record: dict) -> psutil.Process | None:
     try:
         process = psutil.Process(record["pid"])
-        if abs(process.create_time() - record["create_time"]) > 1.0:
+        created = process.create_time()
+        recovering = "create_time" not in record
+        if recovering:
+            if not record["launch_started"] - 1.0 <= created <= record["launch_finished"] + 1.0:
+                raise WorkbenchError("无法确认待登记进程的启动时间。")
+        elif abs(created - record["create_time"]) > 1.0 or os.path.normcase(process.exe()) != os.path.normcase(record["executable"]):
             return None
-        if os.path.normcase(process.exe()) != os.path.normcase(record["executable"]):
+        if process.cmdline() != record["command"] or process.environ().get("APF_WORKSPACE") != record["workspace"]:
+            if recovering:
+                raise WorkbenchError("无法确认待登记进程的命令或工作区。")
             return None
-        if process.cmdline() != record["command"]:
-            return None
-        if process.environ().get("APF_WORKSPACE") != record["workspace"]:
-            return None
+        if recovering:
+            record["create_time"], record["executable"] = created, process.exe()
         return process if process.is_running() else None
     except psutil.NoSuchProcess:
         return None
-    except (psutil.AccessDenied, OSError, KeyError) as exc:
+    except (psutil.AccessDenied, OSError, KeyError, TypeError, ValueError) as exc:
         raise WorkbenchError("无法确认记录进程的身份。") from exc
 
 
@@ -219,6 +224,10 @@ def _write_state(workspace: Path, state: dict) -> None:
 
 def _control_path(workspace: Path) -> Path:
     return workspace / "run" / "control.json"
+
+
+def _write_control(workspace: Path, control: dict) -> None:
+    app_config._write_configuration_file(_control_path(workspace), json.dumps(control, ensure_ascii=False, indent=2))
 
 
 def _recent(workspace: Path) -> WorkbenchResult | None:
@@ -256,7 +265,9 @@ def status(workspace_config: Path | None = None) -> WorkbenchState:
                             web_url=None, service_url=None, processes=[], effective_settings=None, versions={}, reason=None, recent=None)
     try:
         raw = _read_state(workspace)
-        result.recent = _recent(workspace)
+        control_path = _control_path(workspace)
+        control = json.loads(control_path.read_text(encoding="utf-8")) if control_path.is_file() else {}
+        result.recent = WorkbenchResult.model_validate_json(json.dumps(control["result"])) if control else None
         live = []
         for record in raw["processes"]:
             if _identity(record) is not None:
@@ -275,7 +286,6 @@ def status(workspace_config: Path | None = None) -> WorkbenchState:
                 result.ready = False
                 result.reason = "维护准入仍关闭；请核对控制结果或显式停止。"
         if result.recent is not None and result.recent.state == "in_progress":
-            control = json.loads(_control_path(workspace).read_text(encoding="utf-8"))
             controller = control["controller"]
             owner = psutil.Process(controller["pid"])
             if abs(owner.create_time() - controller["create_time"]) < 1.0 and owner.is_running():
@@ -283,8 +293,16 @@ def status(workspace_config: Path | None = None) -> WorkbenchState:
                 result.reason = "控制操作仍在进行；查询现有结果，不重复提交。"
             elif not result.ready:
                 result.state, result.reason = "unknown", "控制进程已退出，操作结果需核对。"
+        if control.get("pending_process") is not None:
+            result.ready = False
+            if result.state not in {"starting", "stopping"}:
+                result.state = "unknown"
+            pending_pid = control["pending_process"].get("pid") or "未记录"
+            result.reason = f"启动进程尚未完成登记（PID {pending_pid}）；请核对并停止。"
     except psutil.NoSuchProcess:
-        if result.recent is not None and result.recent.action == "stop" and not result.processes:
+        if control.get("pending_process") is not None:
+            result.state, result.ready, result.reason = "unknown", False, "启动进程身份尚未核对，不能确认已停止。"
+        elif result.recent is not None and result.recent.action == "stop" and not result.processes:
             result.state, result.reason = "stopped", "已核对记录进程均已退出。"
         elif not result.ready:
             result.state, result.reason = "unknown", "控制进程已退出，操作结果需核对。"
@@ -314,12 +332,13 @@ def _launch(command: list[str], cwd: Path, env: dict, log_path: Path) -> subproc
 
 
 @contextmanager
-def _control_operation(config_path: Path, action: str):
+def _control_operation(config_path: Path, action: str, operation_id: UUID | None = None):
     workspace = _workspace_for_config(config_path)
     (workspace / "run").mkdir(parents=True, exist_ok=True)
     try:
-        with FileLock(str(workspace / "run/control.lock"), timeout=0):
+        with FileLock(str(workspace / "run/control.lock"), timeout=5 if operation_id is not None else 0):
             previous = _recent(workspace)
+            previous_control = json.loads(_control_path(workspace).read_text(encoding="utf-8")) if previous is not None else {}
             if previous is not None and previous.state in {"in_progress", "unknown"}:
                 observed = status(config_path)
                 resolved = (previous.action in {"start", "restart"} and observed.ready
@@ -327,21 +346,26 @@ def _control_operation(config_path: Path, action: str):
                 if not resolved:
                     if action != "stop":
                         raise WorkbenchError("上次启停结果尚未确认；请先查询状态和日志。")
-                    _stop(config_path)
-            result = WorkbenchResult(operation_id=uuid4(), action=action, state="in_progress", workspace=str(workspace),
+                    _stop(config_path, control=previous_control)
+            result = WorkbenchResult(operation_id=operation_id or uuid4(), action=action, state="in_progress", workspace=str(workspace),
                                      config_path=str(config_path), reused=False, web_url=None, service_url=None, detail=None,
                                      blockers=[], log_path=str(workspace / "logs"))
             owner = psutil.Process()
             control = {"result": result.model_dump(mode="json"),
                        "controller": {"pid": owner.pid, "create_time": owner.create_time()},
                        "started_at": datetime.now(timezone.utc).isoformat(), "finished_at": None}
-            app_config._write_configuration_file(_control_path(workspace), json.dumps(control, ensure_ascii=False, indent=2))
+            if previous_control.get("pending_process") is not None:
+                control["pending_process"] = previous_control["pending_process"]
+            _write_control(workspace, control)
+            operation_error = None
             try:
-                yield result
+                yield result, control
             except (OSError, ValueError, WorkbenchError, app_config.ConfigurationError, httpx.HTTPError, psutil.Error) as exc:
-                result.state, result.detail = "failed", str(exc)
+                operation_error = exc
+                result.state, result.detail = ("unknown" if control.get("pending_process") is not None else "failed"), str(exc)
                 raise WorkbenchError(str(exc)) from exc
-            except BaseException:
+            except BaseException as exc:
+                operation_error = exc
                 result.state, result.detail = "unknown", "控制操作中断，需查询进程及健康结果。"
                 raise
             else:
@@ -350,7 +374,14 @@ def _control_operation(config_path: Path, action: str):
             finally:
                 control["result"] = result.model_dump(mode="json")
                 control["finished_at"] = datetime.now(timezone.utc).isoformat() if result.state != "unknown" else None
-                app_config._write_configuration_file(_control_path(workspace), json.dumps(control, ensure_ascii=False, indent=2))
+                try:
+                    _write_control(workspace, control)
+                except Exception as write_error:
+                    if operation_error is not None and not isinstance(operation_error, Exception):
+                        operation_error.add_note(f"控制结果未能保存：{write_error}；状态需核对。")
+                        raise operation_error from write_error
+                    prior = f"{operation_error}；" if operation_error is not None else ""
+                    raise WorkbenchError(f"{prior}控制结果未能保存：{write_error}；状态需核对。") from write_error
     except Timeout as exc:
         raise WorkbenchError("同一workspace已有启停或初始化操作，请查询当前结果。") from exc
 
@@ -382,7 +413,7 @@ def _write_actual_ports(config_path: Path, service_port: int, origins: list[str]
         app_config._write_configuration_file(config_path, app_config._configuration_text(values))
 
 
-def _start(config_path: Path, result: WorkbenchResult) -> None:
+def _start(config_path: Path, result: WorkbenchResult, control: dict) -> None:
     workspace = config_path.parent
     observed = status(config_path)
     if observed.ready:
@@ -421,14 +452,24 @@ def _start(config_path: Path, result: WorkbenchResult) -> None:
               "web_url": web_url, "service_url": effective.service_url, "processes": [], "maintenance_operation_id": None,
               "versions": {"platform": version("astrophotoflow"), "comfyui": manifest["comfyui_version"]}}
     _write_state(workspace, record)
-    launched = []
+    pending_child = None
     try:
         for command, cwd, role, timeout in ((service_command, workspace, "asset-service", 90),
                                             (comfy_command, comfyui, "comfyui", 180)):
+            control["pending_process"] = {"role": role, "pid": None, "command": command, "workspace": str(workspace),
+                                          "started_at": datetime.now(timezone.utc).isoformat(), "launch_started": time.time()}
+            _write_control(workspace, control)
             child = _launch(command, cwd, env, workspace / "logs" / ("service.log" if role == "asset-service" else "comfyui.log"))
-            launched.append(child)
-            record["processes"].append(_record(child, role, workspace, command))
+            pending_child = child
+            control["pending_process"].update({"pid": child.pid, "launch_finished": time.time()})
+            _write_control(workspace, control)
+            control["pending_process"] = _record(child, role, workspace, command)
+            _write_control(workspace, control)
+            record["processes"].append(control["pending_process"])
             app_config._update_running_state(workspace, {"processes": record["processes"]})
+            control.pop("pending_process")
+            _write_control(workspace, control)
+            pending_child = None
             deadline = time.monotonic() + timeout
             while True:
                 if child.poll() is not None:
@@ -439,17 +480,21 @@ def _start(config_path: Path, result: WorkbenchResult) -> None:
                 if time.monotonic() >= deadline:
                     raise WorkbenchError(f"{role}未能在{timeout}秒内就绪；请查看workspace/logs。")
                 time.sleep(0.25)
-    except (OSError, WorkbenchError):
-        for child in reversed(launched):
-            if child.poll() is None:
-                child.terminate()
+    except Exception as startup_error:
+        if pending_child is None and control.get("pending_process", {}).get("pid") is None:
+            control.pop("pending_process", None)
+        try:
+            _stop(config_path, control=control, pending_child=pending_child)
+        except Exception as cleanup_error:
+            identity_detail = ""
+            if pending_child is not None and control.get("pending_process") is not None and "create_time" not in control["pending_process"]:
                 try:
-                    child.wait(timeout=5)
-                except subprocess.TimeoutExpired:
-                    child.kill()
-                    child.wait(timeout=5)
-        record["processes"] = []
-        app_config._update_running_state(workspace, {"processes": []})
+                    control["pending_process"] = _record(pending_child, role, workspace, command)
+                except Exception as identity_error:
+                    identity_detail = f"；PID {pending_child.pid} 身份尚未确认：{identity_error}"
+            raise WorkbenchError(
+                f"{startup_error} 启动失败后的停止未完成：{cleanup_error}{identity_detail}"
+            ) from startup_error
         raise
     result.web_url, result.service_url = web_url, effective.service_url
     try:
@@ -458,13 +503,34 @@ def _start(config_path: Path, result: WorkbenchResult) -> None:
         result.detail = f"服务已就绪，但实际端口未保存：{exc}"
 
 
-def _stop(config_path: Path) -> None:
+def _stop(config_path: Path, *, control: dict, pending_child=None) -> None:
     workspace = config_path.parent
     raw = _read_state(workspace)
-    native = "effective_settings" in raw or any(
+    pending = control.get("pending_process")
+    if pending is not None and pending.get("pid") is None:
+        raise WorkbenchError("启动进程身份尚未登记，无法确认是否已停止；请先核对实际进程。")
+    native = "effective_settings" in raw or pending is not None or any(
         item["role"] == "comfyui" and "--front-end-root" in item["command"] for item in raw["processes"])
-    for record in reversed(raw["processes"]):
-        process = _identity(record)
+    records = list(raw["processes"])
+    if pending is not None and not any(
+            item.get("pid") == pending["pid"] and item.get("role") == pending["role"] for item in records):
+        records.append(pending)
+    for record in reversed(records):
+        is_pending_child = (pending_child is not None and pending is not None
+                            and record["pid"] == pending["pid"] and record["role"] == pending["role"])
+        if is_pending_child and pending_child.poll() is not None:
+            process = None
+        elif is_pending_child and record["role"] == "asset-service":
+            process = pending_child
+        elif is_pending_child:
+            try:
+                process = psutil.Process(pending_child.pid)
+            except psutil.NoSuchProcess:
+                if pending_child.poll() is None:
+                    raise WorkbenchError(f"无法确认启动进程 {pending_child.pid} 已退出。")
+                process = None
+        else:
+            process = _identity(record)
         if process is None:
             continue
         if native and record["role"] == "asset-service":
@@ -473,7 +539,7 @@ def _stop(config_path: Path) -> None:
             httpx.post(settings.service_url + "/internal/shutdown", headers={"Authorization": f"Bearer {token}"}, timeout=5).raise_for_status()
             try:
                 process.wait(timeout=30)
-            except psutil.TimeoutExpired as exc:
+            except (psutil.TimeoutExpired, subprocess.TimeoutExpired) as exc:
                 raise WorkbenchError("导入或预览仍在排空，进程记录已保留；稍后查询并停止。") from exc
             continue
         family = [process, *process.children(recursive=True)]
@@ -493,16 +559,17 @@ def _stop(config_path: Path) -> None:
         app_config._update_running_state(workspace, {"processes": []})
     else:
         _write_state(workspace, raw)
+    control.pop("pending_process", None)
 
 
-def _operate(action: str, workspace_config: Path | None) -> WorkbenchResult:
+def _operate(action: str, workspace_config: Path | None, operation_id: UUID | None = None) -> WorkbenchResult:
     config_path = resolve_config_path(workspace_config)
-    with _control_operation(config_path, action) as result:
+    with _control_operation(config_path, action, operation_id) as (result, control):
         if action == "start":
-            _start(config_path, result)
+            _start(config_path, result, control)
         elif action == "stop":
-            if _read_state(config_path.parent)["processes"]:
-                _stop(config_path)
+            if _read_state(config_path.parent)["processes"] or control.get("pending_process") is not None:
+                _stop(config_path, control=control)
         else:
             observed = status(config_path)
             if observed.processes:
@@ -538,8 +605,8 @@ def _operate(action: str, workspace_config: Path | None) -> WorkbenchResult:
             elif observed.state == "unknown":
                 result.state, result.blockers = "rejected", [observed.reason or "无法确认进程已停止"]
                 return result
-            _stop(config_path)
-            _start(config_path, result)
+            _stop(config_path, control=control)
+            _start(config_path, result, control)
         return result
 
 
@@ -551,5 +618,85 @@ def stop(workspace_config: Path | None = None) -> WorkbenchResult:
     return _operate("stop", workspace_config)
 
 
-def restart(workspace_config: Path | None = None) -> WorkbenchResult:
-    return _operate("restart", workspace_config)
+def restart(workspace_config: Path | None = None, *, operation_id: UUID | None = None) -> WorkbenchResult:
+    return _operate("restart", workspace_config, operation_id)
+
+
+def request_restart(workspace_config: Path, operation_id: UUID) -> WorkbenchResult:
+    config_path = resolve_config_path(workspace_config)
+    workspace = config_path.parent
+    receipt = workspace / "run/web-restart.json"
+    try:
+        with FileLock(str(workspace / "run/control.lock"), timeout=0):
+            if receipt.is_file():
+                previous = json.loads(receipt.read_text(encoding="utf-8"))
+                result = WorkbenchResult.model_validate_json(json.dumps(previous["result"]))
+                if result.operation_id == operation_id:
+                    return result
+                if result.state == "in_progress":
+                    try:
+                        owner = psutil.Process(previous["controller"]["pid"])
+                        if abs(owner.create_time() - previous["controller"]["create_time"]) < 1.0:
+                            raise WorkbenchError("已有网页重启正在进行，请查询现有结果。")
+                    except psutil.NoSuchProcess:
+                        pass
+            log_path = workspace / "logs/web-restart.log"
+            result = WorkbenchResult(operation_id=operation_id, action="restart", state="in_progress",
+                                     workspace=str(workspace), config_path=str(config_path), reused=False,
+                                     web_url=None, service_url=None, detail=None, blockers=[], log_path=str(log_path))
+            env = os.environ.copy()
+            env["PYTHONPATH"] = str(Path(__file__).resolve().parents[2])
+            command = [sys.executable, "-c",
+                       "import sys; from pathlib import Path; from uuid import UUID; "
+                       "from astrophotoflow.core.workbench import _web_restart; "
+                       "_web_restart(Path(sys.argv[1]), UUID(sys.argv[2]))",
+                       str(config_path), str(operation_id)]
+            parent = psutil.Process()
+            pending = {"result": result.model_dump(mode="json"),
+                       "controller": {"pid": parent.pid, "create_time": parent.create_time()}}
+            app_config._write_configuration_file(receipt, json.dumps(pending))
+            try:
+                child = _launch(command, workspace, env, log_path)
+            except OSError as exc:
+                result.state, result.detail = "failed", str(exc)
+                pending["result"] = result.model_dump(mode="json")
+                app_config._write_configuration_file(receipt, json.dumps(pending))
+                raise
+            owner = psutil.Process(child.pid)
+            pending["controller"] = {"pid": child.pid, "create_time": owner.create_time()}
+            app_config._write_configuration_file(receipt, json.dumps(pending))
+            return result
+    except Timeout as exc:
+        raise WorkbenchError("已有启停操作正在进行，请稍后查询状态。") from exc
+
+
+def _web_restart(config_path: Path, operation_id: UUID) -> None:
+    receipt = config_path.parent / "run/web-restart.json"
+    try:
+        result = restart(config_path, operation_id=operation_id)
+    except (OSError, ValueError, WorkbenchError, app_config.ConfigurationError, psutil.Error) as exc:
+        result = WorkbenchResult(operation_id=operation_id, action="restart", state="unknown",
+                                 workspace=str(config_path.parent), config_path=str(config_path), reused=False,
+                                 web_url=None, service_url=None, detail=str(exc), blockers=[],
+                                 log_path=str(config_path.parent / "logs/web-restart.log"))
+    raw = json.loads(receipt.read_text(encoding="utf-8"))
+    raw["result"] = result.model_dump(mode="json")
+    app_config._write_configuration_file(receipt, json.dumps(raw))
+
+
+def restart_result(workspace_config: Path, operation_id: UUID) -> WorkbenchResult | None:
+    receipt = resolve_config_path(workspace_config).parent / "run/web-restart.json"
+    if not receipt.is_file():
+        return None
+    raw = json.loads(receipt.read_text(encoding="utf-8"))
+    result = WorkbenchResult.model_validate_json(json.dumps(raw["result"]))
+    if result.operation_id != operation_id:
+        return None
+    if result.state == "in_progress":
+        try:
+            owner = psutil.Process(raw["controller"]["pid"])
+            if abs(owner.create_time() - raw["controller"]["create_time"]) >= 1.0:
+                result.state, result.detail = "unknown", "重启控制进程身份已变化，请查询实际状态。"
+        except psutil.NoSuchProcess:
+            result.state, result.detail = "unknown", "重启控制进程已退出，结果尚未确认。"
+    return result

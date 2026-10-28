@@ -62,6 +62,8 @@ describe('workbench configuration', () => {
     next.config_token = 'new'
     next.restart_required = true
     const client = {
+      restart: vi.fn(),
+      restartResult: vi.fn(),
       getConfiguration: vi.fn().mockResolvedValue(initial),
       saveConfiguration: vi.fn().mockResolvedValue(next)
     }
@@ -70,6 +72,10 @@ describe('workbench configuration', () => {
     })
     await flushPromises()
     await wrapper.get('input[name="file_workers"]').setValue(4)
+    expect(
+      wrapper.get('[data-testid="workbench-restart"]').attributes('disabled')
+    ).toBeDefined()
+    expect(wrapper.text()).toContain('apfWorkbench.saveFirst')
     await wrapper.get('form').trigger('submit')
     await flushPromises()
     expect(client.saveConfiguration).toHaveBeenCalledWith({
@@ -88,6 +94,8 @@ describe('workbench configuration', () => {
 
   it('keeps user input after a conflict and does not silently reload or resubmit', async () => {
     const client = {
+      restart: vi.fn(),
+      restartResult: vi.fn(),
       getConfiguration: vi.fn().mockResolvedValue(configuration()),
       saveConfiguration: vi
         .fn()
@@ -122,6 +130,8 @@ describe('workbench configuration', () => {
     const initial = configuration()
     initial.effective = null
     const client = {
+      restart: vi.fn(),
+      restartResult: vi.fn(),
       getConfiguration: vi.fn().mockResolvedValue(initial),
       saveConfiguration: vi.fn()
     }
@@ -133,4 +143,49 @@ describe('workbench configuration', () => {
     expect(wrapper.find('dl').exists()).toBe(false)
     wrapper.unmount()
   })
+  it.each(['completed', 'rejected'] as const)(
+    'observes restart %s without resubmitting',
+    async (state) => {
+      const result = {
+        operation_id: 'ce88796a-b7bb-488d-9f15-645d04a87be5',
+        state,
+        detail: null,
+        blockers: state === 'rejected' ? ['busy import'] : []
+      }
+      const client = {
+        getConfiguration: vi.fn().mockResolvedValue(configuration()),
+        saveConfiguration: vi.fn(),
+        restart: vi
+          .fn()
+          .mockRejectedValue(new ApiClientError('response lost', 'network')),
+        restartResult: vi
+          .fn()
+          .mockRejectedValueOnce(new ApiClientError('offline', 'network'))
+          .mockResolvedValue(result)
+      }
+      const wrapper = mount(WorkbenchSettings, {
+        props: { client, translate: (key) => key }
+      })
+      await flushPromises()
+      expect(wrapper.get('a').attributes('href')).toBe('http://127.0.0.1:31388')
+      vi.useFakeTimers()
+      try {
+        await wrapper.get('[data-testid="workbench-restart"]').trigger('click')
+        expect(
+          wrapper
+            .get('[data-testid="workbench-restart"]')
+            .attributes('disabled')
+        ).toBeDefined()
+        await vi.advanceTimersByTimeAsync(2000)
+        expect(client.restart).toHaveBeenCalledTimes(1)
+        expect(client.restartResult).toHaveBeenCalledTimes(2)
+        if (state === 'rejected')
+          expect(wrapper.get('[role="alert"]').text()).toContain('busy import')
+        else expect(wrapper.text()).toContain('apfWorkbench.restarted')
+      } finally {
+        wrapper.unmount()
+        vi.useRealTimers()
+      }
+    }
+  )
 })

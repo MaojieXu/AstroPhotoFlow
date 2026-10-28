@@ -4,7 +4,7 @@ from uuid import UUID
 
 from pydantic import Field, model_validator
 
-from astrophotoflow.contracts.common import StrictModel
+from astrophotoflow.contracts.common import StrictModel, UuidInput
 
 
 class ImportRootValue(StrictModel):
@@ -33,6 +33,10 @@ class ConfigSave(StrictModel):
             if self.default_workspace is None or not self.default_workspace.strip():
                 raise ValueError("默认 workspace 必须为非空路径；省略字段以保持原值。")
         return self
+
+
+class RestartRequest(StrictModel):
+    operation_id: UuidInput
 
 
 class ConfigState(StrictModel):

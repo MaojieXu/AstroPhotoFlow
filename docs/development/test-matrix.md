@@ -1,19 +1,24 @@
 # 需求、实现与验证矩阵
 
+2026-10-28最终人工批准：用户在当前聊天确认“通过测试，可以将结果merge到dev，并删除目前这个branch”，授权M1整体交付dev。网页重启UUID校验及回执修复后，定向Python115项、表单6项、类型检查与生产构建通过；真实网页保存并应用导入3／预览6，地址新页跳转、输入／移除按钮36px且纵向偏移0，errors为空。见`.artifacts/implementation/M1/restart-browser.json`、`restart-python-final.xml`、`restart-build-final2.log`和`restart-build-final3.log`。用户要求修复后停止，网页重启最终独立审查中止，未记为通过；未追加业务回归。此前候选状态保留为历史，不替代本次用户批准。
+
+2026-10-28 M1侧栏调整：配置入口改用原生SidebarTabTemplate，位于工作流后。定向配置表单4项及侧栏注册5项通过；私有包及原生应用类型检查、生产构建、定向ESLint通过。真实浏览器5类检查验证保存、冲突、重启生效、错误及收起后画布保留，截图已人工检查。证据见`.artifacts/implementation/M1/sidebar-update.md`及`.artifacts/implementation/B13/browser`。自动验证不代替用户M1批准。
+
 <a id="m1-foundation"></a>
 
-## 2026-10-27 M1公共基础实施候选
+## 2026-10-28 M1公共基础实施候选复核
 
-**第三轮未收敛，M1阻断**：已复现`_start`异常清理强杀已健康且真实受理导入的领域服务；违反B12排空要求，不能因正常流程测试通过而关闭。证据见`review-round3.md`、`review3-probe-tests.xml`，后者“passed”只证明缺陷成立。按三轮规则停止自动修复，待用户确认最小修订及原验收后新开迭代；方案`startup-cleanup-revision.md`尚未应用，当前不记技术收敛、I(Bxx)或A(M1)。
+**技术复核通过，待用户人工验收**：此前第三轮发现启动失败清理绕过排空，用户明确确认复用stop及原验收后开启新迭代。现已修复普通失败清理、待登记进程持久化与身份恢复、控制结果写入失败遮盖原错误。新迭代第三轮无剩余阻断，报告`iteration2-round3-review.md`核对了冻结文件及实际测试。旧`review-round3.md`和缺陷probe保留，不将旧轮次失败改写成通过；当前仍不记I(Bxx)或A(M1)。
 
-候选分支`codex/workbench-settings-ui`继承B11与B12中间提交，最终提交和文件指纹登记在`.artifacts/implementation/M1/report.md`。本节记录技术验证；最终独立复核及用户人工批准分别登记，尚未合入dev，不记I(Bxx)或A(M1)。旧B11／规划阶段证据保留原候选范围。
+候选分支`codex/workbench-settings-ui`继承B11与B12中间提交，最新候选和文件指纹登记在`.artifacts/implementation/M1/delivery-report.md`及`iteration2-round3-candidate.json`。本节记录技术验证；独立复核及用户人工批准分别登记，尚未合入dev，不记I(Bxx)或A(M1)。旧B11／规划阶段证据保留原候选范围。
 
 - B11／B12／B13实现：默认workspace、配置保存／冲突及实际采用值；结构化启停／重启、双服务身份和健康、自动端口及安全回写、最近控制结果；导入／预览与原生受理维护屏障；网页配置与同一公共HTTP实现。80项公共HTTP／代理、58项原MCP数据工具；没有新增数据库模型、迁移、依赖、队列或常驻服务。
-- 最新全量Python：**328 passed，1 skipped**，143.12秒；跳过的是显式启用的原生隔离用例，随后单独实际执行 **1 passed**，47.39秒。原生用例覆盖W2在线、W1占优先端口自动换址／回写／复用、繁忙拒绝、显式重启采用及两个实例停止；新增/prompt和/api/prompt真实409门禁、释放后恢复原生校验。证据：`python-release-tests.xml`、`native-final-tests.xml`。保留一条既有SQLAlchemy互相引用表排序警告。
-- UI完整回归 **148 passed**，类型检查和生产构建通过；依赖边界0 error、9条既有data组件循环warning，未扩改旧组件。构建日志在`.artifacts/implementation/B13/build.log`。本轮Figma连接不可用，沿用现有主题；已检查真实截图，不声称通过Figma专项审计。
+- 最新全量Python：**336 passed，2 skipped**，149.45秒；两项显式真实进程测试另行执行 **2 passed**，51.57秒。原生用例覆盖W2在线、W1占优先端口自动换址／回写／复用、繁忙拒绝、显式重启采用、两个实例停止，以及/prompt和/api/prompt真实409门禁。新增真实领域子进程测试在导入running时模拟引擎启动失败，核对导入completed、产出资产及进程exit 0后才清记录；最终严格断言另行 **1 passed**。证据：`delivery-python.xml`、`delivery-native.xml`、`real-drain-final.xml`。保留一条既有SQLAlchemy互相引用表排序警告。
+- UI完整回归 **148 passed**，类型检查和生产构建通过；依赖边界0 error、9条既有data组件循环warning，未扩改旧组件。此为既有M1构建证据，本次仅修改Python生命周期及测试，前端源码与依赖未变。构建日志在`.artifacts/implementation/B13/build.log`。本轮Figma连接不可用，沿用现有主题；已检查真实截图，不声称通过Figma专项审计。
 - 浏览器在真实隔离网页验证保存不重启、采用值不变、双页面409且输入保留、真实CLI重启后生效、无效主机422及画布保留。最终回执／截图在`.artifacts/implementation/B13/browser`；首轮实际发现并修正小地图遮挡入口，另修正测试选择器未限定配置表单的问题，不使用强制点击绕过。
-- 独立审查轮次与裁决在`review-round2.md`等报告中。已修复中断后无法显式停止、停止后沿用旧地址、部分服务绕排空、维护回执丢失留下准入，以及原生入队穿过维护；当前维护ID复用已有operation_id，记录更新共用短文件锁。第三轮结论以最终报告为准，未运行不能记通过。
+- 独立审查轮次与裁决在`review-round2.md`、`iteration2-round1.md`、`iteration2-round2.md`及`iteration2-round3-review.md`中。已修复中断后无法显式停止、停止后沿用旧地址、部分服务绕排空、维护回执丢失留下准入及原生入队穿过维护；本次进一步关闭启动失败与未登记子进程的清理缺口。控制文件只保留当前／最近结果及必要的待核对启动信息，没有新增历史账本或服务。
 - 首次全量Python有一次WinError 5失败；已用打开的读句柄复现，并补有限等待／日志及持续失败保留原文件的回归。保留`python-tests.log`原失败，不把重跑当作原次通过。受限环境的socket／临时目录问题和缺失默认Playwright浏览器单独记录；正常环境复跑使用已安装Chromium，未安装／升级依赖。
+- 新迭代中保留了测试数据库初始化影响后续日志捕获、代理用例一次503的失败记录；测试初始化现已隔离日志配置，相关用例与最终完整集均通过。原失败见`new-iteration-affected.xml`、`new-iteration-full.xml`，不将其记为通过。恢复后的原dev经当前HTTP客户端及真实MCP stdio只读验证，58工具保持，证据`delivery-mcp.json`。
 - 按维护窗口保留原可运行源码和固定runtime后，停止原dev做真实验证；已用原版本恢复31388／31390，业务表行数、原配置／默认定位／令牌与引擎散列保持。补充实际恢复启动的采用记录，使当前数据客户端可读原dev；旧dev页面不作为M1候选页面。W2验后停止，W1仅为人工验收保留，用户结束后再停止，不以原dev数据测试写入。
 - 未执行仓库外wheel／sdist重建（B62）、Linux／WSL或③⑤占用；MCP真实控制在B57。M1技术通过不能代签用户批准、S6维护或首个科学处理闭环。
 

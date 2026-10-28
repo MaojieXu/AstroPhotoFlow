@@ -1,6 +1,10 @@
 import type { ZodType, z } from 'zod'
-import { configStateSchema, errorSchema } from './contracts'
-import type { ConfigSave, ConfigState } from './contracts'
+import {
+  configStateSchema,
+  errorSchema,
+  workbenchResultSchema
+} from './contracts'
+import type { ConfigSave, ConfigState, WorkbenchResult } from './contracts'
 
 export type FetchApi = (path: string, init?: RequestInit) => Promise<Response>
 
@@ -165,6 +169,8 @@ export function createApiClient(fetchApi: FetchApi) {
 export interface WorkbenchClient {
   getConfiguration(): Promise<ConfigState>
   saveConfiguration(body: ConfigSave): Promise<ConfigState>
+  restart(operationId: string): Promise<WorkbenchResult>
+  restartResult(operationId: string): Promise<WorkbenchResult | null>
 }
 
 export function createWorkbenchClient(fetchApi: FetchApi): WorkbenchClient {
@@ -173,6 +179,15 @@ export function createWorkbenchClient(fetchApi: FetchApi): WorkbenchClient {
   return {
     getConfiguration: () => client.get(path, configStateSchema),
     saveConfiguration: (body) =>
-      client.send(path, configStateSchema, 'PATCH', body)
+      client.send(path, configStateSchema, 'PATCH', body),
+    restart: (operationId) =>
+      client.send(path + '/restart', workbenchResultSchema, 'POST', {
+        operation_id: operationId
+      }),
+    restartResult: (operationId) =>
+      client.get(
+        path + '/restart/' + operationId,
+        workbenchResultSchema.nullable()
+      )
   }
 }

@@ -4,8 +4,9 @@
 
 数据引用、节点定义、当前工作流保存及运行结果的责任和语义统一见[总架构的四类边界](../architecture/overview.md#5-四类跨模块契约)。具体输入输出、失败含义及未来 HTTP／MCP 设计集中在[契约文档](platform-contracts.md)，不向 OpenAPI 添加占位。
 
-M1候选新增 `GET/PATCH /api/v1/settings/workbench`：读取固定当前workspace的保存／采用值，PATCH携带config_token，冲突409、显式null默认位置或无效字段422；保存不重启。与原78项合计80项公共HTTP操作，代理／Python客户端／前端Zod及快照同步。内部maintenance和shutdown不进入公共OpenAPI或MCP。
+M1候选新增 `GET/PATCH /api/v1/settings/workbench`：读取固定当前workspace的保存／采用值，PATCH携带config_token，冲突409、显式null默认位置或无效字段422；保存不重启。与原78项合计80项公共HTTP操作（以下网页重启扩展后为82项），代理／Python客户端／前端Zod及快照同步。内部maintenance和shutdown不进入公共OpenAPI或MCP。
 
+网页重启新增 `POST /api/v1/settings/workbench/restart`（请求为 `{operation_id: UUID字符串}`，202受理）及 `GET /api/v1/settings/workbench/restart/{operation_id}`（当前网页请求回执，尚未登记为null）。前端先持有编号；POST断连只查询，不重发。控制互斥409、启动控制器失败503；子进程执行原有restart，繁忙／未知／实际完成分别回执。少量最新受理结果保存在workspace的`run/web-restart.json`，不建立历史账本。内部维护与shutdown仍不公开；现有MCP保持。
 HTTP 服务前缀为 `/api/v1`；浏览器经原生网页服务的 `/astrophotoflow/api/v1` 同源代理访问。认证、版本冲突、错误 envelope 和请求 ID 延续当前实现。
 
 [openapi.json](openapi.json) 是实际应用生成的契约快照。修改接口时同时核对处理逻辑、Pydantic 模型、代理白名单、前端 Zod 和相关测试；不能用路由数量相等代替行为一致。

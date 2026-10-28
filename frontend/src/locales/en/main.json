@@ -31,7 +31,14 @@
     "saved": "Configuration saved. The workbench has not been restarted.",
     "saving": "Saving…",
     "save": "Save configuration",
-    "reload": "Reload latest values (replaces unsaved input)"
+    "reload": "Reload configuration",
+    "restart": "Restart workbench",
+    "restarting": "Restarting; waiting for the workbench to reconnect…",
+    "restarted": "Workbench restarted with the saved configuration.",
+    "restartUnknown": "Restart outcome is unknown. Use apf status to check the actual state and web address before restarting again.",
+    "restartHelp": "Restart applies saved settings and is rejected while tasks are active.",
+    "saveFirst": "Save your changes before restarting.",
+    "portChangeHelp": "The web port changed; this page cannot reconnect across ports automatically. After restart open the configured address below. If occupied, use apf status for the actual address:"
   },
   "astrophotoflow": {
     "library": "Library",

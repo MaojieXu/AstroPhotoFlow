@@ -7,7 +7,10 @@ from astrophotoflow.core.http import authenticate
 from fastapi import Depends, Request
 from sqlalchemy.exc import SQLAlchemyError
 from pathlib import Path
-from astrophotoflow.contracts.workbench import ConfigSave, ConfigState
+from uuid import UUID
+import psutil
+from astrophotoflow.core.workbench import request_restart, restart_result, WorkbenchError
+from astrophotoflow.contracts.workbench import ConfigSave, ConfigState, WorkbenchResult, RestartRequest
 from astrophotoflow.core.config import ConfigurationError, get_configuration, save_configuration
 from astrophotoflow.core.errors import ApiError
 from astrophotoflow.core.database.schema import SCHEMA_REVISION, current_revision
@@ -33,6 +36,21 @@ def save_workbench_configuration(body: ConfigSave, request: Request):
         )
     except (OSError, ConfigurationError) as exc:
         raise ApiError(503, "CONFIGURATION_SAVE_FAILED", "无法保存工作台配置，请重新读取并检查文件权限。") from exc
+
+
+@router.post("/settings/workbench/restart", response_model=WorkbenchResult, status_code=202, dependencies=[Depends(authenticate)])
+def restart_workbench(body: RestartRequest, request: Request):
+    try:
+        return request_restart(request.app.state.settings.workspace / "config.toml", body.operation_id)
+    except WorkbenchError as exc:
+        raise ApiError(409, "WORKBENCH_CONTROL_BUSY", str(exc)) from exc
+    except (OSError, ConfigurationError, psutil.Error) as exc:
+        raise ApiError(503, "WORKBENCH_RESTART_FAILED", str(exc)) from exc
+
+
+@router.get("/settings/workbench/restart/{operation_id}", response_model=WorkbenchResult | None, dependencies=[Depends(authenticate)])
+def get_workbench_restart(operation_id: UUID, request: Request):
+    return restart_result(request.app.state.settings.workspace / "config.toml", operation_id)
 
 
 @router.get("/health", dependencies=[Depends(authenticate)])

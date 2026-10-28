@@ -16,6 +16,8 @@ BASE_PATH = "/astrophotoflow/api/v1"
 # Public route, corresponding API path, and method. No wildcard proxy route is registered.
 ROUTES = [
     ("GET", "/settings/workbench", "/settings/workbench"),
+    ("POST", "/settings/workbench/restart", "/settings/workbench/restart"),
+    ("GET", "/settings/workbench/restart/{operation_id}", "/settings/workbench/restart/{operation_id}"),
     ("PATCH", "/settings/workbench", "/settings/workbench"),
     ("GET", "/health", "/health"),
     ("GET", "/capabilities", "/capabilities"),

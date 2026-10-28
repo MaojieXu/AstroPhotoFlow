@@ -1774,3 +1774,24 @@ def test_restart_lost_enter_reply_releases_the_actual_service_gate(managed_servi
     assert not client.app.state.maintenance
     assert json.loads((settings.workspace / "run/processes.json").read_text(encoding="utf-8"))["maintenance_operation_id"] is None
     assert client.post("/api/v1/uploads", headers=auth(), json={"files": [{"name": "after-release.png", "size": 10}]}).status_code == 202
+
+
+def test_workbench_restart_requires_auth_and_exposes_correlated_result(service, monkeypatch):
+    from astrophotoflow.interfaces.http import system
+    from astrophotoflow.contracts.workbench import WorkbenchResult
+    from uuid import uuid4
+    _, client, _ = service
+    result = WorkbenchResult(operation_id=uuid4(), action="restart", state="in_progress",
+                             workspace="workspace", config_path="workspace/config.toml", reused=False,
+                             web_url=None, service_url=None, detail=None, blockers=[], log_path=None)
+    calls = []
+    monkeypatch.setattr(system, "request_restart", lambda config, operation_id: calls.append(config) or result)
+    monkeypatch.setattr(system, "restart_result", lambda config, operation_id: result if operation_id == result.operation_id else None)
+    path = "/api/v1/settings/workbench/restart"
+    assert client.post(path, json={}).status_code == 401
+    assert not calls
+    accepted = client.post(path, headers=auth(), json={"operation_id": str(result.operation_id)})
+    assert accepted.status_code == 202 and accepted.json()["operation_id"] == str(result.operation_id)
+    assert calls == [client.app.state.settings.workspace / "config.toml"]
+    assert client.get(path + "/" + str(result.operation_id), headers=auth()).json()["state"] == "in_progress"
+    assert client.get(path + "/" + str(uuid4()), headers=auth()).json() is None

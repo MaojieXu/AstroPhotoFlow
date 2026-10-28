@@ -1,9 +1,7 @@
 import assert from 'node:assert/strict'
-import { execFile } from 'node:child_process'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { promisify } from 'node:util'
 
 import { chromium, expect } from '../../frontend/node_modules/@playwright/test/index.mjs'
 
@@ -24,15 +22,14 @@ const errors = []
 const checks = []
 page.on('pageerror', error => errors.push(String(error)))
 let configurationUrl = origin + '/astrophotoflow/api/v1/settings/workbench'
-const run = promisify(execFile)
-const python = process.env.APF_PYTHON ?? fileURLToPath(new URL('../../.artifacts/venvs/dev/Scripts/python.exe', import.meta.url))
 
 async function openSettings(target) {
   await target.goto(origin, { waitUntil: 'domcontentloaded' })
   await expect(target.locator('#splash-loader')).toBeHidden({ timeout: 45000 })
   await expect(target.locator('#graph-canvas')).toBeVisible({ timeout: 45000 })
-  await expect(target.getByTestId('workbench-settings-button')).toBeVisible({ timeout: 45000 })
-  await target.getByTestId('workbench-settings-button').click()
+  await expect(target.getByTestId('workbench-tab-button')).toBeVisible({ timeout: 45000 })
+  await expect(target.getByTestId('workbench-settings-button')).toHaveCount(0)
+  await target.getByTestId('workbench-tab-button').click()
   await expect(target.getByTestId('workbench-settings').locator('input[name="file_workers"]')).toBeVisible()
 }
 
@@ -68,32 +65,36 @@ try {
   await other.screenshot({ path: join(report, 'configuration-conflict.png'), fullPage: true })
   await other.close()
   checks.push('stale page receives 409 and retains user input')
-  const restarted = await run(python, ['-m', 'astrophotoflow.cli', 'restart', '--workspace', workspace], {
-    env: { ...process.env, ASTROPHOTOFLOW_CONFIG: join(workspace, 'config.toml') }, timeout: 300000
-  })
-  const result = JSON.parse(restarted.stdout)
-  assert.equal(result.state, 'completed')
-  origin = new URL(result.web_url).origin
-  configurationUrl = origin + '/astrophotoflow/api/v1/settings/workbench'
-  await context.setExtraHTTPHeaders({ Origin: origin })
+  const address = page.getByTestId('workbench-settings').getByRole('link')
+  await expect(address).toHaveAttribute('href', origin)
+  await expect(address).toHaveAttribute('target', '_blank')
+  await page.getByTestId('workbench-restart').click()
+  await expect(page.getByTestId('workbench-settings')).toContainText('工作台已重启', { timeout: 120000 })
   await openSettings(page)
   await expect(page.getByTestId('effective-file-workers')).toContainText(String(targetWorkers))
   await expect(page.getByTestId('configuration-state')).toContainText('没有待重启')
   await page.screenshot({ path: join(report, 'configuration-after-restart.png'), fullPage: true })
-  checks.push('real CLI restart adopts the saved settings and clears pending state')
+  checks.push('real GUI restart adopts saved settings, reconnects and clears pending state')
   await page.locator('details summary').click()
+  for (const name of ['host', 'data_dir']) {
+    const input = page.locator('input[name="' + name + '"]')
+    await expect(input).toBeVisible()
+    assert.ok(await input.evaluate(el => el.getBoundingClientRect().width > 0))
+  }
+  assert.equal(await page.getByTestId('workbench-sidebar').evaluate(el => el.scrollWidth > el.clientWidth), false)
   await page.locator('input[name="host"]').fill('0.0.0.0')
   await page.getByRole('button', { name: '保存配置', exact: true }).click()
   await expect(page.getByTestId('workbench-settings').getByRole('alert')).toContainText('本机回环地址')
   const afterInvalid = await (await context.request.get(configurationUrl, { headers: { Origin: origin } })).json()
   assert.equal(afterInvalid.saved.host, '127.0.0.1')
-  await page.getByRole('button', { name: '重新读取最新值（替换未保存输入）', exact: true }).click()
+  await page.getByRole('button', { name: '重新读取配置', exact: true }).click()
   await expect(page.getByTestId('workbench-settings').getByRole('alert')).toHaveCount(0)
   checks.push('invalid host is rejected without changing the saved configuration')
-  await page.getByRole('dialog', { name: '工作台配置', exact: true }).getByRole('button', { name: '关闭', exact: true }).click()
+  await page.getByTestId('workbench-tab-button').click()
+  await expect(page.getByTestId('workbench-sidebar')).toHaveCount(0)
   await expect(page.locator('#graph-canvas')).toBeVisible()
   assert.deepEqual(errors, [])
-  checks.push('configuration dialog closes while retaining the native canvas')
+  checks.push('configuration sidebar closes while retaining the native canvas')
   await writeFile(join(report, 'report.json'), JSON.stringify({ passed: true, origin, workspace, checks, errors, targetWorkers, browserVersion: browser.version(), browserExecutable: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE }, null, 2))
   console.log(JSON.stringify({ passed: true, checks, report }, null, 2))
 } catch (error) {

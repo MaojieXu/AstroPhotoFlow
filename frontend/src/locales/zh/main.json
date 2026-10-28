@@ -31,7 +31,14 @@
     "saved": "配置已保存，工作台没有自动重启。",
     "saving": "正在保存…",
     "save": "保存配置",
-    "reload": "重新读取最新值（替换未保存输入）"
+    "reload": "重新读取配置",
+    "restart": "重启工作台",
+    "restarting": "正在重启，等待工作台重新连接…",
+    "restarted": "工作台已重启，已应用保存的配置。",
+    "restartUnknown": "无法确认重启结果。请使用 apf status 查询实际状态与网页地址，勿重复重启。",
+    "restartHelp": "重启采用已保存的配置；有任务运行时将拒绝重启。",
+    "saveFirst": "有未保存的修改，请先保存配置，再重启。",
+    "portChangeHelp": "网页端口已修改，当前页不能跨端口自动重连。重启后请打开此配置入口；若端口被占用，用 apf status 查询实际地址："
   },
   "astrophotoflow": {
     "library": "素材库",
