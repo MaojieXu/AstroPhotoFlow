@@ -53,7 +53,7 @@ M1网页配置使用 `GET/PATCH /api/v1/settings/workbench` 读取当前workspac
 
 ## 4. ② 导入、选择科学输入与保存所选结果
 
-M2候选分支已实现下面的 `resolve_inputs`、`observe_reference_inputs`、`check_output`、`render_output_preview`、`register_output`、`get_output_registration`、`preview_library_removal` Python公开能力，以及素材文件变化观察／接纳两个HTTP路由。它们与原有16个业务模型、AssetTask流程配合，不新增迁移。内容接纳路由为`POST /library/assets/{asset_id}/content-observation`和`POST /library/assets/{asset_id}/content-accept`；科学输入及输出登记仍不单独暴露HTTP／MCP，等待⑤实际运行消费者接入。候选是否集成及跨工作流验收以开发状态和验证矩阵为准。
+M2已在dev实现`resolve_inputs`、`observe_reference_inputs`、`check_output`、`render_output_preview`、`register_output`、`get_output_registration`、`preview_library_removal` Python公开能力，以及素材文件变化观察／接纳两个HTTP路由。它们与原有16个业务模型、AssetTask流程配合，不新增迁移。内容接纳路由为`POST /library/assets/{asset_id}/content-observation`和`POST /library/assets/{asset_id}/content-accept`；科学输入及输出登记仍不单独暴露HTTP／MCP，等待⑤实际运行消费者接入。M2用户Milestone批准及跨工作流验收状态以开发矩阵为准。
 
 ### 4.1 现有操作继续复用
 

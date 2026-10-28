@@ -6,7 +6,7 @@
 
 ## 2026-10-28 M2 数据与资产实现候选
 
-候选分支：`feature/database_management`，从dev创建。B21～B24的②侧实现已落位，尚未集成dev、未获M2用户Milestone批准；⑤运行、工作流影响与Agent结果选择仍等待B51／B53／B54／B57联调。
+候选分支：`feature/database_management`，从dev创建，已于`38edd952`快进合入dev。自动验证和独立审查通过，M2用户Milestone批准尚待完成；⑤运行、工作流影响与Agent结果选择仍等待B51／B53／B54／B57联调。
 
 - 后端：`tests/modules/data` **261 passed**，保留一条既有SQLAlchemy互相依赖表排序警告。新增`test_science_inputs.py`覆盖可复现／仅引用、FITS HDU、固定组成员顺序、再次变化时拒绝旧确认、同素材新版本、未变化确认、缺失托管文件、完整结果登记／重复查询、other格式登记、预览失败原因及移除范围只读查询。OpenAPI与原生代理白名单专项 **2 passed**；新增两条素材内容观察／接纳HTTP路径使公共HTTP操作增至84。
 - 前端：数据UI全量 **153 passed**，`@astrophotoflow/ui`类型检查通过。表单将一个像元尺寸写入既有x/y字段，并隐藏位深、赤道仪及配件录入；望远镜减焦／增距说明和滤镜可选带宽保留。新增确认请求断连后只读核对测试通过，不重发确认POST。
