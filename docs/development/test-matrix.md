@@ -1,5 +1,18 @@
 # 需求、实现与验证矩阵
 
+<a id="b11-implementation"></a>
+
+## 2026-10-27 M1 B11配置基础实现
+
+设计基线dev `9d4c729`已正常同步origin/dev；实现候选为`codex/workbench-config`相对该基线的本次增量，最终提交／文件指纹见`.artifacts/implementation/B11/report.md`。本节只记录B11，不记I(B11)、M1用户批准或B12真实原型通过。
+
+- 配置定位、初始化默认TOML、ConfigValues／ConfigSave／ConfigState、三项配置函数、显式Settings.workspace已实现；复用原有字段校验、filelock和Pydantic，不加依赖、HTTP／MCP入口、配置历史或业务模型。
+- Windows／Python 3.12.4既有锁定dev环境：配置／工作台、架构、原生代理、打包资源及卡内9份数据／集成测试合计 **242 passed**，91.36秒；保留1条既有SQLAlchemy互相引用表排序警告。实际命令、JUnit与环境版本分别见`report.md`、`verified-tests.xml`、`environment.json`。
+- 受限环境中两组回归卡在Windows asyncio.socketpair；最小FastAPI TestClient用faulthandler确认同一环境故障，原组已终止且未计通过。获准在正常本机环境重跑同范围并通过；没有修改运行库或测试框架来绕过问题。
+- 未参与实现者独立审查发现“启动采用值读取错误要求进程非空”，已修复并补测试；复核无剩余阻塞。独立配置／工作台／架构30 passed及原子写失败保留原文件证据见`review.md`；不把受限环境未结束的代理运行当通过。
+- 21处直接Settings构造及发行内嵌smoke静态核对通过；发行脚本未执行仓库外重装，完整发行验收归B62。OpenAPI、锁文件、schema0009、MCP／Skill及正常dev配置／令牌均未改，未启停服务。
+- A11-1／2的配置行为已验证；A11-3仅提供配置基础，自动端口实际回写由B12/G01验收。B12采用记录写入与客户端连接接入、B13网页配置均未实施，不以模拟采用记录代签真实重启。
+
 ## 2026-10-27 第⑤阶段计划联合审查与任务卡
 
 候选为dev `75aab88714095d77f2d576c14712a31c2b987bf6`上的本轮文档增量，非业务实现。[总计划](implementation-plan.md)保留M1～M6、22 Batch／建议分支、79项验收、G01～G10及V01～V18；六份任务卡把需求／数据／接口映射到准确文件、关键函数、实施顺序、测试输入／命令／预期及人工操作。

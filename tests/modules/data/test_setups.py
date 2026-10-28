@@ -16,7 +16,7 @@ AUTH = {"Authorization": "Bearer settings-test"}
 
 @pytest.fixture
 def service(tmp_path):
-    settings = Settings("127.0.0.1", 8190, tmp_path / "settings-data", ())
+    settings = Settings("127.0.0.1", 8190, tmp_path / "settings-data", (), workspace=tmp_path)
     upgrade_database(settings)
     app = create_app(settings, "settings-test")
     with TestClient(app) as client:

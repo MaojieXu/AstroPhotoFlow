@@ -13,7 +13,7 @@ def main() -> None:
     temporary = root / ".artifacts" / "tmp"
     temporary.mkdir(parents=True, exist_ok=True)
     with TemporaryDirectory(dir=temporary) as directory:
-        settings = Settings("127.0.0.1", 8190, Path(directory), ("http://127.0.0.1:8188",))
+        settings = Settings("127.0.0.1", 8190, Path(directory), ("http://127.0.0.1:8188",), workspace=Path(directory))
         app = create_app(settings, "contract-export")
         try:
             document = app.openapi()

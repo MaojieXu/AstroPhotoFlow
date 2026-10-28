@@ -32,10 +32,12 @@ def test_initialize_copies_native_web_and_start_uses_builtin_gateway(tmp_path, m
     monkeypatch.setattr(workbench, "_runtime_dir", lambda: runtime)
     monkeypatch.setattr(workbench, "_uv", lambda: "uv")
     monkeypatch.setattr(workbench, "_run", lambda command, env=None: None)
-    monkeypatch.setattr(workbench, "_activate_workspace", lambda config_path: None)
+    monkeypatch.setattr(workbench.app_config, "CONFIG_PATH", tmp_path / "user/config.toml")
 
     workspace = tmp_path / "workspace"
     config_path = workbench.initialize(workspace, service_port=18190, comfyui_port=18188)
+    assert workbench.app_config.resolve_config_path() == config_path
+    assert not (workbench.app_config.CONFIG_PATH.parent / "active-workspace").exists()
     assert (workspace / "web/index.html").read_text(encoding="utf-8") == "AstroPhotoFlow"
     assert (workspace / "web/assets/app.js").is_file()
     assert not (workspace / "comfyui-data/custom_nodes/AstroPhotoFlow").exists()

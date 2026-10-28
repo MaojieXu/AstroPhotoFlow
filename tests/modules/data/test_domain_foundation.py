@@ -18,7 +18,7 @@ from astrophotoflow.core.config import Settings
 
 
 def test_shared_migration_removes_replaced_profiles_and_keeps_equipment(tmp_path):
-    settings = Settings("127.0.0.1", 8190, tmp_path, ())
+    settings = Settings("127.0.0.1", 8190, tmp_path, (), workspace=tmp_path)
     command.upgrade(_alembic_config(settings), "0006_library_trash_cleanup_state")
     camera, profile = str(uuid4()), str(uuid4())
     with sqlite3.connect(settings.database_path) as connection:
@@ -38,7 +38,7 @@ def test_shared_migration_removes_replaced_profiles_and_keeps_equipment(tmp_path
 
 
 def test_import_snapshot_freezes_registered_and_inline_components(tmp_path):
-    settings = Settings("127.0.0.1", 8190, tmp_path, ())
+    settings = Settings("127.0.0.1", 8190, tmp_path, (), workspace=tmp_path)
     upgrade_database(settings)
     database = Database(settings.database_path)
     camera, setup, preset = (str(uuid4()) for _ in range(3))

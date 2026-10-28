@@ -80,7 +80,7 @@ def service(tmp_path, request):
     root = tmp_path / "science"
     root.mkdir()
     settings = Settings("127.0.0.1", 8190, tmp_path / "data", ("http://127.0.0.1:8188",),
-                        (ImportRoot("science", root),), **getattr(request, "param", {}))
+                        (ImportRoot("science", root),), **getattr(request, "param", {}), workspace=tmp_path)
     with database_lock(settings):
         upgrade_database(settings)
     app = create_app(settings, "import-pipeline-test")

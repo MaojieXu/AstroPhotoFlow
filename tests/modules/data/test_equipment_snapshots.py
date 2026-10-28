@@ -20,7 +20,7 @@ AUTH = {"Authorization": "Bearer snapshot-test"}
 def service(tmp_path, monkeypatch):
     root = tmp_path / "originals"
     root.mkdir()
-    settings = Settings("127.0.0.1", 8190, tmp_path / "data", (), (ImportRoot("source", root),))
+    settings = Settings("127.0.0.1", 8190, tmp_path / "data", (), (ImportRoot("source", root),), workspace=tmp_path)
     upgrade_database(settings)
     app = create_app(settings, "snapshot-test")
     # Acceptance and execution are deliberately separated to exercise queued imports.

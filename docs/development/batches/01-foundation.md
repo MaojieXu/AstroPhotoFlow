@@ -2,13 +2,13 @@
 
 本文件落实[近期总计划](../implementation-plan.md#m1)，不另定义协议；公开DTO、签名和错误以④为准。文件路径均相对仓库根；N＝计划新增，M＝修改既有，R＝只复用。每卡先读根及所改作用域AGENTS。
 
-所有卡当前未开工。只有总计划获确认、可识别dev基点及本卡真实前置具备后才Ready；Batch自动集成与Milestone用户验收分别记录。测试命令只在对应文件实际落位后执行，本轮未运行。工作目录/工具及共享runtime维护窗口按[验证环境](../implementation-plan.md#validation-environment)，用户操作/批准按[人工验收门](../implementation-plan.md#acceptance-gates)。维护窗口必须能用原版本入口恢复原dev；tmp_path单元测试无需停止dev。
+B11已在`codex/workbench-config`实施，B12／B13尚未开工；验证结果见[验证矩阵](../test-matrix.md#b11-implementation)。只有总计划获确认、可识别dev基点及本卡真实前置具备后才Ready；Batch自动集成与Milestone用户验收分别记录。测试只在实际文件落位后执行。工作目录/工具及共享runtime维护窗口按[验证环境](../implementation-plan.md#validation-environment)，用户操作/批准按[人工验收门](../implementation-plan.md#acceptance-gates)。维护窗口必须能用原版本入口恢复原dev；tmp_path单元测试无需停止dev。
 
 <a id="b11"></a>
 
 ## B11：workspace配置与运行采用值
 
-状态：未开工；待确认总计划/前置，满足后才Ready。
+状态：2026-10-27已获用户开工授权，基点为dev `9d4c729`，在`codex/workbench-config`实施；分支验证／独立审查见验证矩阵。尚未合入dev，不记I(B11)，不代签M1人工验收；A11-3实际端口回写由B12/G01完成。
 
 1. **结果、分支和追踪**：`codex/workbench-config`。默认TOML定位唯一workspace，保存最新值，运行采用值与保存值分开；配置冲突可见。FR-13/14/15；NFR-01/04/07/08；AT-01近期部分。对接A11-1～3、V01/02、G01的配置部分。
 
@@ -27,6 +27,7 @@
 | `scripts/verify_distribution.py` | M：内嵌smoke脚本的Settings构造明确传测试workspace；发行执行仍归B62 | 保留原7个位置参数 |
 | `tests/core/test_config.py` | M：修改既有优先级与多入口测试，新增保存/采用值/冲突断言 | tmp_path、monkeypatch |
 | `tests/core/test_workbench.py` | M：仅调整initialize/start所用配置夹具及旧active指针断言 | 新配置定位 |
+| `tests/interfaces/comfyui/test_proxy.py` | M：将原来把用户CONFIG_PATH当工作区配置的夹具改为显式环境选择；代理行为不变 | 新默认TOML只保存workspace定位 |
 | `tests/modules/data/test_domain_foundation.py` | M：修改显式Settings构造的workspace字段；既有行为不变 | Settings新必要字段 |
 | `tests/modules/data/test_service.py` | M：同上，含多处迁移夹具 | M：同上 |
 | `tests/modules/data/test_setups.py` | M：同上 | M：同上 |

@@ -1,9 +1,18 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+import hashlib
 import ipaddress
+import json
 import os
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 import tomllib
 from urllib.parse import urlsplit
+
+from filelock import FileLock, Timeout
+from pydantic import ValidationError
+
+from astrophotoflow.contracts.workbench import ConfigState, ConfigValues
+from astrophotoflow.core.errors import ApiError
 
 
 CONFIG_PATH = Path.home() / ".config/astrophotoflow/config.toml"
@@ -28,6 +37,7 @@ class Settings:
     import_roots: tuple[ImportRoot, ...] = ()
     file_workers: int = 2
     preview_workers: int = 1
+    workspace: Path = field(kw_only=True)
 
     @property
     def service_url(self) -> str:
@@ -53,10 +63,10 @@ def resolve_config_path(path: Path | None = None) -> Path:
     configured = os.environ.get("ASTROPHOTOFLOW_CONFIG")
     if configured:
         return Path(configured).expanduser().resolve()
-    pointer = CONFIG_PATH.parent / "active-workspace"
-    if pointer.is_file():
-        return Path(pointer.read_text(encoding="utf-8").strip()).expanduser().resolve()
-    return CONFIG_PATH.resolve()
+    default = _default_workspace(_default_bytes())
+    if default is None:
+        raise ConfigurationError("未设置默认 workspace；请初始化或明确选择配置文件。")
+    return default / "config.toml"
 
 
 def load_settings(config_path: Path | None = None) -> Settings:
@@ -64,8 +74,14 @@ def load_settings(config_path: Path | None = None) -> Settings:
     if not config_path.is_file():
         raise ConfigurationError(f"配置文件不存在：{config_path}")
     try:
-        with config_path.open("rb") as stream:
-            raw = tomllib.load(stream)
+        raw = tomllib.loads(config_path.read_text(encoding="utf-8"))
+    except tomllib.TOMLDecodeError as exc:
+        raise ConfigurationError(f"配置文件无效：{exc}") from exc
+    return _settings_from_raw(raw, config_path)
+
+
+def _settings_from_raw(raw: dict, config_path: Path) -> Settings:
+    try:
         server = raw["server"]
         storage = raw["storage"]
         comfyui = raw["comfyui"]
@@ -124,9 +140,152 @@ def load_settings(config_path: Path | None = None) -> Settings:
         data_path = Path(data_dir).expanduser()
         if not data_path.is_absolute():
             data_path = config_path.parent / data_path
-        return Settings(str(address), port, data_path.resolve(), tuple(origins), tuple(import_roots), file_workers, preview_workers)
+        return Settings(str(address), port, data_path.resolve(), tuple(origins), tuple(import_roots), file_workers, preview_workers,
+                        workspace=config_path.parent)
     except (KeyError, TypeError, ValueError, tomllib.TOMLDecodeError) as exc:
         raise ConfigurationError(f"配置文件无效：{exc}") from exc
+
+
+def _default_bytes() -> bytes:
+    return CONFIG_PATH.read_bytes() if CONFIG_PATH.is_file() else b""
+
+
+def _default_workspace(content: bytes) -> Path | None:
+    try:
+        raw = tomllib.loads(content.decode("utf-8"))
+        if not raw:
+            return None
+        if set(raw) != {"workspace"} or set(raw["workspace"]) != {"default"}:
+            raise ValueError("用户配置只接受 [workspace] default。")
+        value = raw["workspace"]["default"]
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError("默认 workspace 必须为非空路径。")
+        return Path(value).expanduser().resolve()
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ConfigurationError(f"默认 workspace 配置无效：{exc}") from exc
+
+
+def _raw_from_values(values: ConfigValues) -> dict:
+    return {
+        "server": {"host": values.host, "port": values.service_port},
+        "storage": {"data_dir": values.data_dir},
+        "comfyui": {"allowed_origins": values.allowed_origins},
+        "imports": {"roots": [root.model_dump() for root in values.import_roots]},
+        "ingestion": {"file_workers": values.file_workers, "preview_workers": values.preview_workers},
+    }
+
+
+def _values_from_raw(raw: dict) -> ConfigValues:
+    return ConfigValues(
+        host=raw["server"]["host"], service_port=raw["server"]["port"], data_dir=raw["storage"]["data_dir"],
+        allowed_origins=raw["comfyui"]["allowed_origins"], import_roots=raw.get("imports", {}).get("roots", []),
+        file_workers=raw.get("ingestion", {}).get("file_workers", 2),
+        preview_workers=raw.get("ingestion", {}).get("preview_workers", 1),
+    )
+
+
+def _running_values(workspace: Path, raw: dict) -> ConfigValues:
+    if Path(raw["workspace"]).resolve() != workspace or Path(raw["config_path"]).resolve() != workspace / "config.toml":
+        raise ValueError("运行采用记录不属于目标 workspace。")
+    return ConfigValues.model_validate(raw["effective_settings"])
+
+
+def load_running_settings(workspace: Path) -> Settings:
+    workspace = workspace.expanduser().resolve()
+    path = workspace / "run" / "processes.json"
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+        values = _running_values(workspace, raw)
+        return _settings_from_raw(_raw_from_values(values), workspace / "config.toml")
+    except (OSError, KeyError, TypeError, ValueError) as exc:
+        raise ConfigurationError(f"无法读取运行采用配置：{exc}") from exc
+
+
+def get_configuration(config_path: Path | None = None) -> ConfigState:
+    config_path = resolve_config_path(config_path)
+    content = config_path.read_bytes()
+    try:
+        raw = tomllib.loads(content.decode("utf-8"))
+    except ValueError as exc:
+        raise ConfigurationError(f"配置文件无效：{exc}") from exc
+    saved_settings = _settings_from_raw(raw, config_path)
+    default_content = _default_bytes()
+    default = _default_workspace(default_content)
+    token_content = json.dumps([str(config_path), content.hex(), default_content.hex()]).encode("utf-8")
+    effective = None
+    restart_required = False
+    run_path = saved_settings.workspace / "run" / "processes.json"
+    if run_path.is_file():
+        try:
+            run = json.loads(run_path.read_text(encoding="utf-8"))
+            if run["processes"]:
+                effective = _running_values(saved_settings.workspace, run)
+                running = _settings_from_raw(_raw_from_values(effective), config_path)
+                restart_required = saved_settings != running
+        except (OSError, KeyError, TypeError, ValueError, ConfigurationError) as exc:
+            raise ApiError(503, "RUNNING_CONFIGURATION_UNAVAILABLE", str(exc)) from exc
+    return ConfigState(
+        config_path=str(config_path), default_workspace=str(default) if default is not None else None,
+        saved=_values_from_raw(raw), config_token=hashlib.sha256(token_content).hexdigest(),
+        effective=effective, restart_required=restart_required,
+    )
+
+
+def _write_configuration_file(path: Path, text: str) -> None:
+    temporary = None
+    try:
+        with NamedTemporaryFile(mode="w", encoding="utf-8", newline="\n", dir=path.parent, delete=False) as stream:
+            temporary = Path(stream.name)
+            stream.write(text)
+        os.replace(temporary, path)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+
+
+def _write_default_workspace(workspace: Path) -> None:
+    _write_configuration_file(CONFIG_PATH, '[workspace]\ndefault = ' + json.dumps(str(workspace), ensure_ascii=False) + '\n')
+
+
+def _set_default_workspace(workspace: Path) -> None:
+    CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with FileLock(str(CONFIG_PATH) + ".lock", timeout=0):
+        _write_default_workspace(workspace.expanduser().resolve())
+
+
+def save_configuration(config_path: Path, values: ConfigValues, config_token: str, *,
+                       default_workspace: Path | None = None) -> ConfigState:
+    config_path = resolve_config_path(config_path)
+    try:
+        values = ConfigValues.model_validate(values.model_dump())
+        _settings_from_raw(_raw_from_values(values), config_path)
+        if default_workspace is not None and not str(default_workspace).strip():
+            raise ValueError("默认 workspace 必须为非空路径。")
+    except (ValidationError, ConfigurationError, ValueError) as exc:
+        raise ApiError(422, "INVALID_CONFIGURATION", str(exc)) from exc
+    CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        with FileLock(str(CONFIG_PATH) + ".lock", timeout=0):
+            if get_configuration(config_path).config_token != config_token:
+                raise ApiError(409, "CONFIGURATION_CONFLICT", "配置已被修改，请重新读取。")
+            quote = json.dumps
+            roots = ", ".join("{ id = " + quote(root.id) + ", path = " + quote(root.path) + " }" for root in values.import_roots)
+            text = (
+                f'[server]\nhost = {quote(values.host)}\nport = {values.service_port}\n\n'
+                f'[storage]\ndata_dir = {quote(values.data_dir)}\n\n'
+                f'[comfyui]\nallowed_origins = [{", ".join(quote(origin) for origin in values.allowed_origins)}]\n\n'
+                f'[imports]\nroots = [{roots}]\n\n'
+                f'[ingestion]\nfile_workers = {values.file_workers}\npreview_workers = {values.preview_workers}\n'
+            )
+            _write_configuration_file(config_path, text)
+            if default_workspace is not None:
+                try:
+                    _write_default_workspace(default_workspace.expanduser().resolve())
+                except OSError as exc:
+                    raise ApiError(503, "CONFIGURATION_PARTIALLY_SAVED", "workspace 配置已保存，但默认位置保存失败；请重新读取。") from exc
+            return get_configuration(config_path)
+    except Timeout as exc:
+        raise ApiError(409, "CONFIGURATION_BUSY", "配置正在保存，请重新读取后再提交。") from exc
 
 
 def ensure_data_dir(settings: Settings) -> None:

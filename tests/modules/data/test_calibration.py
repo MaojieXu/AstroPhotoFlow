@@ -17,7 +17,7 @@ AUTH = {"Authorization": "Bearer calibration-test"}
 
 @pytest.fixture
 def service(tmp_path):
-    settings = Settings("127.0.0.1", 8190, tmp_path / "data", ())
+    settings = Settings("127.0.0.1", 8190, tmp_path / "data", (), workspace=tmp_path)
     upgrade_database(settings)
     app = create_app(settings, "calibration-test")
     with TestClient(app) as client:

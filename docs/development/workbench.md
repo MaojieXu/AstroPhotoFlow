@@ -22,6 +22,8 @@ py -3.12 -m venv .apf-env
 
 CLI 命令与58个 MCP 工具保持。使用 ASTROPHOTOFLOW_CONFIG 指定目标 workspace 的 config.toml；读取当前 revision 后再编辑。接口与例子见[操作参考](library-agent-tools.md)。
 
+B11起，默认位置由用户`~/.config/astrophotoflow/config.toml`的`[workspace] default`指定workspace目录，`apf init`激活时写入；显式workspace和`ASTROPHOTOFLOW_CONFIG`优先。旧active-workspace不再读取，没有默认设置时请明确指定目标。本轮未迁移或修改本机原默认指针，可继续使用显式路径。配置保存不重启；自动端口、真实启动采用记录及网页配置待B12／B13，当前不据此宣称已支持。
+
 ```powershell
 .\.apf-env\Scripts\apf.exe stop --workspace D:\AstroPhotoFlow\workspace
 .\.apf-env\Scripts\apf-service.exe db status

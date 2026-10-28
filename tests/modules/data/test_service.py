@@ -39,7 +39,7 @@ def test_internal_shutdown_requires_token_and_is_not_a_public_api(service):
 
 @pytest.fixture
 def service(tmp_path):
-    settings=Settings("127.0.0.1",8190,tmp_path,("http://127.0.0.1:8188",))
+    settings=Settings("127.0.0.1",8190,tmp_path,("http://127.0.0.1:8188",), workspace=tmp_path)
     with database_lock(settings): upgrade_database(settings)
     app=create_app(settings,TOKEN)
     with TestClient(app) as client: yield settings,client,app.state.database
@@ -64,7 +64,7 @@ def test_camera_cfa_specs_reject_unregistered_pattern(service):
     assert rejected.status_code==422
 
 def test_init_lock_token_and_unknown_schema(tmp_path):
-    s=Settings("127.0.0.1",8190,tmp_path,())
+    s=Settings("127.0.0.1",8190,tmp_path,(), workspace=tmp_path)
     with database_lock(s):
         with pytest.raises(SchemaError): database_lock(s)
         assert upgrade_database(s) is None
@@ -75,7 +75,7 @@ def test_init_lock_token_and_unknown_schema(tmp_path):
     if sys.platform != "win32":
         assert token_mode==0o600
     legacy=tmp_path/"legacy"; legacy.mkdir()
-    old=Settings("127.0.0.1",8190,legacy,())
+    old=Settings("127.0.0.1",8190,legacy,(), workspace=tmp_path)
     with sqlite3.connect(old.database_path) as db: db.execute("CREATE TABLE keep_me(value TEXT)")
     with pytest.raises(SchemaError): ensure_schema_for_serve(old)
     with pytest.raises(SchemaError): upgrade_database(old)
@@ -84,7 +84,7 @@ def test_init_lock_token_and_unknown_schema(tmp_path):
         assert not db.execute("SELECT name FROM sqlite_master WHERE name='alembic_version'").fetchone()
 
 def test_alembic_initial_migration_matches_orm_metadata(tmp_path):
-    settings = Settings("127.0.0.1", 8190, tmp_path, ())
+    settings = Settings("127.0.0.1", 8190, tmp_path, (), workspace=tmp_path)
     with database_lock(settings):
         upgrade_database(settings)
     engine = create_engine("sqlite:///" + str(settings.database_path))
@@ -94,7 +94,7 @@ def test_alembic_initial_migration_matches_orm_metadata(tmp_path):
     assert changes == []
 
 def test_existing_data_directory_permissions_are_not_changed(tmp_path):
-    settings = Settings("127.0.0.1", 8190, tmp_path, ())
+    settings = Settings("127.0.0.1", 8190, tmp_path, (), workspace=tmp_path)
     settings.data_dir.chmod(0o750)
     mode = settings.data_dir.stat().st_mode
     ensure_data_dir(settings)
@@ -140,7 +140,7 @@ path = "relative/path"
         load_settings(config)
 
 def test_explicit_upgrade_keeps_consistent_backup_on_failure(tmp_path):
-    settings = Settings("127.0.0.1", 8190, tmp_path, ())
+    settings = Settings("127.0.0.1", 8190, tmp_path, (), workspace=tmp_path)
     with sqlite3.connect(settings.database_path) as db:
         db.execute("CREATE TABLE alembic_version(version_num VARCHAR(32) NOT NULL)")
         db.execute("INSERT INTO alembic_version VALUES ('0000_unknown')")
@@ -156,7 +156,7 @@ def test_explicit_upgrade_keeps_consistent_backup_on_failure(tmp_path):
 
 
 def test_stage_two_upgrade_preserves_stage_one_records_and_backs_up(tmp_path):
-    settings = Settings("127.0.0.1", 8190, tmp_path, ())
+    settings = Settings("127.0.0.1", 8190, tmp_path, (), workspace=tmp_path)
     config = Config(str(Path(backend.__file__).resolve().parent / "alembic.ini"))
     config.attributes["database_url"] = "sqlite:///" + str(settings.database_path)
     command.upgrade(config, "0001_foundation")
@@ -199,7 +199,7 @@ def test_stage_two_upgrade_preserves_stage_one_records_and_backs_up(tmp_path):
 
 
 def test_asset_fact_backfill_uses_current_version_and_preserves_manual_clears(tmp_path):
-    settings = Settings("127.0.0.1", 8190, tmp_path, ())
+    settings = Settings("127.0.0.1", 8190, tmp_path, (), workspace=tmp_path)
     config = Config(str(Path(backend.__file__).resolve().parent / "alembic.ini"))
     config.attributes["database_url"] = "sqlite:///" + str(settings.database_path)
     command.upgrade(config, "0001_foundation")

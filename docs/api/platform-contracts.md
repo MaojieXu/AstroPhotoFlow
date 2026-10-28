@@ -429,7 +429,7 @@ ConfigValues只映射workspace原有TOML启动字段，默认定位单独表达�
 def initialize(workspace: Path, service_port: int = 8190, comfyui_port: int = 8188, *, frontend_assets: Path | None = None, activate: bool = True, reuse_runtime: bool = False) -> Path: ...
 ```
 
-initialize返回实际config路径；activate表示本次初始化是否把位置设为config默认，沿既有--no-activate选择，不写旧active指针。start只控制目标，不保留activate参数。当前采用值与互斥机制仍待实现。
+initialize返回实际config路径；activate表示本次初始化是否把位置设为config默认，沿既有--no-activate选择，不写旧active指针。start只控制目标、不保留activate参数是B12目标。B11已实现本节3个配置函数／Config*类型、初始化默认TOML及配置保存互斥；真实启动采用记录写入、启停互斥与上述结构化控制返回仍待B12，不因读取函数存在视为完成。
 
 各模块经公开查询供app组合维护，core不扫描业务表：
 

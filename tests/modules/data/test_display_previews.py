@@ -29,7 +29,7 @@ AUTH = {"Authorization": "Bearer display-preview-test"}
 def service(tmp_path):
     root = tmp_path / "science"
     root.mkdir()
-    settings = Settings("127.0.0.1", 8190, tmp_path / "data", ("http://127.0.0.1:8188",), (ImportRoot("science", root),))
+    settings = Settings("127.0.0.1", 8190, tmp_path / "data", ("http://127.0.0.1:8188",), (ImportRoot("science", root),), workspace=tmp_path)
     with database_lock(settings):
         upgrade_database(settings)
     app = create_app(settings, "display-preview-test")
@@ -557,7 +557,7 @@ def test_raw_display_ignores_tiny_embedded_preview_and_selects_decode_size(servi
 def test_shutdown_drains_display_jobs_and_shared_executor_limits_generation(tmp_path, monkeypatch):
     root = tmp_path / "science"
     root.mkdir()
-    settings = Settings("127.0.0.1", 8190, tmp_path / "data", ("http://127.0.0.1:8188",), (ImportRoot("science", root),))
+    settings = Settings("127.0.0.1", 8190, tmp_path / "data", ("http://127.0.0.1:8188",), (ImportRoot("science", root),), workspace=tmp_path)
     with database_lock(settings):
         upgrade_database(settings)
     app = create_app(settings, "display-preview-test")

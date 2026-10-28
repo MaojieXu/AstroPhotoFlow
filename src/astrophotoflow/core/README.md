@@ -1,12 +1,12 @@
 # ① 公共基础设施概要设计
 
-具体交接见[①接口契约](../../../docs/api/platform-contracts.md#foundation)及[文件级详细设计](../../../docs/api/platform-contracts.md#foundation-design)：本机启停、实际地址、配置及繁忙维护的签名、文件和测试；新增契约尚未实现，不创建占位接口。
+具体交接见[①接口契约](../../../docs/api/platform-contracts.md#foundation)及[文件级详细设计](../../../docs/api/platform-contracts.md#foundation-design)：本机启停、实际地址、配置及繁忙维护的签名、文件和测试。2026-10-27的B11已实现配置DTO、默认workspace、保存冲突及运行采用值读取；其余新增控制／HTTP契约仍待实现，不创建占位接口。分支验证见[矩阵](../../../docs/development/test-matrix.md#b11-implementation)。
 
 数据细化入口：[①公共基础设施数据结构初稿](../../../docs/architecture/data-models/01-foundation.md)。当前为待逐项确认的逻辑草案，区分已有字段、新增建议与派生视图；本概要继续维护能力和行为边界，草案不代表新增实现、接口或迁移已完成。
 
 设计基线：2026-10-26。本文是①的唯一概要设计，依据[现行需求](../../../docs/requirements/README.md)和[总架构](../../../docs/architecture/overview.md)，统一公共能力、状态归属、源码入口及验收责任；[开发路线](../../../docs/development/platform-roadmap.md)维护阶段依赖。FND 编号仅用于本模块设计追踪，不替代 FR／NFR／AT。
 
-**本次交付是设计文档。** 当前没有网页公共配置、待应用配置、`apf restart`、MCP 启动／重启控制、端口冲突自动选择、维护状态、公共状态桥接、平台日志轮转或缓存清理界面。本文中的概念操作与后续验收不能当成可调用接口；具体字段、消息、表结构和协议在五模块概要完成后的数据与接口设计中确定。
+**本文维护概要，实际进度以当前上下文及矩阵为准。** B11可读取／保存最新配置并与运行采用记录比较；B12尚未写入真实启动采用值。当前没有网页公共配置、`apf restart`、MCP 启动／重启控制、端口冲突自动选择、维护状态、公共状态桥接、平台日志轮转或缓存清理界面。本文中的其他概念操作与后续验收不能当成可调用接口。
 
 阅读导航：[场景](#scenarios) · [状态归属](#authority) · [能力清单](#capabilities) · [关键行为](#behavior) · [跨模块链路](#handoffs) · [源码与分工](#source-map) · [需求覆盖](#coverage) · [阶段与缺口](#phases) · [验证](#verification) · [取舍](#decisions)。
 
@@ -69,7 +69,7 @@ contracts 只依赖标准库和 Pydantic。公共请求关联与错误机制可�
 
 ### 4.1 配置、初始化与文件范围
 
-2026-10-27用户收敛范围：在config.toml设置默认workspace即可，不建立workspace身份登记或搬迁／复制服务。当前仍由配置文件位置及active-workspace指针定位，尚无默认workspace字段；后续实现时明确调整，不能保留两份可独立修改的默认位置。本轮不改已有dev目录、配置、指针或MCP注册。
+2026-10-27用户收敛范围：在config.toml设置默认workspace即可，不建立workspace身份登记或搬迁／复制服务。B11已按用户TOML的workspace.default定位，不再读active-workspace；显式配置和环境优先，不能保留两份可独立修改的默认位置。本轮不改已有dev目录、配置、指针或MCP注册。
 
 配置只保留最新值；并发数等性能参数保存后在下次重启采用。网页显示保存值、本次采用值及是否需要重启，不建立配置修订历史。运行中的网关、CLI／MCP及控制操作继续使用实际地址；②业务资料的即时保存行为不受影响。
 

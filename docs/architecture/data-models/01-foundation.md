@@ -1,6 +1,6 @@
 # ①公共基础设施数据结构初稿
 
-**按2026-10-27用户决策精简；新增行为尚未实现。** 依据[现行需求](../../requirements/README.md)、[①概要](../../../src/astrophotoflow/core/README.md)及源码。本文确定需要保存什么，字段名为设计建议，不是现有接口或文件格式。
+**按2026-10-27用户决策精简；B11配置基础已实施，其余控制行为尚未实现。** 依据[现行需求](../../requirements/README.md)、[①概要](../../../src/astrophotoflow/core/README.md)及源码。本文确定需要保存什么；实际配置契约见[①详设](../../api/platform-contracts.md#foundation-design)，实现证据见[验证矩阵](../../development/test-matrix.md#b11-implementation)。
 
 ## 1. 用途与边界
 
@@ -27,7 +27,7 @@
 
 | 字段或内容 | 逻辑类型 | 含义 | 当前情况 |
 |---|---|---|---|
-| 默认workspace | 路径 | 第④阶段明确用户CONFIG_PATH的config.toml以workspace.default定位目标；目标workspace/config.toml仍存该工作区参数，显式配置／环境优先；不另存活动指针 | 设计已明确，当前仍由配置位置及active-workspace指针定位；未来签名见[①详设](../../api/platform-contracts.md#foundation-design) |
+| 默认workspace | 路径 | 用户CONFIG_PATH的config.toml以workspace.default定位目标；目标workspace/config.toml仍存该工作区参数，显式配置／环境优先；不另存活动指针 | B11已实现；签名见[①详设](../../api/platform-contracts.md#foundation-design) |
 | server.host／server.port | 地址／整数 | 本机业务服务地址，端口作为下次启动的优先选择 | 已有；自动回写待补 |
 | 网页端口与允许来源 | 端口／来源列表 | 网页使用另一端口，允许来源与实际地址一致 | 当前从comfyui.allowed_origins首项取端口；自动调整待补 |
 | storage.data_dir | 路径 | 业务数据目录 | 已有，相对路径按当前配置文件目录解析 |
@@ -143,6 +143,6 @@ flowchart TB
 
 源码：[配置](../../../src/astrophotoflow/core/config.py)、[工作台](../../../src/astrophotoflow/core/workbench.py)、[数据库升级](../../../src/astrophotoflow/core/database/schema.py)、[健康接口](../../../src/astrophotoflow/interfaces/http/system.py)。已有验证入口：[配置测试](../../../tests/core/test_config.py)、[工作台测试](../../../tests/core/test_workbench.py)。这些测试只覆盖现有行为。
 
-当前仍按既有配置定位，端口占用会报错；MCP启动、自动端口回写、默认workspace字段、重启生效展示与可查询启停结果尚未实现。文件布局、配置写入并发及服务外控制调用在对应实施任务中确定，不再以补全通用基础设施模型为前置条件。
+B11已实现用户TOML默认workspace定位、最新配置保存／冲突检查及processes.json采用值读取，不再读旧active-workspace。端口占用当前仍报错；真实启动采用／自动端口回写由B12、网页展示由B13，MCP启停由B57接入，均尚未实现。配置能力完成不表示启停或M1验收通过。
 
 本轮只精简设计与结构图，核对源码事实、链接及修改范围，不更改代码、数据库、环境或业务数据，不提交推送。

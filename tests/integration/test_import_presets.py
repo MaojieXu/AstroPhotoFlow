@@ -14,7 +14,7 @@ from astrophotoflow.core.config import Settings
 @pytest.mark.parametrize("manual_classification", [None, {"frame_class": "masterframe", "frame_type": "flat"},
                                                    {"frame_type": "flat"}, {"frame_type": None}])
 def test_selected_preset_is_frozen_and_observed_values_win(tmp_path, manual_classification):
-    settings = Settings("127.0.0.1", 8190, tmp_path / "data", ())
+    settings = Settings("127.0.0.1", 8190, tmp_path / "data", (), workspace=tmp_path)
     upgrade_database(settings)
     app = create_app(settings, "integration-token")
     try:

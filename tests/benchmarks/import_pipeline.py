@@ -207,7 +207,7 @@ def worker(args):
     # Real samples are one direct source, never a corpus directory traversal.
     data = ARTIFACTS / "runs" / str(uuid4())
     settings = Settings("127.0.0.1", 8190, data, ("http://127.0.0.1:8188",),
-                        tuple(ImportRoot(str(index), path.parent) for index, path in enumerate(paths)))
+                        tuple(ImportRoot(str(index), path.parent) for index, path in enumerate(paths)), workspace=data)
     with database_lock(settings):
         upgrade_database(settings)
     database = Database(settings.database_path)

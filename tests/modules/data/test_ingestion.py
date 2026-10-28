@@ -44,7 +44,7 @@ def write_fits(path: Path, value: int = 1) -> bytes:
 
 
 def make_client(tmp_path: Path, roots: tuple[ImportRoot, ...]):
-    settings = Settings("127.0.0.1", 8190, tmp_path / "data", ("http://127.0.0.1:8188",), roots)
+    settings = Settings("127.0.0.1", 8190, tmp_path / "data", ("http://127.0.0.1:8188",), roots, workspace=tmp_path)
     with database_lock(settings):
         upgrade_database(settings)
     app = create_app(settings, TOKEN)

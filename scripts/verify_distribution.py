@@ -92,7 +92,7 @@ assert 'capture_profile' not in Base.metadata.tables
 assert 'project_capture_profile' not in Base.metadata.tables
 assert 'capture_profile_id' not in Base.metadata.tables['asset_version'].c
 """
-            script += "\ndata = Path('database'); data.mkdir(exist_ok=True)\nsettings = Settings('127.0.0.1', 8190, data.resolve(), ('http://127.0.0.1:8188',))\nupgrade_database(settings)\nassert current_revision(settings.database_path) == SCHEMA_REVISION\n"
+            script += "\ndata = Path('database'); data.mkdir(exist_ok=True)\nsettings = Settings('127.0.0.1', 8190, data.resolve(), ('http://127.0.0.1:8188',), workspace=Path.cwd())\nupgrade_database(settings)\nassert current_revision(settings.database_path) == SCHEMA_REVISION\n"
             run([str(python), "-c", script], cwd=work, env=env)
 
         smoke()

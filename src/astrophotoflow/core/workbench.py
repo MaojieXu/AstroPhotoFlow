@@ -226,9 +226,7 @@ def _record(process: subprocess.Popen, role: str, workspace: Path, command: list
 
 
 def _activate_workspace(config_path: Path) -> None:
-    pointer = app_config.CONFIG_PATH.parent / "active-workspace"
-    pointer.parent.mkdir(parents=True, exist_ok=True)
-    pointer.write_text(str(config_path), encoding="utf-8")
+    app_config._set_default_workspace(config_path.parent)
 
 
 def _launch(command: list[str], cwd: Path, env: dict, log_path: Path) -> subprocess.Popen:

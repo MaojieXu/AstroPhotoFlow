@@ -41,7 +41,7 @@ uv run --locked --no-sync apf stop --workspace .artifacts/workspaces/docs-update
 
 浏览器使用隔离 workspace 与合成 PNG，默认报告在 `.artifacts/reports/native-web`。真实开发数据不用于导入、回收站或工作流写入验收。正常 dev 使用 31388／31390，本机工具与状态见[当前上下文](current-context.md)。
 
-配置由 `astrophotoflow.core.config` 统一解析：显式 workspace、环境、默认指针、默认配置依次优先。`storage.data_dir` 相对 TOML 解析；令牌位于 workspace/data/service.token。CLI/MCP 用进程级 `ASTROPHOTOFLOW_CONFIG` 选择隔离实例，不改全局注册。
+配置由 `astrophotoflow.core.config` 统一解析：显式配置路径、`ASTROPHOTOFLOW_CONFIG`、用户`~/.config/astrophotoflow/config.toml`中的`[workspace] default`依次优先，最后读取所选workspace/config.toml。不再读取旧active-workspace；没有默认位置时明确指定目标。`storage.data_dir` 相对所属 TOML 解析，`Settings.workspace`为其父目录。CLI/MCP 用进程级环境选择隔离实例，不改全局注册。B11提供配置读取／保存和采用记录读取；B12真实启动采用、端口回写及B13网页配置仍待实现。
 
 ## 发行与安装验证
 
