@@ -81,6 +81,15 @@ class LibraryEntriesRemove(StrictModel):
         return self
 
 
+class LibraryRemovalScope(StrictModel):
+    selection: LibraryEntriesRemove
+    asset_version_ids: list[UUID]
+    dataset_version_ids: list[UUID]
+    asset_ids: list[UUID]
+    dataset_ids: list[UUID]
+    data_token: str
+
+
 class LibraryTrashSelectionItem(StrictModel):
     entry_type: Literal["asset", "dataset"]
     id: UuidInput

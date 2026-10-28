@@ -88,6 +88,15 @@ export const assetSchema = z.object({
   created_at: timestamp, current_version: assetVersionSchema.nullable()
 }).strict()
 
+export const assetContentObservationSchema = z.object({
+  asset_id: id, base_version_id: id, base_revision: z.number().int().positive(),
+  storage_mode: z.enum(['reference', 'managed']), stored_hash: z.string(),
+  state: z.enum(['unchanged', 'changed', 'missing', 'unsupported']),
+  observed_hash: z.string().nullable(), observed_byte_size: z.number().int().nonnegative().nullable(),
+  observed_mtime_ns: z.number().int().nonnegative().nullable(),
+  error: z.object({code:z.string(),message:z.string(),fields:z.array(z.record(z.string(),z.string()))}).strict().nullable()
+}).strict()
+
 export const projectAssetReferenceSchema = z.object({
   id, project_id: id, asset_version_id: id, added_at: timestamp,
   asset: assetSchema, version: assetVersionSchema

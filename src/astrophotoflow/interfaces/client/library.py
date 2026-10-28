@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import Any
 
-from astrophotoflow.contracts.assets import AssetParametersPatch, AssetPatch
+from astrophotoflow.contracts.assets import AssetContentAccept, AssetContentObservation, AssetOut, AssetParametersPatch, AssetPatch
 from astrophotoflow.contracts.datasets import DatasetCreate, DatasetMemberParametersUpdate, DatasetMembersCreate, DatasetPatch
 from astrophotoflow.contracts.trash import LibraryEntriesRemove, LibraryTrashDelete, LibraryTrashSelection
 
@@ -22,6 +22,12 @@ class LibraryOperations:
 
     def get_asset(self, asset_id: str) -> dict[str, Any]:
         return self.request("GET", f"/library/assets/{asset_id}")
+
+    def observe_asset_content(self, asset_id: str) -> AssetContentObservation:
+        return AssetContentObservation.model_validate(self.request("POST", f"/library/assets/{asset_id}/content-observation"))
+
+    def accept_asset_content(self, asset_id: str, body: AssetContentAccept) -> AssetOut:
+        return AssetOut.model_validate(self.request("POST", f"/library/assets/{asset_id}/content-accept", json=body))
 
     def update_asset(self, asset_id: str, body: AssetPatch) -> dict[str, Any]:
         return self.request("PATCH", f"/library/assets/{asset_id}", json=body)

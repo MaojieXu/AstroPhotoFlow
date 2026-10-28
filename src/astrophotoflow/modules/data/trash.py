@@ -12,15 +12,69 @@ from uuid import UUID
 from fastapi import Depends, Request
 from sqlalchemy import delete, func, select
 from astrophotoflow.core.errors import ApiError, not_found
+from astrophotoflow.core.database.db import Database
 from astrophotoflow.modules.data.previews import assert_no_preview_jobs, owned_preview_locations
 from astrophotoflow.modules.data.models import Asset, AssetTask, AssetTaskItem, AssetVersion, Dataset, DatasetMember, DatasetVersion, FitsHduMetadata, Preview, Project, ProjectAssetReference, ProjectDatasetReference, LibraryEntryRemoval
 from pathlib import Path
 from astrophotoflow.contracts.trash import LibraryEntriesRemove, LibraryTrashDelete, LibraryTrashSelection
-from astrophotoflow.contracts.trash import LibraryEntriesRemoveOut, LibraryTrashPage, LibraryTrashItemOut, LibraryTrashPreviewOut, LibraryTrashDeleteOut
+from astrophotoflow.contracts.trash import LibraryEntriesRemoveOut, LibraryRemovalScope, LibraryTrashPage, LibraryTrashItemOut, LibraryTrashPreviewOut, LibraryTrashDeleteOut
 from astrophotoflow.modules.data.calibration import calibration_references, protect_calibration_targets
 
 
 router = APIRouter(prefix="/api/v1", responses=ERROR_RESPONSES)
+
+
+def preview_library_removal(database: Database, body: LibraryEntriesRemove) -> LibraryRemovalScope:
+    asset_ids: list[str] = []
+    dataset_ids: list[str] = []
+    asset_version_ids: list[str] = []
+    dataset_version_ids: list[str] = []
+    with database.read_session() as session:
+        for item in body.items:
+            record_id = shared._id(item.id)
+            if item.entry_type == "asset":
+                asset = session.get(Asset, record_id)
+                if asset is None or asset.scope != "shared" or asset.status != "active":
+                    raise not_found()
+                if asset.revision != item.revision:
+                    shared._conflict_or_missing(session, Asset, record_id)
+                if asset.current_version_id != (shared._id(item.current_version_id) if item.current_version_id else None):
+                    raise ApiError(409, "REVISION_CONFLICT", "素材当前版本已变化，请重新读取后预览移除范围。")
+                asset_ids.append(asset.id)
+                if asset.current_version_id:
+                    asset_version_ids.append(asset.current_version_id)
+            else:
+                dataset = session.get(Dataset, record_id)
+                if dataset is None or dataset.status != "active":
+                    raise not_found()
+                if dataset.revision != item.revision:
+                    shared._conflict_or_missing(session, Dataset, record_id)
+                if dataset.current_version_id != (shared._id(item.current_version_id) if item.current_version_id else None):
+                    raise ApiError(409, "REVISION_CONFLICT", "素材组成员版本已变化，请重新读取后预览移除范围。")
+                dataset_ids.append(dataset.id)
+                if dataset.current_version_id:
+                    dataset_version_ids.append(dataset.current_version_id)
+                    pairs = session.execute(select(AssetVersion.asset_id, AssetVersion.id)
+                        .join(DatasetMember, DatasetMember.asset_version_id == AssetVersion.id)
+                        .where(DatasetMember.dataset_version_id == dataset.current_version_id)
+                        .order_by(DatasetMember.position)).all()
+                    asset_ids.extend(asset_id for asset_id, _ in pairs)
+                    asset_version_ids.extend(version_id for _, version_id in pairs)
+    scope_data = {
+        "selection": body.model_dump(mode="json"),
+        "asset_ids": list(dict.fromkeys(asset_ids)),
+        "dataset_ids": list(dict.fromkeys(dataset_ids)),
+        "asset_version_ids": list(dict.fromkeys(asset_version_ids)),
+        "dataset_version_ids": list(dict.fromkeys(dataset_version_ids)),
+    }
+    token = hashlib.sha256(json.dumps(scope_data, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    return LibraryRemovalScope(
+        selection=body, asset_ids=[UUID(value) for value in scope_data["asset_ids"]],
+        dataset_ids=[UUID(value) for value in scope_data["dataset_ids"]],
+        asset_version_ids=[UUID(value) for value in scope_data["asset_version_ids"]],
+        dataset_version_ids=[UUID(value) for value in scope_data["dataset_version_ids"]],
+        data_token=token,
+    )
 
 
 @router.delete("/library/items", response_model=LibraryEntriesRemoveOut, dependencies=[Depends(deps.authenticate)])

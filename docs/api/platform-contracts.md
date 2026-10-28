@@ -8,7 +8,7 @@
 
 | 事实来源 | 已有能力 | 本轮设计的增量及限制 |
 |---|---|---|
-| [领域 HTTP](../../src/astrophotoflow/modules/data/routes.py)、[系统接口](../../src/astrophotoflow/interfaces/http/system.py)、[同源代理](../../src/astrophotoflow/comfyui/proxy.py) | 78 个 HTTP 操作，与 OpenAPI、代理白名单逐项对应；项目、导入、素材／集合、设备、校准、预览、回收站 | 科学输入解析、移除工作流影响、所选结果保存及偏好尚无公共契约；健康在线不能证明软件或图可执行 |
+| [领域 HTTP](../../src/astrophotoflow/modules/data/routes.py)、[系统接口](../../src/astrophotoflow/interfaces/http/system.py)、[同源代理](../../src/astrophotoflow/comfyui/proxy.py) | 当前 84 个 HTTP 操作，与 OpenAPI、代理白名单逐项对应；M2新增素材内容观察／确认 | 科学输入、输出检查／登记及移除范围查询是②公开Python能力，尚未作为HTTP／MCP入口开放；工作流移除影响由B54／B57接入，偏好仍待实现 |
 | [客户端](../../src/astrophotoflow/client.py)、[MCP](../../src/astrophotoflow/interfaces/mcp/server.py)、[工具参考](../development/library-agent-tools.md) | HTTP 客户端、CLI、58 个数据工具；图片工具返回真实图像内容 | 生命周期、软件、节点、画布与运行 MCP 未实现；精简 MCP 是后续整体迁移 |
 | [工作台控制](../../src/astrophotoflow/core/workbench.py) | init/start/status/stop、固定 runtime、两个服务、进程文件 | 自动端口及实际地址、结构化就绪、显式 restart、MCP 本机启停尚缺；当前 start 的默认指针行为不能直接当作目标契约 |
 | [原生文件](../../engine/ComfyUI/app/user_manager.py)、[工作流 Store](../../frontend/src/platform/workflow/management/stores/comfyWorkflow.ts) | userdata 保存／读取／改名／删除，临时文件后替换；自动保存、本地草稿、另存与会话撤销 | 项目关联与当前控制没有接入；原生文件写入不是已有 Agent 改图接口 |
@@ -52,6 +52,8 @@ M1网页配置使用 `GET/PATCH /api/v1/settings/workbench` 读取当前workspac
 <a id="data"></a>
 
 ## 4. ② 导入、选择科学输入与保存所选结果
+
+M2候选分支已实现下面的 `resolve_inputs`、`observe_reference_inputs`、`check_output`、`render_output_preview`、`register_output`、`get_output_registration`、`preview_library_removal` Python公开能力，以及素材文件变化观察／接纳两个HTTP路由。它们与原有16个业务模型、AssetTask流程配合，不新增迁移。内容接纳路由为`POST /library/assets/{asset_id}/content-observation`和`POST /library/assets/{asset_id}/content-accept`；科学输入及输出登记仍不单独暴露HTTP／MCP，等待⑤实际运行消费者接入。候选是否集成及跨工作流验收以开发状态和验证矩阵为准。
 
 ### 4.1 现有操作继续复用
 

@@ -155,28 +155,20 @@ const specFields: Record<string, InputField[]> = {
     { key: 'sensor_mode', label: '传感器类型', options: ['mono', 'color'] },
     { key: 'sensor_width_px', label: '宽度（px）', type: 'number', integer: true },
     { key: 'sensor_height_px', label: '高度（px）', type: 'number', integer: true },
-    { key: 'pixel_size_x_um', label: '像元宽度（μm）', type: 'number' },
-    { key: 'pixel_size_y_um', label: '像元高度（μm）', type: 'number' },
-    { key: 'native_bit_depth', label: '原生位深', type: 'number', integer: true },
+    { key: 'pixel_size_um', label: '像元尺寸（μm）', type: 'number' },
     { key: 'cfa_pattern', label: 'CFA 排列' }
   ],
   optical_system: [
     { key: 'aperture_mm', label: '口径（mm）', type: 'number' },
     { key: 'native_focal_length_mm', label: '基础焦距（mm）', type: 'number' },
-    { key: 'effective_focal_length_mm', label: '有效焦距（mm，手动填写）', type: 'number' },
-    { key: 'focal_adjustment_note', label: '减焦／增焦说明' }
+    { key: 'effective_focal_length_mm', label: '使用减焦／增距镜后的焦距（mm）', type: 'number' },
+    { key: 'focal_adjustment_note', label: '减焦镜／增距镜说明（可选）' }
   ],
   filter: [
-    { key: 'filter_type', label: '滤镜类型' },
-    { key: 'central_wavelength_nm', label: '中心波长（nm）', type: 'number' },
     { key: 'bandwidth_nm', label: '带宽（nm）', type: 'number' },
-    { key: 'bandpass_note', label: '带通说明' }
   ],
-  mount: [
-    {key:'mount_type',label:'赤道仪类型'}, {key:'payload_kg',label:'承重（kg）',type:'number'},
-    {key:'connection_note',label:'连接说明'}
-  ],
-  accessory: [{key:'accessory_type',label:'配件类型'},{key:'connection_note',label:'连接说明'}]
+  mount: [],
+  accessory: []
 }
 specFields.telescope = specFields.optical_system
 const frameTypes = ['light', 'bias', 'dark', 'flat', 'dark_flat']
@@ -186,7 +178,7 @@ const cfaChoices=[
   {value:'RGGB',label:'RGGB'},{value:'BGGR',label:'BGGR'},{value:'GRBG',label:'GRBG'},{value:'GBRG',label:'GBRG'},
   {value:'XTRANS',label:'X-Trans 6×6'},{value:'QUAD_BAYER',label:'Quad Bayer'}
 ]
-const equipmentKinds = ['camera', 'telescope', 'filter', 'mount', 'accessory']
+const equipmentKinds = ['camera', 'telescope', 'filter']
 const equipmentKindLabels:Record<string,string> = {camera:'相机',telescope:'望远镜',filter:'滤镜',mount:'赤道仪',accessory:'配件',optical_system:'成像系统（既有）'}
 function specKind(field:InputField):'number'|'select'|'text'{
   return field.key==='cfa_pattern'||field.options?'select':field.type==='number'?'number':'text'
@@ -201,6 +193,19 @@ function specDisplay(field:InputField,value:unknown){
   if(field.key==='cfa_pattern')return cfaLabel(value)
   if(field.options)return specChoices(field).find(choice=>choice.value===String(value))?.label??String(value)
   return String(value)
+}
+function specValue(field:InputField,specs:Record<string,unknown>){
+  return field.key==='pixel_size_um' ? specs.pixel_size_um ?? specs.pixel_size_x_um ?? specs.pixel_size_y_um : specs[field.key]
+}
+function equipmentSpecsPayload(kind:string,specs:Record<string,unknown>){
+  const result={...specs}
+  if(kind==='camera'){
+    const pixelSize=result.pixel_size_um
+    delete result.pixel_size_um
+    result.pixel_size_x_um=pixelSize??null
+    result.pixel_size_y_um=pixelSize??null
+  }
+  return result
 }
 
 function apiPath(path: string, params: Record<string, string | number | string[] | undefined> = {}) {
@@ -866,7 +871,9 @@ async function performInlineFieldSave(row: RecordData, field: string, value: str
     path='/equipment/'+row.id;schema=equipmentSchema
     const spec=field.startsWith('specs.')?specFields[row.kind]?.find(item=>item.key===field.slice(6)):undefined
     const fieldValue=spec?.type==='number'?(value==null||value===''?null:Number(value)):value
-    payload=field.startsWith('specs.')
+    payload=field==='specs.pixel_size_um'
+      ? {base_revision:row.revision,kind:row.kind,specs:{pixel_size_x_um:fieldValue,pixel_size_y_um:fieldValue}}
+      : field.startsWith('specs.')
       ? {base_revision:row.revision,kind:row.kind,specs:{[field.slice(6)]:fieldValue}}
       : {base_revision:row.revision,kind:row.kind,[field]:value}
   }
@@ -1429,7 +1436,7 @@ function nullableString(value: unknown) {
 }
 
 function editEquipment(row: RecordData) {
-  const specs = Object.fromEntries(specFields[row.kind].map(field => [field.key, textInput(row.specs[field.key])]))
+  const specs = Object.fromEntries(specFields[row.kind].map(field => [field.key, textInput(specValue(field,row.specs))]))
   draft.value = {
     name: row.name, kind: row.kind, model: textInput(row.model), serial_number: textInput(row.serial_number),
     notes: textInput(row.notes), status: row.status, revision: row.revision, specs
@@ -1477,9 +1484,9 @@ function buildPayload() {
     return payload
   }
   if (editorType.value === 'equipment') {
-    const specs = Object.fromEntries(specFields[draft.value.kind].map(field => [
+    const specs = equipmentSpecsPayload(draft.value.kind,Object.fromEntries(specFields[draft.value.kind].map(field => [
       field.key, field.type ? inputNumber(draft.value.specs[field.key]) : nullableString(draft.value.specs[field.key])
-    ]))
+    ])))
     const payload: RecordData = {
       kind: draft.value.kind, name: draft.value.name, model: nullableString(draft.value.model),
       serial_number: nullableString(draft.value.serial_number), notes: nullableString(draft.value.notes), specs
@@ -1632,7 +1639,7 @@ const workspaceContext = {
   isAssetTable, isDatasetTable, isLibraryItemsView, isLibraryTableView, isDatasetMembersView,
   pageSelectionKeys, pageAllSelected, pagePartiallySelected, areaTitles, areaMessages,
   specFields, frameTypes, frameClasses, cfaChoices, equipmentKinds, equipmentKindLabels,
-  specKind, specChoices, specDisplay, apiPath, loadWorkspacePage,
+  specKind, specChoices, specDisplay, specValue, equipmentSpecsPayload, apiPath, loadWorkspacePage,
   libraryFilterParams, formListPath, loadAll, loadRelatedEquipment, equipmentChoiceMessage,
   equipmentChoices,    loadCapabilities,
   loadRecords, loadThumbnails, previewMember, openPhotoPreview, presentError, errorText,

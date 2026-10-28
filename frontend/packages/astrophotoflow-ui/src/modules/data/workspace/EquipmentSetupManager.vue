@@ -6,7 +6,7 @@ import type { WorkspaceContext } from './Workspace.vue'
 import WorkspaceRecords from './WorkspaceRecords.vue'
 
 const context = inject<WorkspaceContext>('workspace')!
-const { selected, specFields, equipmentKinds, equipmentKindLabels, relatedEquipment, loadRelatedEquipment, loadRecords } = context
+const { selected, specFields, specValue, equipmentSpecsPayload, equipmentKinds, equipmentKindLabels, relatedEquipment, loadRelatedEquipment, loadRecords } = context
 const selectedSetup = computed(() => selected.value as EquipmentSetup | undefined)
 const editingSetup = ref<EquipmentSetup | null>()
 const setupDraft = ref({name:'',notes:'',status:'active' as 'active'|'archived',components:[] as SetupComponent[]})
@@ -68,7 +68,7 @@ async function saveSetup() {
     context.store.query === query && context.store.offset === offset && context.statusFilter.value === status
   saving.value = true; error.value = ''
   try {
-    const payload = {...setupDraft.value,notes:setupDraft.value.notes || null}
+    const payload = {...setupDraft.value,notes:setupDraft.value.notes || null,components:setupDraft.value.components.map(component=>component.source==='inline'?{...component,equipment:{...component.equipment,specs:equipmentSpecsPayload(component.equipment.kind,component.equipment.specs)}}:component)}
     const current = editingSetup.value
     const saved = await assetApi.send('/astrophotoflow/api/v1/equipment-setups' + (current ? '/' + current.id : ''),equipmentSetupSchema,current ? 'PATCH' : 'POST',
       current ? {...payload,base_revision:current.revision} : {name:payload.name,components:payload.components,notes:payload.notes})
@@ -156,7 +156,7 @@ async function savePreset() {
       <fieldset><legend>组合设备</legend>
         <p>注册设备保持关联；组合内设备独立保存在此组合中。</p>
         <p v-if="context.relatedEquipmentError.value" role="alert">{{context.relatedEquipmentError.value}}</p>
-        <label>注册设备<select v-model="registeredId" :disabled="context.relatedEquipmentLoading.value"><option value="">选择已登记设备</option><option v-for="equipment in relatedEquipment.filter(item=>item.kind!=='optical_system'&&item.status==='active')" :key="equipment.id" :value="equipment.id">{{equipmentKindLabels[equipment.kind]}} · {{equipment.name}}</option></select></label>
+        <label>注册设备<select v-model="registeredId" :disabled="context.relatedEquipmentLoading.value"><option value="">选择已登记设备</option><option v-for="equipment in relatedEquipment.filter(item=>['camera','telescope','filter'].includes(item.kind)&&item.status==='active')" :key="equipment.id" :value="equipment.id">{{equipmentKindLabels[equipment.kind]}} · {{equipment.name}}</option></select></label>
         <button type="button" :disabled="!registeredId||saving" @click="addRegistered">加入注册设备</button>
         <button type="button" :disabled="saving" @click="addInline">添加组合内设备</button>
         <fieldset v-for="(component,index) in setupDraft.components" :key="index"><legend>设备 {{index+1}}</legend>
@@ -168,8 +168,8 @@ async function savePreset() {
             <label>序列号<input v-model="component.equipment.serial_number" /></label>
             <label>设备说明<textarea v-model="component.equipment.notes" /></label>
             <label v-for="field in specFields[component.equipment.kind]" :key="field.key">{{field.label}}
-              <select v-if="field.options||field.key==='cfa_pattern'" :value="component.equipment.specs[field.key]??''" @change="component.equipment.specs[field.key]=($event.target as HTMLSelectElement).value||null"><option v-for="choice in context.specChoices(field)" :key="choice.value" :value="choice.value">{{choice.label}}</option></select>
-              <input v-else :value="component.equipment.specs[field.key]??''" :type="field.type??'text'" :step="field.integer?1:'any'" @input="component.equipment.specs[field.key]=($event.target as HTMLInputElement).value===''?null:field.type==='number'?Number(($event.target as HTMLInputElement).value):($event.target as HTMLInputElement).value" />
+              <select v-if="field.options||field.key==='cfa_pattern'" :value="specValue(field,component.equipment.specs)??''" @change="component.equipment.specs[field.key]=($event.target as HTMLSelectElement).value||null"><option v-for="choice in context.specChoices(field)" :key="choice.value" :value="choice.value">{{choice.label}}</option></select>
+              <input v-else :value="specValue(field,component.equipment.specs)??''" :type="field.type??'text'" :step="field.integer?1:'any'" @input="component.equipment.specs[field.key]=($event.target as HTMLInputElement).value===''?null:field.type==='number'?Number(($event.target as HTMLInputElement).value):($event.target as HTMLInputElement).value" />
             </label>
           </template>
           <button type="button" :disabled="saving" @click="setupDraft.components.splice(index,1)">移除此设备</button>

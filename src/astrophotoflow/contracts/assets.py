@@ -1,4 +1,4 @@
-from astrophotoflow.contracts.common import CfaPattern, StrictModel, UuidInput, check_name
+from astrophotoflow.contracts.common import CfaPattern, ErrorDetail, StrictModel, UuidInput, check_name
 from datetime import datetime
 from math import isfinite
 from pydantic import Field, field_validator, model_validator
@@ -62,6 +62,37 @@ class AssetVersionPage(StrictModel):
     total: int
     limit: int
     offset: int
+
+
+class AssetContentObservation(StrictModel):
+    asset_id: UUID
+    base_version_id: UUID
+    base_revision: int = Field(ge=1)
+    storage_mode: Literal["reference", "managed"]
+    stored_hash: str
+    state: Literal["unchanged", "changed", "missing", "unsupported"]
+    observed_hash: str | None
+    observed_byte_size: int | None = Field(default=None, ge=0)
+    observed_mtime_ns: int | None = Field(default=None, ge=0)
+    error: ErrorDetail | None
+
+
+class AssetContentAccept(StrictModel):
+    base_version_id: UuidInput
+    base_revision: int = Field(ge=1)
+    expected_observed_hash: str = Field(pattern=r"^blake3:[0-9a-f]{64}$")
+
+
+class OutputRegistration(StrictModel):
+    task_id: UUID
+    created: bool
+    task_status: Literal["queued", "running", "cancelling", "completed", "completed_with_errors", "failed", "cancelled", "interrupted"]
+    asset_id: UUID | None
+    asset_version_id: UUID | None
+    content_status: Literal["pending", "available", "failed"]
+    metadata_status: Literal["pending", "available", "unsupported", "failed"]
+    preview_status: Literal["pending", "available", "unsupported", "failed"]
+    error: ErrorDetail | None
 
 
 class FilterEquipmentOption(StrictModel):

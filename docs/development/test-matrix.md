@@ -4,6 +4,16 @@
 
 2026-10-28 M1侧栏调整：配置入口改用原生SidebarTabTemplate，位于工作流后。定向配置表单4项及侧栏注册5项通过；私有包及原生应用类型检查、生产构建、定向ESLint通过。真实浏览器5类检查验证保存、冲突、重启生效、错误及收起后画布保留，截图已人工检查。证据见`.artifacts/implementation/M1/sidebar-update.md`及`.artifacts/implementation/B13/browser`。自动验证不代替用户M1批准。
 
+## 2026-10-28 M2 数据与资产实现候选
+
+候选分支：`feature/database_management`，从dev创建。B21～B24的②侧实现已落位，尚未集成dev、未获M2用户Milestone批准；⑤运行、工作流影响与Agent结果选择仍等待B51／B53／B54／B57联调。
+
+- 后端：`tests/modules/data` **261 passed**，保留一条既有SQLAlchemy互相依赖表排序警告。新增`test_science_inputs.py`覆盖可复现／仅引用、FITS HDU、固定组成员顺序、再次变化时拒绝旧确认、同素材新版本、未变化确认、缺失托管文件、完整结果登记／重复查询、other格式登记、预览失败原因及移除范围只读查询。OpenAPI与原生代理白名单专项 **2 passed**；新增两条素材内容观察／接纳HTTP路径使公共HTTP操作增至84。
+- 前端：数据UI全量 **153 passed**，`@astrophotoflow/ui`类型检查通过。表单将一个像元尺寸写入既有x/y字段，并隐藏位深、赤道仪及配件录入；望远镜减焦／增距说明和滤镜可选带宽保留。新增确认请求断连后只读核对测试通过，不重发确认POST。
+- 数据库schema保持0009，无新增ORM、迁移或依赖；现有58个数据MCP工具不变。结果登记复用AssetTask；输出登记和科学输入是②内部Python能力，没有新增外部工具或路由。界面与⑤工作流/运行的真实端到端验收尚未进行。
+
+自动验证证据位于`.artifacts/implementation/feature-database-management/M2/`。GPT-6 Luna High未发现具体UI风格或交互缺陷；GPT-6.1 Sol Low复核通过②候选。未运行完整原生应用浏览器验收、生产构建、运行期跨模块保护或真实Agent客户端操作。
+
 <a id="m1-foundation"></a>
 
 ## 2026-10-28 M1公共基础实施候选复核

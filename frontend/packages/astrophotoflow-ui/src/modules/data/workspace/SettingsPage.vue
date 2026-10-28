@@ -5,9 +5,10 @@ import InlineField from './InlineField.vue'
 import ParameterModeField from './ParameterModeField.vue'
 import WorkspaceRecords from './WorkspaceRecords.vue'
 import EquipmentSetupManager from './EquipmentSetupManager.vue'
+import AssetContentChange from './AssetContentChange.vue'
 
 export default {
-  components: { InlineField, ParameterModeField, WorkspaceRecords, EquipmentSetupManager },
+  components: { InlineField, ParameterModeField, WorkspaceRecords, EquipmentSetupManager, AssetContentChange },
   setup() { return inject<WorkspaceContext>('workspace')! }
 }
 </script>
@@ -80,6 +81,7 @@ export default {
         <aside v-if="selected&&activeArea!=='library'" class="apf-details" aria-label="记录详情">
           <template v-if="selected">
             <h2>{{ itemTitle(selected) }}</h2>
+            <AssetContentChange v-if="selected.scope==='shared'||selected.asset?.scope==='shared'" :asset-id="rowAsset(selected).id" :has-version="!!rowAsset(selected).current_version_id" @accepted="loadRecords" />
             <p>{{ itemSubtitle(selected) }}</p>
             <button v-if="store.section === 'projects' && !viewingProjectAssets && !viewingProjectDatasets" type="button" @click="openProjectAssets">查看项目资产</button>
             <button v-if="store.section === 'projects' && !viewingProjectAssets && !viewingProjectDatasets" type="button" @click="openProjectDatasets">查看项目数据集</button>

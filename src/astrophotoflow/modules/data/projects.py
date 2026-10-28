@@ -13,12 +13,21 @@ from fastapi import Depends, Request
 from sqlalchemy import and_, func, or_, select, update
 from astrophotoflow.core.errors import ApiError, invalid_reference, not_found
 from astrophotoflow.modules.data.models import Asset, AssetVersion, Dataset, DatasetVersion, FitsHduMetadata, Project, ProjectAssetReference, ProjectDatasetReference
+from astrophotoflow.core.database.db import Database
 from astrophotoflow.contracts.projects import ProjectAssetReferenceOut, ProjectAssetReferencePage, ProjectCreate, ProjectOut, ProjectPage, ProjectPatch, ProjectDatasetReferenceOut, ProjectDatasetReferencePage
 from astrophotoflow.contracts.assets import FitsHeaderOut, FitsHduPage
 from astrophotoflow.contracts.projects import ProjectDatasetReferenceCreate, ProjectReferenceCreate, ProjectReferenceDelete
 
 
 router = APIRouter(prefix="/api/v1", responses=ERROR_RESPONSES)
+
+
+def get_project(database: Database, project_id: UUID) -> ProjectOut:
+    with database.read_session() as session:
+        row = session.get(Project, _id(project_id))
+        if row is None:
+            raise not_found()
+        return _project_out(session, row)
 
 
 @router.get("/projects", response_model=ProjectPage, dependencies=[Depends(authenticate)])

@@ -56,6 +56,29 @@ async function openSetups(){
 }
 
 describe('settings organization',()=>{
+  it('uses one camera pixel-size input and only the agreed equipment fields',async()=>{
+    await openSetups()
+    await click('新建使用组合')
+    await label('组合名称').get('input').setValue('Lean rig')
+    await click('添加组合内设备')
+    expect(wrapper!.text()).not.toContain('原生位深')
+    expect(wrapper!.text()).not.toContain('像元宽度')
+    expect(wrapper!.text()).not.toContain('像元高度')
+    await label('像元尺寸（μm）').get('input').setValue('3.76')
+    expect((label('像元尺寸（μm）').get('input').element as HTMLInputElement).value).toBe('3.76')
+    await click('添加组合内设备')
+    const kinds=wrapper!.findAll('label').filter(item=>item.text().startsWith('设备类别')).at(-1)!.get('select')
+    await kinds.setValue('filter')
+    expect(wrapper!.text()).toContain('带宽（nm）')
+    expect(wrapper!.text()).not.toContain('中心波长')
+    expect(kinds.findAll('option').map(option=>option.element.value)).toEqual(['camera','telescope','filter'])
+    await wrapper!.get('form[aria-label="使用组合表单"]').trigger('submit');await flushPromises()
+    const call=send.mock.calls.find(([path])=>String(path).includes('/equipment-setups'))!
+    const payload=call[3] as {components:Array<{source:string;equipment?:{specs:Record<string,unknown>}} >}
+    expect(payload.components[0].equipment?.specs).toMatchObject({pixel_size_x_um:3.76,pixel_size_y_um:3.76})
+    expect(payload.components[0].equipment?.specs).not.toHaveProperty('pixel_size_um')
+  })
+
   it.each(['组合','预设'])('preserves a dirty %s when a previously opened filter excludes its setup',async(editor)=>{
     await openSetups();await wrapper!.get('.apf-record').trigger('click');await flushPromises()
     await click('筛选')
@@ -140,14 +163,9 @@ describe('settings organization',()=>{
     await openSetups();await click('设备')
     await click('筛选')
     const filter=wrapper!.get('.apf-management-filter-panel select')
-    expect(filter.findAll('option').map(item=>item.text())).toEqual(['全部设备','相机','望远镜','滤镜','赤道仪','配件'])
-    await filter.setValue('mount');await click('应用')
-    expect(get.mock.calls.at(-1)![0]).toContain('kind=mount')
+    expect(filter.findAll('option').map(item=>item.text())).toEqual(['全部设备','相机','望远镜','滤镜'])
     await click('添加设备')
-    await wrapper!.get('.apf-editor select').setValue('mount')
-    expect(wrapper!.text()).toContain('承重（kg）')
-    await wrapper!.get('.apf-editor select').setValue('accessory')
-    expect(wrapper!.text()).toContain('配件类型')
+    expect(wrapper!.get('.apf-editor select').findAll('option').map(item=>item.element.value)).toEqual(['camera','telescope','filter'])
   })
 
   it('passes only the selected preset identity without copying defaults into manual fields',async()=>{

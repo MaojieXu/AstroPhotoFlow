@@ -644,7 +644,7 @@ def _register_asset(database: Database, settings: Settings, task_data: dict, ite
         root_id, source_path = item.root_id, item.source_path
     if root_id == "__upload__":
         upload = next(file for file in task_data["upload_files"] if file["stored_name"] == source_path)
-        asset_name = upload["name"]
+        asset_name = task_data.get("output_name") if task_data.get("output_registration") else upload["name"]
         original = settings.data_dir / "upload-staging" / task_data["upload_source_task_id"] / source_path
         location = ""
     else:
@@ -656,7 +656,9 @@ def _register_asset(database: Database, settings: Settings, task_data: dict, ite
         raise IngestionError("SOURCE_UNAVAILABLE", "所选来源不是可读文件。")
     source_stamp = _source_stamp(original) if root_id != "__upload__" else None
     category = format_for_path(original)
-    if category not in SUPPORTED_EXTENSIONS.values():
+    if category not in SUPPORTED_EXTENSIONS.values() and task_data.get("output_registration"):
+        category = "other"
+    if category not in SUPPORTED_EXTENSIONS.values() and category != "other":
         raise IngestionError("UNSUPPORTED_FORMAT", "该文件格式不在本阶段入库清单中。")
     parsed, hdu_rows, parse_error = {}, [], None
     defaults = task_data.get("import_defaults_snapshot") or {}
@@ -1126,6 +1128,8 @@ def process_task(database: Database, settings: Settings, task_id: str, workers=N
                 "upload_manifest": bool((task.report or {}).get("upload_manifest")),
                 "upload_files": (task.report or {}).get("upload_files", []),
                 "upload_source_task_id": (task.report or {}).get("upload_source_task_id", task.id),
+                "output_registration": bool((task.report or {}).get("output_registration")),
+                "output_name": (task.report or {}).get("output_name"),
             }
         if not task_data["retry_of_task_id"]:
             _enumerate_task(database, settings, task_id, task_data)

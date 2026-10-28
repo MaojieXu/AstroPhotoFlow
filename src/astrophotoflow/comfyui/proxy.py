@@ -52,6 +52,8 @@ ROUTES = [
     ("POST", "/library/trash/delete", "/library/trash/delete"),
     ("GET", "/library/filter-options", "/library/filter-options"),
     ("GET", "/library/assets/{asset_id}", "/library/assets/{asset_id}"),
+    ("POST", "/library/assets/{asset_id}/content-observation", "/library/assets/{asset_id}/content-observation"),
+    ("POST", "/library/assets/{asset_id}/content-accept", "/library/assets/{asset_id}/content-accept"),
     ("GET", "/projects/{project_id}/assets", "/projects/{project_id}/assets"),
     ("GET", "/projects/{project_id}/asset-references/{reference_id}", "/projects/{project_id}/asset-references/{reference_id}"),
     ("GET", "/projects/{project_id}/asset-references/{reference_id}/previews/{size}", "/projects/{project_id}/asset-references/{reference_id}/previews/{size}"),
