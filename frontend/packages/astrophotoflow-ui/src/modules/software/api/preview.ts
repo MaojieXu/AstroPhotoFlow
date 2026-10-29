@@ -31,3 +31,30 @@ export function createSirilPreviewClient(fetchApi: FetchApi) {
     }
   }
 }
+
+export interface BundlePreviewRequest {
+  reference: ScienceReference
+  member_index: number
+  consumer_id: string
+  generation: number
+  package_id: string
+  operation_id: string
+  parameters: Record<string, unknown>
+}
+
+export function createBundlePreviewClient(fetchApi: FetchApi) {
+  const base = '/astrophotoflow/api/v1/software/preview'
+  return {
+    async render(body: BundlePreviewRequest, signal: AbortSignal): Promise<Blob> {
+      const response = await fetchApi(base, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal })
+      if (!response.ok) {
+        const error = await response.json() as { error: { message: string; code: string } }
+        throw new ApiClientError(error.error.message, 'service', response.status, error.error.code)
+      }
+      return response.blob()
+    },
+    async release(consumer: string): Promise<void> {
+      await fetchApi(`${base}/${encodeURIComponent(consumer)}`, { method: 'DELETE', keepalive: true })
+    }
+  }
+}

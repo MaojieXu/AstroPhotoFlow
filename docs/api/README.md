@@ -1,5 +1,14 @@
 # 接口与契约
 
+## Bundle 与节点目录
+
+此节覆盖早期固定 Siril 原生节点描述。公开 `GET /api/v1/nodes?query=` 和 `GET /api/v1/nodes/{definition_id}` 提供 `NodeCapability`；`POST /api/v1/canvas/graph` 读取/修改在线图，`POST/DELETE /api/v1/software/preview` 处理 Bundle 轻量显示。原生执行切换至内部 `/internal/native/bundles/calls`，不作为公开任意执行 API。旧 Siril 预览及命令查询仍可消费。
+
+CLI：`apf nodes list --query stretch`、`apf nodes get <definition_id>`、`apf canvas pages`、`apf canvas get <page_id>`、`apf canvas edit --data @edit.json`。MCP 对应 `list_nodes/get_node/get_canvas/edit_canvas`，已有工具保留。get_canvas 是读取，不取得控制。
+
+编辑请求提供从 pages/get_canvas 取得的最新目标和内容标记；add_node 使用 definition_id，set_parameter 使用实际 node_id/name/value，connect 使用实际源/目标 node_id 和端口名。每次只做一个操作，使用返回的新 content_token；applied=null 时查询同一 operation_id，不自动重放。网页变更、撤销、切图或断连不会自动恢复授权。
+
+软件包响应补充 bundle_version、bundle_commit、restart_required、migration_required。安装确认中明确 Git tag/commit 与重启；真实节点载入前为 not_ready，不以 checkout 完成代替可用。当前操作、节点与预览参数来自 Bundle 操作定义，旧命令资源仅为只读发布资料。
 2026-10-29 Siril显示专用接口：`POST /api/v1/software/packages/siril/autostretch-preview` 接收固定InputReference、member_index、consumer_id、generation及linked／shadowsclip／targetbg，返回 image/png；不接受文件路径、脚本、URL或通用操作名。`DELETE /api/v1/software/packages/siril/autostretch-preview/{consumer_id}` 释放本次查看；认证及同源代理白名单保持。预览只调用固定AutoStretch处理平台生成的线性样本，不执行工作流，不登记新素材，不作为科学输出。未安装／维护／来源变化明确返回错误。正式原生执行接口保持内部使用；修复其HTTP会话跨事件循环复用问题。OpenAPI按实际路由生成。
 
 

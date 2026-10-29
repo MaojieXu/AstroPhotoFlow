@@ -25,6 +25,10 @@ ROUTES = [
     ("POST", "/settings/workbench/select-directory", "/settings/workbench/select-directory"),
     ("GET", "/health", "/health"),
     ("GET", "/software/packages", "/software/packages"),
+    ("GET", "/nodes", "/nodes"),
+    ("GET", "/nodes/{definition_id}", "/nodes/{definition_id}"),
+    ("POST", "/software/preview", "/software/preview"),
+    ("DELETE", "/software/preview/{consumer_id}", "/software/preview/{consumer_id}"),
     (
         "GET",
         "/software/packages/{package_id}/versions/{version}/commands",

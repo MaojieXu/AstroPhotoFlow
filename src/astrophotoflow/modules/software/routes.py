@@ -18,8 +18,8 @@ def get_software_packages(request: Request):
 
 @router.get("/software/packages/{package_id}/versions/{version}/commands", response_model=list[SirilCommand],
             dependencies=[Depends(authenticate)])
-def get_software_commands(package_id: str, version: str):
-    return get_command_catalog(package_id, version)
+def get_software_commands(package_id: str, version: str, request: Request):
+    return get_command_catalog(package_id, version, request.app.state.settings)
 
 
 @router.get("/software/packages/{package_id}", response_model=SoftwarePackageDetails, dependencies=[Depends(authenticate)])

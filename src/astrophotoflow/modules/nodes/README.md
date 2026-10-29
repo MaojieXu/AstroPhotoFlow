@@ -1,5 +1,8 @@
 # ④ 节点构建与发布概要设计
 
+## Bundle 节点加载增量
+
+保留 workspace/nodes 有效 JSON 和稳定 native_type。目录 `catalog.py` 联合③公开元数据返回 NodeCapability；`routes.py` 提供统一只读 HTTP。接入层 bundle_nodes 根据定义生成 V3 类并记录实际加载 token；缺失 Bundle 时保留定义但不注册可执行类。前端、CLI、MCP 共用同一目录。首版 Auto Stretch ID 不变，通用节点编辑器和完整升级重映射仍待后续。
 具体交接见[④接口契约](../../../../docs/api/platform-contracts.md#nodes)及[文件级详细设计](../../../../docs/api/platform-contracts.md#nodes-design)：定义JSON保存、可选测试、影响确认和⑤实例更新。测试复用⑤同次运行，新增操作仍待实现。
 
 本文是④的唯一概要，依据[现行需求](../../../../docs/requirements/README.md)及[总架构](../../../../docs/architecture/overview.md)。数据设计见[④节点构建](../../../../docs/architecture/data-models/04-nodes.md)。2026-10-27用户确认简化方向，替代原有项目草稿、强制测试发布和旧版并存要求。

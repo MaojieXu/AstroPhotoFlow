@@ -1,5 +1,33 @@
 # 当前开发上下文
 
+## 2026-10-29 Siril Bundle dev 集成验证
+
+用户本轮明确授权检查 chat `01a183fd-e65c-7b32-b71e-8220c5245b55` 的实现、解决冲突、执行测试及构建，并将主项目 `codex/siril-bundle` 集成推送到远端 `dev`，独立 AstroPhotoFlow-Siril 保持并推送 `dev`。主项目基点为 `366a3112`；Bundle 为 `0.1.2-dev.1` / `12fd2d1d55daeadf7acb3972385d5c2bfcb52d4d`，仍是开发版本，不构成正式发布。
+
+发现并修复两处实现不一致：移除 `bundles.py` 中重复的 `remove_checkout` 定义与重复导入，保留受管理目录及删除目标检查；两个仍公开的 Siril 预览适配路由恢复进入 OpenAPI，并从实际应用重新生成快照，保持代理白名单与当前服务契约一致。初始远端核对没有 Git 分叉或未合并文件，不将旧实验版本文字作为当前版本。
+
+验证环境为 Windows / Python 3.12.4 / Node 26.8.2 / pnpm 11.13.1。后端初轮 570 passed、1 failed、4 skipped；唯一失败为上述代理/OpenAPI 一致性，修复后软件、代理、预览和失败用例合计 46 passed，清理函数修复后安装/卸载用例另有 6 passed。两个显式真实原生/Siril用例另外执行并通过，检查双成员输出及原件哈希；两个未运行的跳过项为本轮无改动的 M1 双 workspace 生命周期及失败排空真实验收。UI包 34文件267用例、宿主桥接12文件45用例、独立Bundle适配器5用例均通过。根 `pnpm build`（固定引擎、UI及原生类型、完整网页）通过；边界检查0错误、13条既有循环引用警告，后端保留一条既有互相外键排序警告。发布目录重新导出与固定Bundle checkout一致。
+
+本轮证据位于 `.artifacts/verification/siril-dev-integration-20261029/`：`backend.log/xml` 保留初轮失败；`final-regression.log/xml` 保存修复回归；`install-regression.log`、`real-native.log/xml`、`bundle.log/xml`、`ui.log`、`native-ui.log`、`build.log`、`boundaries.log`、`bundle-catalog.json`。本轮未操作正常dev或demo-preview服务；人工视觉验收、无系统Git自举及完整升级影响验收仍不由自动测试代签。Git集成与推送结果以实际提交及远端回执为准。
+
+## 开发/正式发布隔离（用户2026-10-29补充）
+
+当前发布仅为开发构建。Siril Bundle默认分支为dev，当前标签 v0.1.2-dev.1，commit 12fd2d1d55daeadf7acb3972385d5c2bfcb52d4d，release_channel=dev。开发版本必须使用X.Y.Z-dev.N，正式版本使用X.Y.Z并显式标为stable；schema和发布目录导出拒绝混用标签/通道。正式发布另行由用户明确批准，不能移动开发标签来冒充正式版本。v0.1.0/v0.1.1仅为历史实验标签，未作为正式Release发布。主项目候选位于codex/siril-bundle，本轮获授权测试后集成并推送dev；未发布正式包。
+
+历史实验版本就绪核对（已由上述v0.1.2-dev.1替代）：v0.1.1 / 7f2639441b3d00b3b3ec671b77fa5a027b4c1e8e，包ready，显式执行终点为true；最终index SHA256 535067a29c75b126a6bbcbc04261b07f0289b25975646537d91225fa63b5af42。保留原app，仅清理本轮生成的v0.1.0实验备份。
+
+历史实验Bundle版本（非当前发布目录）：v0.1.1 / 7f2639441b3d00b3b3ec671b77fa5a027b4c1e8e（Siril1.4.4）。v0.1.0保留为早期验证记录。v0.1.1以output_nodes显式声明原生终点，默认非终点，并补齐examples/agent.md；独立包5项测试通过。当时主项目目录锁定v0.1.1，demo-preview已更新；当前锁定版本以上述开发通道记录为准。无系统Git自举、浏览器确认和用户画布视觉仍待人工验证。
+
+交付更新：demo-preview已通过维护机制停止/启动（eb878959停止、3a48a82c启动），迁移到独立Bundle并保留原app。HTTP确认32688网页散列与最终构建一致、包ready、原生节点已注册，报告.artifacts/bundle-demo-report.json。bundle-smoke测试实例已停止并验证真实Git卸载；正常dev实例未启停。前端依赖检查0错误/13条既有警告。无系统Git时的MinGit自举分支未做真实下载验收；私有仓库仍需用户具有访问权限及系统凭据。
+
+## 2026-10-29 Siril Bundle 候选
+
+工作分支 codex/siril-bundle，基线 dev 366a3112，主项目未提交/合并。独立私有仓库 https://github.com/MaojieXu/AstroPhotoFlow-Siril 已发布 v0.1.0，commit d6be7dd341772d3be5a47849db92f2825ea1e92f；普通 Git 携带完整便携程序，软件版本1.4.4。独立本地 checkout 为 .artifacts/bundles/AstroPhotoFlow-Siril，不纳入主项目版本控制。
+
+已接入固定 Git 安装、参数目录、通用 V3 类、通用预览元数据、CLI/MCP 四个目录/画布工具；节点 UUID/native_type 保持。安装完成后受控空闲重启，真实程序和原生加载观察通过才绿色。原有199命令资料为只读缓存，只有 Auto Stretch 是可执行节点。旧 Siril 预览 HTTP 保留适配。
+
+隔离 bundle-smoke 已实际从私有 Git clone，检查程序版本、加载节点、生成实时PNG并经原生队列处理合成FITS；源哈希不变，输出96×64。真实CLI/stdio MCP返回相同目录，MCP共66工具含新增4项。后端56项（含新增说明变更门用例）、Bundle适配器4项、宿主14项、软件页面12项通过；UI包类型、原生类型和生产构建通过。真实Git卸载保留4个受保护文件的哈希。类型/构建与回归结果见验证矩阵。浏览器实际安装确认、Agent在用户画布操作及视觉效果未代签；定义变化的完整B55升级仍不在首版验收范围。
+
 ## 2026-10-29 M2 最终验证通过候选
 
 本条覆盖此前“仅编写测试”“受阻等待确认”的状态：用户已明确授权运行工作台设置及素材库全部现有实现的测试，通过后推送并合入dev。设备管理与素材库复用侧栏内容宽度和左边界，设备组合／我的设备居左；切换类别先清空旧记录，避免设备记录被组合视图误读。根目录单文件导入补存受理时大小／mtime，保证受理后来源变化会失败且不登记素材。

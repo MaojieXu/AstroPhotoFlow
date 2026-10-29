@@ -370,15 +370,138 @@
         }
       }
     },
-    "/api/v1/software/packages/siril/autostretch-preview": {
+    "/api/v1/canvas/graph": {
       "post": {
-        "summary": "Preview",
-        "operationId": "preview_api_v1_software_packages_siril_autostretch_preview_post",
+        "summary": "Edit Canvas",
+        "operationId": "edit_canvas_api_v1_canvas_graph_post",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/SirilPreviewRequest"
+                "$ref": "#/components/schemas/CanvasGraphRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CanvasAddResult"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Origin not allowed by the ComfyUI proxy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found or outside the requested scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Method not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Revision conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error or invalid reference",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service not configured or unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Service timeout",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/software/preview": {
+      "post": {
+        "summary": "Preview",
+        "operationId": "preview_api_v1_software_preview_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BundlePreviewRequest"
               }
             }
           },
@@ -494,10 +617,244 @@
         ]
       }
     },
-    "/api/v1/software/packages/siril/autostretch-preview/{consumer_id}": {
+    "/api/v1/software/preview/{consumer_id}": {
       "delete": {
         "summary": "Release",
-        "operationId": "release_api_v1_software_packages_siril_autostretch_preview__consumer_id__delete",
+        "operationId": "release_api_v1_software_preview__consumer_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "consumer_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Consumer Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Origin not allowed by the ComfyUI proxy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found or outside the requested scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Method not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Revision conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error or invalid reference",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service not configured or unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Service timeout",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/software/packages/siril/autostretch-preview": {
+      "post": {
+        "summary": "Legacy Preview",
+        "operationId": "legacy_preview_api_v1_software_packages_siril_autostretch_preview_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SirilPreviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Origin not allowed by the ComfyUI proxy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found or outside the requested scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Method not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Revision conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error or invalid reference",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service not configured or unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Service timeout",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/software/packages/siril/autostretch-preview/{consumer_id}": {
+      "delete": {
+        "summary": "Legacy Release",
+        "operationId": "legacy_release_api_v1_software_packages_siril_autostretch_preview__consumer_id__delete",
         "security": [
           {
             "HTTPBearer": []
@@ -16635,6 +16992,266 @@
           }
         }
       }
+    },
+    "/api/v1/nodes": {
+      "get": {
+        "summary": "Nodes",
+        "operationId": "nodes_api_v1_nodes_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Query"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/NodeCapability"
+                  },
+                  "title": "Response Nodes Api V1 Nodes Get"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Origin not allowed by the ComfyUI proxy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found or outside the requested scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Method not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Revision conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error or invalid reference",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service not configured or unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Service timeout",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/nodes/{definition_id}": {
+      "get": {
+        "summary": "Node",
+        "operationId": "node_api_v1_nodes__definition_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "definition_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Definition Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NodeCapability"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Origin not allowed by the ComfyUI proxy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found or outside the requested scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Method not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Revision conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error or invalid reference",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service not configured or unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Service timeout",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -18125,6 +18742,96 @@
         ],
         "title": "AutoStretch"
       },
+      "BundlePreview": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "science-image",
+            "title": "Kind"
+          },
+          "input": {
+            "type": "string",
+            "title": "Input"
+          },
+          "max_edge": {
+            "type": "integer",
+            "const": 1024,
+            "title": "Max Edge",
+            "default": 1024
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "kind",
+          "input"
+        ],
+        "title": "BundlePreview"
+      },
+      "BundlePreviewRequest": {
+        "properties": {
+          "reference": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/AssetInputReference"
+              },
+              {
+                "$ref": "#/components/schemas/DatasetInputReference"
+              }
+            ],
+            "title": "Reference",
+            "discriminator": {
+              "propertyName": "kind",
+              "mapping": {
+                "asset_version": "#/components/schemas/AssetInputReference",
+                "dataset_version": "#/components/schemas/DatasetInputReference"
+              }
+            }
+          },
+          "member_index": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Member Index",
+            "default": 0
+          },
+          "consumer_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Consumer Id"
+          },
+          "generation": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Generation"
+          },
+          "package_id": {
+            "type": "string",
+            "title": "Package Id"
+          },
+          "operation_id": {
+            "type": "string",
+            "title": "Operation Id"
+          },
+          "parameters": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "type": "object",
+            "title": "Parameters"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "reference",
+          "consumer_id",
+          "generation",
+          "package_id",
+          "operation_id",
+          "parameters"
+        ],
+        "title": "BundlePreviewRequest"
+      },
       "CalibrationTarget": {
         "properties": {
           "kind": {
@@ -18673,6 +19380,45 @@
                 "type": "null"
               }
             ]
+          },
+          "graph": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/JsonValue"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Graph"
+          },
+          "link_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Link Id"
+          },
+          "content_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content Token"
           }
         },
         "additionalProperties": false,
@@ -18687,6 +19433,83 @@
           "error"
         ],
         "title": "CanvasAddResult"
+      },
+      "CanvasConnect": {
+        "properties": {
+          "action": {
+            "type": "string",
+            "const": "connect",
+            "title": "Action"
+          },
+          "source_node_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Source Node Id"
+          },
+          "source_port": {
+            "type": "string",
+            "title": "Source Port"
+          },
+          "target_node_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Target Node Id"
+          },
+          "target_port": {
+            "type": "string",
+            "title": "Target Port"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "action",
+          "source_node_id",
+          "source_port",
+          "target_node_id",
+          "target_port"
+        ],
+        "title": "CanvasConnect"
+      },
+      "CanvasCreateNode": {
+        "properties": {
+          "action": {
+            "type": "string",
+            "const": "add_node",
+            "title": "Action"
+          },
+          "definition_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Definition Id"
+          },
+          "parameters": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "type": "object",
+            "title": "Parameters"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "action",
+          "definition_id"
+        ],
+        "title": "CanvasCreateNode"
       },
       "CanvasDataOut": {
         "properties": {
@@ -18770,6 +19593,98 @@
           "version_id"
         ],
         "title": "CanvasDataRequest"
+      },
+      "CanvasGraphRequest": {
+        "properties": {
+          "operation_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Operation Id"
+          },
+          "page_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Page Id"
+          },
+          "workflow_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Workflow Id"
+          },
+          "graph_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Graph Id"
+          },
+          "content_token": {
+            "type": "string",
+            "title": "Content Token"
+          },
+          "control_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Control Token"
+          },
+          "edit": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/CanvasInspect"
+              },
+              {
+                "$ref": "#/components/schemas/CanvasCreateNode"
+              },
+              {
+                "$ref": "#/components/schemas/CanvasSetParameter"
+              },
+              {
+                "$ref": "#/components/schemas/CanvasConnect"
+              }
+            ],
+            "title": "Edit",
+            "discriminator": {
+              "propertyName": "action",
+              "mapping": {
+                "add_node": "#/components/schemas/CanvasCreateNode",
+                "connect": "#/components/schemas/CanvasConnect",
+                "inspect": "#/components/schemas/CanvasInspect",
+                "set_parameter": "#/components/schemas/CanvasSetParameter"
+              }
+            }
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "operation_id",
+          "page_id",
+          "workflow_id",
+          "graph_id",
+          "content_token",
+          "control_token",
+          "edit"
+        ],
+        "title": "CanvasGraphRequest"
+      },
+      "CanvasInspect": {
+        "properties": {
+          "action": {
+            "type": "string",
+            "const": "inspect",
+            "title": "Action"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "action"
+        ],
+        "title": "CanvasInspect"
       },
       "CanvasInspectOut": {
         "properties": {
@@ -19022,6 +19937,42 @@
           "page_id"
         ],
         "title": "CanvasPageOut"
+      },
+      "CanvasSetParameter": {
+        "properties": {
+          "action": {
+            "type": "string",
+            "const": "set_parameter",
+            "title": "Action"
+          },
+          "node_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Node Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "value": {
+            "$ref": "#/components/schemas/JsonValue"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "action",
+          "node_id",
+          "name",
+          "value"
+        ],
+        "title": "CanvasSetParameter"
       },
       "CapturePresetCreate": {
         "properties": {
@@ -23115,6 +24066,67 @@
         ],
         "title": "NativeWorkflowChangeResult"
       },
+      "NodeCapability": {
+        "properties": {
+          "node": {
+            "$ref": "#/components/schemas/SavedDefinition"
+          },
+          "operation": {
+            "$ref": "#/components/schemas/SoftwareOperation"
+          },
+          "available": {
+            "type": "boolean",
+            "title": "Available"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "preview": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BundlePreview"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "help": {
+            "type": "string",
+            "title": "Help"
+          },
+          "examples": {
+            "items": {
+              "additionalProperties": {
+                "$ref": "#/components/schemas/JsonValue"
+              },
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Examples"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "node",
+          "operation",
+          "available",
+          "reason",
+          "preview",
+          "help",
+          "examples"
+        ],
+        "title": "NodeCapability"
+      },
       "NodeDefinition": {
         "properties": {
           "definition_id": {
@@ -24466,6 +25478,80 @@
         ],
         "title": "SoftwareBinding"
       },
+      "SoftwareInputDefinition": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type"
+          },
+          "formats": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "fits",
+                "xisf",
+                "image",
+                "raw",
+                "video",
+                "numpy",
+                "other"
+              ]
+            },
+            "type": "array",
+            "title": "Formats"
+          },
+          "cardinality": {
+            "type": "string",
+            "enum": [
+              "one",
+              "many"
+            ],
+            "title": "Cardinality"
+          },
+          "required": {
+            "type": "boolean",
+            "title": "Required"
+          },
+          "supports_hdu": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supports Hdu"
+          },
+          "supports_slice": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supports Slice"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name",
+          "type",
+          "formats",
+          "cardinality",
+          "required",
+          "supports_hdu",
+          "supports_slice"
+        ],
+        "title": "SoftwareInputDefinition"
+      },
       "SoftwareInstallRequest": {
         "properties": {
           "version": {
@@ -24484,6 +25570,152 @@
           "package_token"
         ],
         "title": "SoftwareInstallRequest"
+      },
+      "SoftwareOperation": {
+        "properties": {
+          "package_id": {
+            "type": "string",
+            "title": "Package Id"
+          },
+          "version": {
+            "type": "string",
+            "title": "Version"
+          },
+          "operation_id": {
+            "type": "string",
+            "title": "Operation Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "syntax": {
+            "type": "string",
+            "title": "Syntax"
+          },
+          "scriptable": {
+            "type": "boolean",
+            "title": "Scriptable"
+          },
+          "inputs": {
+            "items": {
+              "$ref": "#/components/schemas/SoftwareInputDefinition"
+            },
+            "type": "array",
+            "title": "Inputs"
+          },
+          "outputs": {
+            "items": {
+              "$ref": "#/components/schemas/SoftwareOutputDefinition"
+            },
+            "type": "array",
+            "title": "Outputs"
+          },
+          "parameters": {
+            "items": {
+              "$ref": "#/components/schemas/ParameterDefinition"
+            },
+            "type": "array",
+            "title": "Parameters"
+          },
+          "content_token": {
+            "type": "string",
+            "title": "Content Token"
+          },
+          "ready": {
+            "type": "boolean",
+            "title": "Ready"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "cancel_supported": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cancel Supported"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "package_id",
+          "version",
+          "operation_id",
+          "name",
+          "description",
+          "syntax",
+          "scriptable",
+          "inputs",
+          "outputs",
+          "parameters",
+          "content_token",
+          "ready",
+          "cancel_supported"
+        ],
+        "title": "SoftwareOperation"
+      },
+      "SoftwareOutputDefinition": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type"
+          },
+          "formats": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "fits",
+                "xisf",
+                "image",
+                "raw",
+                "video",
+                "numpy",
+                "other"
+              ]
+            },
+            "type": "array",
+            "title": "Formats"
+          },
+          "cardinality": {
+            "type": "string",
+            "enum": [
+              "one",
+              "many"
+            ],
+            "title": "Cardinality"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name",
+          "type",
+          "formats",
+          "cardinality"
+        ],
+        "title": "SoftwareOutputDefinition"
       },
       "SoftwarePackage": {
         "properties": {
@@ -24619,6 +25851,38 @@
             },
             "type": "array",
             "title": "Node Definition Ids"
+          },
+          "bundle_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bundle Version"
+          },
+          "bundle_commit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bundle Commit"
+          },
+          "restart_required": {
+            "type": "boolean",
+            "title": "Restart Required",
+            "default": false
+          },
+          "migration_required": {
+            "type": "boolean",
+            "title": "Migration Required",
+            "default": false
           }
         },
         "additionalProperties": false,

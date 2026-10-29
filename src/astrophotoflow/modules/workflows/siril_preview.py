@@ -8,14 +8,14 @@ import shutil
 
 from fastapi import APIRouter, Depends, Request, Response
 
-from astrophotoflow.contracts.software import SirilPreviewRequest
+from astrophotoflow.contracts.software import SirilPreviewRequest, BundlePreviewRequest
 from astrophotoflow.core.http import authenticate, ERROR_RESPONSES
 from astrophotoflow.core.errors import ApiError
 from astrophotoflow.modules.data.public import prepare_siril_sample, direct_fits_image
-from astrophotoflow.modules.software.public import preview_autostretch, get_package
+from astrophotoflow.modules.software.public import preview_operation, get_package, validate_parameters
 
 
-router = APIRouter(prefix="/api/v1/software/packages/siril", dependencies=[Depends(authenticate)], responses=ERROR_RESPONSES)
+router = APIRouter(prefix="/api/v1/software", dependencies=[Depends(authenticate)], responses=ERROR_RESPONSES)
 
 
 class SirilPreviews:
@@ -74,9 +74,9 @@ class SirilPreviews:
                 sample = await asyncio.shield(asyncio.wrap_future(work))
                 directory = sample.folder / str(uuid4())
                 if sample.path != sample.folder / "linear.fit":
-                    result = await preview_autostretch(self.settings, sample.path, directory, body, prepare_sample=True)
+                    result = await preview_operation(self.settings, sample.path, directory, body.parameters, package_id=body.package_id, operation_id=body.operation_id, prepare_sample=True)
                 else:
-                    result = await preview_autostretch(self.settings, sample.path, directory, body)
+                    result = await preview_operation(self.settings, sample.path, directory, body.parameters, package_id=body.package_id, operation_id=body.operation_id)
                 future = self.executor.submit(direct_fits_image, result, 0, 1024)
                 image = await asyncio.shield(asyncio.wrap_future(future))
                 stream = BytesIO()
@@ -123,12 +123,13 @@ class SirilPreviews:
         await asyncio.gather(*(self.cancel(consumer) for consumer in list(self.active)))
 
 
-@router.post("/autostretch-preview", response_class=Response,
+@router.post("/preview", response_class=Response,
              responses={200: {"content": {"image/png": {"schema": {"type": "string", "format": "binary"}}}}})
-async def preview(body: SirilPreviewRequest, request: Request):
-    package = get_package(request.app.state.settings, "siril")
+async def preview(body: BundlePreviewRequest, request: Request):
+    package = get_package(request.app.state.settings, body.package_id)
     if package.availability != "ready":
         raise ApiError(503, "SOFTWARE_NOT_READY", package.reason or "请先安装 Siril。")
+    validate_parameters(request.app.state.settings, body.package_id, body.operation_id, body.parameters)
     manager = request.app.state.siril_previews
     async with request.app.state.maintenance_lock:
         if request.app.state.maintenance or request.app.state.shutdown_started:
@@ -148,7 +149,19 @@ async def preview(body: SirilPreviewRequest, request: Request):
         raise
 
 
-@router.delete("/autostretch-preview/{consumer_id}", status_code=204, response_class=Response)
+@router.delete("/preview/{consumer_id}", status_code=204, response_class=Response)
 async def release(consumer_id: UUID, request: Request):
     await request.app.state.siril_previews.cancel(consumer_id)
     return Response(status_code=204)
+
+
+@router.post("/packages/siril/autostretch-preview", response_class=Response)
+async def legacy_preview(body: SirilPreviewRequest, request: Request):
+    return await preview(BundlePreviewRequest(reference=body.reference, member_index=body.member_index,
+        consumer_id=body.consumer_id, generation=body.generation, package_id="siril", operation_id="autostretch",
+        parameters=body.model_dump(include={"linked", "shadowsclip", "targetbg"})), request)
+
+
+@router.delete("/packages/siril/autostretch-preview/{consumer_id}", status_code=204, response_class=Response)
+async def legacy_release(consumer_id: UUID, request: Request):
+    return await release(consumer_id, request)

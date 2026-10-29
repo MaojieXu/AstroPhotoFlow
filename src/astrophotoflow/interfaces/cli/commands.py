@@ -15,7 +15,7 @@ from astrophotoflow.contracts.projects import ProjectCreate, ProjectPatch
 from astrophotoflow.contracts.setups import CapturePresetCreate, CapturePresetPatch, EquipmentSetupCreate, EquipmentSetupPatch
 from astrophotoflow.contracts.imports import PhotoImportOptions
 from astrophotoflow.contracts.inputs import CanvasDataRequest
-from astrophotoflow.contracts.workflows import CanvasAddRequest
+from astrophotoflow.contracts.workflows import CanvasAddRequest, CanvasGraphRequest
 
 
 def read_body(value: str, schema):
@@ -49,7 +49,12 @@ def _group(commands, name):
 
 
 def register(commands, assets):
+    nodes = _group(commands, "nodes")
+    _command(nodes, "list", "list_nodes", filters=("query",))
+    _command(nodes, "get", "get_node", ids=("definition_id",))
     canvas = _group(commands, "canvas")
+    _command(canvas, "get", "get_canvas", ids=("page_id",))
+    _command(canvas, "edit", "edit_canvas", schema=CanvasGraphRequest)
     _command(canvas, "pages", "list_canvas_pages")
     _command(canvas, "add-data", "add_canvas_data", schema=CanvasAddRequest)
     _command(canvas, "result", "get_canvas_request", ids=("operation_id",))

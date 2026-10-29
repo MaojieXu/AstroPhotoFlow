@@ -13,7 +13,7 @@ from astrophotoflow.modules.workflows import software_calls
 def test_native_call_is_idempotent_and_not_a_public_execution_route(tmp_path, monkeypatch):
     settings = Settings("127.0.0.1", 8190, tmp_path, (), workspace=tmp_path)
     app = create_app(settings, "token")
-    monkeypatch.setattr(software_calls, "get_operation", lambda *_args: SimpleNamespace(ready=True))
+    monkeypatch.setattr(software_calls, "_binding", lambda *_args: (SimpleNamespace(ready=True), {}))
     executed = []
 
     async def run(_app, _settings, body):
@@ -26,11 +26,11 @@ def test_native_call_is_idempotent_and_not_a_public_execution_route(tmp_path, mo
     monkeypatch.setattr(software_calls, "_run", run)
     body = {"call_id": str(uuid4()), "prompt_id": str(uuid4()), "node_id": "3",
             "reference": {"kind": "asset_version", "asset_version_id": str(uuid4()), "selection": {"kind": "whole_file"}},
-            "linked": True, "shadowsclip": -2.8, "targetbg": 0}
+            "definition_id": str(uuid4()), "definition_token":"test", "parameters": {"linked": True, "shadowsclip": -2.8, "targetbg": 0}}
 
     async def scenario():
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
-            path = "/internal/native/siril/calls"
+            path = "/internal/native/bundles/calls"
             assert (await client.post(path, json=body)).status_code == 401
             headers = {"Authorization": "Bearer token"}
             assert (await client.post(path, json={**body, "work_directory": "C:/arbitrary"}, headers=headers)).status_code == 422
@@ -40,7 +40,7 @@ def test_native_call_is_idempotent_and_not_a_public_execution_route(tmp_path, mo
             second = await client.post(path, json=body, headers=headers)
             assert second.status_code == 200 and second.json()["state"] == "completed"
             assert len(executed) == 1
-            changed = await client.post(path, json={**body, "targetbg": 0.4}, headers=headers)
+            changed = await client.post(path, json={**body, "parameters": {**body["parameters"], "targetbg":0.4}}, headers=headers)
             assert changed.status_code == 409
     try:
         asyncio.run(scenario())

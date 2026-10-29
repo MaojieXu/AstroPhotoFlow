@@ -1,4 +1,6 @@
 export { Workspace } from './modules/data'
+export { createNodeClient, savedNodeSchema } from './modules/nodes/client'
+export type { NodeCapability, SavedNode, NodeParameter } from './modules/nodes/client'
 export { canvasDataRequestSchema, canvasDataSchema, canvasInspectSchema, scienceReferenceSchema, createCanvasDataClient } from './modules/data/api/canvas'
 export type { CanvasData, CanvasDataRequest, CanvasInspect, ScienceReference } from './modules/data/api/canvas'
 export type { LibraryControls } from './modules/data/workspace/libraryControls'
@@ -9,7 +11,7 @@ export { createWorkbenchClient } from './core/client'
 export type { WorkbenchClient } from './core/client'
 export type { ConfigSave, ConfigState, ConfigValues } from './core/contracts'
 export { SoftwarePanel, createSoftwareClient, pendingSoftwareActionSchema } from './modules/software'
-export { createSirilPreviewClient } from './modules/software/api/preview'
+export { createSirilPreviewClient, createBundlePreviewClient } from './modules/software/api/preview'
 export type { SirilPreviewRequest } from './modules/software/api/preview'
 export type {
   PendingSoftwareAction,

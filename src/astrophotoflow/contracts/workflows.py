@@ -2,10 +2,10 @@ from pathlib import Path
 from typing import Annotated, Literal
 from uuid import UUID
 
-from pydantic import Field
+from pydantic import Field, JsonValue
 
 from astrophotoflow.contracts.common import ErrorDetail, JsonObject, StrictModel, UuidInput
-from astrophotoflow.contracts.nodes import DefinitionWriteResult, NativeNodeLoad
+from astrophotoflow.contracts.nodes import DefinitionWriteResult, NativeNodeLoad, SavedDefinition
 from astrophotoflow.contracts.software import ConfirmSoftwareEvent, SoftwarePackage
 from astrophotoflow.contracts.inputs import CanvasDataOut, CanvasDataRequest
 
@@ -43,11 +43,57 @@ class CanvasAddResult(StrictModel):
     applied: bool | None
     node_id: str | int | None
     error: ErrorDetail | None
+    graph: JsonObject | None = None
+    link_id: str | int | None = None
+    content_token: str | None = None
 
 
 class NativeCanvasCommand(StrictModel):
     request: CanvasAddRequest
     data: CanvasDataOut
+
+
+class CanvasInspect(StrictModel):
+    action: Literal['inspect']
+
+
+class CanvasCreateNode(StrictModel):
+    action: Literal['add_node']
+    definition_id: UuidInput
+    parameters: dict[str, JsonValue] = Field(default_factory=dict)
+
+
+class CanvasSetParameter(StrictModel):
+    action: Literal['set_parameter']
+    node_id: str | int
+    name: str
+    value: JsonValue
+
+
+class CanvasConnect(StrictModel):
+    action: Literal['connect']
+    source_node_id: str | int
+    source_port: str
+    target_node_id: str | int
+    target_port: str
+
+
+CanvasEdit = Annotated[CanvasInspect | CanvasCreateNode | CanvasSetParameter | CanvasConnect, Field(discriminator='action')]
+
+
+class CanvasGraphRequest(StrictModel):
+    operation_id: UuidInput
+    page_id: UuidInput
+    workflow_id: UuidInput
+    graph_id: UuidInput
+    content_token: str
+    control_token: str | None
+    edit: CanvasEdit
+
+
+class NativeCanvasGraphCommand(StrictModel):
+    request: CanvasGraphRequest
+    definition: SavedDefinition | None = None
 
 
 class NativeCanvasStateEvent(StrictModel):

@@ -1,5 +1,10 @@
 # ⑤工作流、执行与 Agent 交互概要设计
 
+## Bundle 调用与在线图增量
+
+正式调用以定义 ID/content token 解析执行绑定，经③运行进程并交②验证输出；已拉伸输出使用直接显示，不再次自动拉伸。实时预览按 Bundle 元数据消费直接相连的固定素材引用；不承诺任意上游结果的实时链式预览。
+
+CanvasGraphRequest 复用现有在线页面、内容/控制标记及一次性回执。inspect 读取原生实际 JSON，add_node/set_parameter/connect 通过宿主原生节点、控件、连线及撤销/草稿生命周期完成。手动接管、切图、重连和未知结果规则不变；不创建服务器当前图副本或永久回执库。
 2026-10-29 首个 Siril 节点窄接入：software_calls.py 复用原生 prompt_id／node_id，固定工作目录，调用②公开科学解析与检查、③invoke／cancel／inspect，保存该次调用 JSON 和日志；不向网页代理／CLI／MCP开放直接执行。完整项目图关联、SQLite 运行权威、保存前运行及 Agent 执行准入仍按 M5 实施，不能由该窄适配代签。测试仅编写，未执行。
 
 

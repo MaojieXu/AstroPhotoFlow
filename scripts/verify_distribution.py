@@ -34,7 +34,7 @@ def check_wheel(path: Path) -> None:
             "vendor/comfyui-0.42.0.zip", "vendor/comfyui-0.42.0-windows-py312.lock",
             "vendor/siril-1.4.4-commands.json", "vendor/siril-1.4.4-manifest.json",
             "vendor/siril-1.4.4-command-assessments.json",
-            "vendor/siril-1.4.4-node-definitions.json",
+            "vendor/bundle-catalog.json",
         }
         assert {prefix + name for name in required} <= names, f"Missing product resources in {path.name}"
         assert not any(name.startswith(("astrophotoflow_service/", "tests/", "astrophotoflow/frontend/", "astrophotoflow/backend/", "astrophotoflow/agent_tools/", "astrophotoflow/client_domains/")) for name in names)
@@ -143,7 +143,7 @@ assert len(assessment_names) == len(set(assessment_names))
 assert set(assessment_names) == {item['command'] for item in catalog}
 assessment_fields = {'parameter_details', 'structured_parameter_defaults_ranges', 'single_image_sequence_context', 'input_output_semantics', 'headless_status', 'dependencies', 'security_risk', 'semantic_review_status', 'node_definition_status', 'node_definition_reason', 'node_generation_status', 'node_generation_reason', 'registry_load_status', 'registry_load_reason', 'runtime_test_status', 'runtime_test_reason'}
 assert all(set(item['assessment']) == assessment_fields and all(isinstance(value, str) and value for value in item['assessment'].values()) for item in assessments['commands'])
-node_definitions = json.loads(vendor.joinpath('siril-1.4.4-node-definitions.json').read_text(encoding='utf-8'))
+node_definitions = json.loads(vendor.joinpath('bundle-catalog.json').read_text(encoding='utf-8'))['siril']['nodes']
 catalog_names = [item['command'] for item in catalog]
 assert hashlib.sha256(catalog_bytes).hexdigest().upper() == catalog_manifest['commands_file_sha256'].upper()
 assert len(catalog_names) == catalog_manifest['indexed_commands']

@@ -1,0 +1,201 @@
+{
+  "siril": {
+    "repository": "https://github.com/MaojieXu/AstroPhotoFlow-Siril.git",
+    "tag": "v0.1.2-dev.1",
+    "commit": "12fd2d1d55daeadf7acb3972385d5c2bfcb52d4d",
+    "manifest": {
+      "schema_version": 1,
+      "package_id": "siril",
+      "name": "Siril CLI",
+      "bundle_version": "0.1.2-dev.1",
+      "release_channel": "dev",
+      "software_version": "1.4.4",
+      "platform": "windows-x86_64",
+      "host_api": 1,
+      "executable": "app/bin/siril-cli.exe",
+      "version_args": [
+        "--version"
+      ],
+      "version_output": "siril 1.4.4",
+      "adapter": "adapter/siril.py",
+      "operations": [
+        "operations/autostretch.json"
+      ],
+      "nodes": [
+        "nodes/autostretch.json"
+      ],
+      "output_nodes": [
+        "169de083-7f81-4cde-a329-5541ecacf463"
+      ],
+      "commands": "reference/commands.json",
+      "assessments": "reference/assessments.json"
+    },
+    "operations": [
+      {
+        "operation": {
+          "package_id": "siril",
+          "version": "1.4.4",
+          "operation_id": "autostretch",
+          "name": "Auto Stretch",
+          "description": "Applies Auto Stretch to each static image in fixed order using Siril. Linked mode preserves channel balance. Writes new FITS files; originals remain unchanged.",
+          "syntax": "autostretch [-linked] [shadowsclip [targetbg]]",
+          "scriptable": true,
+          "inputs": [
+            {
+              "name": "image",
+              "type": "APF_SCIENCE",
+              "formats": [
+                "fits",
+                "xisf",
+                "image",
+                "raw"
+              ],
+              "cardinality": "many",
+              "required": true,
+              "supports_hdu": false,
+              "supports_slice": false
+            }
+          ],
+          "outputs": [
+            {
+              "name": "image",
+              "type": "APF_SCIENCE",
+              "formats": [
+                "fits"
+              ],
+              "cardinality": "many"
+            }
+          ],
+          "parameters": [
+            {
+              "name": "linked",
+              "kind": "boolean",
+              "default": false,
+              "minimum": null,
+              "maximum": null,
+              "step": null,
+              "choices": null,
+              "advanced": false,
+              "nullable": false
+            },
+            {
+              "name": "shadowsclip",
+              "kind": "float",
+              "default": -2.8,
+              "minimum": null,
+              "maximum": null,
+              "step": null,
+              "choices": null,
+              "advanced": false,
+              "nullable": false
+            },
+            {
+              "name": "targetbg",
+              "kind": "float",
+              "default": 0.25,
+              "minimum": 0.0,
+              "maximum": 1.0,
+              "step": null,
+              "choices": null,
+              "advanced": false,
+              "nullable": false
+            }
+          ],
+          "cancel_supported": null
+        },
+        "preview": {
+          "kind": "science-image",
+          "input": "image",
+          "max_edge": 1024
+        },
+        "help": "Connect an APF_SCIENCE fixed image or ordered group to image. Adjust linked, shadowsclip and targetbg. Live preview uses a 1024px sample; Run processes originals and writes new FITS. Output previews must not be auto-stretched again. Agent flow: list_nodes/get_node, list_canvas_pages/get_canvas, then edit_canvas(add_node, set_parameter, connect) with fresh target tokens. Unknown results must be queried, not replayed. See examples/agent.md in the bundle.",
+        "examples": [
+          {
+            "linked": false,
+            "shadowsclip": -2.8,
+            "targetbg": 0.25
+          }
+        ]
+      }
+    ],
+    "nodes": [
+      {
+        "definition_id": "169de083-7f81-4cde-a329-5541ecacf463",
+        "source": "package",
+        "name": "Siril Auto Stretch",
+        "description": "Siril 1.4.4 Auto Stretch; processes fixed static images or an ordered group and writes new FITS files.",
+        "inputs": [
+          {
+            "name": "image",
+            "type": "APF_SCIENCE"
+          }
+        ],
+        "outputs": [
+          {
+            "name": "image",
+            "type": "APF_SCIENCE"
+          }
+        ],
+        "parameters": [
+          {
+            "name": "linked",
+            "kind": "boolean",
+            "default": false,
+            "minimum": null,
+            "maximum": null,
+            "step": null,
+            "choices": null,
+            "advanced": false,
+            "nullable": false
+          },
+          {
+            "name": "shadowsclip",
+            "kind": "float",
+            "default": -2.8,
+            "minimum": null,
+            "maximum": null,
+            "step": null,
+            "choices": null,
+            "advanced": false,
+            "nullable": false
+          },
+          {
+            "name": "targetbg",
+            "kind": "float",
+            "default": 0.25,
+            "minimum": 0.0,
+            "maximum": 1.0,
+            "step": null,
+            "choices": null,
+            "advanced": false,
+            "nullable": false
+          }
+        ],
+        "execution": {
+          "package_id": "siril",
+          "operation_id": "autostretch",
+          "inputs": {
+            "image": "image"
+          },
+          "parameters": {
+            "linked": {
+              "kind": "parameter",
+              "name": "linked"
+            },
+            "shadowsclip": {
+              "kind": "parameter",
+              "name": "shadowsclip"
+            },
+            "targetbg": {
+              "kind": "parameter",
+              "name": "targetbg"
+            }
+          },
+          "outputs": {
+            "image": "image"
+          }
+        }
+      }
+    ]
+  }
+}

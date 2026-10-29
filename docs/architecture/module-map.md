@@ -1,5 +1,10 @@
 # 五模块源码与验证导航
 
+## Bundle 实际入口（2026-10-29）
+
+SDK契约：contracts/bundles.py；③：software/bundles.py、public.py；④：nodes/catalog.py、routes.py；原生注册：interfaces/bundle_nodes.py；⑤：workflows/canvas.py、software_calls.py、siril_preview.py；宿主：bundleCatalog.ts、canvasNodeBridge.ts。CLI/MCP通过共享HTTP消费，不导入业务实现。独立Siril仓库包含程序和适配器，主平台vendor/bundle-catalog.json为发布目录快照。
+
+
 2026-10-29 M3 候选映射：software/public.py 新增程序卸载、真实调用、只读观察、定向取消及当前占用；contracts/software.py 承载实际 DTO，routes.py／client/software.py／固定代理新增待确认卸载。interfaces/siril_node.py 从 JSON 定义生成首个 V3 Siril 节点；workflows/software_calls.py 复用原生执行身份，协调 data.public.resolve_canvas_inputs、科学输出检查及软件调用。UI SoftwarePanel 精简为状态与安装／卸载，宿主注入原生控件。测试新增 software/test_invocation.py、workflows/test_software_calls.py、interfaces/comfyui/test_software_page.py、integration/test_siril_native.py；全部未运行。
 
 

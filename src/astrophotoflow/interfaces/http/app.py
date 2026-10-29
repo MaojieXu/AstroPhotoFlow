@@ -29,12 +29,13 @@ from astrophotoflow.contracts.workflows import (
 from astrophotoflow.modules.nodes.public import list_definitions, replace_package_definitions
 from astrophotoflow.modules.software.public import (
     get_bundled_definitions, get_package, get_package_source, install_package,
-    maintain_package, set_package_node_definition_ids, uninstall_package, get_usage,
+    maintain_package, set_package_node_definition_ids, uninstall_package, get_usage, list_packages,
 )
 from sqlalchemy.exc import SQLAlchemyError
 from typing import Literal
 from astrophotoflow.modules.data.routes import router as data_router
 from astrophotoflow.modules.software.routes import router as software_router
+from astrophotoflow.modules.nodes.routes import router as nodes_router
 from astrophotoflow.modules.workflows.canvas import router as canvas_router
 from astrophotoflow.modules.workflows.siril_preview import SirilPreviews, router as siril_preview_router
 from astrophotoflow.interfaces.http import system
@@ -87,8 +88,7 @@ def create_app(settings: Settings, token: str) -> FastAPI:
         app.state.maintenance_owner = owner
         app.state.maintenance = owner is not None
 
-    def siril_definition_plan(*, uninstall=False):
-        package_id, version = "siril", "1.4.4"
+    def bundle_definition_plan(package_id, version, *, uninstall=False):
         current = list_definitions(settings.workspace)
         current_by_id = {item.definition.definition_id: item for item in current}
         package_current = {
@@ -110,12 +110,12 @@ def create_app(settings: Settings, token: str) -> FastAPI:
             if saved is not None and (saved.definition.source != "package" or saved.definition.execution.package_id != package_id):
                 raise ApiError(409, "NODE_CONTENT_CONFLICT", "软件包配套节点ID已属于其他定义。")
             token = definition_content_token(definition)
-            if saved is not None and saved.content_token != token:
+            if saved is not None and saved.content_token != token and saved.definition.model_dump(exclude={'name', 'description'}) != definition.model_dump(exclude={'name', 'description'}):
                 raise ApiError(409, "SOFTWARE_CONTENT_CONFLICT", "现有软件包定义与待安装版本不同，需先通过B55确认影响。")
             changes.append(SoftwarePlanNodeChange(
                 definition_id=definition.definition_id,
                 name=definition.name,
-                action="create" if saved is None else "retain",
+                action="create" if saved is None else "retain" if saved.content_token == token else "update",
                 before_content_token=saved.content_token if saved is not None else None,
                 after_content_token=token,
             ))
@@ -150,7 +150,7 @@ def create_app(settings: Settings, token: str) -> FastAPI:
             raise ApiError(409, "SOFTWARE_CONTENT_CONFLICT", "软件包状态已变化，请重新读取后请求安装。")
         if package.operation_state == "running":
             raise ApiError(409, "SOFTWARE_BUSY", "软件包已有动作正在执行。")
-        if package.availability != "not_installed":
+        if package.availability != "not_installed" and not package.migration_required:
             raise ApiError(503, "SOFTWARE_NOT_READY", package.reason or "当前软件状态不允许重新安装。")
 
     def request_software_action(package_id: str, body: SoftwareInstallRequest | SoftwareUninstallRequest) -> PendingSoftwareAction:
@@ -163,7 +163,7 @@ def create_app(settings: Settings, token: str) -> FastAPI:
         if not workbench.ready or not workbench.web_url:
             raise ApiError(503, "WORKBENCH_NOT_READY", "必须从已就绪的工作台网页确认软件安装。")
         uninstall = isinstance(body, SoftwareUninstallRequest)
-        node_changes, _, _ = siril_definition_plan(uninstall=uninstall)
+        node_changes, _, _ = bundle_definition_plan(package_id, body.version if not uninstall else package.installed_version, uninstall=uninstall)
         operation_id = uuid4()
         plan = SoftwarePlanSummary(
             action="uninstall" if uninstall else "install",
@@ -171,11 +171,11 @@ def create_app(settings: Settings, token: str) -> FastAPI:
             current_version=package.installed_version,
             target_version=None if uninstall else body.version,
             source=None if uninstall else get_package_source(package_id, body.version),
-            install_path=settings.workspace / "software" / package_id / "app",
+            install_path=settings.workspace / "software" / package_id / "bundle" / "app",
             package_token=body.package_token,
             impact_token=None,
-            restart_required=False,
-            restart_reason="保留节点及画布；卸载后对应节点无法执行。" if uninstall else None,
+            restart_required=True,
+            restart_reason="完成后在空闲状态重启工作台以加载节点；繁忙时拒绝重启。",
             node_changes=node_changes,
             workflow_impacts=[],
         )
@@ -257,6 +257,22 @@ def create_app(settings: Settings, token: str) -> FastAPI:
             app.state.software_actions[pending.plan.package_id] = pending.model_copy(
                 update={"state": final_state, "error": result.error}
             )
+        if final_state == "completed" and pending.plan.restart_required:
+            asyncio.get_running_loop().call_soon(schedule_bundle_restart, pending.plan.package_id)
+
+    def schedule_bundle_restart(package_id):
+        from astrophotoflow.core.workbench import request_restart
+        async def restart_when_idle():
+            try:
+                import json
+                operation_id = uuid4()
+                (settings.workspace / 'software' / package_id / 'bundle-restart.json').write_text(
+                    json.dumps({'operation_id': str(operation_id)}), encoding='utf-8')
+                await asyncio.to_thread(request_restart, settings.workspace / "config.toml", operation_id)
+            except Exception:
+                logger.exception("Bundle installed; controlled restart was refused. package=%s", package_id)
+        asyncio.create_task(restart_when_idle())
+
 
     async def confirm_software_action(body: ConfirmSoftwareEvent, *, page_id: UUID, page_token: str) -> PendingSoftwareAction:
         async with app.state.maintenance_lock:
@@ -268,7 +284,7 @@ def create_app(settings: Settings, token: str) -> FastAPI:
         if not workbench.ready or workbench.web_url != expected_base:
             raise ApiError(409, "SOFTWARE_ACTION_EXPIRED", "工作台网页地址已变化，请重新查看安装计划。")
         package = get_package(settings, pending.plan.package_id)
-        node_changes, definitions, expected_tokens = siril_definition_plan(uninstall=pending.plan.action == "uninstall")
+        node_changes, definitions, expected_tokens = bundle_definition_plan(pending.plan.package_id, pending.plan.target_version, uninstall=pending.plan.action == "uninstall")
         if get_usage(pending.plan.package_id):
             raise ApiError(409, "SOFTWARE_BUSY", "软件仍有实际调用或未知占用。")
         with app.state.software_action_lock:
@@ -304,7 +320,7 @@ def create_app(settings: Settings, token: str) -> FastAPI:
         with app.state.software_action_lock:
             if app.state.software_page_tokens.get(page_id) != page_token:
                 raise ApiError(409, "SOFTWARE_ACTION_EXPIRED", "软件确认页面连接已改变。")
-            pending = app.state.software_actions.get("siril")
+            pending = next((item for item in app.state.software_actions.values() if item.operation_id == body.operation_id), None)
             if pending is None or pending.operation_id != body.operation_id:
                 raise ApiError(409, "SOFTWARE_ACTION_EXPIRED", "该软件动作已被替换或失效。")
             if pending.state != "awaiting_confirmation":
@@ -341,7 +357,7 @@ def create_app(settings: Settings, token: str) -> FastAPI:
                 set_maintenance(body.operation_id)
                 state = data_busy(app.state.database)
                 active_software = [package_id for package_id, task in app.state.software_tasks.items() if not task.done()]
-                active_software.extend(f"Siril调用 {use.call_id}" for use in get_usage("siril"))
+                active_software.extend(f"{package.package_id}调用 {use.call_id}" for package in list_packages(settings) for use in get_usage(package.package_id))
                 active_software.extend(f"Siril准备 {call_id}" for call_id, task in app.state.siril_calls.items() if not task.done())
                 if app.state.siril_previews is not None:
                     active_software.extend(f"Siril实时预览 {consumer}" for consumer in app.state.siril_previews.active)
@@ -350,7 +366,7 @@ def create_app(settings: Settings, token: str) -> FastAPI:
                 if active_software:
                     state.busy = True
                     state.blockers.extend(f"软件包动作 {package_id}" for package_id in active_software)
-                elif get_package(settings, "siril").operation_state == "unknown":
+                elif any(package.operation_state == "unknown" for package in list_packages(settings)):
                     state.unknown = True
                     state.blockers.append("无法确认Siril软件动作是否已停止")
                 async with httpx.AsyncClient(timeout=3) as client:
@@ -459,6 +475,7 @@ def create_app(settings: Settings, token: str) -> FastAPI:
     app.include_router(system.router)
     app.include_router(data_router)
     app.include_router(software_router)
+    app.include_router(nodes_router)
     return app
 
 

@@ -186,7 +186,8 @@ def test_install_request_builds_replaceable_plan_without_side_effects(tmp_path, 
     body = SoftwareInstallRequest(version="1.4.4", package_token=package.package_token)
     first = app.state.request_software_action("siril", body)
     assert first.state == "awaiting_confirmation"
-    assert first.plan.source.endswith("siril-1.4.4-ucrt64_win.zip")
+    assert "AstroPhotoFlow-Siril.git @ v0.1.2-dev.1" in first.plan.source
+    assert first.plan.restart_required is True
     assert first.plan.node_changes[0].action == "create"
     assert "operation_id=" + str(first.operation_id) in first.confirmation_url
     assert not (tmp_path / "software").exists()
@@ -237,6 +238,32 @@ def test_confirmation_does_not_start_replaced_plan(tmp_path, monkeypatch):
     app.state.database.close()
 
 
+def test_bundle_migration_allows_description_only_change_but_not_parameter_change(tmp_path, monkeypatch):
+    import json
+    import astrophotoflow.interfaces.http.app as app_module
+    monkeypatch.setattr(app_module, 'workbench_status', lambda _path: SimpleNamespace(ready=True, web_url='http://127.0.0.1:8188'))
+    settings = Settings('127.0.0.1', 8190, tmp_path, (), workspace=tmp_path)
+    definition = get_bundled_definitions(settings, 'siril', '1.4.4')[0].copy()
+    definition['description'] = 'Previous display description'
+    directory = tmp_path/'nodes'
+    directory.mkdir()
+    path = directory/(definition['definition_id']+'.json')
+    path.write_text(json.dumps(definition), encoding='utf-8')
+    app = create_app(settings, TOKEN)
+    try:
+        package = list_packages(settings)[0]
+        body = SoftwareInstallRequest(version='1.4.4', package_token=package.package_token)
+        pending = app.state.request_software_action('siril', body)
+        assert pending.plan.node_changes[0].action == 'update'
+        changed = json.loads(path.read_text(encoding='utf-8'))
+        changed['parameters'][0]['default'] = True
+        path.write_text(json.dumps(changed), encoding='utf-8')
+        with pytest.raises(ApiError, match='B55'):
+            app.state.request_software_action('siril', body)
+    finally:
+        app.state.database.close()
+
+
 def test_uninstall_plan_requires_confirmation_and_keeps_actual_definitions(tmp_path, monkeypatch):
     import astrophotoflow.interfaces.http.app as app_module
     from astrophotoflow.contracts.software import SoftwareUninstallRequest
@@ -247,7 +274,7 @@ def test_uninstall_plan_requires_confirmation_and_keeps_actual_definitions(tmp_p
     app_path = tmp_path / "software/siril/app"
     (app_path / "bin").mkdir(parents=True)
     (app_path / "bin/siril-cli.exe").write_bytes(b"fixture")
-    public._write_state(tmp_path, SoftwarePackageState(
+    public._write_package_state(settings, "siril", SoftwarePackageState(
         installed_version="1.4.4", install_path=app_path, availability="ready", reason=None,
         operation="install", operation_state="completed", phase=None, progress=None,
         last_error=None, node_definition_ids=[],
@@ -259,7 +286,7 @@ def test_uninstall_plan_requires_confirmation_and_keeps_actual_definitions(tmp_p
         pending = app.state.request_software_action("siril", request)
         assert pending.state == "awaiting_confirmation" and pending.plan.action == "uninstall"
         assert pending.plan.target_version is None and pending.plan.source is None
-        assert pending.plan.restart_required is False
+        assert pending.plan.restart_required is True
         assert app_path.exists() and not app.state.software_tasks
         assert "/api/v1/software/packages/{package_id}/uninstall" in app.openapi()["paths"]
         with pytest.raises(ApiError) as conflict:

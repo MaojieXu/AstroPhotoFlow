@@ -1,5 +1,10 @@
 # 五模块文件架构
 
+## 独立 Bundle 位置（2026-10-29）
+
+Siril源码仓库：https://github.com/MaojieXu/AstroPhotoFlow-Siril 。本机独立checkout在.artifacts/bundles/AstroPhotoFlow-Siril（独立.git，不归主仓库）；用户安装位置为workspace/software/siril/bundle。workspace/software/siril旁保存state.json、bundle-lock.json和native-load.json；workspace/nodes仍保存有效节点定义。旧命令资源为既有只读HTTP目录快照，不用于安装或执行绑定。
+
+
 本文规定当前目录归属、导入规则与产物位置。模块权威、公开调用方向及关键链路统一见[总架构](overview.md)，源码与验证入口见[模块导航](module-map.md)，有效待办见[当前上下文](../development/current-context.md)，实际证据见[验证矩阵](../development/test-matrix.md)。
 
 ## 决策与范围

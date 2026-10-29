@@ -112,6 +112,10 @@ class SoftwarePackage(StrictModel):
     progress: float | None = Field(default=None, ge=0, le=1)
     last_error: ErrorDetail | None = None
     node_definition_ids: list[UUID]
+    bundle_version: str | None = None
+    bundle_commit: str | None = None
+    restart_required: bool = False
+    migration_required: bool = False
 
 
 class SoftwarePackageState(StrictModel):
@@ -227,6 +231,26 @@ class SirilPreviewRequest(AutostretchParameters):
     member_index: int = Field(default=0, ge=0)
     consumer_id: UuidInput
     generation: int = Field(ge=0)
+
+
+class NativeBundleCall(StrictModel):
+    call_id: UuidInput
+    prompt_id: UuidInput
+    node_id: str
+    definition_id: UuidInput
+    definition_token: str
+    reference: InputReference | OutputLocator
+    parameters: dict[str, JsonValue]
+
+
+class BundlePreviewRequest(StrictModel):
+    reference: InputReference
+    member_index: int = Field(default=0, ge=0)
+    consumer_id: UuidInput
+    generation: int = Field(ge=0)
+    package_id: str
+    operation_id: str
+    parameters: dict[str, JsonValue]
 
 
 class ConfirmSoftwareEvent(StrictModel):

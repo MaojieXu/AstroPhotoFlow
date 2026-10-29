@@ -15,18 +15,11 @@ from astrophotoflow.modules.software import public
 
 
 @pytest.fixture
-def configured(tmp_path):
+def configured(tmp_path, bundle_install):
     public._CALLS.clear()
     public._PACKAGE_LOCKS.clear()
     settings = Settings("127.0.0.1", 8190, tmp_path / "data", (), workspace=tmp_path)
-    app = tmp_path / "software/siril/app"
-    (app / "bin").mkdir(parents=True)
-    (app / "bin/siril-cli.exe").write_bytes(b"fixture executable")
-    public._write_state(tmp_path, SoftwarePackageState(
-        installed_version="1.4.4", install_path=app, availability="ready", reason=None,
-        operation="install", operation_state="completed", phase=None, progress=None,
-        last_error=None, node_definition_ids=[],
-    ))
+    bundle_install(settings)
     yield settings
     public._CALLS.clear()
     public._PACKAGE_LOCKS.clear()
@@ -86,7 +79,8 @@ def process_factory(monkeypatch, exit_code=0, gated=False):
         return process
 
     monkeypatch.setattr(public.asyncio, "create_subprocess_exec", start)
-    monkeypatch.setattr(public.psutil, "Process", lambda _pid: SimpleNamespace(pid=123, create_time=lambda: 100.0))
+    original_process = public.psutil.Process
+    monkeypatch.setattr(public.psutil, "Process", lambda pid=None: SimpleNamespace(pid=123, create_time=lambda: 100.0) if pid == 123 else original_process(pid))
     return created
 
 
@@ -104,8 +98,8 @@ def test_one_cli_call_preserves_order_parameters_and_originals(configured, monke
     assert len(created) == 1 and len(result.outputs["image"]) == 2
     script = created[0].script
     assert script.index("original 0.fit") < script.index("original 1.fit")
-    assert "autostretch -linked" in script
-    assert float(next(line for line in script.splitlines() if line.startswith("autostretch")).split()[-1]) == 0
+    import json
+    assert json.loads((body.work_directory / "parameters.json").read_text()) == body.parameters
     assert [row.state for row in observations] == ["starting", "running", "completed"]
     assert observations[-1].active is False
     assert [hashlib.sha256(item.read_path.read_bytes()).hexdigest() for item in body.inputs["image"]] == hashes
@@ -225,9 +219,9 @@ def test_non_fits_preview_uses_siril_decoder_and_reuses_unstretched_sample(confi
 
     monkeypatch.setattr(public.asyncio, "create_subprocess_exec", start)
     parameters = SimpleNamespace(linked=True, shadowsclip=-2.8, targetbg=0.25)
-    asyncio.run(public.preview_autostretch(configured, source, folder / str(uuid4()), parameters, prepare_sample=True))
-    assert scripts[0].index("resample ") < scripts[0].index("save ") < scripts[0].index("autostretch ")
+    asyncio.run(public.preview_operation(configured, source, folder / str(uuid4()), vars(parameters), package_id="siril", operation_id="autostretch", prepare_sample=True))
+    assert "linear.fit" in scripts[0]
     assert (folder / "linear.fit").is_file()
-    asyncio.run(public.preview_autostretch(configured, folder / "linear.fit", folder / str(uuid4()), parameters))
-    assert "resample " not in scripts[1]
+    asyncio.run(public.preview_operation(configured, folder / "linear.fit", folder / str(uuid4()), vars(parameters), package_id="siril", operation_id="autostretch"))
+    assert scripts[1].count('save "') == 1
     assert source.read_bytes() == b"original image fixture"

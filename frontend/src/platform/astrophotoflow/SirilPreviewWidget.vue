@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { createSirilPreviewClient, scienceReferenceSchema } from '@astrophotoflow/ui'
+import { createBundlePreviewClient, scienceReferenceSchema } from '@astrophotoflow/ui'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
@@ -7,6 +7,7 @@ import Button from '@/components/ui/button/Button.vue'
 import ImagePreview from '@/renderer/extensions/vueNodes/components/ImagePreview.vue'
 import { api } from '@/scripts/api'
 import type { ComponentWidget } from '@/scripts/domWidget'
+import { bundleCapabilities } from './bundleCatalog'
 import { useSidebarTabStore } from '@/stores/workspace/sidebarTabStore'
 
 const { widget } = defineProps<{ widget: ComponentWidget<string | object> }>()
@@ -19,16 +20,18 @@ const failure = ref('')
 const phase = ref<'idle' | 'waiting' | 'updating' | 'ready' | 'failed'>('idle')
 const notInstalled = ref(false)
 const consumer = crypto.randomUUID()
-const client = createSirilPreviewClient((path, init) => fetch(path, init))
+const client = createBundlePreviewClient((path, init) => fetch(path, init))
 let generation = 0
 let timer: ReturnType<typeof setTimeout> | undefined
 let controller: AbortController | undefined
+
+const capability = computed(() => widget.node.comfyClass ? bundleCapabilities.get(widget.node.comfyClass) : undefined)
 
 const sourceText = computed(() => {
   void revision.value
   const node = widget.node
   if (!node.graph) return ''
-  const slot = node.inputs.findIndex(input => input.name === 'image')
+  const slot = node.inputs.findIndex(input => input.name === capability.value?.preview?.input)
   if (slot < 0) return ''
   const source = node.getInputNode(slot)
   if (source?.comfyClass !== 'APF_DATA_REFERENCE') return ''
@@ -49,11 +52,9 @@ const total = computed(() => reference.value?.kind === 'dataset_version' ? refer
 const parameters = computed(() => {
   void revision.value
   const controls = widget.node.widgets ?? []
-  const linked = controls.find(control => control.name === 'linked')?.value
-  const shadowsclip = controls.find(control => control.name === 'shadowsclip')?.value
-  const targetbg = controls.find(control => control.name === 'targetbg')?.value
-  if (typeof linked !== 'boolean' || typeof shadowsclip !== 'number' || !Number.isFinite(shadowsclip) || typeof targetbg !== 'number' || !Number.isFinite(targetbg)) return undefined
-  return { linked, shadowsclip, targetbg }
+  if (!capability.value) return undefined
+  return Object.fromEntries(capability.value.node.definition.parameters.map(parameter => [parameter.name,
+    controls.find(control => control.name === parameter.name)?.value ?? parameter.default]))
 })
 const signature = computed(() => JSON.stringify([sourceText.value, parameters.value, index.value]))
 
@@ -84,12 +85,12 @@ async function render() {
   const signal = controller.signal
   const fixed = reference.value
   const values = parameters.value
-  if (!fixed || !values) return
+  if (!fixed || !values || !capability.value) return
   phase.value = 'updating'
   failure.value = ''
   try {
     const blob = await client.render({ reference: fixed, member_index: index.value,
-      consumer_id: consumer, generation: current, ...values }, signal)
+      consumer_id: consumer, generation: current, parameters: values, package_id: capability.value.operation.package_id, operation_id: capability.value.operation.operation_id }, signal)
     if (current !== generation || signal.aborted) return
     clearImage()
     image.value = URL.createObjectURL(blob)
@@ -127,7 +128,7 @@ onBeforeUnmount(() => {
       <div v-if="phase !== 'ready'" class="absolute inset-0 flex flex-col items-center justify-center gap-2 overflow-auto p-2 text-center text-xs text-muted-foreground" :role="failure ? 'alert' : 'status'">
         <i v-if="phase === 'waiting' || phase === 'updating'" class="icon-[lucide--loader-circle] size-4 animate-spin" aria-hidden="true" />
         <span class="max-h-24 overflow-auto break-words">{{ failure || t(phase === 'idle' ? 'astrophotoflow.siril.connectSource' : 'astrophotoflow.siril.updating') }}</span>
-        <Button v-if="notInstalled" size="sm" variant="secondary" @click="tabs.activeSidebarTabId = 'software'">{{ t('apfSoftware.install') }} Siril</Button>
+        <Button v-if="notInstalled" size="sm" variant="secondary" @click="tabs.activeSidebarTabId = 'software'">{{ t('apfSoftware.install') }}</Button>
         <Button v-if="phase === 'failed'" size="sm" variant="textonly" @click="render">{{ t('g.retry') }}</Button>
       </div>
     </div>

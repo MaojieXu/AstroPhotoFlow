@@ -1,5 +1,15 @@
 # AstroPhotoFlow 总体架构与模块边界
 
+## 开发/正式发布隔离（用户2026-10-29补充）
+
+当前发布仅为开发构建。Siril Bundle默认分支为dev，当前标签 v0.1.2-dev.1，commit 12fd2d1d55daeadf7acb3972385d5c2bfcb52d4d，release_channel=dev。开发版本必须使用X.Y.Z-dev.N，正式版本使用X.Y.Z并显式标为stable；schema和发布目录导出拒绝混用标签/通道。正式发布另行由用户明确批准，不能移动开发标签来冒充正式版本。v0.1.0/v0.1.1仅为历史实验标签，未作为正式Release发布。主项目仍在codex/siril-bundle，未提交或发布正式包。
+
+## 2026-10-29 Bundle 接入边界
+
+③管理独立 Git Bundle、版本锁、适配器及受管进程；④以 workspace 节点 JSON 为有效定义，生成原生 V3 类；⑤解析固定科学引用、管理调用/预览，并通过既有原生 WebSocket 控制画布。`contracts/bundles.py` 是 SDK v1：适配器只返回进程参数和预期输出，平台负责启动、取消、观察和结果检查。原生引擎不导入领域服务的软件实现或其 HTTP 依赖。
+
+Bundle manifest以output_nodes显式声明执行终点，默认非终点；只加载平台维护目录中的软件包。Bundle 操作为参数权威，发布时生成平台目录快照；原生 Vue 预览组件按能力元数据挂载，不加载外部 Vue 应用。SDK v1 面向单个 APF_SCIENCE 输入和输出，端口内可包含固定有序组；当前预览消费直接相连的素材节点。统一目录和画布编辑复用现有 HTTP/CLI/MCP，不创建第二画布权威、执行队列或数据库表。具体契约见接口文档，实际证据见验证矩阵。
+
 2026-10-29 本轮 M3 窄交接候选：③负责固定 Siril 程序与真实 CLI 句柄，④JSON仍为首节点控件来源，⑤ software_calls.py 使用原生 prompt 身份协调②公开科学解析与输出检查；接入层提供一个 V3 节点及内部通信，沿既有原生队列执行。必要调用事实暂放该 prompt 运行目录的 JSON／日志；M5 完整项目关联、SQLite 运行权威及图维护影响仍待实现，不能把此窄适配称为完整工作流闭环。程序卸载保留图及定义，不引入图改写或新的任务队列。实际状态及未执行验收见[本轮 M3](../development/batches/03-software.md)。
 
 

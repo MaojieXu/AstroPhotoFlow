@@ -31,7 +31,11 @@ export const softwarePackageSchema = z
     phase: z.string().nullable(),
     progress: z.number().min(0).max(1).nullable(),
     last_error: errorDetailSchema.nullable(),
-    node_definition_ids: z.array(z.uuid())
+    node_definition_ids: z.array(z.uuid()),
+    bundle_version: z.string().nullable().optional(),
+    bundle_commit: z.string().nullable().optional(),
+    restart_required: z.boolean().optional(),
+    migration_required: z.boolean().optional()
   })
   .strict()
 

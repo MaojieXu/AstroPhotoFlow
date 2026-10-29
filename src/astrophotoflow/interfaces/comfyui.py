@@ -23,10 +23,8 @@ def register_native(server: Any) -> None:
 
     nodes.NODE_CLASS_MAPPINGS["APF_DATA_REFERENCE"] = DataReferenceNode
     nodes.NODE_DISPLAY_NAME_MAPPINGS["APF_DATA_REFERENCE"] = "AstroPhotoFlow Data"
-    from astrophotoflow.interfaces.siril_node import SirilAutostretchNode
-    schema = SirilAutostretchNode.GET_SCHEMA()
-    nodes.NODE_CLASS_MAPPINGS[schema.node_id] = SirilAutostretchNode
-    nodes.NODE_DISPLAY_NAME_MAPPINGS[schema.node_id] = schema.display_name
+    from astrophotoflow.interfaces.bundle_nodes import register_bundle_nodes
+    register_bundle_nodes(server, nodes.NODE_CLASS_MAPPINGS, nodes.NODE_DISPLAY_NAME_MAPPINGS)
     initialize_canvas(server)
     server.apf_page_tasks = {}
     server.apf_page_locks = {}

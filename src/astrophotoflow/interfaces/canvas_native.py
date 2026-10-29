@@ -6,7 +6,7 @@ from aiohttp import web
 from pydantic import TypeAdapter, ValidationError
 
 from astrophotoflow.contracts.common import ErrorDetail
-from astrophotoflow.contracts.workflows import CanvasAddResult, CanvasPageOut, NativeCanvasCommand, NativeCanvasEvent
+from astrophotoflow.contracts.workflows import CanvasAddResult, CanvasPageOut, NativeCanvasCommand, NativeCanvasGraphCommand, NativeCanvasEvent
 from astrophotoflow.comfyui.proxy import _configuration
 
 
@@ -87,7 +87,7 @@ def register_canvas_routes(routes):
         if not _authorized(request):
             return _error(401, "AUTHENTICATION_REQUIRED", "需要平台服务令牌。")
         try:
-            command = NativeCanvasCommand.model_validate(await request.json())
+            command = TypeAdapter(NativeCanvasCommand | NativeCanvasGraphCommand).validate_python(await request.json())
         except (ValidationError, ValueError):
             return _error(422, "VALIDATION_ERROR", "画布请求无效。")
         native = server()
@@ -98,6 +98,8 @@ def register_canvas_routes(routes):
             if operation["command"] != command:
                 return _error(409, "CANVAS_REQUEST_CONFLICT", "operation_id 已用于其他请求。")
         else:
+            if isinstance(command, NativeCanvasGraphCommand) and body.edit.action != 'inspect' and not body.control_token:
+                return _error(409, 'CANVAS_NOT_AUTHORIZED', '用户尚未交给 Agent。')
             target = next(((client_id, page) for client_id, page in native.apf_canvas_pages.items() if page.page_id == body.page_id), None)
             if target is None or target[0] not in native.sockets:
                 return _error(409, "CANVAS_OFFLINE", "目标画布不在线。")

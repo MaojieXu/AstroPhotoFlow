@@ -1,15 +1,19 @@
+import { createNodeClient } from '@astrophotoflow/ui'
 import { markRaw } from 'vue'
 
 import type { LGraphNode } from '@/lib/litegraph/src/litegraph'
+import { api } from '@/scripts/api'
 import { ComponentWidgetImpl } from '@/scripts/domWidget'
 import type { ComfyApp } from '@/types/comfy'
 
 import SirilPreviewWidget from './SirilPreviewWidget.vue'
 
+import { bundleCapabilities } from './bundleCatalog'
+
 const registered = new WeakSet<ComfyApp>()
 
 export function attachSirilPreview(node: LGraphNode) {
-  if (node.comfyClass !== 'APF_169de0837f814cdea3295541ecacf463' || node.widgets?.some(widget => widget.name === 'apf_siril_preview')) return
+  if (!node.comfyClass || !bundleCapabilities.get(node.comfyClass)?.preview || node.widgets?.some(widget => widget.name === 'apf_siril_preview')) return
   const widget = new ComponentWidgetImpl({
     node, name: 'apf_siril_preview', component: markRaw(SirilPreviewWidget),
     inputSpec: { name: 'apf_siril_preview', type: 'STRING' },
@@ -30,8 +34,19 @@ export function registerSirilPreviewDisplay(app: ComfyApp) {
       for (const node of graph.nodes) attachSirilPreview(node)
     }
   }
+  async function refreshCatalog() {
+    const capabilities = await createNodeClient(fetch).list()
+    bundleCapabilities.clear()
+    for (const capability of capabilities) bundleCapabilities.set(capability.node.native_type, capability)
+    hydrate()
+  }
+  api.addEventListener('reconnected', () => {
+    void app.reloadNodeDefs().then(refreshCatalog)
+  })
   app.registerExtension({
-    name: 'AstroPhotoFlow.SirilPreview', nodeCreated: attachSirilPreview,
+    name: 'AstroPhotoFlow.BundlePreview',
+    setup: refreshCatalog,
+    nodeCreated: attachSirilPreview,
     afterConfigureGraph: hydrate
   })
   if (app.isGraphReady) hydrate()

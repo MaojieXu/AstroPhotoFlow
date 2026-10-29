@@ -1,3 +1,5 @@
+import { bundleCapabilities } from './bundleCatalog'
+import type { NodeCapability } from '@astrophotoflow/ui'
 import { fromPartial } from '@total-typescript/shoehorn'
 import { render, screen } from '@testing-library/vue'
 import { nextTick } from 'vue'
@@ -11,7 +13,7 @@ import SirilPreviewWidget from './SirilPreviewWidget.vue'
 const service = vi.hoisted(() => ({ render: vi.fn(), release: vi.fn().mockResolvedValue(undefined) }))
 vi.mock('@astrophotoflow/ui', async importOriginal => ({
   ...await importOriginal<typeof import('@astrophotoflow/ui')>(),
-  createSirilPreviewClient: () => service
+  createBundlePreviewClient: () => service
 }))
 vi.mock('vue-i18n', async original => ({ ...await original<typeof import('vue-i18n')>(), useI18n: () => ({ t: (key: string) => key }) }))
 vi.mock('@/stores/workspace/sidebarTabStore', () => ({ useSidebarTabStore: () => ({ activeSidebarTabId: 'library' }) }))
@@ -25,7 +27,13 @@ function setup() {
   source.comfyClass = 'APF_DATA_REFERENCE'
   source.addWidget('text', 'reference', JSON.stringify({ kind: 'asset_version', asset_version_id: '00000000-0000-4000-8000-000000000001', selection: { kind: 'whole_file' } }), () => {})
   source.addOutput('science', 'APF_SCIENCE')
-  const node = new LGraphNode('Siril Auto Stretch')
+  bundleCapabilities.set('APF_169de0837f814cdea3295541ecacf463', fromPartial<NodeCapability>({
+      node: { native_type: 'APF_169de0837f814cdea3295541ecacf463', definition: { parameters: [
+        { name: 'linked', default: false }, { name: 'shadowsclip', default: -2.8 }, { name: 'targetbg', default: 0.25 }
+      ] } }, operation: { package_id: 'siril', operation_id: 'autostretch' }, preview: { kind: 'science-image', input: 'image', max_edge: 1024 }
+    }))
+    const node = new LGraphNode('Siril Auto Stretch')
+    node.comfyClass = 'APF_169de0837f814cdea3295541ecacf463'
   node.addInput('image', 'APF_SCIENCE')
   const values = [node.addWidget('toggle', 'linked', true, () => {}), node.addWidget('number', 'shadowsclip', 0, () => {}), node.addWidget('number', 'targetbg', 0, () => {})]
   graph.add(source)
@@ -53,7 +61,7 @@ describe('Siril live preview', () => {
     expect(service.render).not.toHaveBeenCalled()
     await vi.advanceTimersByTimeAsync(350)
     expect(service.render).toHaveBeenCalledTimes(1)
-    expect(service.render.mock.calls[0][0]).toMatchObject({ linked: true, shadowsclip: 0, targetbg: 0.3, member_index: 0 })
+    expect(service.render.mock.calls[0][0]).toMatchObject({ parameters: { linked: true, shadowsclip: 0, targetbg: 0.3 }, member_index: 0 })
     expect(screen.getByTestId('preview').textContent).toContain('blob:current')
     const signal = service.render.mock.calls[0][1] as AbortSignal
     wrapper.unmount()

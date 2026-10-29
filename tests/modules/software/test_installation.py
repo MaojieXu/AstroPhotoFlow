@@ -1,100 +1,75 @@
 import asyncio
-from io import BytesIO
 import json
-import os
+import shutil
 from pathlib import Path
 from types import SimpleNamespace
-import zipfile
-
 import pytest
-
 from astrophotoflow.core.config import Settings
 from astrophotoflow.core.errors import ApiError
-from astrophotoflow.modules.software import public
+from astrophotoflow.modules.software import public, bundles
 
 
-def archive_bytes(entries):
-    buffer = BytesIO()
-    with zipfile.ZipFile(buffer, "w") as archive:
-        for name, content in entries.items():
-            archive.writestr(name, content)
-    return buffer.getvalue()
+def test_checkout_rejects_tag_moving_before_loading_code(tmp_path, monkeypatch):
+    release = bundles.release('siril')
+    calls=[]
+    def git(args, **kwargs):
+        calls.append(args)
+        return 'different-commit' if args[0]=='rev-parse' else ''
+    monkeypatch.setattr(bundles,'git',git)
+    with pytest.raises(ApiError, match='tag'):
+        bundles.checkout('siril',tmp_path/'bundle')
+    assert calls[0][:4]==['clone','--depth','1','--branch']
+    assert release['tag'] in calls[0]
 
 
-def download(monkeypatch, content):
-    class Response:
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *_args):
-            pass
-
-        def raise_for_status(self):
-            pass
-
-        def iter_bytes(self, _size):
-            yield content
-
-    class Client(Response):
-        def __init__(self, **_kwargs):
-            pass
-
-        def stream(self, *_args):
-            return Response()
-
-    monkeypatch.setattr(public.httpx, "Client", Client)
-
-
-def test_installer_extracts_into_final_path_before_version_check(tmp_path, monkeypatch):
-    download(monkeypatch, archive_bytes({"siril/bin/siril-cli.exe": b"fixture", "siril/share/file.txt": b"resource"}))
-    app = tmp_path / "app"
-    stage = tmp_path / "stage"
-    stage.mkdir()
-    phases = []
-
-    def verify(command, **kwargs):
-        assert command == [str(app / "bin/siril-cli.exe"), "--version"]
-        assert Path(kwargs["cwd"]) == app / "bin"
-        assert (app / "share/file.txt").read_bytes() == b"resource"
-        assert phases == ["installing", "verifying"]
-        return SimpleNamespace(returncode=0, stdout="siril 1.4.4\n")
-
-    monkeypatch.setattr(public.subprocess, "run", verify)
-    result = public._download_and_verify_archive("https://fixed.invalid/siril.zip", stage, app, phases.append)
-    assert result == app
-    assert not (stage / "extract").exists()
-
-
-@pytest.mark.parametrize("entry", ["siril/../escape.txt", "/siril/escape.txt", "siril/../../escape.txt"])
-def test_archive_escape_is_rejected_before_creating_program(tmp_path, monkeypatch, entry):
-    download(monkeypatch, archive_bytes({entry: b"invalid"}))
-    stage = tmp_path / "stage"
-    stage.mkdir()
-    with pytest.raises(ValueError, match="不安全"):
-        public._download_and_verify_archive("https://fixed.invalid/siril.zip", stage, tmp_path / "app", lambda _phase: None)
-    assert not (tmp_path / "app").exists()
-
-
-@pytest.mark.skipif(os.name != "nt", reason="Fixed package installation supports Windows")
-@pytest.mark.parametrize("partial", [False, True])
-def test_failed_install_records_original_error_instead_of_staying_running(tmp_path, monkeypatch, partial):
-    settings = Settings("127.0.0.1", 8190, tmp_path / "data", (), workspace=tmp_path)
-    package = public.get_package(settings, "siril")
-
-    def fail(_url, _stage, app, phase):
+@pytest.mark.parametrize('partial',[False,True])
+def test_failed_clone_keeps_previous_state_and_removes_staging(tmp_path,monkeypatch,partial):
+    settings=Settings('127.0.0.1',8190,tmp_path/'data',(),workspace=tmp_path)
+    package=public.get_package(settings,'siril')
+    def fail(package_id,destination,**kwargs):
         if partial:
-            app.mkdir()
-        phase("installing")
-        raise PermissionError("[WinError 5] original directory failure")
+            destination.mkdir()
+            (destination/'partial').write_text('incomplete')
+        raise PermissionError('original directory failure')
+    monkeypatch.setattr(bundles,'checkout',fail)
+    with pytest.raises(ApiError,match='original directory failure'):
+        asyncio.run(public.install_package(settings,'siril','1.4.4',package.package_token))
+    state=public.get_package(settings,'siril')
+    assert state.operation_state=='failed' and state.availability=='not_installed'
+    assert not (tmp_path/'software/siril/bundle').exists()
+    assert not list((tmp_path/'software/siril').glob('.bundle-install-*'))
 
-    monkeypatch.setattr(public, "_download_and_verify_archive", fail)
-    with pytest.raises(ApiError) as failure:
-        asyncio.run(public.install_package(settings, "siril", "1.4.4", package.package_token))
-    assert "WinError 5" in failure.value.message
-    state = json.loads((tmp_path / "software/siril/state.json").read_text(encoding="utf-8"))
-    assert state["operation_state"] == "failed" and state["phase"] is None
-    assert state["last_error"]["code"] == "INSTALL_FAILED"
-    assert "original directory failure" in state["last_error"]["message"]
-    assert state["installed_version"] is None
-    assert state["availability"] == ("not_ready" if partial else "not_installed")
-    assert (state["install_path"] is not None) is partial
+
+def test_install_uses_verified_checkout_and_waits_for_native_load(tmp_path,monkeypatch,bundle_install):
+    source_settings=Settings('127.0.0.1',8190,tmp_path/'source/data',(),workspace=tmp_path/'source')
+    source=bundle_install(source_settings)
+    settings=Settings('127.0.0.1',8190,tmp_path/'target/data',(),workspace=tmp_path/'target')
+    def clone(package_id,destination,**kwargs):
+        shutil.copytree(source,destination)
+        return bundles.read_bundle(destination)[0], 'pinned-commit'
+    monkeypatch.setattr(bundles,'checkout',clone)
+    before=public.get_package(settings,'siril')
+    after=asyncio.run(public.install_package(settings,'siril','1.4.4',before.package_token))
+    assert after.availability=='not_ready' and after.restart_required
+    assert after.bundle_commit=='pinned-commit' and after.bundle_version==bundles.release('siril')['manifest']['bundle_version']
+    assert after.install_path==settings.workspace/'software/siril/bundle/app'
+
+
+def test_manifest_paths_cannot_escape_checkout(tmp_path):
+    with pytest.raises(ValueError):
+        bundles.contained(tmp_path,'../outside.py')
+
+
+def test_remove_checkout_handles_git_readonly_pack_files_and_keeps_siblings(tmp_path):
+    import stat
+    root=tmp_path/'bundle'
+    pack=root/'.git/objects/pack/data.pack'
+    pack.parent.mkdir(parents=True)
+    pack.write_bytes(b'git data')
+    pack.chmod(stat.S_IREAD)
+    protected=tmp_path/'science.fit'
+    protected.write_bytes(b'original')
+    bundles.remove_checkout(root,tmp_path)
+    assert not root.exists() and protected.read_bytes()==b'original'
+    with pytest.raises(ValueError):
+        bundles.remove_checkout(tmp_path,tmp_path)

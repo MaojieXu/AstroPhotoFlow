@@ -1,17 +1,14 @@
 import hashlib
 import json
 import os
-import shutil
-import stat
 import subprocess
 import tempfile
-import zipfile
 import asyncio
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from contextlib import asynccontextmanager
 from importlib.resources import files
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 from typing import Any, Awaitable, Callable
 from uuid import UUID
 
@@ -26,10 +23,9 @@ from astrophotoflow.contracts.software import (
 from astrophotoflow.contracts.common import ErrorDetail
 from astrophotoflow.core.config import Settings
 from astrophotoflow.core.errors import ApiError
+from astrophotoflow.modules.software import bundles
 
 
-_PACKAGE_ID = "siril"
-_VERSION = "1.4.4"
 _PACKAGE_LOCKS: dict[str, asyncio.Lock] = {}
 
 
@@ -42,7 +38,7 @@ class _Call:
 
 
 _CALLS: dict[UUID, _Call] = {}
-_LIVE_PREVIEWS: dict[UUID, asyncio.subprocess.Process | None] = {}
+_LIVE_PREVIEWS: dict[UUID, tuple[str, asyncio.subprocess.Process | None]] = {}
 
 
 def _resource(name: str) -> str:
@@ -53,73 +49,28 @@ def _manifest() -> dict[str, Any]:
     return json.loads(_resource("siril-1.4.4-manifest.json"))
 
 
-def _write_state(workspace: Path, state: SoftwarePackageState) -> None:
-    package_dir = workspace / "software" / _PACKAGE_ID
-    package_dir.mkdir(parents=True, exist_ok=True)
-    state_path = package_dir / "state.json"
-    content = json.dumps(state.model_dump(mode="json"), ensure_ascii=False, indent=2) + "\n"
-    temporary = None
-    try:
-        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", newline="\n", dir=package_dir, delete=False) as stream:
-            temporary = Path(stream.name)
-            stream.write(content)
-        os.replace(temporary, state_path)
-    finally:
-        if temporary is not None:
-            temporary.unlink(missing_ok=True)
+def _state_path(settings, package_id):
+    return settings.workspace / "software" / package_id / "state.json"
 
 
-def _download_and_verify_archive(url: str, stage: Path, app: Path, phase: Callable[[str], None]) -> Path:
-    archive_path = stage / "siril-1.4.4-ucrt64_win.zip"
-    with httpx.Client(follow_redirects=True, timeout=httpx.Timeout(120)) as client:
-        with client.stream("GET", url) as response:
-            response.raise_for_status()
-            with archive_path.open("xb") as stream:
-                for chunk in response.iter_bytes(1024 * 1024):
-                    stream.write(chunk)
-    root = app.resolve()
-    with zipfile.ZipFile(archive_path) as archive:
-        members = []
-        for member in archive.infolist():
-            archive_path_parts = PurePosixPath(member.filename).parts
-            if stat.S_ISLNK(member.external_attr >> 16) or ".." in archive_path_parts or PurePosixPath(member.filename).is_absolute():
-                raise ValueError("软件归档包含不安全的文件路径。")
-            if not archive_path_parts or archive_path_parts[0] != "siril":
-                continue
-            target = app.joinpath(*archive_path_parts[1:]).resolve()
-            if not target.is_relative_to(root):
-                raise ValueError("软件归档包含不安全的文件路径。")
-            members.append((member, target))
-        phase("installing")
-        app.mkdir(exist_ok=False)
-        for member, target in members:
-            if member.is_dir():
-                target.mkdir(parents=True, exist_ok=True)
-            else:
-                target.parent.mkdir(parents=True, exist_ok=True)
-                with archive.open(member) as source, target.open("xb") as destination:
-                    shutil.copyfileobj(source, destination, length=1024 * 1024)
-    phase("verifying")
-    executable = app / "bin" / "siril-cli.exe"
-    if not executable.is_file():
-        raise ValueError("Siril 1.4.4归档未包含预期的命令行程序。")
-    result = subprocess.run([str(executable), "--version"], cwd=executable.parent,
-                            capture_output=True, text=True, timeout=30, check=False,
-                            creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0)
-    if result.returncode != 0 or result.stdout.strip().casefold() != "siril 1.4.4":
-        raise ValueError("下载的Siril程序未报告准确的1.4.4版本。")
-    return app
+def _write_package_state(settings, package_id, state):
+    path = _state_path(settings, package_id)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    part = path.with_suffix(".part")
+    part.write_text(state.model_dump_json(indent=2) + "\n", encoding="utf-8")
+    os.replace(part, path)
+
+
+def _state(package):
+    return SoftwarePackageState.model_validate(package.model_dump(include=set(SoftwarePackageState.model_fields)))
 
 
 @asynccontextmanager
 async def maintain_package(package_id: str):
-    if package_id != _PACKAGE_ID:
-        raise ApiError(404, "RESOURCE_NOT_FOUND", "未找到请求的软件包。")
+    bundles.release(package_id)
     lock = _PACKAGE_LOCKS.setdefault(package_id, asyncio.Lock())
-    if lock.locked():
-        raise ApiError(409, "SOFTWARE_BUSY", "软件包当前正在维护。")
-    if get_usage(package_id) or get_preview_usage(package_id):
-        raise ApiError(409, "SOFTWARE_BUSY", "软件包仍有运行或无法确认停止的调用。")
+    if lock.locked() or get_usage(package_id) or get_preview_usage(package_id):
+        raise ApiError(409, "SOFTWARE_BUSY", "软件包当前正在维护、运行或预览。")
     await lock.acquire()
     try:
         yield
@@ -127,134 +78,185 @@ async def maintain_package(package_id: str):
         lock.release()
 
 
-async def install_package(settings: Settings, package_id: str, version: str,
-                          expected_package_token: str) -> SoftwarePackage:
-    if package_id != _PACKAGE_ID:
-        raise ApiError(404, "RESOURCE_NOT_FOUND", "未找到请求的软件包。")
-    if version != _VERSION:
-        raise ApiError(422, "VALIDATION_ERROR", "只能安装维护清单中的Siril 1.4.4版本。")
+def get_package(settings: Settings, package_id: str) -> SoftwarePackage:
+    release = bundles.release(package_id)
+    manifest, operations, _ = bundles.metadata(settings.workspace, package_id)
+    path = _state_path(settings, package_id)
+    state = SoftwarePackageState.model_validate_json(path.read_text(encoding="utf-8")) if path.is_file() else SoftwarePackageState(
+        installed_version=None, install_path=None, availability="not_installed", reason="尚未安装 Bundle。",
+        operation=None, operation_state="idle", phase=None, progress=None, last_error=None, node_definition_ids=[])
+    root = path.parent / "bundle"
+    lock_path = path.parent / "bundle-lock.json"
+    lock = json.loads(lock_path.read_text(encoding="utf-8")) if lock_path.is_file() else {}
+    restart_required = False
+    active_lock = _PACKAGE_LOCKS.get(package_id)
+    if state.operation_state == 'running' and (active_lock is None or not active_lock.locked()):
+        state = state.model_copy(update={'operation_state': 'unknown', 'availability': 'unknown',
+                                        'reason': '上次安装或卸载被中断，无法确认结果。'})
+    if state.installed_version is not None:
+        if not root.is_dir():
+            state = state.model_copy(update={"availability": "not_ready", "reason": "现有安装尚未迁移到独立 Bundle，请安装 Bundle；保留原程序。"})
+        elif not bundles.contained(root, manifest.executable).is_file():
+            state = state.model_copy(update={"availability": "not_ready", "reason": "Bundle 程序缺失。"})
+        else:
+            expected = root / "app"
+            if state.install_path is None or state.install_path.resolve() != expected.resolve():
+                raise ApiError(409, "BUNDLE_STATE_CONFLICT", "Bundle 安装位置与状态记录不一致。")
+            observation = path.parent / "native-load.json"
+            loaded = json.loads(observation.read_text(encoding="utf-8")) if observation.is_file() else {}
+            try:
+                native_alive = psutil.Process(loaded["pid"]).create_time() == loaded["create_time"]
+            except (KeyError, psutil.Error):
+                native_alive = False
+            if loaded.get("commit") != lock.get("commit") or not loaded.get("ready") or not native_alive:
+                restart_required = True
+                state = state.model_copy(update={"availability": "not_ready", "reason": loaded.get("reason") or "Bundle 已安装，等待工作台重启加载节点。"})
+                restart_path = path.parent / 'bundle-restart.json'
+                if restart_path.is_file():
+                    from astrophotoflow.core.workbench import restart_result
+                    restart_id = UUID(json.loads(restart_path.read_text(encoding='utf-8'))['operation_id'])
+                    result = restart_result(settings.workspace / 'config.toml', restart_id)
+                    if result is not None and result.state in {'failed', 'unknown', 'rejected'}:
+                        state = state.model_copy(update={'reason': 'Bundle 已安装，但重启未完成：' + (result.detail or '、'.join(result.blockers)) + '；请在工作台设置中重启。'})
+            elif state.operation_state not in {"unknown", "running"}:
+                state = state.model_copy(update={"availability": "ready", "reason": None})
+    token = hashlib.sha256(json.dumps({"release": release, "state": state.model_dump(mode="json")}, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+    return SoftwarePackage(package_id=package_id, name=manifest.name,
+        available_versions=[release["manifest"]["software_version"]], package_token=token,
+        bundle_version=lock.get("bundle_version"), bundle_commit=lock.get("commit"), restart_required=restart_required,
+        migration_required=state.installed_version is not None and not root.is_dir(), **state.model_dump())
+
+
+def list_packages(settings: Settings):
+    return [get_package(settings, key) for key in bundles.catalog()]
+
+
+def get_package_source(package_id: str, version: str):
+    release = bundles.release(package_id)
+    if version != release["manifest"]["software_version"]:
+        raise ApiError(404, "RESOURCE_NOT_FOUND", "未找到发布版本。")
+    return release["repository"] + " @ " + release["tag"] + " (" + (release["commit"] or "unreleased") + ")"
+
+
+def get_bundled_definitions(settings, package_id, version):
+    release = bundles.release(package_id)
+    if version != release["manifest"]["software_version"]:
+        raise ApiError(404, "RESOURCE_NOT_FOUND", "未找到发布版本。")
+    return release["nodes"]
+
+
+def get_operation(settings, package_id, version, operation_id):
+    manifest, _, _ = bundles.metadata(settings.workspace, package_id)
+    if version != manifest.software_version:
+        raise ApiError(404, "RESOURCE_NOT_FOUND", "未找到软件版本。")
+    package = get_package(settings, package_id)
+    return bundles.operation(settings.workspace, package_id, operation_id, package.availability == "ready", package.reason)
+
+
+def get_bundle_metadata(settings, package_id):
+    return bundles.metadata(settings.workspace, package_id)
+
+
+def set_package_node_definition_ids(settings, package_id, definition_ids):
+    state = _state(get_package(settings, package_id))
+    _write_package_state(settings, package_id, state.model_copy(update={"node_definition_ids": definition_ids}))
+
+
+async def install_package(settings, package_id, version, expected_package_token):
+    release = bundles.release(package_id)
+    package = get_package(settings, package_id)
+    if version != release["manifest"]["software_version"] or package.package_token != expected_package_token:
+        raise ApiError(409, "SOFTWARE_CONTENT_CONFLICT", "软件状态或发布版本发生变化。")
     if os.name != "nt":
-        raise ApiError(503, "SOFTWARE_NOT_READY", "Siril 1.4.4 UCRT64便携包仅配置了Windows安装流程。")
-    package = get_package(settings, package_id)
-    if package.package_token != expected_package_token:
-        raise ApiError(409, "SOFTWARE_CONTENT_CONFLICT", "软件包状态已变化，请重新读取后请求安装。")
-    if package.availability == "ready":
-        raise ApiError(409, "SOFTWARE_CONTENT_CONFLICT", "Siril 1.4.4已经就绪。")
-    package_dir = settings.workspace / "software" / package_id
-    app_path = package_dir / "app"
-    if app_path.exists():
-        raise ApiError(409, "SOFTWARE_CONTENT_CONFLICT", "平台软件目录已存在但当前状态不能确认，需先检查现状。")
-    previous = SoftwarePackageState(
-        installed_version=package.installed_version, install_path=package.install_path,
-        availability=package.availability, reason=package.reason, operation="install",
-        operation_state="running", phase="downloading", progress=None,
-        last_error=None, node_definition_ids=package.node_definition_ids,
-    )
-    _write_state(settings.workspace, previous)
-    stage = Path(tempfile.mkdtemp(prefix=".siril-install-", dir=package_dir))
-
-    def phase(value: str):
-        _write_state(settings.workspace, previous.model_copy(update={"phase": value,
-            "install_path": app_path if app_path.is_dir() else None,
-            "availability": "not_ready" if app_path.is_dir() else "not_installed"}))
-
+        raise ApiError(503, "SOFTWARE_NOT_READY", "当前 Bundle 只支持 Windows。")
+    if get_usage(package_id) or get_preview_usage(package_id):
+        raise ApiError(409, "SOFTWARE_BUSY", "软件仍在运行。")
+    directory = settings.workspace / "software" / package_id
+    directory.mkdir(parents=True, exist_ok=True)
+    stage = Path(tempfile.mkdtemp(prefix=".bundle-install-", dir=directory))
+    state = _state(package)
+    _write_package_state(settings, package_id, state.model_copy(update={"operation": "install", "operation_state": "running", "phase": "cloning", "last_error": None}))
+    activated = False
+    old_lock = (directory / 'bundle-lock.json').read_bytes() if (directory / 'bundle-lock.json').is_file() else None
+    old_load = (directory / 'native-load.json').read_bytes() if (directory / 'native-load.json').is_file() else None
     try:
-        await asyncio.to_thread(_download_and_verify_archive, _manifest()["download_url"], stage, app_path, phase)
-        installed = SoftwarePackageState(
-            installed_version=_VERSION, install_path=app_path, availability="ready", reason=None,
-            operation="install", operation_state="completed", phase=None, progress=None,
-            last_error=None, node_definition_ids=package.node_definition_ids,
-        )
-        _write_state(settings.workspace, installed)
-        return get_package(settings, package_id)
-    except (OSError, ValueError, httpx.HTTPError, subprocess.SubprocessError) as exc:
-        failed = previous.model_copy(update={
-            "operation_state": "failed", "phase": None,
-            "install_path": app_path if app_path.is_dir() else None,
-            "availability": "not_ready" if app_path.is_dir() else "not_installed",
-            "reason": "软件安装未完成，可卸载后重新安装。" if app_path.is_dir() else package.reason,
-            "last_error": ErrorDetail(code="INSTALL_FAILED", message=str(exc), fields=[]),
-        })
-        _write_state(settings.workspace, failed)
-        raise ApiError(503, "SOFTWARE_NOT_READY", f"Siril 1.4.4安装失败：{exc}") from exc
-    finally:
-        shutil.rmtree(stage)
-
-
-def prepare_package(settings: Settings, package_id: str):
-    if package_id != _PACKAGE_ID:
-        raise ApiError(404, "RESOURCE_NOT_FOUND", "未找到请求的软件包。")
-    package = get_package(settings, package_id)
-    lock = _PACKAGE_LOCKS.get(package_id)
-    if get_usage(package_id) or (lock is not None and lock.locked()):
-        raise ApiError(409, "SOFTWARE_BUSY", "软件包正在调用或维护，暂不重新检查准备状态。")
-    if package.installed_version is not None and package.install_path is not None:
+        manifest, commit = await asyncio.to_thread(bundles.checkout, package_id, stage / "bundle", tool_root=settings.workspace / "software/.tools")
+        destination = directory / "bundle"
+        previous = directory / "previous-bundle"
+        if previous.exists():
+            raise ApiError(409, "BUNDLE_STATE_CONFLICT", "上次版本仍待处理，未覆盖现有程序。")
+        if destination.exists():
+            destination.rename(previous)
         try:
-            result = subprocess.run([str(package.install_path / "bin" / "siril-cli.exe"), "--version"],
-                                    cwd=package.install_path / "bin", capture_output=True, text=True, timeout=30)
-            ready = result.returncode == 0 and result.stdout.strip().casefold() == "siril 1.4.4"
-            reason = None if ready else "平台 Siril 程序未报告准确的 1.4.4 版本。"
-        except (OSError, subprocess.SubprocessError) as exc:
-            ready, reason = False, f"无法检查平台 Siril 程序：{exc}"
-        state = SoftwarePackageState.model_validate(package.model_dump(exclude={"package_id", "name", "available_versions", "package_token"}))
-        _write_state(settings.workspace, state.model_copy(update={"availability": "ready" if ready else "not_ready", "reason": reason}))
-    return SoftwarePreparation(package=get_package(settings, package_id), user_action=None, ui_kind=None, ui_target=None)
+            (stage / "bundle").rename(destination)
+        except OSError:
+            if previous.exists():
+                previous.rename(destination)
+            raise
+        activated = True
+        lock = {"repository": release["repository"], "tag": release["tag"], "commit": commit, "bundle_version": manifest.bundle_version}
+        (directory / "bundle-lock.json").write_text(json.dumps(lock, indent=2), encoding="utf-8")
+        (directory / "native-load.json").unlink(missing_ok=True)
+        _write_package_state(settings, package_id, state.model_copy(update={
+            "installed_version": manifest.software_version, "install_path": destination / "app",
+            "availability": "ready", "reason": None, "operation": "install", "operation_state": "completed", "phase": None, "last_error": None}))
+        return get_package(settings, package_id)
+    except (ApiError, OSError, ValueError, httpx.HTTPError, subprocess.SubprocessError) as exc:
+        if activated:
+            (directory / 'bundle').rename(stage / 'failed-bundle')
+            if (directory / 'previous-bundle').exists():
+                (directory / 'previous-bundle').rename(directory / 'bundle')
+            for name, content in [('bundle-lock.json', old_lock), ('native-load.json', old_load)]:
+                if content is None:
+                    (directory / name).unlink(missing_ok=True)
+                else:
+                    (directory / name).write_bytes(content)
+        _write_package_state(settings, package_id, state.model_copy(update={
+            "availability": state.availability,
+            "operation": "install", "operation_state": "failed", "phase": None,
+            "last_error": ErrorDetail(code="INSTALL_FAILED", message=str(exc), fields=[])}))
+        raise ApiError(503, "SOFTWARE_NOT_READY", f"Bundle 安装失败：{exc}") from exc
+    finally:
+        bundles.remove_checkout(stage, directory)
 
 
-async def uninstall_package(settings: Settings, package_id: str, expected_package_token: str) -> SoftwarePackage:
+async def uninstall_package(settings, package_id, expected_package_token):
     package = get_package(settings, package_id)
     if package.package_token != expected_package_token:
-        raise ApiError(409, "SOFTWARE_CONTENT_CONFLICT", "软件包状态已变化，请重新确认卸载。")
-    if get_usage(package_id):
-        raise ApiError(409, "SOFTWARE_BUSY", "软件包仍有运行或无法确认停止的调用。")
-    app = settings.workspace / "software" / package_id / "app"
-    expected = settings.workspace.resolve() / "software" / package_id / "app"
-    if app.resolve() != expected or app.is_symlink():
-        raise ApiError(409, "SOFTWARE_CONTENT_CONFLICT", "平台程序目录指向其他位置，拒绝卸载。")
-    previous = SoftwarePackageState.model_validate(package.model_dump(exclude={"package_id", "name", "available_versions", "package_token"}))
-    _write_state(settings.workspace, previous.model_copy(update={"operation": "uninstall", "operation_state": "running", "phase": "removing"}))
+        raise ApiError(409, "SOFTWARE_CONTENT_CONFLICT", "软件状态变化，请重新确认。")
+    if get_usage(package_id) or get_preview_usage(package_id):
+        raise ApiError(409, "SOFTWARE_BUSY", "软件仍在运行或预览。")
+    directory = settings.workspace.resolve() / "software" / package_id
+    previous = _state(package)
+    _write_package_state(settings, package_id, previous.model_copy(update={"operation": "uninstall", "operation_state": "running", "phase": "removing"}))
     try:
-        if app.exists():
-            await asyncio.to_thread(shutil.rmtree, app)
-    except OSError as exc:
-        _write_state(settings.workspace, previous.model_copy(update={
-            "availability": "unknown", "operation": "uninstall", "operation_state": "failed", "phase": None,
-            "reason": "卸载未完整结束，请检查平台程序目录。",
-            "last_error": ErrorDetail(code="UNINSTALL_FAILED", message=str(exc), fields=[]),
-        }))
-        raise ApiError(503, "SOFTWARE_NOT_READY", f"Siril 卸载失败：{exc}") from exc
-    _write_state(settings.workspace, previous.model_copy(update={
-        "installed_version": None, "install_path": None, "availability": "not_installed",
-        "reason": "该软件尚未通过 AstroPhotoFlow 安装。", "operation": "uninstall",
-        "operation_state": "completed", "phase": None, "progress": None, "last_error": None,
-    }))
+        for name in ("bundle", "app", "previous-bundle"):
+            target = directory / name
+            if target.exists():
+                await asyncio.to_thread(bundles.remove_checkout, target, directory)
+    except (OSError, ValueError) as exc:
+        _write_package_state(settings, package_id, previous.model_copy(update={
+            "operation": "uninstall", "operation_state": "failed", "phase": None,
+            "availability": "unknown", "reason": "卸载未完整结束。",
+            "last_error": ErrorDetail(code="UNINSTALL_FAILED", message=str(exc), fields=[])}))
+        raise ApiError(503, "SOFTWARE_NOT_READY", f"Bundle 卸载失败：{exc}") from exc
+    for name in ("bundle-lock.json", "native-load.json"):
+        (directory / name).unlink(missing_ok=True)
+    _write_package_state(settings, package_id, _state(package).model_copy(update={
+        "installed_version": None, "install_path": None, "availability": "not_installed", "reason": "尚未安装 Bundle。",
+        "operation": "uninstall", "operation_state": "completed", "phase": None, "last_error": None}))
     return get_package(settings, package_id)
 
 
-def get_package_source(package_id: str, version: str) -> str:
-    if package_id != _PACKAGE_ID or version != _VERSION:
-        raise ApiError(404, "RESOURCE_NOT_FOUND", "未找到请求的软件包来源。")
-    return _manifest()["download_url"]
-
-
-def set_package_node_definition_ids(settings: Settings, package_id: str, definition_ids: list[UUID]) -> None:
-    if package_id != _PACKAGE_ID:
-        raise ApiError(404, "RESOURCE_NOT_FOUND", "未找到请求的软件包。")
-    package = get_package(settings, package_id)
-    state = SoftwarePackageState(
-        installed_version=package.installed_version, install_path=package.install_path,
-        availability=package.availability, reason=package.reason, operation=package.operation,
-        operation_state=package.operation_state, phase=package.phase, progress=package.progress,
-        last_error=package.last_error, node_definition_ids=definition_ids,
-    )
-    _write_state(settings.workspace, state)
+def prepare_package(settings, package_id):
+    return SoftwarePreparation(package=get_package(settings, package_id), user_action=None, ui_kind=None, ui_target=None)
 
 
 def list_siril_commands() -> list[SirilCommand]:
     manifest = _manifest()
     commands = json.loads(_resource(manifest["commands_file"]))
     assessments = json.loads(_resource(manifest["command_assessments_file"]))
-    if assessments["package_id"] != _PACKAGE_ID or assessments["version"] != _VERSION:
+    if assessments["package_id"] != "siril" or assessments["version"] != "1.4.4":
         raise ValueError("Siril command assessments are not bound to the fixed package version.")
     if assessments["source_commands_file_sha256"].casefold() != manifest["commands_file_sha256"].casefold():
         raise ValueError("Siril command assessments do not match the official command catalog.")
@@ -269,129 +271,10 @@ def list_siril_commands() -> list[SirilCommand]:
     ]
 
 
-def get_command_catalog(package_id: str, version: str) -> list[SirilCommand]:
-    if package_id != _PACKAGE_ID or version != _VERSION:
+def get_command_catalog(package_id: str, version: str, settings=None) -> list[SirilCommand]:
+    if package_id != "siril" or version != "1.4.4":
         raise ApiError(404, "RESOURCE_NOT_FOUND", "未找到请求的软件命令目录。")
     return list_siril_commands()
-
-
-def _operation(ready: bool, reason: str | None) -> SoftwareOperation:
-    operation = SoftwareOperation.model_validate({
-        "package_id": _PACKAGE_ID,
-        "version": _VERSION,
-        "operation_id": "autostretch",
-        "name": "Auto Stretch",
-        "description": "Applies Auto Stretch to each static image in fixed order using Siril. Linked mode preserves channel balance. Writes new FITS files; originals remain unchanged.",
-        "syntax": "autostretch [-linked] [shadowsclip [targetbg]]",
-        "inputs": [{
-            "name": "image", "type": "APF_SCIENCE", "formats": ["fits", "xisf", "image", "raw"],
-            "cardinality": "many", "required": True, "supports_hdu": False, "supports_slice": False,
-        }],
-        "outputs": [{
-            "name": "image", "type": "APF_SCIENCE", "formats": ["fits"], "cardinality": "many",
-        }],
-        "parameters": [
-            {"name": "linked", "kind": "boolean", "default": False},
-            {"name": "shadowsclip", "kind": "float", "default": -2.8},
-            {"name": "targetbg", "kind": "float", "default": 0.25, "minimum": 0, "maximum": 1},
-        ],
-        "scriptable": True,
-        "cancel_supported": None,
-        "content_token": "",
-        "ready": ready,
-        "reason": reason,
-    })
-    token_payload = operation.model_dump(mode="json", exclude={"content_token", "ready", "reason"})
-    token = hashlib.sha256(json.dumps(token_payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")).hexdigest()
-    return operation.model_copy(update={"content_token": token})
-
-
-def get_operation(settings: Settings, package_id: str, version: str, operation_id: str) -> SoftwareOperation:
-    if package_id != _PACKAGE_ID or version != _VERSION or operation_id != "autostretch":
-        raise ApiError(404, "RESOURCE_NOT_FOUND", "未找到请求的软件操作。")
-    package = get_package(settings, package_id)
-    reason = package.reason if package.availability != "ready" else None
-    return _operation(package.availability == "ready", reason)
-
-
-def get_bundled_definitions(settings: Settings, package_id: str, version: str) -> list[dict[str, JsonValue]]:
-    if package_id != _PACKAGE_ID or version != _VERSION:
-        raise ApiError(404, "RESOURCE_NOT_FOUND", "未找到请求的软件配套定义。")
-    return json.loads(_resource("siril-1.4.4-node-definitions.json"))
-
-
-def get_package(settings: Settings, package_id: str) -> SoftwarePackage:
-    if package_id != _PACKAGE_ID:
-        raise ApiError(404, "RESOURCE_NOT_FOUND", "未找到请求的软件包。")
-    manifest = _manifest()
-    app_path = settings.workspace / "software" / _PACKAGE_ID / "app"
-    state_path = settings.workspace / "software" / _PACKAGE_ID / "state.json"
-    if state_path.is_file():
-        state = SoftwarePackageState.model_validate_json(state_path.read_text(encoding="utf-8"))
-        if state.installed_version is not None and state.installed_version not in [_VERSION]:
-            raise ValueError(f"Siril 当前状态记录了清单外版本：{state.installed_version}")
-        if state.install_path is not None and state.install_path.resolve() != app_path.resolve():
-            raise ValueError("Siril 当前状态记录的安装位置与平台固定位置不一致。")
-        if state.availability == "not_installed" and app_path.is_dir():
-            state = state.model_copy(update={"availability": "unknown", "reason": "安装目录存在但当前状态记录为未安装，无法确认软件状态。"})
-        if state.installed_version is not None and state.install_path is None:
-            raise ValueError("已安装的软件状态必须记录安装位置。")
-        if state.installed_version is not None and not app_path.is_dir():
-            state = state.model_copy(update={"availability": "unknown", "reason": "安装位置不存在，无法确认软件已就绪。"})
-        elif state.availability == "ready" and not (app_path / "bin" / "siril-cli.exe").is_file():
-            state = state.model_copy(update={"availability": "not_ready", "reason": "平台 Siril CLI 程序缺失。"})
-        active_lock = _PACKAGE_LOCKS.get(package_id)
-        if state.operation_state == "running" and (active_lock is None or not active_lock.locked()):
-            state = state.model_copy(update={
-                "availability": "unknown", "operation_state": "unknown",
-                "reason": "上次服务状态记录为运行中，但当前没有可核对的安装任务。",
-            })
-    else:
-        if app_path.is_dir():
-            state = SoftwarePackageState(
-                installed_version=None, install_path=app_path, availability="unknown",
-                reason="检测到平台软件目录，但尚无可核对的版本状态记录。", operation=None,
-                operation_state="unknown", phase=None, progress=None, last_error=None, node_definition_ids=[],
-            )
-        else:
-            state = SoftwarePackageState(
-                installed_version=None, install_path=None, availability="not_installed",
-                reason="该软件尚未通过 AstroPhotoFlow 安装。", operation=None,
-                operation_state="idle", phase=None, progress=None, last_error=None, node_definition_ids=[],
-            )
-    content = {
-        "package_id": _PACKAGE_ID,
-        "name": manifest["name"],
-        "available_versions": [_VERSION],
-        "installed_version": state.installed_version,
-        "install_path": str(state.install_path) if state.install_path is not None else None,
-        "operation_contents": [_operation(state.availability == "ready", state.reason).model_dump(
-            mode="json", exclude={"content_token", "ready", "reason"}
-        )],
-    }
-    package_token = hashlib.sha256(
-        json.dumps(content, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
-    ).hexdigest()
-    return SoftwarePackage(
-        package_id=_PACKAGE_ID,
-        name=manifest["name"],
-        available_versions=[_VERSION],
-        installed_version=state.installed_version,
-        install_path=state.install_path,
-        package_token=package_token,
-        availability=state.availability,
-        reason=state.reason,
-        operation=state.operation,
-        operation_state=state.operation_state,
-        phase=state.phase,
-        progress=state.progress,
-        last_error=state.last_error,
-        node_definition_ids=state.node_definition_ids,
-    )
-
-
-def list_packages(settings: Settings) -> list[SoftwarePackage]:
-    return [get_package(settings, _PACKAGE_ID)]
 
 
 def get_usage(package_id: str) -> list[SoftwareUse]:
@@ -410,10 +293,10 @@ def get_usage(package_id: str) -> list[SoftwareUse]:
 
 
 def get_preview_usage(package_id: str) -> list[UUID]:
-    for key, process in list(_LIVE_PREVIEWS.items()):
+    for key, (_, process) in list(_LIVE_PREVIEWS.items()):
         if process is not None and process.returncode is not None:
             _LIVE_PREVIEWS.pop(key, None)
-    return list(_LIVE_PREVIEWS) if package_id == "siril" else []
+    return [key for key, (package, _) in _LIVE_PREVIEWS.items() if package == package_id]
 
 
 async def _stop_preview(process):
@@ -425,37 +308,29 @@ async def _stop_preview(process):
     await asyncio.shield(process.wait())
 
 
-async def preview_autostretch(settings: Settings, source: Path, directory: Path, parameters, *, prepare_sample: bool = False) -> Path:
-    package = get_package(settings, "siril")
+async def preview_operation(settings: Settings, source: Path, directory: Path, parameters, *, package_id: str, operation_id: str, prepare_sample: bool = False) -> Path:
+    package = get_package(settings, package_id)
     if package.availability != "ready":
         raise ApiError(503, "SOFTWARE_NOT_READY", package.reason or "请先在软件包页面安装 Siril。")
-    lock = _PACKAGE_LOCKS.get("siril")
+    lock = _PACKAGE_LOCKS.get(package_id)
     if lock is not None and lock.locked():
         raise ApiError(409, "SOFTWARE_BUSY", "Siril 正在维护。")
     root = (settings.data_dir / "previews").resolve()
     if not directory.resolve().is_relative_to(root) or (not prepare_sample and not source.resolve().is_relative_to(root)):
         raise ApiError(422, "INVALID_REFERENCE", "实时预览仅接受平台生成的显示样本。")
     job_id = UUID(directory.name)
-    _LIVE_PREVIEWS[job_id] = None
+    _LIVE_PREVIEWS[job_id] = (package_id, None)
     process = None
     try:
         directory.mkdir(parents=True, exist_ok=False)
-        # An explicit -i requires an existing INI; omitted keys use Siril defaults.
-        (directory / "siril.ini").write_text("[core]\n", encoding="utf-8")
-        target = directory / "result.fit"
-        command = "autostretch " + ("-linked " if parameters.linked else "") + f"{parameters.shadowsclip:.17g} {parameters.targetbg:.17g}"
-        script = directory / "preview.ssf"
+        plan = bundles.adapter_plan(settings.workspace, package_id, operation_id, [source], parameters,
+                                    directory, preview=True, prepare_sample=prepare_sample)
+        target = plan.outputs[0]
         source_stamp = source.stat()
-        commands = ["requires 1.4.4", "setext fit", "set32bits", "load " + _siril_path(source)]
-        if prepare_sample:
-            commands.extend(["resample -maxdim=1024 -interp=area", "save " + _siril_path(directory / "linear.fit")])
-        commands.extend([command, "save " + _siril_path(target), "close"])
-        script.write_text("\n".join(commands) + "\n", encoding="utf-8")
         log = directory / "preview.log"
         with log.open("wb") as stream:
             spawn = asyncio.create_task(asyncio.create_subprocess_exec(
-                str(package.install_path / "bin/siril-cli.exe"), "-o", "-i", str(directory / "siril.ini"),
-                "-d", str(directory), "-s", str(script), cwd=directory,
+                str(bundles.contained(settings.workspace / "software" / package_id / "bundle", bundles.metadata(settings.workspace, package_id)[0].executable)), *plan.arguments, cwd=directory,
                 stdout=stream, stderr=asyncio.subprocess.STDOUT,
                 creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
             ))
@@ -465,7 +340,7 @@ async def preview_autostretch(settings: Settings, source: Path, directory: Path,
                 process = await asyncio.shield(spawn)
                 await _stop_preview(process)
                 raise
-            _LIVE_PREVIEWS[job_id] = process
+            _LIVE_PREVIEWS[job_id] = (package_id, process)
             code = await process.wait()
         if code != 0 or not target.is_file():
             detail = log.read_text(encoding="utf-8", errors="replace")[-2000:]
@@ -483,6 +358,19 @@ async def preview_autostretch(settings: Settings, source: Path, directory: Path,
     finally:
         if process is None or process.returncode is not None:
             _LIVE_PREVIEWS.pop(job_id, None)
+
+
+def validate_parameters(settings, package_id, operation_id, values):
+    manifest, _, _ = bundles.metadata(settings.workspace, package_id)
+    operation = get_operation(settings, package_id, manifest.software_version, operation_id)
+    if set(values) != {item.name for item in operation.parameters}:
+        raise ApiError(422, "VALIDATION_ERROR", "参数与 Bundle 操作定义不一致。")
+    for parameter in operation.parameters:
+        try:
+            ParameterDefinition.model_validate({**parameter.model_dump(), "default": values[parameter.name]})
+        except ValueError as exc:
+            raise ApiError(422, "VALIDATION_ERROR", f"参数无效：{parameter.name}") from exc
+    return operation
 
 
 def _validate_invocation(settings: Settings, invocation: SoftwareInvocation):
@@ -521,13 +409,6 @@ def _validate_invocation(settings: Settings, invocation: SoftwareInvocation):
     return get_package(settings, invocation.package_id), work
 
 
-def _siril_path(path: Path) -> str:
-    value = path.resolve().as_posix()
-    if any(character in value for character in ('"', '\n', '\r')):
-        raise ApiError(422, "UNSUPPORTED_SOURCE_PATH", "Siril 脚本不支持此文件名中的引号或换行。")
-    return '"' + value + '"'
-
-
 async def invoke_operation(settings: Settings, invocation: SoftwareInvocation,
                            observe: Callable[[SoftwareObservation], Awaitable[None]]) -> SoftwareResult:
     package, work = _validate_invocation(settings, invocation)
@@ -552,29 +433,24 @@ async def invoke_operation(settings: Settings, invocation: SoftwareInvocation,
     try:
         await observe(observation)
         work.mkdir(parents=True, exist_ok=False)
-        (work / "siril.ini").write_text("[core]\n", encoding="utf-8")
-        output_paths = [work / f"autostretch-{index:06d}.fit" for index in range(len(invocation.inputs["image"]))]
-        parameters = invocation.parameters
-        command = "autostretch " + ("-linked " if parameters["linked"] else "") + \
-            f'{parameters["shadowsclip"]:.17g} {parameters["targetbg"]:.17g}'
-        commands = ["requires 1.4.4", "setext fit", "set32bits"]
-        for item, target in zip(invocation.inputs["image"], output_paths, strict=True):
-            commands.extend(["load " + _siril_path(item.read_path), command, "save " + _siril_path(target), "close"])
-        script = work / "operation.ssf"
-        script.write_text("\n".join(commands) + "\n", encoding="utf-8")
+        plan = bundles.adapter_plan(settings.workspace, invocation.package_id, invocation.operation_id,
+                                    [item.read_path for item in invocation.inputs["image"]], invocation.parameters, work)
+        output_paths = plan.outputs
+        executable = bundles.contained(settings.workspace / "software" / invocation.package_id / "bundle",
+                                       bundles.metadata(settings.workspace, invocation.package_id)[0].executable)
         if call.cancelled:
             state = "cancelled"
         else:
             with log.open("wb") as stream:
                 call.process = await asyncio.create_subprocess_exec(
-                    str(package.install_path / "bin" / "siril-cli.exe"), "-o", "-i", str(work / "siril.ini"), "-d", str(work), "-s", str(script),
+                    str(executable), *plan.arguments,
                     cwd=work, stdout=stream, stderr=asyncio.subprocess.STDOUT,
                     creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
                 )
                 try:
                     process = psutil.Process(call.process.pid)
                     runtime_ref = {"pid": process.pid, "create_time": process.create_time(),
-                                   "executable": str(package.install_path / "bin" / "siril-cli.exe")}
+                                   "executable": str(executable)}
                 except (psutil.NoSuchProcess, psutil.AccessDenied):
                     runtime_ref = None
                 call.observation = observation.model_copy(update={
@@ -589,7 +465,7 @@ async def invoke_operation(settings: Settings, invocation: SoftwareInvocation,
                 if call.cancelled and call.process.returncode is None:
                     call.process.terminate()
                 code = await asyncio.shield(task)
-            outputs = [ProducedFile(path=path, format="fits") for path in output_paths if path.is_file() and path.stat().st_size > 0]
+            outputs = [ProducedFile(path=path, format=plan.output_format) for path in output_paths if path.is_file() and path.stat().st_size > 0]
             if call.cancelled:
                 state = "cancelled"
             elif code != 0 or len(outputs) != len(output_paths):
@@ -686,9 +562,3 @@ async def cancel_operation(call_id: UUID) -> SoftwareCancelResult:
                                         observed_at=datetime.now(timezone.utc), reason="停止请求已发送，尚未观察到退出。")
     return SoftwareCancelResult(call_id=call_id, request_state="sent", stop_state="stopped" if process.returncode is not None else "unknown",
                                 observed_at=datetime.now(timezone.utc))
-
-
-__all__ = ["get_bundled_definitions", "get_operation", "get_package", "get_package_source", "install_package",
-           "list_packages", "list_siril_commands", "maintain_package", "prepare_package", "set_package_node_definition_ids",
-           "uninstall_package", "invoke_operation", "inspect_operation", "cancel_operation", "get_usage",
-           "preview_autostretch", "get_preview_usage"]

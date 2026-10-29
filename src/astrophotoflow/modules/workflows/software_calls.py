@@ -7,11 +7,12 @@ from uuid import UUID
 from fastapi import Depends, Request
 
 from astrophotoflow.contracts.inputs import OutputLocator, ResolvedOutputInput
-from astrophotoflow.contracts.software import NativeSirilCall, SoftwareInvocation, SoftwareObservation
+from astrophotoflow.contracts.software import NativeSirilCall, NativeBundleCall, SoftwareInvocation, SoftwareObservation
 from astrophotoflow.core.errors import ApiError
 from astrophotoflow.core.http import authenticate
 from astrophotoflow.modules.data.public import check_output, render_output_preview, resolve_canvas_inputs
-from astrophotoflow.modules.software.public import cancel_operation, get_operation, inspect_operation, invoke_operation
+from astrophotoflow.modules.nodes.public import get_definition
+from astrophotoflow.modules.software.public import get_bundle_metadata, validate_parameters, cancel_operation, get_operation, inspect_operation, invoke_operation
 
 
 def _record_path(settings, prompt_id: UUID, call_id: UUID) -> Path:
@@ -33,7 +34,7 @@ def _read(settings, prompt_id: UUID, call_id: UUID):
     return value
 
 
-def _resolve_previous(settings, body: NativeSirilCall):
+def _resolve_previous(settings, body: NativeBundleCall):
     locator = body.reference
     if locator.run_id != body.prompt_id or locator.output_index != 0:
         raise ApiError(422, "INVALID_REFERENCE", "只接受同次原生运行内已检查的科学输出。")
@@ -63,7 +64,20 @@ def _resolve_previous(settings, body: NativeSirilCall):
     return items
 
 
-async def _run(app, settings, body: NativeSirilCall):
+def _binding(settings, body):
+    saved = get_definition(settings.workspace, body.definition_id)
+    if saved.content_token != body.definition_token:
+        raise ApiError(409, "NODE_CONTENT_CONFLICT", "节点定义已变化，请重新加载节点。")
+    binding = saved.definition.execution
+    manifest, _, _ = get_bundle_metadata(settings, binding.package_id)
+    if set(body.parameters) != {p.name for p in saved.definition.parameters}:
+        raise ApiError(422, "VALIDATION_ERROR", "节点参数与定义不一致。")
+    values = {name: body.parameters[source.name] if source.kind == "parameter" else source.value for name, source in binding.parameters.items()}
+    operation = validate_parameters(settings, binding.package_id, binding.operation_id, values)
+    return operation, values
+
+
+async def _run(app, settings, body: NativeBundleCall):
     path = _record_path(settings, body.prompt_id, body.call_id)
     record = _read(settings, body.prompt_id, body.call_id)
     work = settings.workspace / "runs" / str(body.prompt_id) / "work" / str(body.call_id)
@@ -74,11 +88,11 @@ async def _run(app, settings, body: NativeSirilCall):
             resolved = await asyncio.to_thread(resolve_canvas_inputs, app.state.database, settings, body.reference,
                                                run_directory=work.parent / (str(body.call_id) + "-inputs"))
             items = resolved.items
-        operation = get_operation(settings, "siril", "1.4.4", "autostretch")
+        operation, parameters = _binding(settings, body)
         invocation = SoftwareInvocation(
             run_id=body.prompt_id, node_execution_id=body.node_id, call_id=body.call_id,
-            package_id="siril", version="1.4.4", operation_id="autostretch", operation_content_token=operation.content_token,
-            inputs={"image": items}, parameters={"linked": body.linked, "shadowsclip": body.shadowsclip, "targetbg": body.targetbg},
+            package_id=operation.package_id, version=operation.version, operation_id=operation.operation_id, operation_content_token=operation.content_token,
+            inputs={"image": items}, parameters=parameters,
             work_directory=work,
         )
         record["invocation"] = invocation.model_dump(mode="json")
@@ -120,8 +134,8 @@ async def _run(app, settings, body: NativeSirilCall):
 def register_siril_calls(app, settings):
     app.state.siril_calls = {}
 
-    @app.post("/internal/native/siril/calls", dependencies=[Depends(authenticate)], include_in_schema=False)
-    async def start(body: NativeSirilCall):
+    @app.post("/internal/native/bundles/calls", dependencies=[Depends(authenticate)], include_in_schema=False)
+    async def start(body: NativeBundleCall):
         async with app.state.maintenance_lock:
             if app.state.maintenance or app.state.shutdown_started:
                 raise ApiError(409, "WORKBENCH_MAINTENANCE", "工作台正在维护。")
@@ -133,7 +147,7 @@ def register_siril_calls(app, settings):
                 return record
             if any(not task.done() for task in app.state.software_tasks.values()):
                 raise ApiError(409, "SOFTWARE_BUSY", "软件包正在维护。")
-            operation = get_operation(settings, "siril", "1.4.4", "autostretch")
+            operation, parameters = _binding(settings, body)
             if not operation.ready:
                 raise ApiError(503, "SOFTWARE_NOT_READY", operation.reason or "请先安装 Siril。")
             record = {"request": body.model_dump(mode="json"), "state": "starting", "result": None,
@@ -145,14 +159,14 @@ def register_siril_calls(app, settings):
             task.add_done_callback(lambda _task: app.state.siril_calls.pop(body.call_id, None))
             return record
 
-    @app.get("/internal/native/siril/calls/{prompt_id}/{call_id}", dependencies=[Depends(authenticate)], include_in_schema=False)
+    @app.get("/internal/native/bundles/calls/{prompt_id}/{call_id}", dependencies=[Depends(authenticate)], include_in_schema=False)
     async def status(prompt_id: UUID, call_id: UUID):
         record = _read(settings, prompt_id, call_id)
         if record["state"] in {"starting", "running"} and call_id not in app.state.siril_calls:
             record["state"] = "unknown"
         return record
 
-    @app.post("/internal/native/siril/calls/{prompt_id}/{call_id}/cancel", dependencies=[Depends(authenticate)], include_in_schema=False)
+    @app.post("/internal/native/bundles/calls/{prompt_id}/{call_id}/cancel", dependencies=[Depends(authenticate)], include_in_schema=False)
     async def cancel(prompt_id: UUID, call_id: UUID):
         record = _read(settings, prompt_id, call_id)
         result = await cancel_operation(call_id)

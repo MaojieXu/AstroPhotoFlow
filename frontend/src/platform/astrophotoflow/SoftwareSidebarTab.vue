@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted, onBeforeUnmount, ref } from 'vue'
 import { useRoute } from 'vue-router'
 
 import Button from '@/components/ui/button/Button.vue'
@@ -11,9 +11,13 @@ import { confirmSoftware } from './workflowBridge'
 import { SoftwarePanel, createSoftwareClient } from '@astrophotoflow/ui'
 
 const route = useRoute()
+const connectionEpoch = ref(0)
+function reconnected() { connectionEpoch.value++ }
+onMounted(() => api.addEventListener('reconnected', reconnected))
+onBeforeUnmount(() => api.removeEventListener('reconnected', reconnected))
 const client = createSoftwareClient((path, init) => fetch(path, init))
 const packageId = computed(() => typeof route.query.package_id === 'string' ? route.query.package_id : undefined)
-const operationId = computed(() => typeof route.query.operation_id === 'string' ? route.query.operation_id : undefined)
+const operationId = computed(() => connectionEpoch.value === 0 && typeof route.query.operation_id === 'string' ? route.query.operation_id : undefined)
 const confirmationAvailable = computed(() => api.serverSupportsFeature('apf_page'))
 </script>
 
@@ -21,6 +25,7 @@ const confirmationAvailable = computed(() => api.serverSupportsFeature('apf_page
   <SidebarTabTemplate :title="$t('apfSoftware.title')" data-testid="software-sidebar">
     <template #body>
       <SoftwarePanel
+        :key="connectionEpoch"
         :client="client"
         :confirm-software="confirmSoftware"
         :confirmation-available="confirmationAvailable"

@@ -1,5 +1,12 @@
 # ③ 外部软件接入与环境概要设计
 
+最终Bundle版本：v0.1.1 / 7f2639441b3d00b3b3ec671b77fa5a027b4c1e8e（Siril1.4.4）。v0.1.0保留为早期验证记录。v0.1.1以output_nodes显式声明原生终点，默认非终点，并补齐examples/agent.md；独立包5项测试通过。最终主项目目录锁定v0.1.1，demo-preview已更新。无系统Git自举、浏览器确认和用户画布视觉仍待人工验证。
+
+## 独立 Bundle 当前实现
+
+软件源码/便携程序位于私有 AstroPhotoFlow-Siril，首版 v0.1.0 / Siril1.4.4。平台 `bundles.py` 负责发布元数据、Git 固定提交、清单及程序检查和 SDK 适配器加载；`public.py` 负责维护、状态、实际进程和取消。安装到 workspace/software/<package>/bundle，state、bundle-lock、native-load 保存在 checkout 外。程序复制/适配代码不再随主平台节点类硬编码。
+
+SDK v1 的 build_plan 只消费已解析的科学输入、参数和本次输出目录，返回 ProcessPlan；不启动自己的进程池或访问私有 ORM。正式结果继续由⑤检查，轻量预览由既有执行器调度。发布目录通过 scripts/export_bundle_catalog.py 从指定 Bundle tag 生成，参数不在主平台手写。当前实际验证见验证矩阵，旧段落为历史实现记录。
 2026-10-29 Auto Stretch 静态格式扩展候选：输入接受 fits、xisf、image、raw，完整原件交由 Siril 自身 load 解码；具体编码支持由安装的 Siril 报告。非 FITS 快速预览首次 load 原件后 resample -maxdim=1024，先保存未拉伸 linear.fit 再执行 autostretch；成功且原件大小/mtime 未变化后发布样本缓存，后续调参复用。FITS 保持既有条带采样。正式结果继续 FITS，显示不二次拉伸。视频、数值数组及指定 HDU/切片仍未接入。补写格式转发、原生解码顺序和缓存复用用例，未运行测试或实际软件处理。Python语法编译通过；仅后端及包描述变更，沿用现有前端构建；隔离重启证据见 .artifacts/implementation/siril-formats-20261029。用户预览待验收。
 
 2026-10-29 安装故障修复候选：安全验证ZIP成员后直接解压到独占创建的固定app目录，再从正式位置检查准确版本；避免Windows下移动已检查程序目录。失败通过类型化ErrorDetail记录终态，保留部分目录及未验证版本事实，允许用户确认卸载已知失败的部分安装。原有真实网页确认和token规则保持，不自动重试；新增测试仅编写未运行，实际安装由用户验收。

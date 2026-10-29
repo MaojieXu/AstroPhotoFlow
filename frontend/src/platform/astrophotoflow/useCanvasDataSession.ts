@@ -12,6 +12,7 @@ import { isSelectOnly } from '@/utils/litegraphUtil'
 import { canvasCommandSchema, canvasPageSchema } from './canvasContracts'
 import type { CanvasPage } from './canvasContracts'
 import { insertPreparedCanvasData } from './canvasDataBridge'
+import { applyCanvasNodeEdit } from './canvasNodeBridge'
 
 export const canvasDataAgentAllowed = ref(false)
 let toggleControl: (() => void) | undefined
@@ -85,19 +86,33 @@ export function useCanvasDataSession() {
   async function apply(event: CustomEvent<unknown>) {
     const parsed = canvasCommandSchema.safeParse(event.detail)
     if (!parsed.success) return
-    const { request, data } = parsed.data
+    const command = parsed.data
+    const { request } = command
+    const inspecting = 'edit' in request && request.edit.action === 'inspect'
     let nodeId: string | number | null = null
     let error = null
+    let linkId: string | number | null = null
+    let snapshot = null
+    let applied: boolean | null = false
     try {
       const app = useApp()
       const current = state
-      if (!current || !controlToken || request.control_token !== controlToken || request.workflow_id !== current.workflow_id || request.graph_id !== current.graph_id || request.content_token !== current.content_token || app.graph.id !== request.workflow_id || app.canvas.graph?.id !== request.graph_id || serializeCanvasContent(app.canvas.graph) !== serialized || applying) {
+      if (!current || (!inspecting && !controlToken) || request.control_token !== controlToken || request.workflow_id !== current.workflow_id || request.graph_id !== current.graph_id || request.content_token !== current.content_token || app.graph.id !== request.workflow_id || app.canvas.graph?.id !== request.graph_id || serializeCanvasContent(app.canvas.graph) !== serialized || applying) {
         throw new Error(t('astrophotoflow.canvasChanged'))
       }
       applying = true
-      nodeId = insertPreparedCanvasData(data)
+      if ('data' in command) nodeId = insertPreparedCanvasData(command.data)
+      else if (inspecting) snapshot = JSON.parse(serializeCanvasContent(app.canvas.graph))
+      else {
+        const result = applyCanvasNodeEdit(command)
+        nodeId = result.node_id
+        linkId = result.link_id
+      }
+      applied = true
     } catch (cause) {
-      error = { code: 'CANVAS_TARGET_CHANGED', message: cause instanceof Error ? cause.message : String(cause), fields: [] }
+      const graph = useApp().canvas.graph
+      if (applying && graph && serializeCanvasContent(graph) !== serialized) applied = null
+      error = { code: applied === null ? 'CANVAS_RESULT_UNKNOWN' : 'CANVAS_TARGET_CHANGED', message: cause instanceof Error ? cause.message : String(cause), fields: [] }
     } finally {
       applying = false
     }
@@ -105,7 +120,8 @@ export function useCanvasDataSession() {
     api.sendCanvasEvent({ action: 'result', result: {
       operation_id: request.operation_id, page_id: request.page_id,
       workflow_id: request.workflow_id, graph_id: request.graph_id,
-      applied: nodeId !== null, node_id: nodeId, error
+      applied, node_id: nodeId, link_id: linkId, graph: snapshot,
+      content_token: state?.workflow_id === request.workflow_id && state.graph_id === request.graph_id ? state.content_token : null, error
     } })
   }
 

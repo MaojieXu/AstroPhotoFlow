@@ -6,15 +6,15 @@ from uuid import uuid4
 from PIL import Image
 import pytest
 
-from astrophotoflow.contracts.software import SirilPreviewRequest
+from astrophotoflow.contracts.software import BundlePreviewRequest
 from astrophotoflow.core.errors import ApiError
 from astrophotoflow.modules.workflows import siril_preview
 
 
 def test_live_preview_cancels_old_generation_and_releases_samples(tmp_path, monkeypatch):
     consumer = uuid4()
-    body = SirilPreviewRequest(reference={"kind": "asset_version", "asset_version_id": uuid4(), "selection": {"kind": "whole_file"}},
-                              member_index=0, consumer_id=consumer, generation=1, linked=True, shadowsclip=0, targetbg=0)
+    body = BundlePreviewRequest(reference={"kind": "asset_version", "asset_version_id": uuid4(), "selection": {"kind": "whole_file"}},
+                              member_index=0, consumer_id=consumer, generation=1, package_id="siril", operation_id="autostretch", parameters={"linked":True,"shadowsclip":0,"targetbg":0})
     released, requests = [], []
     first_started = asyncio.Event()
 
@@ -23,15 +23,15 @@ def test_live_preview_cancels_old_generation_and_releases_samples(tmp_path, monk
         return SimpleNamespace(path=tmp_path / "linear.fit", folder=tmp_path,
                                close=lambda error: released.append((request.generation, error)))
 
-    async def run(_settings, source, directory, parameters):
-        requests.append((source, parameters.shadowsclip, parameters.targetbg))
-        if parameters.generation == 1:
+    async def run(_settings, source, directory, parameters, **options):
+        requests.append((source, parameters["shadowsclip"], parameters["targetbg"]))
+        if len(requests) == 1:
             first_started.set()
             await asyncio.Event().wait()
         return directory / "result.fit"
 
     monkeypatch.setattr(siril_preview, "prepare_siril_sample", sample)
-    monkeypatch.setattr(siril_preview, "preview_autostretch", run)
+    monkeypatch.setattr(siril_preview, "preview_operation", run)
     monkeypatch.setattr(siril_preview, "direct_fits_image", lambda *_args: Image.new("RGB", (12, 9), "blue"))
 
     class Cache:
@@ -42,7 +42,7 @@ def test_live_preview_cancels_old_generation_and_releases_samples(tmp_path, monk
         manager = siril_preview.SirilPreviews(None, SimpleNamespace(preview_workers=1), executor, Cache())
         first = asyncio.create_task(manager.render(body))
         await first_started.wait()
-        newer = body.model_copy(update={"generation": 2, "targetbg": 0.25})
+        newer = body.model_copy(update={"generation": 2, "parameters": {"linked":True,"shadowsclip":0,"targetbg":0.25}})
         result = await manager.render(newer)
         await asyncio.gather(first, return_exceptions=True)
         assert result.startswith(b"\x89PNG")

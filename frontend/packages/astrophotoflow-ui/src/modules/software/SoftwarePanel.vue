@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { Component } from 'vue'
+import { ApiClientError } from '../../core/client'
 
 import type { SoftwareClient } from './api/client'
 import type { PendingSoftwareAction, SoftwareConfirmationResult, SoftwarePackageDetails } from './api/contracts'
@@ -26,7 +27,7 @@ const details = computed(() => 'details' in state.value ? state.value.details : 
 const software = computed(() => details.value?.package)
 const action = computed(() => details.value?.current_action)
 const busy = computed(() => state.value.phase === 'requesting' || state.value.phase === 'confirming' || action.value?.state === 'running')
-const installed = computed(() => software.value?.installed_version != null || software.value?.install_path != null)
+const installed = computed(() => !software.value?.migration_required && (software.value?.installed_version != null || software.value?.install_path != null))
 const uninstallAction = computed(() => action.value?.state === 'running' ? action.value.plan.action === 'uninstall' : installed.value)
 const ready = computed(() => software.value?.availability === 'ready' && !busy.value)
 const statusText = computed(() => {
@@ -65,7 +66,13 @@ async function load() {
     const packages = await props.client.listPackages()
     const id = props.packageId ?? packages[0]?.package_id
     if (!id) throw new Error(props.translate('apfSoftware.noPackages'))
-    const result = await props.client.getPackage(id, props.operationId)
+    let result: SoftwarePackageDetails
+    try {
+      result = await props.client.getPackage(id, props.operationId)
+    } catch (cause) {
+      if (!(cause instanceof ApiClientError) || cause.code !== 'SOFTWARE_ACTION_EXPIRED') throw cause
+      result = await props.client.getPackage(id)
+    }
     if (disposed || current !== generation) return
     state.value = { phase: 'ready', details: result, error: null }
     planOpen.value = result.current_action?.state === 'awaiting_confirmation'
@@ -162,9 +169,10 @@ onBeforeUnmount(() => {
     >
       <div class="flex min-h-0 flex-col gap-3 overflow-y-auto p-4 text-sm">
         <div class="font-medium">{{ software?.name }} {{ action.plan.target_version ?? action.plan.current_version }}</div>
-        <p v-if="action.plan.action === 'uninstall'">{{ translate('apfSoftware.uninstallNotice') }}</p>
+        <p v-if="action.plan.restart_required">{{ action.plan.restart_reason }}</p>
+          <p v-if="action.plan.action === 'uninstall'">{{ translate('apfSoftware.uninstallNotice') }}</p>
         <template v-else>
-          <a v-if="action.plan.source" :href="action.plan.source" target="_blank" rel="noreferrer" class="break-all underline">{{ action.plan.source }}</a>
+          <a v-if="action.plan.source" :href="action.plan.source.split(' @ ')[0]" target="_blank" rel="noreferrer" class="break-all underline">{{ action.plan.source }}</a>
           <p class="break-all">{{ action.plan.install_path }}</p>
           <p v-for="node in action.plan.node_changes" :key="node.definition_id">{{ node.name }}</p>
         </template>

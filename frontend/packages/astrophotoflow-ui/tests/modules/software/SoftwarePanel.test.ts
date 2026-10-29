@@ -2,6 +2,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
 
 import SoftwarePanel from '@ui/modules/software/SoftwarePanel.vue'
+import { ApiClientError } from '@ui/core/client'
 import type { SoftwareClient } from '@ui/modules/software/api/client'
 import type { PendingSoftwareAction, SoftwarePackage, SoftwarePackageDetails } from '@ui/modules/software/api/contracts'
 
@@ -59,6 +60,32 @@ function client(overrides: Partial<SoftwareClient> = {}): SoftwareClient {
 }
 
 describe('SoftwarePanel', () => {
+  it('reads current installed state after a restart expires the old confirmation', async () => {
+    const getPackage = vi.fn().mockRejectedValueOnce(new ApiClientError('Expired', 'service', 409, 'SOFTWARE_ACTION_EXPIRED'))
+      .mockResolvedValue({ ...details, package: { ...packageInfo, installed_version: '1.4.4', availability: 'ready', reason: null } })
+    const apiClient = client({ getPackage })
+    const confirmSoftware = vi.fn()
+    const wrapper = mount(SoftwarePanel, { props: { client: apiClient, confirmSoftware, confirmationAvailable: true, translate, operationId: pending.operation_id } })
+    await flushPromises()
+    expect(getPackage).toHaveBeenNthCalledWith(2, 'siril')
+    expect(wrapper.find('[data-testid="request-uninstall"]').exists()).toBe(true)
+    expect(confirmSoftware).not.toHaveBeenCalled()
+    expect(apiClient.requestInstall).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
+  it('offers bundle migration without uninstalling the existing standalone program', async () => {
+    const apiClient = client({ getPackage: vi.fn().mockResolvedValue({ ...details, package: {
+      ...packageInfo, installed_version: '1.4.4', install_path: 'C:/workspace/software/siril/app', migration_required: true
+    } }) })
+    const wrapper = mount(SoftwarePanel, { props: { client: apiClient, confirmSoftware: vi.fn(), confirmationAvailable: true, translate } })
+    await flushPromises()
+    await wrapper.get('[data-testid="request-install"]').trigger('click')
+    await flushPromises()
+    expect(apiClient.requestUninstall).not.toHaveBeenCalled()
+    expect(apiClient.requestInstall).toHaveBeenCalledOnce()
+    wrapper.unmount()
+  })
   it('requests an install plan but waits for the separate confirmation action', async () => {
     const apiClient = client()
     const confirmSoftware = vi.fn()

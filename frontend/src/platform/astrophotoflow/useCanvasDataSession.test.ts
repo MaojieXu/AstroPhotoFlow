@@ -36,7 +36,7 @@ function lastState() {
   return value.state
 }
 
-function command(): CanvasCommand {
+function command(): Extract<CanvasCommand, { data: unknown }> {
   const state = lastState()
   return {
     request: { operation_id: ids.operation, page_id: ids.page, workflow_id: state.workflow_id, graph_id: state.graph_id, content_token: state.content_token, control_token: state.control_token ?? '', source: { entry_type: 'asset', id: ids.asset, version_id: ids.version, member_indexes: null } },
@@ -69,6 +69,30 @@ afterEach(() => {
 })
 
 describe('native data canvas control', () => {
+  it('reads the current native graph without taking control', async () => {
+    const current = lastState()
+    events.dispatchEvent(new CustomEvent('apf.canvas_command', { detail: {
+      request: { operation_id: ids.operation, page_id: ids.page,
+        workflow_id: current.workflow_id, graph_id: current.graph_id,
+        content_token: current.content_token, control_token: null, edit: { action: 'inspect' } },
+      definition: null
+    } }))
+    await waitFor(() => expect(mocks.send).toHaveBeenCalledWith({ action: 'result', result: expect.objectContaining({ applied: true, graph: expect.objectContaining({ nodes: [] }) }) }))
+    expect(canvasDataAgentAllowed.value).toBe(false)
+    expect(mocks.insert).not.toHaveBeenCalled()
+  })
+
+  it('rejects node editing without explicit user handoff', async () => {
+    const current = lastState()
+    events.dispatchEvent(new CustomEvent('apf.canvas_command', { detail: {
+      request: { operation_id: ids.operation, page_id: ids.page,
+        workflow_id: current.workflow_id, graph_id: current.graph_id,
+        content_token: current.content_token, control_token: null,
+        edit: { action: 'set_parameter', node_id: 9, name: 'targetbg', value: .4 } }, definition: null
+    } }))
+    await waitFor(() => expect(mocks.send).toHaveBeenCalledWith({ action: 'result', result: expect.objectContaining({ applied: false }) }))
+    expect(canvasDataAgentAllowed.value).toBe(false)
+  })
   it('requires explicit handoff and revokes on manual changes or reconnect', async () => {
     expect(lastState().control_token).toBeNull()
     toggleCanvasDataControl()

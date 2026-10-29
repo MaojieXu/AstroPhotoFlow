@@ -6,6 +6,8 @@ from astrophotoflow.core import http as deps
 from astrophotoflow.core.errors import ApiError
 from astrophotoflow.modules.data.public import prepare_canvas_data
 from uuid import UUID
+from astrophotoflow.contracts.workflows import CanvasGraphRequest, NativeCanvasGraphCommand
+from astrophotoflow.modules.nodes.catalog import describe_node
 
 
 router = APIRouter(prefix="/api/v1/canvas", responses=deps.ERROR_RESPONSES)
@@ -45,3 +47,20 @@ async def add_canvas_data(body: CanvasAddRequest, request: Request):
 @router.get("/requests/{operation_id}", response_model=CanvasAddResult, dependencies=[Depends(deps.authenticate)])
 async def get_canvas_request(operation_id: UUID, request: Request):
     return await _native(request, "GET", f"/requests/{operation_id}")
+
+
+@router.post('/graph', response_model=CanvasAddResult, dependencies=[Depends(deps.authenticate)])
+async def edit_canvas(body: CanvasGraphRequest, request: Request):
+    async with request.app.state.maintenance_lock:
+        if request.app.state.maintenance or request.app.state.shutdown_started:
+            raise ApiError(409, 'WORKBENCH_MAINTENANCE', '工作台正在维护。')
+        definition = None
+        if body.edit.action != 'inspect' and not body.control_token:
+            raise ApiError(409, 'CANVAS_NOT_AUTHORIZED', '请在目标网页明确交给 Agent。')
+        if body.edit.action == 'add_node':
+            capability = describe_node(request.app.state.settings, body.edit.definition_id)
+            if not capability.available:
+                raise ApiError(409, 'SOFTWARE_NOT_READY', capability.reason or '节点依赖尚未就绪。')
+            definition = capability.node
+        command = NativeCanvasGraphCommand(request=body, definition=definition)
+        return await _native(request, 'POST', '/requests', command.model_dump(mode='json'))

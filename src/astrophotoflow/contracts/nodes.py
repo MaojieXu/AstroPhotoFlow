@@ -6,7 +6,8 @@ from uuid import UUID
 from pydantic import Field, JsonValue, field_validator, model_validator
 
 from astrophotoflow.contracts.common import ErrorDetail, StrictModel, UuidInput, check_name
-from astrophotoflow.contracts.software import ParameterDefinition
+from astrophotoflow.contracts.software import ParameterDefinition, SoftwareOperation
+from astrophotoflow.contracts.bundles import BundlePreview
 
 
 class NodePort(StrictModel):
@@ -104,6 +105,16 @@ class NativeNodeLoad(StrictModel):
     content_token: str | None
     state: Literal["loaded", "not_loaded", "failed", "unknown"]
     reason: str | None
+
+
+class NodeCapability(StrictModel):
+    node: SavedDefinition
+    operation: SoftwareOperation
+    available: bool
+    reason: str | None
+    preview: BundlePreview | None
+    help: str
+    examples: list[dict[str, JsonValue]]
 
 
 def definition_content_token(definition: NodeDefinition) -> str:

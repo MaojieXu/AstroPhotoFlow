@@ -1,5 +1,13 @@
 # 五模块接口契约与文件级详细设计
 
+## 2026-10-29 Bundle 增量契约（实现候选）
+
+- `BundleManifest` 固定 schema_version/host_api=1，标识 package、bundle/software version、Windows 平台、程序/适配器相对路径、操作与节点文件。`ProcessPlan` 返回 arguments、outputs、output_format、可选 linear_sample；不接收任意用户脚本。
+- `GET /api/v1/nodes` 与 `GET /api/v1/nodes/{definition_id}` 返回 `NodeCapability`，包含有效定义、content_token/native_type、操作、可用原因、preview/help/examples。
+- `POST /api/v1/canvas/graph` 消费 `CanvasGraphRequest`：精确 operation/page/workflow/graph ID、content/control token 和一个 edit（inspect/add_node/set_parameter/connect）。沿原生连接返回实际 graph/node/link ID、新内容 token；未知结果不自动重放。
+- `POST /api/v1/software/preview` 消费 `BundlePreviewRequest`，固定引用、成员索引、消费者/generation、package/operation ID 和参数；返回 PNG。DELETE 同路径/consumer_id 取消。旧 Siril 预览入口保留协议适配，正式调用使用内部 `/internal/native/bundles/calls`。
+- 本轮增加 list_nodes/get_node/get_canvas/edit_canvas 四个 MCP 工具和对应 CLI；不实施整套精简 MCP 迁移。当前完整字段以契约类和 OpenAPI 为准。
+
 2026-10-29 已实现候选覆盖：③补齐 SoftwareInvocation／Observation／Result／CancelResult／Use 及 invoke／inspect／cancel／usage；首操作为固定 Siril 1.4.4 Auto Stretch，完整 FITS 的 one-or-many 有序输入／输出使用 APF_SCIENCE，指定 HDU／切片未支持。新增 SoftwareUninstallRequest(package_token)，卸载提前交付为保留图及定义的程序移除，不改写图，不代替 B55 更新影响。NativeSirilCall 仅传固定科学引用（或同 prompt 已检查的 OutputLocator）及三个真实参数，内部按原生 prompt_id 固定工作目录；不接受路径、shell、URL 或脚本正文。窄原生适配与调用 JSON 是本轮首节点的真实消费者，不代表下文 M5 完整 NativeNodeCall／SQLite 运行契约已实现。详见[本轮任务](../development/batches/03-software.md)，测试尚未执行。
 
 

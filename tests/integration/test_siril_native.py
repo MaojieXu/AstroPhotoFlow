@@ -27,11 +27,15 @@ def test_real_native_v3_siril_schema():
 sys.path.insert(0, sys.argv[1])
 from comfy.cli_args import args
 args.cpu=True
-from astrophotoflow.interfaces.siril_node import SirilAutostretchNode
+from astrophotoflow.interfaces.bundle_nodes import BundleNode
+from importlib.resources import files
+catalog=lambda:json.loads(files('astrophotoflow').joinpath('vendor/bundle-catalog.json').read_text(encoding='utf-8'))
+from astrophotoflow.contracts.nodes import NodeDefinition
+SirilAutostretchNode=type("TestBundleNode",(BundleNode,),{"definition":NodeDefinition.model_validate(catalog()["siril"]["nodes"][0]),"output_node":True})
 schema=SirilAutostretchNode.GET_SCHEMA()
 import asyncio
 from types import SimpleNamespace
-import astrophotoflow.interfaces.siril_node as adapter
+import astrophotoflow.interfaces.bundle_nodes as adapter
 sessions=[]
 async def request(session, method, path, body=None):
     assert session._loop is asyncio.get_running_loop() and not session.closed
@@ -40,7 +44,7 @@ async def request(session, method, path, body=None):
 adapter._request=request
 adapter.get_executing_context=lambda:SimpleNamespace(prompt_id="00000000-0000-4000-8000-000000000001",node_id="65",list_index=0)
 for _ in range(2):
-    asyncio.run(SirilAutostretchNode.execute({},False,-2.8,0.25))
+    asyncio.run(SirilAutostretchNode.execute(image={},linked=False,shadowsclip=-2.8,targetbg=0.25))
 assert len(sessions)==2 and sessions[0] is not sessions[1] and all(session.closed for session in sessions)
 print("APF_SCHEMA="+json.dumps({"id":schema.node_id,"inputs":SirilAutostretchNode.INPUT_TYPES(),"outputs":SirilAutostretchNode.RETURN_TYPES,"object_info":SirilAutostretchNode.GET_NODE_INFO_V1()}))
 '''
@@ -61,13 +65,19 @@ print("APF_SCHEMA="+json.dumps({"id":schema.node_id,"inputs":SirilAutostretchNod
 
 
 def test_real_siril_autostretch_two_members_and_original_integrity(tmp_path):
-    source_app = os.environ.get("APF_TEST_SIRIL_APP")
+    source_app = os.environ.get("APF_TEST_SIRIL_BUNDLE")
     if not source_app:
-        pytest.skip("Set APF_TEST_SIRIL_APP to a complete Siril 1.4.4 portable directory.")
+        pytest.skip("Set APF_TEST_SIRIL_BUNDLE to a verified complete bundle checkout.")
     settings = Settings("127.0.0.1", 8190, tmp_path / "data", (), workspace=tmp_path)
-    app = tmp_path / "software/siril/app"
-    shutil.copytree(source_app, app)
-    public._write_state(tmp_path, SoftwarePackageState(
+    bundle = tmp_path / "software/siril/bundle"
+    shutil.copytree(source_app, bundle)
+    app = bundle / "app"
+    import psutil
+    from astrophotoflow.modules.software.bundles import release
+    commit = release("siril")["commit"]
+    (bundle.parent/"bundle-lock.json").write_text(json.dumps({"commit":commit,"bundle_version":"0.1.0"}))
+    (bundle.parent/"native-load.json").write_text(json.dumps({"commit":commit,"ready":True,"pid":os.getpid(),"create_time":psutil.Process().create_time()}))
+    public._write_package_state(settings, "siril", SoftwarePackageState(
         installed_version="1.4.4", install_path=app, availability="ready", reason=None,
         operation="install", operation_state="completed", phase=None, progress=None, last_error=None, node_definition_ids=[],
     ))
