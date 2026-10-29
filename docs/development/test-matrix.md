@@ -8,6 +8,8 @@
 
 验证环境为 Windows / Python 3.12.4 / Node 26.8.2 / pnpm 11.13.1。后端初轮 570 passed、1 failed、4 skipped；唯一失败为上述代理/OpenAPI 一致性，修复后软件、代理、预览和失败用例合计 46 passed，清理函数修复后安装/卸载用例另有 6 passed。两个显式真实原生/Siril用例另外执行并通过，检查双成员输出及原件哈希；两个未运行的跳过项为本轮无改动的 M1 双 workspace 生命周期及失败排空真实验收。UI包 34文件267用例、宿主桥接12文件45用例、独立Bundle适配器5用例均通过。根 `pnpm build`（固定引擎、UI及原生类型、完整网页）通过；边界检查0错误、13条既有循环引用警告，后端保留一条既有互相外键排序警告。发布目录重新导出与固定Bundle checkout一致。
 
+最终修复源码另外通过 wheel/sdist 构建、独立venv安装与隔离构建的无Node源码包重建，原始及重建wheel均通过安装smoke。结果为 `packaging.json`，日志为 `final-package-build.log` 与 `packaging.log`；临时安装/解包目录在本仓库 `.artifacts` 内，`repository_external_install=false`、`repository_external_sdist_rebuild=false`，本轮不声明严格仓库外验收。当前Bundle仍锁定 `v0.1.2-dev.1`，未新增或移动发布标签。
+
 本轮证据位于 `.artifacts/verification/siril-dev-integration-20261029/`：`backend.log/xml` 保留初轮失败；`final-regression.log/xml` 保存修复回归；`install-regression.log`、`real-native.log/xml`、`bundle.log/xml`、`ui.log`、`native-ui.log`、`build.log`、`boundaries.log`、`bundle-catalog.json`。本轮未操作正常dev或demo-preview服务；人工视觉验收、无系统Git自举及完整升级影响验收仍不由自动测试代签。Git集成与推送结果以实际提交及远端回执为准。
 
 ## 开发/正式发布隔离（用户2026-10-29补充）
