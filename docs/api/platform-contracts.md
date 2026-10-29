@@ -1,6 +1,11 @@
 # 五模块接口契约与文件级详细设计
 
-**状态：接口设计，新增能力待实现；原生桥接及科学执行仍须原型验证。** 本文是未来平台契约和文件级详细设计的统一入口；[接口说明](README.md)、[OpenAPI](openapi.json)及源码描述当前实现，不用本页替代已实现请求模型。本轮不修改代码、OpenAPI、MCP 注册或 Skill。
+2026-10-29 已实现候选覆盖：③补齐 SoftwareInvocation／Observation／Result／CancelResult／Use 及 invoke／inspect／cancel／usage；首操作为固定 Siril 1.4.4 Auto Stretch，完整 FITS 的 one-or-many 有序输入／输出使用 APF_SCIENCE，指定 HDU／切片未支持。新增 SoftwareUninstallRequest(package_token)，卸载提前交付为保留图及定义的程序移除，不改写图，不代替 B55 更新影响。NativeSirilCall 仅传固定科学引用（或同 prompt 已检查的 OutputLocator）及三个真实参数，内部按原生 prompt_id 固定工作目录；不接受路径、shell、URL 或脚本正文。窄原生适配与调用 JSON 是本轮首节点的真实消费者，不代表下文 M5 完整 NativeNodeCall／SQLite 运行契约已实现。详见[本轮任务](../development/batches/03-software.md)，测试尚未执行。
+
+
+2026-10-28 素材入画布窄候选补充：②prepare_canvas_data提供固定InputReference，⑤canvas.py与宿主canvasDataBridge／useCanvasDataSession实现按钮、拖放及已授权活动画布的MCP／CLI加数据。实际HTTP及字段见[现有接口](README.md#library-canvas)；此增量不等于下文B51／B52完整项目关联、通用改图或运行协议已完成，测试未执行。
+
+**状态：未来接口设计与当前实现分开记录；M1／M2已有实现，B31／B32／B41已有本地候选。** 当前文件／公开函数／消费者见[源码映射](../architecture/module-map.md#31-当前文件与公开函数映射)。 本文仍是五模块契约和文件级详细设计的统一入口；[接口说明](README.md)、[OpenAPI](openapi.json)及源码描述当前实现，不用本页替代已实现请求模型。B32安装／准备及同socket页面确认已有代码，真实确认与下载安装仍待验收；动态节点加载、受控运行、MCP迁移及其余原生桥接仍待对应Batch。
 
 依据[现行需求](../requirements/README.md)、[总架构](../architecture/overview.md)、[五模块数据设计](../architecture/data-models/README.md)和模块概要。2026-10-27 用户确认：**日常局部改图；整图 JSON 用于导入或明确替换；保存当前画布成功后运行；在目标网页点击“交给 Agent”绑定该页面。** 取舍见[ADR-0059](../../frontend/docs/adr/WORKBENCH-WORKFLOWS-0059-native-editing-save-and-agent-target.md)。
 
@@ -8,14 +13,14 @@
 
 | 事实来源 | 已有能力 | 本轮设计的增量及限制 |
 |---|---|---|
-| [领域 HTTP](../../src/astrophotoflow/modules/data/routes.py)、[系统接口](../../src/astrophotoflow/interfaces/http/system.py)、[同源代理](../../src/astrophotoflow/comfyui/proxy.py) | 当前 85 个 HTTP 操作，与 OpenAPI、代理白名单逐项对应；M2新增素材内容观察／确认 | 科学输入、输出检查／登记及移除范围查询是②公开Python能力，尚未作为HTTP／MCP入口开放；工作流移除影响由B54／B57接入，偏好仍待实现 |
-| [客户端](../../src/astrophotoflow/client.py)、[MCP](../../src/astrophotoflow/interfaces/mcp/server.py)、[工具参考](../development/library-agent-tools.md) | HTTP 客户端、CLI、58 个数据工具；图片工具返回真实图像内容 | 生命周期、软件、节点、画布与运行 MCP 未实现；精简 MCP 是后续整体迁移 |
-| [工作台控制](../../src/astrophotoflow/core/workbench.py) | init/start/status/stop、固定 runtime、两个服务、进程文件 | 自动端口及实际地址、结构化就绪、显式 restart、MCP 本机启停尚缺；当前 start 的默认指针行为不能直接当作目标契约 |
+| [领域 HTTP](../../src/astrophotoflow/modules/data/routes.py)、[软件路由](../../src/astrophotoflow/modules/software/routes.py)、[系统接口](../../src/astrophotoflow/interfaces/http/system.py)、[同源代理](../../src/astrophotoflow/comfyui/proxy.py) | 当前 89 个公共HTTP操作，与OpenAPI／固定代理路由对应；M2新增素材内容观察／确认，B31只读包列表／版本命令目录，B32详情／安装计划／准备查询 | 软件安装计划需同原生页面WS确认；真实安装、节点加载、软件执行和能力检索仍待后续Batch；工作流移除影响由B54／B57接入，M2科学输入与所选输出登记已有Python交接，⑤消费及偏好仍待实现 |
+| [客户端](../../src/astrophotoflow/client.py)、[MCP](../../src/astrophotoflow/interfaces/mcp/server.py)、[工具参考](../development/library-agent-tools.md) | HTTP 客户端、CLI、58 个数据工具；图片工具返回真实图像内容；AssetClient已有软件包列表／命令目录／详情／安装计划／准备五项调用 | 软件、节点、画布与运行 MCP 未实现；精简 MCP 是后续整体迁移 |
+| [工作台控制](../../src/astrophotoflow/core/workbench.py) | init/start/status/stop/restart、自动端口及实际地址、结构化就绪、配置／采用值、固定runtime、两个服务、进程文件 | M1已集成dev并获用户批准；MCP本机启停及后续业务占用待补，start/stop/restart已不改变默认workspace |
 | [原生文件](../../engine/ComfyUI/app/user_manager.py)、[工作流 Store](../../frontend/src/platform/workflow/management/stores/comfyWorkflow.ts) | userdata 保存／读取／改名／删除，临时文件后替换；自动保存、本地草稿、另存与会话撤销 | 项目关联与当前控制没有接入；原生文件写入不是已有 Agent 改图接口 |
 | [原生转换](../../frontend/src/utils/executionUtil.ts)、[引擎接口](../../engine/ComfyUI/server.py) | graphToPrompt、object_info、POST /prompt、/queue、/history、/api/jobs、定向取消及 /ws 事件 | 复用转换与调度，补受控提交、实际运行保存和软件调用；/api/jobs 同样来自内存队列／history，不是持久运行库 |
 | [原生事件消费](../../frontend/src/scripts/app.ts) | UI 输出、执行事件、当前画布显示 | 多次完成预览按任务归原图；当前 rootGraph 路由不能证明切页签后归属正确 |
 
-原生 `/ws` 目前接收 feature_flags 等原生消息，没有本文的改图协议；`client_id`／socket 标识只负责路由，不证明授权。`/view` 和 `/upload/image` 也不代替科学文件交接。上述结论来自静态源码核对，不是本轮运行验收。
+原生 `/ws` 已有feature_flags等原生消息及B32的 `apf.page` 软件页面事件候选，仍没有本文的改图协议；`client_id`／socket 标识只负责路由，不证明授权。`/view` 和 `/upload/image` 也不代替科学文件交接。上述结论来自静态源码核对，不是本轮运行验收。
 
 <a id="common"></a>
 
@@ -43,9 +48,7 @@
 | `foundation.config.get/save`，网页／CLI → ① | 读取目标；保存具体可编辑配置及读取时配置校验值 | 返回最新保存配置、当前有效值、`restart_required`；性能项下次重启采用。冲突重新读取，不覆盖新修改；保存不自动重启，不建配置历史 |
 | `foundation.stop/restart`，CLI／MCP → 本机控制 | 固定目标 workspace；restart 不顺带改默认指针 | 返回当前／最近控制结果及实际地址。复用 stop 排空；restart 繁忙或无法确认空闲时拒绝并列阻塞原因，不安排自动重启。断连后 status 核对，不重复重启 |
 
-MCP 的 start／status 必须在创建依赖在线 HTTP 的业务客户端之前可用；不能把它们实现为只调用已停止服务的 HTTP 路由。复用进程文件和少量最新状态文件，不建立维护记录库。当前 start 会更新活动指针，MCP 定向控制的实施须显式避免该副作用。
-
-M1当前网页配置已迁入原生设置“工作台”页，宿主经UI包公开导出注入原生FormItem／Button／Input；旧侧栏入口移除。完整路径和说明收进原生tooltip，区块直接展开，保存和重启状态直接可见。本机目录选择POST只返回选择结果、不保存或迁移；ConfigState.data_dir_absolute返回已保存绝对数据目录。
+MCP 的 start／status 必须在创建依赖在线 HTTP 的业务客户端之前可用；不能把它们实现为只调用已停止服务的 HTTP 路由。复用进程文件和少量最新状态文件，不建立维护记录库。当前start/stop/restart已不修改默认workspace；初始化是否设为默认由activate参数控制，MCP定向控制仍待B57。
 
 M1网页配置使用 `GET/PATCH /api/v1/settings/workbench` 读取当前workspace保存／有效配置并保存可编辑值；PATCH带读取时校验值，响应字段沿上表。停止后的查询与控制继续走本机入口，不为此新增在线控制服务。
 
@@ -257,7 +260,7 @@ FR-01／02／07～11、AT-06～11／14～18／24；S3 最小项目编排与测�
 
 ## 9. 详细设计与验收阅读顺序
 
-第3～8节给行为和远程入口；下面确定关键文件、公开签名、类型、实际调用及测试归属。已有接口仍查OpenAPI，不复制已有112份schema。所有拟新增文件只在本文规划，本轮不创建源文件、类型、迁移或测试。
+第3～8节给行为和远程入口；下面确定关键文件、公开签名、类型、实际调用及测试归属。已有接口仍查OpenAPI，不复制已有112份schema。本页保留设计签名；M1／M2及B31／B32／B41已落位部分文件与测试，下文逐项区分已有与后续增量。不能把设计签名整体视为当前公开面。
 
 - [文件与共同类型](#file-design)、[①](#foundation-design)、[②](#data-design)、[③④](#software-design)、[⑤](#workflows-design)。
 - [原生跨进程交接](#native-design)、[精简MCP](#mcp-design)、[具体测试与FR／NFR／AT追踪](#verification-design)。
@@ -270,34 +273,34 @@ FR-01／02／07～11、AT-06～11／14～18／24；S3 最小项目编排与测�
 下列为拟新增／扩展落点；已有事实见第1节。跨模块入口为 `public.py`，路由只适配HTTP，`interfaces/http/app.py`显式装配；不预拆service／repository／manager、Protocol容器、第二图副本或调度器。
 
 纯DTO复用 `contracts/common.py` 的StrictModel／UuidInput／ErrorDetail、Pydantic JsonValue；`JsonObject = dict[str, JsonValue]`在现有contracts/common.py定义一次，其他新契约显式引用。无默认值即必填，可空不等于可省略；JSON输入UUID沿UuidInput，输出沿UUID／UTC序列化。已有AssetParameters／AssetClassification／CalibrationBindings直接引用。内部Path／敏感字段不直接model_dump为MCP结果，长处理不持有数据库写事务。
-`Settings.workspace: Path`是拟新增解析结果，不能猜data_dir父目录。业务不导入接入层；组合根注入有限具体调用函数，迁移装配仍在现有Alembic入口。
+`Settings.workspace: Path`已是显式配置解析结果，业务调用方不自行猜data_dir父目录。业务不导入接入层；组合根注入有限具体调用函数，迁移装配仍在现有Alembic入口。
 
 | 必要文件 | 状态与责任 |
 |---|---|
-| `src/astrophotoflow/contracts/{workbench,inputs,software,nodes,workflows}.py` | 拟新增纯契约；workflows单向引用③④组合DTO，③④不反向引用⑤ |
+| `src/astrophotoflow/contracts/{workbench,inputs,software,nodes,workflows}.py` | `software.py`、`nodes.py`已实现B31／B41契约；`workflows.py`已有B32计划／网页事件组合DTO，⑤其余契约仍待实现；调用方向保持③④不反向引用⑤ |
 | `src/astrophotoflow/core/config.py`、`core/workbench.py` | 已有，扩展默认workspace、当前采用值、结构化控制及固定薄引导 |
 | `src/astrophotoflow/core/database/schema.py`、`core/database/alembic/env.py`、`versions/0010_workflow_records.py` | 已有schema.py同步目标revision，env.py显式装配⑤models／core Base，拟新增0010保存⑤关联／运行／预览；同步既有迁移与发行清单测试，不改0009历史，本轮不执行 |
-| `src/astrophotoflow/modules/data/science_inputs.py` | 拟新增科学输入解析／结束观察、输出检查／纯文件预览、外部内容接纳 |
-| `src/astrophotoflow/modules/data/{projects,ingestion,trash,imports,public}.py` | 已有，窄提取项目公开读取、输出登记／查询／任务执行及移除范围；public保留现有四项导出。新输出任务序列化不得泄漏内部source_path。既有16模型保持 |
-| `src/astrophotoflow/modules/software/{public,routes}.py` | 拟新增软件清单／维护／操作／调用与薄HTTP；跨模块确认由app组合 |
-| `src/astrophotoflow/modules/nodes/{public,routes}.py` | 拟新增定义JSON／差异／替换与薄HTTP；测试、加载和影响由app组合 |
+| `src/astrophotoflow/modules/data/science_inputs.py` | M2已实现科学输入解析／结束观察、输出检查／纯文件预览、外部内容接纳及所选输出登记／查询；⑤真实消费待联调 |
+| `src/astrophotoflow/modules/data/{projects,ingestion,trash,imports,public}.py` | 已有，窄提取项目公开读取、输出登记／查询／任务执行及移除范围；public已在既有导入／预览导出上增加繁忙、项目、科学输入／内容／输出及移除范围交接，函数见源码映射。新输出任务序列化不得泄漏内部source_path。既有16模型保持 |
+| `src/astrophotoflow/modules/software/{public,routes}.py` | B31实现只读清单／命令／操作／配套定义；B32实现固定包下载、安装计划／准备及软件状态HTTP，实际confirm仍只接受原生网页事件 |
+| `src/astrophotoflow/modules/nodes/{public,routes}.py` | B41已实现定义JSON／差异／替换；HTTP、加载和影响由后续Batch装配 |
 | `src/astrophotoflow/modules/workflows/{public,routes,models}.py` | 拟新增⑤公开业务、薄HTTP及三个SQLite模型；唯一当前图仍在原生文件 |
-| `src/astrophotoflow/interfaces/client/{software,nodes,workflows}.py`、根`client.py` | 前三者拟新增具名操作，由已有AssetClient组合；对应契约校验，无任意URL／函数调用 |
-| `src/astrophotoflow/interfaces/http/{app,system}.py`、`interfaces/cli/main.py`、`interfaces/mcp/server.py`、`comfyui/proxy.py` | 已有，扩展装配／配置／命令／三MCP入口及明确代理白名单；页面确认／当前软件Task在app内组合 |
-| `src/astrophotoflow/interfaces/comfyui.py` | 拟新增单个具体适配：有限HTTP／WS、托管文件guard、入队范围guard、节点注册／执行和事件转发；不承载业务ORM／软件实现 |
+| `src/astrophotoflow/interfaces/client/{software,nodes,workflows}.py`、根`client.py` | software.py已有SoftwareOperations五项HTTP操作并由AssetClient消费；nodes.py／workflows.py及NodeOperations／WorkflowOperations仍待真实HTTP消费者出现后添加 |
+| `src/astrophotoflow/interfaces/http/{app,system}.py`、`interfaces/cli/main.py`、`interfaces/mcp/server.py`、`comfyui/proxy.py` | B31/B32公开软件HTTP和固定代理白名单已装配；安装Task／页面确认由app组合；MCP三入口仍待B57 |
+| `src/astrophotoflow/interfaces/comfyui.py` | B32实现单socket `apf.page` 消息及页面身份回传；托管文件guard、入队范围guard、节点注册／执行等剩余适配待对应Batch |
 | `engine/ComfyUI/server.py`、`app/user_manager.py`、`execution.py` | 已有，在原生实际WS／文件／入队／敏感hidden／事件处接薄钩子，详见第15节 |
-| `frontend/packages/astrophotoflow-ui/src/core/WorkbenchSettings.vue`、`core/contracts.ts`、`core/client.ts` | 拟新增①配置／当前采用值及诊断界面；B13把已有data客户端的实际共用请求／错误代码窄移到这两个计划文件，不新建transport文件或网络框架 |
-| UI包`modules/software/SoftwarePanel.vue`、`modules/nodes/NodeEditor.vue`、`modules/workflows/WorkflowPanel.vue` | 拟新增软件计划／状态、定义编辑／测试／更新、项目图／运行／预览／结果保存界面；GraphView继续原生 |
-| UI包各模块`api/contracts.ts`、`api/client.ts`、`index.ts`及包根`src/index.ts` | data入口扩展，其余拟新增；各模块保存自身Zod产品DTO和具名客户端，根只公开实际消费者所需导出。FetchApi声明／共用请求代码归core/client.ts，data原入口直接重导出保留既有消费；原生JSON只校验对象，不复制其schema |
+| `frontend/packages/astrophotoflow-ui/src/core/WorkbenchSettings.vue`、`core/contracts.ts`、`core/client.ts` | M1已实现①配置／当前采用值与网页重启；demo候选已将现有表单迁入原生设置窗口，由宿主传入原生控件，HTTP与保存／重启契约不变；完整诊断仍待后续。B13已把data客户端的实际共用请求／错误代码窄移到这两个文件，不新建transport文件或网络框架 |
+| UI包`modules/software/SoftwarePanel.vue`、`modules/nodes/NodeEditor.vue`、`modules/workflows/WorkflowPanel.vue` | B32已有软件计划／状态／确认面板；NodeEditor及项目图／运行／预览／结果保存界面待后续Batch，GraphView继续原生 |
+| UI包各模块`api/contracts.ts`、`api/client.ts`、`index.ts`及包根`src/index.ts` | data／software入口及core共用客户端已有，nodes／workflows领域入口仍拟新增；各模块保存自身Zod产品DTO和具名客户端，根只公开实际消费者所需导出。FetchApi声明／共用请求代码归core/client.ts，data原入口直接重导出保留既有消费；原生JSON只校验对象，不复制其schema |
 | UI包已有`modules/data/workspace/Workspace.vue`及设备表单 | 选定引用／拖入走公开宿主接缝；单像元输入明确写x/y，未修改则保留；不要求位深／赤道仪／配件，不删既有字段／类型 |
-| `frontend/src/platform/astrophotoflow/workflowBridge.ts`、`NativeShell.vue` | 前者拟新增唯一宿主桥接，后者已有负责安装／卸载；可用原生Store／画布，业务UI不可反向导入 |
+| `frontend/src/platform/astrophotoflow/workflowBridge.ts`、`NativeShell.vue` | 前者已有B32的confirmSoftware软件确认回调，⑤图编辑／控制／运行桥接仍待实现；后者挂载原生GraphView并按路由选择素材／软件侧栏；可用原生Store／画布，业务UI不可反向导入 |
 | `frontend/src/scripts/{api,app,changeTracker}.ts`、原生`workflowService.ts/workflowStore.ts` | 已有，实际文件／编辑／提交／事件钩子详见第14、15节 |
 
-现ApiClientError缺fields，B13迁移共用代码时补齐业务fields／code／requestId；后续客户端直接复用，不复制多套JSON／错误／图像请求处理。部分编辑事实仍由业务DTO保存。UI只显示事实或提交明确操作，不新起应用；双解释器适配的依赖隔离见第15节。
+B13共用ApiClientError已包含fields／code／requestId；后续客户端直接复用，不复制多套JSON／错误／图像请求处理。部分编辑事实仍由业务DTO保存。UI只显示事实或提交明确操作，不新起应用；双解释器适配的依赖隔离见第15节。
 
 ### 前端具名客户端公开面
 
-下列是拟新增导出，模型字段唯一按本设计对应DTO维护，UUID/Path/日期在前端使用其JSON字符串表示。组件只通过这些客户端消费业务HTTP；原生交回、人工运行和软件确认由宿主回调完成。2026-10-27用户确认：core/client.ts承接现data/api/client.ts的FetchApi、ApiClientError、createApiClient；core/contracts.ts承接现data/api/contracts.ts的errorSchema及①DTO。只窄移这段真实多消费者代码，data原路径直接重导出已有名字，各模块领域DTO不迁入core，core不反向导入业务。既有调用／错误分类／图像Content-Type校验保持，仅补已要求的fields；不新增请求抽象、定位器或客户端基类。
+下列包含已有WorkbenchClient／SoftwareClient与后续规划导出；当前公开面见源码映射，模型字段唯一按本设计对应DTO维护，UUID/Path/日期在前端使用其JSON字符串表示。组件只通过这些客户端消费业务HTTP；原生交回、人工运行和软件确认由宿主回调完成。2026-10-27用户确认：core/client.ts承接现data/api/client.ts的FetchApi、ApiClientError、createApiClient；core/contracts.ts承接现data/api/contracts.ts的errorSchema及①DTO。只窄移这段真实多消费者代码，data原路径直接重导出已有名字，各模块领域DTO不迁入core，core不反向导入业务。既有调用／错误分类／图像Content-Type校验保持，仅补已要求的fields；不新增请求抽象、定位器或客户端基类。
 
 ```typescript
 export interface WorkbenchClient {
@@ -308,6 +311,7 @@ export function createWorkbenchClient(fetchApi: FetchApi): WorkbenchClient
 
 export interface SoftwareClient {
   listPackages(): Promise<SoftwarePackage[]>
+  listCommands(packageId: string, version: string): Promise<SirilCommand[]>
   getPackage(packageId: string, operationId?: string): Promise<SoftwarePackageDetails>
   requestInstall(packageId: string, body: SoftwareInstallRequest): Promise<PendingSoftwareAction>
   prepare(packageId: string): Promise<SoftwarePreparation>
@@ -357,6 +361,7 @@ def remove_library_items(self, body: LibraryRemovalApply) -> dict[str, Any]: ...
 ```python
 class SoftwareOperations:
     def list_software_packages(self) -> list[SoftwarePackage]: ...
+    def list_software_commands(self, package_id: str, version: str) -> list[SirilCommand]: ...
     def get_software_package(self, package_id: str, *, operation_id: UUID | None = None) -> SoftwarePackageDetails: ...
     def install_software(self, package_id: str, body: SoftwareInstallRequest) -> PendingSoftwareAction: ...
     def prepare_software(self, package_id: str) -> SoftwarePreparation: ...
@@ -683,7 +688,7 @@ ActiveInputUsage = Callable[[Session, Sequence[UUID], Sequence[Path]], list[Acti
 
 ### 文件与保存位置
 
-③④尚无实现；文件落点见第10节。③清单由项目维护，不接URL／脚本／shell／Python路径；首软件未选前不建空适配或假ready项。当前状态放 `workspace/software/{package_id}/state.json`，专用软件在同目录app/；只保留当前版本位置与最近结果，无长期多版本目录。④唯一当前定义为 `workspace/nodes/{definition_id}.json`，不建SQLite定义表或历史副本。
+B31已实现Siril固定清单、只读`state.json`与一份配套JSON读取，B41已实现workspace定义JSON读写；文件落点见第10节。③清单由项目维护，不接URL／脚本／shell／Python路径；首软件固定为Siril 1.4.4 CLI。当前状态放 `workspace/software/{package_id}/state.json`，专用软件在同目录app/；只保留当前版本位置与最近结果，无长期多版本目录。④唯一当前定义为 `workspace/nodes/{definition_id}.json`，不建SQLite定义表或历史副本。
 白名单引导与实际加载统一见第15节；当前原生注册／白名单能力不证明平台动态定义已实现。
 
 ### 身份、校验及错误
@@ -711,11 +716,14 @@ public在副作用前沿ApiError失败；已开始的软件调用失败／失联
 ### ③完整定义与调用类型
 | 类型 | 精确字段 |
 |---|---|
+| `SirilCommandAssessment` | `parameter_details: str`；`structured_parameter_defaults_ranges: str`；`single_image_sequence_context: str`；`input_output_semantics: str`；`headless_status: str`；`dependencies: str`；`security_risk: str`；`semantic_review_status: str`；`node_definition_status: str`；`node_definition_reason: str`；`node_generation_status: str`；`node_generation_reason: str`；`registry_load_status: str`；`registry_load_reason: str`；`runtime_test_status: str`；`runtime_test_reason: str`；以逐命令评估备注展示未知或未验证项，不等于完整安全／语义审查通过 |
+| `SirilCommand` | `command: str`；`scriptable: bool`；`syntax: str`；`description: str`；`url: str`；`assessment: SirilCommandAssessment`；为固定 Siril 1.4.4 官方目录及本地验证状态，不代表对应操作已有可安全表示的节点定义 |
 | `ParameterDefinition` | `name: str`；`kind: Literal['int','float','string','boolean','choice']`；`default: JsonValue`；`minimum: float \| None = None`；`maximum: float \| None = None`；`step: float \| None = None`；`choices: list[JsonValue] \| None = None`；`advanced: bool = False`、`nullable: bool = False` |
-| `SoftwareInputDefinition` | `name: str`；`type: str`（引擎真实端口类型）；`formats: list[ScienceFormat]`；`cardinality: Literal['one','many']`；`required: bool`；`supports_hdu: bool`；`supports_slice: bool` |
+| `SoftwareInputDefinition` | `name: str`；`type: str`（引擎真实端口类型）；`formats: list[ScienceFormat]`；`cardinality: Literal['one','many']`；`required: bool`；`supports_hdu: bool \| None`；`supports_slice: bool \| None`；尚未验证的选择能力为null |
 | `SoftwareOutputDefinition` | `name: str`；`type: str`；`formats: list[ScienceFormat]`；`cardinality: Literal['one','many']` |
-| `SoftwareOperation` | `package_id: str`；`version: str`；`operation_id: str`；`name: str`；`description: str`；`inputs: list[SoftwareInputDefinition]`；`outputs: list[SoftwareOutputDefinition]`；`parameters: list[ParameterDefinition]`；`content_token: str`；`ready: bool`；`reason: str \| None`；`cancel_supported: bool` |
+| `SoftwareOperation` | `package_id: str`；`version: str`；`operation_id: str`；`name: str`；`description: str`；`syntax: str`；`scriptable: bool`；`inputs: list[SoftwareInputDefinition]`；`outputs: list[SoftwareOutputDefinition]`；`parameters: list[ParameterDefinition]`；`content_token: str`；`ready: bool`；`reason: str \| None`；`cancel_supported: bool \| None` |
 | `SoftwarePackage` | `package_id: str`；`name: str`；`available_versions: list[str]`；`installed_version: str \| None`；`install_path: Path \| None`；`package_token: str`；`availability: Literal['not_installed','ready','not_ready','unknown']`；`reason: str \| None`；`operation: Literal['install','prepare','update','uninstall'] \| None`；`operation_state: Literal['idle','running','completed','failed','unknown']`；`phase: str \| None`；`progress: float \| None`；`last_error: ErrorDetail \| None`；`node_definition_ids: list[UUID]` |
+| `SoftwarePackageState` | `installed_version: str \| None`；`install_path: Path \| None`；`availability: Literal['not_installed','ready','not_ready','unknown']`；`reason: str \| None`；`operation: Literal['install','prepare','update','uninstall'] \| None`；`operation_state: Literal['idle','running','completed','failed','unknown']`；`phase: str \| None`；`progress: float \| None`；`last_error: ErrorDetail \| None`；`node_definition_ids: list[UUID]`；为`workspace/software/{package_id}/state.json`当前事实，不包含静态软件清单 |
 | `SoftwarePreparation` | `package: SoftwarePackage`；`user_action: str \| None`；`ui_kind: Literal['software','platform'] \| None`；`ui_target: str \| None`；不接收或返回密码、验证码、许可证正文 |
 | `SoftwareInvocation` | `run_id: UUID`；`node_execution_id: str`；`call_id: UUID`；`package_id: str`；`version: str`；`operation_id: str`；`operation_content_token: str`；`inputs: dict[str, list[ResolvedInput]]`；`parameters: dict[str, JsonValue]`；`work_directory: Path` |
 | `ProducedFile` | `path: Path`；`format: ScienceFormat`；只表示③实际返回的完整文件候选，不表示已经通过②检查或登记 |
@@ -734,6 +742,8 @@ ProducedFile只是候选，⑤经②检查成CheckedOutput才交下游；部分�
 ③配套定义只返JSON，由app按④NodeDefinition.model_validate核对；software契约不导入nodes／workflows，public不反向调用④。
 ```python
 def list_packages(settings: Settings) -> list[SoftwarePackage]: ...
+def list_siril_commands() -> list[SirilCommand]: ...
+def get_command_catalog(package_id: str, version: str) -> list[SirilCommand]: ...
 def get_package(settings: Settings, package_id: str) -> SoftwarePackage: ...
 def get_operation( settings: Settings, package_id: str, version: str, operation_id: str ) -> SoftwareOperation: ...
 def get_bundled_definitions( settings: Settings, package_id: str, version: str ) -> list[dict[str, JsonValue]]: ...
@@ -755,6 +765,8 @@ async def cancel_operation(call_id: UUID) -> SoftwareCancelResult: ...
 | 函数 | 参数／返回及副作用 |
 |---|---|
 | list/get_package | 只读清单、安装及真实就绪，不安装／运行／触发登录；未知百分比为null |
+| list_siril_commands | 只读已版本绑定的官方命令说明；Scriptable标记不代表已生成安全节点或通过真实运行 |
+| get_command_catalog | 校验准确包ID与版本后读取固定官方目录；无安装或执行副作用 |
 | get_operation | 准确版本完整定义，无条目404；供制作／预检，不是直接执行MCP工具 |
 | get_bundled_definitions | 只返目标清单版本JSON；app按④schema核对，不写定义／加载／改图 |
 | preview_update | 只读准确版本差异，不下载替换；图影响交⑤ |
@@ -772,6 +784,7 @@ async def cancel_operation(call_id: UUID) -> SoftwareCancelResult: ...
 | HTTP | 输入 | 成功结果 |
 |---|---|---|
 | `GET /api/v1/software/packages` | 无 | 200，`list[SoftwarePackage]` |
+| `GET /api/v1/software/packages/{package_id}/versions/{version}/commands` | 固定包ID、准确版本 | 200，`list[SirilCommand]`；含官方资料及逐命令参数、上下文、依赖、Headless、风险、定义、registry和CLI验证备注；unknown保持显式，不代表定义、registry加载或运行成功 |
 | `GET /api/v1/software/packages/{package_id}` | 路径 ID；可选 `operation_id: UUID`，用于核对确认网页对应的动作 | 200，`SoftwarePackageDetails`，含实际包状态、当前动作、当前计划和可知最终结果；指定动作已失效则409 |
 | `POST .../{package_id}/install` | `{version: str, package_token: str}`，请求展示该包／准确版本的计划 | **202，`PendingSoftwareAction(state='awaiting_confirmation')`；此请求不执行安装／写定义／改图** |
 | `POST .../{package_id}/prepare` | 无参数正文 | 200，`SoftwarePreparation` |
@@ -1928,18 +1941,18 @@ foundation.start/status/stop/restart及其已知定义在构造在线AssetClient
 | E-DATA | 已有：[tests/modules/data/test_ingestion.py](../../tests/modules/data/test_ingestion.py)、[test_import_pipeline.py](../../tests/modules/data/test_import_pipeline.py)、[test_calibration.py](../../tests/modules/data/test_calibration.py)、[test_equipment_snapshots.py](../../tests/modules/data/test_equipment_snapshots.py) | 保留导入、固定组、revision、接收快照、校准、原件；已有项目固定版本不证明运行采用。 |
 | E-PROTECT | 已有：[tests/modules/data/test_service.py](../../tests/modules/data/test_service.py)、[test_display_previews.py](../../tests/modules/data/test_display_previews.py) | 认证／OpenAPI／清理／共享路径和素材显示缓存回归，不代替图引用与运行预览。 |
 | E-TRANSPORT | 已有：[tests/interfaces/comfyui/test_proxy.py](../../tests/interfaces/comfyui/test_proxy.py)、[tests/integration/test_client_operations.py](../../tests/integration/test_client_operations.py)、[test_cli_mcp_protocol.py](../../tests/integration/test_cli_mcp_protocol.py) | 代理、具名客户端、CLI／真实stdio及ImageContent；迁移tools/list断言为精确三入口。 |
-| E-BOUNDARY | 已有：[tests/architecture/test_import_boundaries.py](../../tests/architecture/test_import_boundaries.py)及[前端依赖规则](../../frontend/.dependency-cruiser.json) | 随实现补③④⑤公开入口／依赖，现规则只明确保护data。 |
+| E-BOUNDARY | 已有：[tests/architecture/test_import_boundaries.py](../../tests/architecture/test_import_boundaries.py)及[前端依赖规则](../../frontend/.dependency-cruiser.json) | 随实现补③④⑤公开入口／依赖，现规则已覆盖data公开入口及nodes不依赖workflows／接入层；其他增量随实现补齐。 |
 | E-NATIVE | 已有：[useWorkflowAutoSave.test.ts](../../frontend/src/platform/workflow/persistence/composables/useWorkflowAutoSave.test.ts)、[workflowStore.test.ts](../../frontend/src/platform/workflow/management/stores/workflowStore.test.ts)、[changeTracker.test.ts](../../frontend/src/scripts/changeTracker.test.ts)、[executionUtil.test.ts](../../frontend/src/utils/executionUtil.test.ts)、[litegraphService.lateRegistration.test.ts](../../frontend/src/services/litegraphService.lateRegistration.test.ts)、[nodeOutputStore.workflowSwitch.test.ts](../../frontend/src/stores/nodeOutputStore.workflowSwitch.test.ts)、[jobs_cancel_test.py](../../engine/ComfyUI/tests-unit/jobs_cancel_test/jobs_cancel_test.py) | 原生回归基础；现新图不自动保存、迟到注册不自动升级占位实例、切图缓存与假取消队列均不证明业务闭环。 |
 | E-BROWSER | 已有：[tests/browser/native-web.mjs](../../tests/browser/native-web.mjs) | 侧栏／画布／保存加载／CPU／素材基础；现直接queuePrompt不证明⑤统一入口或真实科学软件。 |
 | E-DELIVERY | 已有：[tests/packaging/test_layout.py](../../tests/packaging/test_layout.py)、[test_engine_build.py](../../tests/packaging/test_engine_build.py)、[scripts/verify_distribution.py](../../scripts/verify_distribution.py) | 资源及仓库外安装；历史范围不作为本次构建／Windows发行通过。 |
-| P-DATA | 拟新增：`tests/modules/data/test_workflow_handoffs.py` | ②科学输入／当前资料／范围、移除影响、所选输出及内容接纳。 |
-| P-SOFTWARE | 拟新增：`tests/modules/software/test_service.py` | ③包／网页计划确认／安装维护／许可／真实调用；替身仅单元，真实软件另证。 |
-| P-NODES | 拟新增：`tests/modules/nodes/test_service.py` | ④JSON／校验／保存与加载／显式测试关联／确认更新。 |
+| P-DATA | 已有：`tests/modules/data/test_science_inputs.py`；后续⑤联调断言待补 | ②科学输入／当前资料／范围、移除影响、所选输出及内容接纳。 |
+| P-SOFTWARE | 已有：`tests/modules/software/test_service.py`；真实调用及后续维护断言待补 | ③包／网页计划确认／安装维护／许可／真实调用；替身仅单元，真实软件另证。 |
+| P-NODES | 已有：`tests/modules/nodes/test_service.py`；加载／测试／画布更新断言待补 | ④JSON／校验／保存与加载／显式测试关联／确认更新。 |
 | P-WORKFLOWS | 拟新增：`tests/modules/workflows/test_service.py` | ⑤SQLite关联／控制、局部结果、保存及目录检索。 |
 | P-RUNS | 拟新增：`tests/modules/workflows/test_runs.py` | 运行／快照／未知重复／取消／多次预览／输出保存防重。 |
 | P-HOST | 拟新增：`frontend/src/platform/astrophotoflow/workflowBridge.test.ts` | 有限连接操作、定向响应／共同撤销、端口参数／动态控件／单保存／归图。 |
 | P-INTEGRATION | 拟新增：`tests/integration/test_platform_workflow.py` | 隔离workspace贯穿真实首包、离线MCP启停、取消保存、重启/history缺失及58业务协议。 |
-| P-BROWSER | 拟新增：`tests/browser/platform-workflows.mjs` | 唯一跨模块浏览器文件，验软件／节点／项目图／真实运行预览／结果选择／接管交回／换客户端；不碰正常dev。 |
+| P-BROWSER | 已有：`tests/browser/platform-workflows.mjs`；后续跨模块场景待扩展 | 唯一跨模块浏览器文件，验软件／节点／项目图／真实运行预览／结果选择／接管交回／换客户端；不碰正常dev。 |
 
 ### 最小夹具
 

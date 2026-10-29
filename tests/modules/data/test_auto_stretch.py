@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from astrophotoflow.modules.data.auto_stretch import calculate_stretch, render_stretch
+from astrophotoflow.modules.data.auto_stretch import STATISTICS_SAMPLES, calculate_stretch, render_stretch, sample_statistics, statistics_indices
 
 
 def test_mono_estimates_its_own_float_background_and_targets_quarter_brightness():
@@ -51,3 +51,58 @@ def test_negative_and_invalid_samples_do_not_break_valid_background_statistics()
     assert render_stretch(pixels, recipe).getpixel((0, 0)) == (0, 0, 0)
     with pytest.raises(ValueError, match="有效像素"):
         calculate_stretch(np.full((8, 10), np.nan))
+
+
+@pytest.mark.parametrize("color", [False, True])
+def test_large_photo_statistics_use_deterministic_stratified_random_source_samples(color, monkeypatch):
+    pixels = np.arange(1025 * 777, dtype=np.float64).reshape(1025, 777) + 100
+    if color:
+        pixels = pixels[..., None] * np.array([1, 2, 4])
+    original = pixels.copy()
+    sample = sample_statistics(pixels)
+    rows, columns = statistics_indices(1025, 777)
+    assert sample.shape == (*columns.shape, 3) if color else sample.shape == columns.shape
+    assert sample.dtype == np.float32
+    np.testing.assert_array_equal(sample, pixels[rows[:, None], columns].astype(np.float32))
+    np.testing.assert_array_equal(sample_statistics(pixels), sample)
+    assert columns.size <= STATISTICS_SAMPLES
+    assert np.unique(np.diff(rows)).size > 1
+    medians = []
+    median = np.median
+
+    def counted(values, *args, **kwargs):
+        medians.append(values.shape[0])
+        return median(values, *args, **kwargs)
+
+    monkeypatch.setattr(np, "median", counted)
+    recipe = calculate_stretch(pixels)
+    assert medians and max(medians) <= STATISTICS_SAMPLES
+    assert recipe == calculate_stretch(sample)
+    assert render_stretch(pixels, recipe).size == (777, 1025)
+    np.testing.assert_array_equal(pixels, original)
+
+
+def test_fast_stretch_keeps_rgb_channels_together_and_ignores_invalid_samples():
+    pixels = np.broadcast_to([10, 20, 40], (1025, 777, 3)).astype(np.float32).copy()
+    pixels[0, 0, 1] = np.nan
+    recipe = calculate_stretch(pixels)
+    assert recipe["white_balance"] == pytest.approx([7 / 3, 7 / 6, 7 / 12])
+    assert np.isfinite([recipe["shadows"], recipe["highlights"], recipe["midtones"]]).all()
+
+
+@pytest.mark.parametrize("shape", [(8, 10), (1, 300000), (300000, 1), (6000, 4000)])
+def test_stratified_coordinates_cover_all_spatial_strata_without_exceeding_budget(shape):
+    height, width = shape
+    rows, columns = statistics_indices(height, width)
+    row_edges = np.linspace(0, height, len(rows) + 1, dtype=np.int64)
+    column_edges = np.linspace(0, width, columns.shape[1] + 1, dtype=np.int64)
+    assert columns.size <= STATISTICS_SAMPLES
+    assert ((rows >= row_edges[:-1]) & (rows < row_edges[1:])).all()
+    assert ((columns >= column_edges[:-1]) & (columns < column_edges[1:])).all()
+
+
+def test_randomized_sampling_does_not_lock_onto_periodic_pixel_phase():
+    pixels = np.broadcast_to(np.where(np.arange(2048) % 8 == 0, 1000, 10), (2048, 2048))
+    sample = sample_statistics(pixels)
+    assert (sample == 1000).mean() == pytest.approx(1 / 8, abs=.01)
+    assert np.median(sample) == 10

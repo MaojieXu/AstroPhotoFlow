@@ -1,12 +1,13 @@
 <script setup lang="ts">
-import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { assetApi } from '../api/index'
 import { libraryFilterOptionsSchema } from '../api/contracts'
+import { displayLabel } from './presentation'
 
 type Options = ReturnType<typeof libraryFilterOptionsSchema.parse>
 type Filters = Record<string, string[] | string>
 type Group = {key:string;label:string;values:string[];labels?:Array<{id:string;name:string}>}
-const props = defineProps<{ filters: Filters; anchor?: HTMLButtonElement }>()
+const props = defineProps<{ filters: Filters; anchor?: HTMLElement }>()
 const emit = defineEmits<{ apply: [filters: Filters]; cancel: [] }>()
 const options = ref<Options>()
 const draft = ref<Filters>(JSON.parse(JSON.stringify(props.filters)))
@@ -18,6 +19,7 @@ const numericFields = [
   ['sensor_temperature_c','温度（°C）'],['iso','ISO'],['gain','Gain'],['offset','Offset']
 ] as const
 const groups = ref<Group[]>([])
+const empty = computed(() => Boolean(options.value) && !groups.value.some(group => group.values.length) && !Object.keys(options.value!.numeric_ranges).length)
 let optionsRequest = 0
 let resizeObserver:ResizeObserver|undefined
 
@@ -104,16 +106,17 @@ onBeforeUnmount(()=>{optionsRequest++;resizeObserver?.disconnect();window.remove
 
 <template>
   <section ref="panel" class="apf-filter-panel" aria-label="素材筛选"
-    :style="{left:placement.left+'px',top:placement.top+'px',width:placement.width+'px',height:placement.height+'px',minWidth:placement.minWidth+'px',minHeight:placement.minHeight+'px',maxWidth:placement.maxWidth+'px',maxHeight:placement.maxHeight+'px'}" @pointerdown.stop>
+    :style="{left:placement.left+'px',top:placement.top+'px',width:placement.width+'px',height:(empty?150:placement.height)+'px',minWidth:placement.minWidth+'px',minHeight:(empty?0:placement.minHeight)+'px',maxWidth:placement.maxWidth+'px',maxHeight:placement.maxHeight+'px'}" @pointerdown.stop>
     <header><strong>筛选素材</strong></header>
     <div class="apf-filter-content">
       <p v-if="error" class="apf-error" role="alert">{{error}}</p>
+      <p v-if="!options && !error" role="status">正在读取筛选选项…</p><p v-if="empty">还没有可筛选的素材资料。导入素材后再试。</p>
       <template v-if="options">
         <fieldset v-for="group in groups.filter(item=>item.values.length)" :key="group.key">
           <legend>{{group.label}}</legend>
           <label v-for="value in group.values" :key="value" class="apf-filter-choice">
             <input type="checkbox" :checked="selected(group.key).includes(value)" @change="toggle(group.key,value)" />
-            {{group.labels?.find(item=>item.id===value)?.name ?? (group.key==='binning'?binLabel(value):value)}}
+            {{group.labels?.find(item=>item.id===value)?.name ?? (group.key==='binning'?binLabel(value):displayLabel(value))}}
           </label>
         </fieldset>
         <template v-for="[key,label] in numericFields" :key="key">

@@ -14,6 +14,12 @@ from astrophotoflow.core.config import Settings
 AUTH = {"Authorization": "Bearer settings-test"}
 
 
+def _create_sort_record(client, path, body):
+    response = client.post("/api/v1/" + path, headers=AUTH, json=body)
+    assert response.status_code == 201, response.text
+    return response.json()
+
+
 @pytest.fixture
 def service(tmp_path):
     settings = Settings("127.0.0.1", 8190, tmp_path / "settings-data", (), workspace=tmp_path)
@@ -90,6 +96,94 @@ def test_setup_paging_status_revisions_and_standard_errors(service):
     assert client.get("/api/v1/equipment-setups", headers=AUTH, params={"status": "archived"}).json()["total"] == 1
     assert client.patch("/api/v1/equipment-setups/" + row["id"], headers=AUTH,
                         json={"base_revision": 2, "components": None}).status_code == 422
+
+
+@pytest.mark.parametrize("kind", ["camera", "telescope", "mount", "filter", "accessory"])
+@pytest.mark.parametrize("order", ["asc", "desc"])
+def test_setup_equipment_sorting_precedes_paging_and_keeps_empty_last(service, kind, order):
+    client, _ = service
+    alpha = _create_sort_record(client, "equipment", {"kind": kind, "name": "Alpha"})
+    zulu = _create_sort_record(client, "equipment", {"kind": kind, "name": "Zulu"})
+    first = _create_sort_record(client, "equipment-setups", {
+        "name": "Match Z", "components": [{"source": "registered", "equipment_id": alpha["id"]}],
+    })
+    middle = _create_sort_record(client, "equipment-setups", {
+        "name": "Match Y", "components": [{"source": "inline", "equipment": {"kind": kind, "name": "Beta"}}],
+    })
+    last = _create_sort_record(client, "equipment-setups", {
+        "name": "Match X", "components": [{"source": "registered", "equipment_id": zulu["id"]}],
+    })
+    empty = _create_sort_record(client, "equipment-setups", {"name": "Match Empty"})
+    _create_sort_record(client, "equipment-setups", {"name": "Outside search"})
+    expected = [first, middle, last] if order == "asc" else [last, middle, first]
+    params = {"sort_by": kind, "order": order, "q": "Match"}
+    response = client.get("/api/v1/equipment-setups", headers=AUTH, params=params)
+    assert response.status_code == 200, response.text
+    assert [row["id"] for row in response.json()["items"]] == [row["id"] for row in expected] + [empty["id"]]
+    page = client.get("/api/v1/equipment-setups", headers=AUTH, params={**params, "limit": 2, "offset": 1}).json()
+    assert page["total"] == 4
+    assert [row["id"] for row in page["items"]] == [row["id"] for row in expected[1:3]]
+    filtered = client.get("/api/v1/equipment-setups", headers=AUTH,
+                          params={**params, "component_kind": kind, "limit": 1, "offset": 1}).json()
+    assert filtered["total"] == 3
+    assert filtered["items"][0]["id"] == middle["id"]
+
+
+@pytest.mark.parametrize("order", ["asc", "desc"])
+def test_setup_equipment_sort_ties_use_setup_name_then_id(service, order):
+    client, _ = service
+    camera = _create_sort_record(client, "equipment", {"kind": "camera", "name": "Same camera"})
+    components = [{"source": "registered", "equipment_id": camera["id"]}]
+    beta = _create_sort_record(client, "equipment-setups", {"name": "Beta", "components": components})
+    alpha = _create_sort_record(client, "equipment-setups", {"name": "Alpha", "components": components})
+    duplicate = [_create_sort_record(client, "equipment-setups", {"name": "Same", "components": components}) for _ in range(2)]
+    result = client.get("/api/v1/equipment-setups", headers=AUTH,
+                        params={"sort_by": "camera", "order": order}).json()
+    assert [row["id"] for row in result["items"]] == [alpha["id"], beta["id"]] + sorted(row["id"] for row in duplicate)
+
+
+@pytest.mark.parametrize("order,indices", [("asc", [1, 0, 2]), ("desc", [2, 0, 1])])
+def test_setup_equipment_sort_uses_all_names_in_component_order(service, order, indices):
+    client, _ = service
+    rows = []
+    for index, names in enumerate([("Alpha", "Zulu"), ("Alpha", "Beta"), ("Zulu", "Alpha")]):
+        rows.append(_create_sort_record(client, "equipment-setups", {
+            "name": "Rig " + str(index),
+            "components": [{"source": "inline", "equipment": {"kind": "camera", "name": name}} for name in names],
+        }))
+    result = client.get("/api/v1/equipment-setups", headers=AUTH, params={"sort_by": "camera", "order": order}).json()
+    assert [row["id"] for row in result["items"]] == [rows[index]["id"] for index in indices]
+
+
+def test_setup_telescope_sort_includes_registered_and_inline_legacy_optics(service):
+    client, _ = service
+    optics = _create_sort_record(client, "equipment", {"kind": "optical_system", "name": "Zulu legacy"})
+    registered = _create_sort_record(client, "equipment-setups", {
+        "name": "Registered", "components": [{"source": "registered", "equipment_id": optics["id"]}],
+    })
+    inline = _create_sort_record(client, "equipment-setups", {
+        "name": "Inline", "components": [{"source": "inline", "equipment": {"kind": "optical_system", "name": "Alpha legacy"}}],
+    })
+    telescope = _create_sort_record(client, "equipment-setups", {
+        "name": "Telescope", "components": [{"source": "inline", "equipment": {"kind": "telescope", "name": "Beta telescope"}}],
+    })
+    params = {"sort_by": "telescope", "order": "asc"}
+    result = client.get("/api/v1/equipment-setups", headers=AUTH, params=params).json()
+    assert [row["id"] for row in result["items"]] == [inline["id"], telescope["id"], registered["id"]]
+    legacy = client.get("/api/v1/equipment-setups", headers=AUTH,
+                        params={**params, "component_kind": "optical_system"}).json()
+    assert [row["id"] for row in legacy["items"]] == [inline["id"], registered["id"]]
+
+
+def test_setup_name_sort_descending_and_sort_scope(service):
+    client, _ = service
+    for name in ["Alpha", "Zulu"]:
+        _create_sort_record(client, "equipment-setups", {"name": name})
+    result = client.get("/api/v1/equipment-setups", headers=AUTH, params={"sort_by": "name", "order": "desc"}).json()
+    assert [row["name"] for row in result["items"]] == ["Zulu", "Alpha"]
+    assert client.get("/api/v1/equipment-setups", headers=AUTH, params={"sort_by": "unknown"}).status_code == 422
+    for path in ["/equipment", "/capture-presets"]:
+        assert client.get("/api/v1" + path, headers=AUTH, params={"sort_by": "camera"}).status_code == 422
 
 
 def test_owned_presets_preserve_sparse_null_zero_and_revision(service):

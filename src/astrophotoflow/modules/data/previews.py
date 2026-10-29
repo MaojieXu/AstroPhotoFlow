@@ -15,11 +15,11 @@ from sqlalchemy import select
 
 from astrophotoflow.core import http as deps
 from astrophotoflow.contracts.previews import AutoStretch
-from astrophotoflow.modules.data.auto_stretch import calculate_stretch, render_stretch
+from astrophotoflow.modules.data.auto_stretch import calculate_stretch, render_stretch, sample_statistics
 from astrophotoflow.modules.data.common import _asset_version_scope
 from astrophotoflow.core.errors import ApiError, not_found
 from astrophotoflow.modules.data.files import find_root, resolve_relative
-from astrophotoflow.modules.data.fits_preview import PREVIEW_ALGORITHM_VERSION, create_preview, read_preview_pixels
+from astrophotoflow.modules.data.fits_preview import PREVIEW_ALGORITHM_VERSION, create_preview, read_preview_pixels, read_stretch_pixels
 from astrophotoflow.modules.data.ingestion import _ordinary_image, _raw_image, _xisf_image, _xisf_pixels
 from astrophotoflow.modules.data.models import AssetVersion, FitsHduMetadata, LibraryEntryRemoval, Preview, ProjectAssetReference
 from astrophotoflow.contracts.common import StrictModel
@@ -35,6 +35,9 @@ DISPLAY_EDGE = 1080
 
 
 def owned_preview_locations(preview, settings) -> list[str]:
+    if preview.size in {"viewer", "playback", "siril-live"}:
+        from astrophotoflow.modules.data.media_cache import media_locations
+        return media_locations(preview, settings)
     if not preview.storage_path:
         return []
     locations = [preview.storage_path]
@@ -95,7 +98,7 @@ class DisplayPreviews:
         if thumbnail is None:
             return display, None, _issue("not_ready", "RECIPE_NOT_READY", "缩略图及其显示参数尚未就绪，请稍后重试。")
         recipe = dict(thumbnail.display_parameters or {})
-        if category in {"fits", "xisf"} and not {"stretch_low", "stretch_high"} <= recipe.keys():
+        if category in {"fits", "xisf"} and "auto_stretch" not in recipe and not {"stretch_low", "stretch_high"} <= recipe.keys():
             return display, None, _issue("not_ready", "STRETCH_NOT_READY", "固定拉伸参数尚未就绪，请稍后重试。")
         if version.storage_mode == "managed":
             path = self.settings.data_dir / version.storage_location
@@ -118,6 +121,7 @@ class DisplayPreviews:
                 "stretch": AutoStretch(**stretch) if stretch is not None else None}
 
     def schedule(self, version_id, *, auto=False):
+        self.executor.prioritize({version_id})
         with self.database.write_session() as session:
             row, job, state = self._resolve(session, version_id)
             if auto and state["status"] == "available" and "auto_stretch" not in (row.display_parameters or {}):
@@ -156,6 +160,8 @@ class DisplayPreviews:
         if category == "fits":
             parameters = {**job["parameters"], "cfa_pattern": job["recipe"].get("cfa_pattern") or job["parameters"].get("cfa_pattern")}
             pixels, _ = read_preview_pixels(path, job["hdu_index"], job["kind"], parameters, DISPLAY_EDGE)
+            if job.get("auto"):
+                job["statistics_pixels"] = read_stretch_pixels(path, job["hdu_index"], job["kind"], parameters)
         elif category == "xisf":
             pixels = _xisf_pixels(path)
         elif category == "raw":
@@ -168,6 +174,8 @@ class DisplayPreviews:
                 if image.mode not in {"L", "I;16", "I;16B", "I;16L", "I", "F"}:
                     image = image.convert("RGB")
                 pixels = np.array(image)
+        if job.get("auto") and category != "fits":
+            job["statistics_pixels"] = sample_statistics(pixels)
         stride = max(1, (max(pixels.shape[:2]) + DISPLAY_EDGE - 1) // DISPLAY_EDGE)
         return pixels[::stride, ::stride]
 
@@ -175,10 +183,11 @@ class DisplayPreviews:
         recipe = dict(job["recipe"])
         if job.get("auto") or "auto_stretch" in recipe:
             pixels = self._pixels(job)
-            parameters = calculate_stretch(pixels) if job.get("auto") else recipe["auto_stretch"]
+            parameters = calculate_stretch(job["statistics_pixels"]) if job.get("auto") else recipe["auto_stretch"]
             image = render_stretch(pixels, parameters)
             image.thumbnail((DISPLAY_EDGE, DISPLAY_EDGE), Image.Resampling.LANCZOS)
-            return image, {**recipe, "auto_stretch": parameters}
+            return image, {**recipe, "auto_stretch": parameters,
+                           **({"statistics": "stratified-random-1"} if job.get("auto") else {})}
         stretch = (recipe["stretch_low"], recipe["stretch_high"]) if "stretch_low" in recipe else None
         path, category = job["path"], job["category"]
         if category == "fits":
@@ -186,7 +195,7 @@ class DisplayPreviews:
             image, computed = create_preview(path, job["hdu_index"], job["kind"], parameters, DISPLAY_EDGE, stretch)
             recipe.update(computed)
         elif category == "xisf":
-            image, _ = _xisf_image(path, stretch)
+            image, _ = _xisf_image(path, stretch, DISPLAY_EDGE)
         elif category == "raw":
             image = _raw_image(path, DISPLAY_EDGE)
         elif category == "video":
@@ -196,7 +205,7 @@ class DisplayPreviews:
                 recipe.update(original)
             image, _ = first_video_frame(path, DISPLAY_EDGE, stretch)
         else:
-            image, _ = _ordinary_image(path, stretch)
+            image, _ = _ordinary_image(path, stretch, DISPLAY_EDGE)
         image.thumbnail((DISPLAY_EDGE, DISPLAY_EDGE), Image.Resampling.LANCZOS)
         return image.convert("RGB"), recipe
 

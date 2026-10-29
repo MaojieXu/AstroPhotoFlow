@@ -4,6 +4,7 @@ import { nextTick } from 'vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiClientError } from '@ui/modules/data/api/client'
 import App from '@ui/modules/data/App.vue'
+import Workspace from '@ui/modules/data/workspace/Workspace.vue'
 import PhotoPreviewDialog from '@ui/modules/data/workspace/PhotoPreviewDialog.vue'
 import { useWorkspaceStore } from '@ui/modules/data/workspace/store'
 
@@ -65,7 +66,7 @@ afterEach(() => {
 })
 
 async function openSettings() {
-  await wrapper.get('.apf-nav button[aria-label="设置"]').trigger('click')
+  await wrapper.findComponent(Workspace).vm.selectArea('settings','projects')
   await flushPromises()
 }
 
@@ -101,7 +102,7 @@ describe('first-stage regression fixes', () => {
     })
     wrapper=mount(App,{global:{plugins:[pinia]}});await flushPromises();await openSettings()
     await wrapper.get('.apf-record').trigger('click');await flushPromises()
-    await wrapper.findAll('.apf-details button').find(button=>button.text()==='查看项目资产')!.trigger('click');await flushPromises()
+    await wrapper.findAll('.apf-details button').find(button=>button.text()==='查看项目素材')!.trigger('click');await flushPromises()
     expect(wrapper.get('.apf-assets-table tbody tr td:nth-child(4)').text()).toBe('Pinned camera name')
   })
 
@@ -278,13 +279,15 @@ describe('first-stage regression fixes', () => {
     await flushPromises()
     await wrapper.get('.apf-record').trigger('click')
     await flushPromises()
-    const widthButton=wrapper.findAll('.apf-details .apf-inline-value').find(button=>button.element.parentElement?.parentElement?.textContent?.includes('宽度（px）'))!
-    await clickDetail(widthButton.element,1)
-    await clickDetail(wrapper.findAll('.apf-details .apf-inline-value').find(button=>button.element.parentElement?.parentElement?.textContent?.includes('宽度（px）'))!.element,2)
-    const width=wrapper.get('.apf-details .apf-detail-fields input[type="number"]')
+    await wrapper.findAll('button').find(button=>button.text()==='编辑')!.trigger('click')
+    await flushPromises()
+    const form=wrapper.get('form[aria-label="记录编辑表单"]')
+    const widthField=form.findAll('label').find(label=>label.text().startsWith('宽度（px）'))!
+    const width=widthField.get('input[type="number"]')
     expect((width.element as HTMLInputElement).value).toBe('2048')
     await width.setValue('4096')
-    await width.trigger('keydown',{key:'Enter'})
+    expect(send).not.toHaveBeenCalled()
+    await form.trigger('submit')
     await flushPromises()
     expect(send).toHaveBeenCalledWith('/astrophotoflow/api/v1/equipment/'+camera.id,expect.anything(),'PATCH',{
       base_revision:1,kind:'camera',specs:{sensor_width_px:4096}
@@ -305,7 +308,7 @@ describe('first-stage regression fixes', () => {
     send.mockResolvedValue({...asset,parameters:{...asset.parameters,binning_x:3,binning_y:3},revision:2})
     wrapper=mount(App,{global:{plugins:[pinia]}})
     await flushPromises()
-    await wrapper.findAll('button').find(button=>button.text()==='细节')!.trigger('click')
+    await wrapper.get('select[aria-label="显示方式"]').setValue('detail')
     const binSelector='.apf-assets-table tbody tr td:nth-child(8)'
     await wrapper.get(binSelector+' .apf-inline-value').trigger('dblclick')
     let editor=wrapper.get(binSelector+' select')
@@ -357,10 +360,10 @@ describe('first-stage regression fixes', () => {
     const filterButton=wrapper.findAll('button').find(button=>button.text().startsWith('筛选'))!
     await filterButton.trigger('click')
     await flushPromises()
-    const frameClass=wrapper.findAll('input[type="checkbox"]').find(input=>input.element.parentElement?.textContent?.includes('subframe'))!
+    const frameClass=wrapper.findAll('input[type="checkbox"]').find(input=>input.element.parentElement?.textContent?.includes('单帧'))!
     await frameClass.setValue(true)
     await flushPromises()
-    await wrapper.findAll('button').find(button=>button.text()==='细节')!.trigger('click')
+    await wrapper.get('select[aria-label="显示方式"]').setValue('detail')
     expect(wrapper.get('.apf-table-scroll').classes()).toContain('detail')
     expect((wrapper.get('input[aria-label="搜索"]').element as HTMLInputElement).value).toBe('M31')
     expect(wrapper.findAll('button').find(button=>button.text().startsWith('筛选'))!.text()).toBe('筛选（1）')
@@ -447,7 +450,7 @@ describe('first-stage regression fixes', () => {
     const cameraSelect=wrapper.get('.apf-assets-table tbody tr td:nth-child(4) select')
     await cameraSelect.trigger('keydown',{key:'Escape'})
     await flushPromises()
-    await wrapper.get('.apf-nav button[aria-label="设置"]').trigger('click')
+    await wrapper.get('.apf-nav button[aria-label="设备管理"]').trigger('click')
     await flushPromises()
 
     expect(wrapper.get('.apf-nav button[aria-label="素材库"]').attributes('aria-current')).toBe('page')
@@ -480,9 +483,9 @@ describe('first-stage regression fixes', () => {
     expect((nameInput.element as HTMLInputElement).value).toBe('Changed')
     await nameInput.trigger('keydown',{key:'Escape'})
     await flushPromises()
-    await wrapper.get('.apf-nav button[aria-label="设置"]').trigger('click')
+    await wrapper.get('.apf-nav button[aria-label="设备管理"]').trigger('click')
     await flushPromises()
-    expect(wrapper.get('.apf-nav button[aria-label="设置"]').attributes('aria-current')).toBe('page')
+    expect(wrapper.get('.apf-nav button[aria-label="设备管理"]').attributes('aria-current')).toBe('page')
   })
 
   it('refreshes the parent library row after a successful dataset field save',async()=>{
@@ -551,10 +554,10 @@ describe('first-stage regression fixes', () => {
     expect(wrapper.get('.apf-assets-table tbody tr td:nth-child(2) .apf-inline-value').text()).toBe('New name')
     expect(get.mock.calls.filter(([path])=>path.includes('/library/items'))).toHaveLength(1)
 
-    await wrapper.findAll('button').find(button=>button.text()==='批量删除')!.trigger('click')
+    await wrapper.findAll('button').find(button=>button.text()==='批量管理')!.trigger('click')
     await wrapper.get('input[aria-label="选择 New name"]').setValue(true)
     await wrapper.findAll('button').find(button=>button.text()==='删除')!.trigger('click')
-    await wrapper.findAll('button').find(button=>button.text()==='移入垃圾桶')!.trigger('click')
+    await wrapper.findAll('button').find(button=>button.text()==='移入回收站')!.trigger('click')
     await flushPromises()
     expect(send.mock.calls.map(([, , method])=>method)).toEqual(['PATCH','DELETE'])
     expect(wrapper.text()).toContain('已移除1条素材库记录')
@@ -588,10 +591,10 @@ describe('first-stage regression fixes', () => {
     await input.setValue('New name')
     await input.trigger('keydown',{key:'Enter'})
     await flushPromises()
-    await wrapper.findAll('button').find(button=>button.text()==='批量删除')!.trigger('click')
+    await wrapper.findAll('button').find(button=>button.text()==='批量管理')!.trigger('click')
     await wrapper.get('input[aria-label="选择 New name"]').setValue(true)
     await wrapper.findAll('button').find(button=>button.text()==='删除')!.trigger('click')
-    await wrapper.findAll('button').find(button=>button.text()==='移入垃圾桶')!.trigger('click')
+    await wrapper.findAll('button').find(button=>button.text()==='移入回收站')!.trigger('click')
     await flushPromises()
 
     expect(wrapper.text()).toContain('记录已被其他窗口修改。')
@@ -699,9 +702,9 @@ describe('first-stage regression fixes', () => {
     store.offset = 50
     wrapper = mount(App, { global: { plugins: [pinia] } })
     await flushPromises()
-    await wrapper.findAll('button').find(button=>button.text()==='批量删除')!.trigger('click')
+    await wrapper.findAll('button').find(button=>button.text()==='批量管理')!.trigger('click')
     await wrapper.get('input[aria-label="选择 M31.fit"]').setValue(true)
-    expect(wrapper.text()).not.toContain('已选')
+    expect(wrapper.text()).toContain('已选 1 项')
     expect((wrapper.get('input[aria-label="选择 M31.fit"]').element as HTMLInputElement).checked).toBe(true)
 
     await wrapper.get('.apf-sort-button').trigger('click')
@@ -722,7 +725,7 @@ describe('first-stage regression fixes', () => {
     expect((wrapper.get('input[aria-label="选择 M31.fit"]').element as HTMLInputElement).checked).toBe(false)
     await wrapper.findAll('button').find(button=>button.text().startsWith('筛选'))!.trigger('click')
     await flushPromises()
-    const classChoice=wrapper.findAll('input[type="checkbox"]').find(input=>input.element.parentElement?.textContent?.includes('subframe'))!
+    const classChoice=wrapper.findAll('input[type="checkbox"]').find(input=>input.element.parentElement?.textContent?.includes('单帧'))!
     await classChoice.setValue(true)
     await flushPromises()
 
@@ -799,13 +802,13 @@ describe('first-stage regression fixes', () => {
     await wrapper.get('.apf-details input[type="text"]').setValue('M42')
     await wrapper.get('.apf-details input[type="text"]').trigger('keydown', {key:'Enter'})
     await flushPromises()
-    await wrapper.findAll('.apf-details button').find(button=>button.text()==='查看项目资产')!.trigger('click')
+    await wrapper.findAll('.apf-details button').find(button=>button.text()==='查看项目素材')!.trigger('click')
     await flushPromises()
     await wrapper.findAll('.apf-toolbar button').find(button=>button.text()==='添加素材')!.trigger('click')
     await flushPromises()
     await wrapper.get('.apf-assets-table tbody tr').trigger('click')
     await flushPromises()
-    await wrapper.findAll('.apf-details button').find(button=>button.text()==='选用此资产版本')!.trigger('click')
+    await wrapper.findAll('.apf-details button').find(button=>button.text()==='选用此素材版本')!.trigger('click')
     await flushPromises()
     await wrapper.get('.apf-assets-table tbody tr').trigger('click')
     await flushPromises()
@@ -815,17 +818,17 @@ describe('first-stage regression fixes', () => {
     await flushPromises()
     await wrapper.get('.apf-record').trigger('click')
     await flushPromises()
-    await wrapper.findAll('.apf-details button').find(button=>button.text()==='查看项目数据集')!.trigger('click')
+    await wrapper.findAll('.apf-details button').find(button=>button.text()==='查看项目图像组')!.trigger('click')
     await flushPromises()
-    await wrapper.findAll('.apf-toolbar button').find(button=>button.text()==='添加数据集')!.trigger('click')
-    await flushPromises()
-    await wrapper.get('.apf-assets-table tbody tr').trigger('click')
-    await flushPromises()
-    await wrapper.findAll('.apf-details button').find(button=>button.text()==='选用此数据集版本')!.trigger('click')
+    await wrapper.findAll('.apf-toolbar button').find(button=>button.text()==='添加图像组')!.trigger('click')
     await flushPromises()
     await wrapper.get('.apf-assets-table tbody tr').trigger('click')
     await flushPromises()
-    await wrapper.findAll('.apf-details button').find(button=>button.text()==='从项目移除数据集')!.trigger('click')
+    await wrapper.findAll('.apf-details button').find(button=>button.text()==='选用此图像组版本')!.trigger('click')
+    await flushPromises()
+    await wrapper.get('.apf-assets-table tbody tr').trigger('click')
+    await flushPromises()
+    await wrapper.findAll('.apf-details button').find(button=>button.text()==='从项目移除图像组')!.trigger('click')
     await flushPromises()
 
     expect(send.mock.calls[0][3]).toMatchObject({base_revision:1,name:'M42'})
@@ -860,10 +863,10 @@ describe('first-stage regression fixes', () => {
     wrapper = mount(App, { global: { plugins: [pinia] } })
     await flushPromises()
 
-    await wrapper.findAll('button').find(button => button.text() === '批量删除')!.trigger('click')
+    await wrapper.findAll('button').find(button => button.text() === '批量管理')!.trigger('click')
     expect(wrapper.text()).toContain('只删除素材库引用，不删除原本数据。')
-    expect(wrapper.find('.apf-import-row').exists()).toBe(true)
-    expect(wrapper.find('.apf-import-row input[type="checkbox"]').exists()).toBe(false)
+    expect(wrapper.find('.apf-import-progress').exists()).toBe(true)
+    expect(wrapper.find('.apf-import-progress input[type="checkbox"]').exists()).toBe(false)
     const selectPage=wrapper.get('input[aria-label="全选当前页"]')
     await selectPage.setValue(true)
     expect((selectPage.element as HTMLInputElement).checked).toBe(true)
@@ -873,11 +876,11 @@ describe('first-stage regression fixes', () => {
     const rowCheckbox = wrapper.get('input[aria-label="选择 M31.fit"]')
     await rowCheckbox.setValue(true)
     expect((rowCheckbox.element as HTMLInputElement).checked).toBe(true)
-    expect(wrapper.text()).not.toContain('已选')
+    expect(wrapper.text()).toContain('已选 1 项')
     expect(wrapper.get('input[aria-label="全选当前页"]').attributes('aria-checked')).toBe('mixed')
     await wrapper.findAll('button').find(button => button.text() === '删除')!.trigger('click')
     expect(send).not.toHaveBeenCalled()
-    await wrapper.findAll('button').find(button => button.text() === '移入垃圾桶')!.trigger('click')
+    await wrapper.findAll('button').find(button => button.text() === '移入回收站')!.trigger('click')
     await flushPromises()
 
     expect(wrapper.text()).toContain('已移除1条素材库记录，原始数据未删除。')
@@ -896,10 +899,10 @@ describe('first-stage regression fixes', () => {
     send.mockRejectedValue(new ApiClientError('记录已变化，请重新读取。','service',409,'REVISION_CONFLICT'))
     wrapper=mount(App,{global:{plugins:[pinia]}})
     await flushPromises()
-    await wrapper.findAll('button').find(button=>button.text()==='批量删除')!.trigger('click')
+    await wrapper.findAll('button').find(button=>button.text()==='批量管理')!.trigger('click')
     await wrapper.get('input[aria-label="选择 M31.fit"]').setValue(true)
     await wrapper.findAll('button').find(button=>button.text()==='删除')!.trigger('click')
-    await wrapper.findAll('button').find(button=>button.text()==='移入垃圾桶')!.trigger('click')
+    await wrapper.findAll('button').find(button=>button.text()==='移入回收站')!.trigger('click')
     await flushPromises()
 
     expect(wrapper.text()).toContain('记录已被其他窗口修改。')
@@ -912,7 +915,7 @@ describe('first-stage regression fixes', () => {
       path.includes('/library/items')?page([{entry_type:'asset',asset:libraryAsset,import_issue:null}]):emptyPage)
     wrapper=mount(App,{global:{plugins:[pinia]}})
     await flushPromises()
-    await wrapper.findAll('button').find(button=>button.text()==='批量删除')!.trigger('click')
+    await wrapper.findAll('button').find(button=>button.text()==='批量管理')!.trigger('click')
     await wrapper.get('input[aria-label="选择 M31.fit"]').setValue(true)
     await wrapper.findAll('button').find(button=>button.text()==='删除')!.trigger('click')
     expect(wrapper.text()).toContain('原文件保留，可恢复')
@@ -936,15 +939,15 @@ describe('first-stage regression fixes', () => {
     })
     wrapper=mount(App,{global:{plugins:[pinia]}})
     await flushPromises()
-    await wrapper.get('button[aria-label="打开回收站"]').trigger('click')
+    await wrapper.findAll('button').find(button=>button.text()==='回收站')!.trigger('click')
     await flushPromises()
     expect(wrapper.text()).toContain('Trash A.fit')
-    expect(wrapper.find('nav[aria-label="垃圾桶分页"]').exists()).toBe(true)
+    expect(wrapper.find('nav[aria-label="回收站分页"]').exists()).toBe(true)
     await wrapper.get('input[aria-label="选择 Trash A.fit"]').setValue(true)
     await wrapper.findAll('button').find(button=>button.text()==='恢复')!.trigger('click')
     await flushPromises()
     expect(send).toHaveBeenCalledTimes(1)
-    expect(wrapper.text()).toContain('垃圾桶为空。')
+    expect(wrapper.text()).toContain('回收站为空。')
   })
 
   it('clears trash selection across pages and prevents restoring partial cleanups',async()=>{
@@ -960,14 +963,14 @@ describe('first-stage regression fixes', () => {
     })
     wrapper=mount(App,{global:{plugins:[pinia]}})
     await flushPromises()
-    await wrapper.get('button[aria-label="打开回收站"]').trigger('click')
+    await wrapper.findAll('button').find(button=>button.text()==='回收站')!.trigger('click')
     await flushPromises()
     await wrapper.get('input[aria-label="选择 Trash 0.fit"]').setValue(true)
-    await wrapper.get('nav[aria-label="垃圾桶分页"]').findAll('button').find(button=>button.text()==='下一页')!.trigger('click')
+    await wrapper.get('nav[aria-label="回收站分页"]').findAll('button').find(button=>button.text()==='下一页')!.trigger('click')
     await flushPromises()
     expect((wrapper.get('input[aria-label="选择 Trash 20.fit"]').element as HTMLInputElement).checked).toBe(false)
     expect((wrapper.findAll('button').find(button=>button.text()==='恢复')!.element as HTMLButtonElement).disabled).toBe(true)
-    await wrapper.get('nav[aria-label="垃圾桶分页"]').findAll('button').find(button=>button.text()==='上一页')!.trigger('click')
+    await wrapper.get('nav[aria-label="回收站分页"]').findAll('button').find(button=>button.text()==='上一页')!.trigger('click')
     await flushPromises()
     expect((wrapper.get('input[aria-label="选择 Trash 0.fit"]').element as HTMLInputElement).checked).toBe(false)
     expect(send).not.toHaveBeenCalled()
@@ -990,7 +993,7 @@ describe('first-stage regression fixes', () => {
     wrapper=mount(App,{global:{plugins:[pinia]}})
     await flushPromises()
     const initialLibraryReads=libraryReads
-    await wrapper.get('button[aria-label="打开回收站"]').trigger('click')
+    await wrapper.findAll('button').find(button=>button.text()==='回收站')!.trigger('click')
     await flushPromises()
     await wrapper.get('input[aria-label="选择 Trash B.fit"]').setValue(true)
     await wrapper.findAll('button').find(button=>button.text()==='恢复')!.trigger('click')
@@ -1009,7 +1012,7 @@ describe('first-stage regression fixes', () => {
     })
     wrapper=mount(App,{global:{plugins:[pinia]}})
     await flushPromises()
-    await wrapper.get('button[aria-label="打开回收站"]').trigger('click')
+    await wrapper.findAll('button').find(button=>button.text()==='回收站')!.trigger('click')
     await flushPromises()
     const rows=wrapper.findAll('.trash-table-wrap tbody tr')
     expect(rows[0].text()).toContain('Light frames')
@@ -1034,7 +1037,7 @@ describe('first-stage regression fixes', () => {
     })
     wrapper=mount(App,{global:{plugins:[pinia]}})
     await flushPromises()
-    await wrapper.get('button[aria-label="打开回收站"]').trigger('click')
+    await wrapper.findAll('button').find(button=>button.text()==='回收站')!.trigger('click')
     await flushPromises()
     await wrapper.findAll('.trash-table-wrap tbody button').find(button=>button.text()==='展开')!.trigger('click')
     await flushPromises()
@@ -1058,7 +1061,7 @@ describe('first-stage regression fixes', () => {
     })
     wrapper=mount(App,{global:{plugins:[pinia]}})
     await flushPromises()
-    await wrapper.get('button[aria-label="打开回收站"]').trigger('click')
+    await wrapper.findAll('button').find(button=>button.text()==='回收站')!.trigger('click')
     await flushPromises()
     await wrapper.get('input[aria-label="选择 Cancel.fit"]').setValue(true)
     await wrapper.findAll('.trash-dialog footer button').find(button=>button.text()==='永久删除')!.trigger('click')

@@ -1,8 +1,11 @@
 from .ingestion import backfill_missing_previews, import_workers, mark_interrupted_tasks
 from .previews import DisplayPreviews
+from .media_view import MediaViews
+from .siril_preview import prepare_siril_sample, direct_fits_image
+from .canvas import prepare_canvas_data
 from sqlalchemy import select
 from .projects import get_project
-from .science_inputs import accept_asset_content, check_output, get_output_registration, observe_asset_content, observe_reference_inputs, register_output, render_output_preview, resolve_inputs, validate_input_references
+from .science_inputs import accept_asset_content, check_output, get_output_registration, observe_asset_content, observe_reference_inputs, register_output, render_output_preview, resolve_inputs, resolve_canvas_inputs, validate_input_references
 from .trash import preview_library_removal
 
 from astrophotoflow.contracts.workbench import BusyState
@@ -18,7 +21,9 @@ def data_busy(database: Database) -> BusyState:
     return BusyState(busy=bool(blockers), unknown=False, blockers=blockers)
 
 
-__all__ = ["DisplayPreviews", "backfill_missing_previews", "import_workers", "mark_interrupted_tasks", "data_busy",
-           "get_project", "validate_input_references", "resolve_inputs", "observe_reference_inputs",
+__all__ = ["DisplayPreviews", "MediaViews", "backfill_missing_previews", "import_workers", "mark_interrupted_tasks", "data_busy",
+           "prepare_siril_sample", "direct_fits_image",
+           "prepare_canvas_data",
+           "get_project", "validate_input_references", "resolve_inputs", "resolve_canvas_inputs", "observe_reference_inputs",
            "observe_asset_content", "accept_asset_content", "check_output", "render_output_preview",
            "register_output", "get_output_registration", "preview_library_removal"]

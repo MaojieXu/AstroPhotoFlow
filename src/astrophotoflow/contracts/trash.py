@@ -175,3 +175,17 @@ class ManagementTrashDelete(ManagementTrashSelection):
 class ManagementTrashDeleteOut(StrictModel):
     deleted_count: int
     detached_material_count: int
+
+
+class EquipmentDeleteSelectionItem(StrictModel):
+    entry_type: Literal["equipment", "equipment_setup", "capture_preset"]
+    id: UuidInput
+    revision: int = Field(ge=1)
+
+
+class EquipmentDeleteSelection(StrictModel):
+    items: list[EquipmentDeleteSelectionItem] = Field(min_length=1)
+
+
+class EquipmentDelete(EquipmentDeleteSelection):
+    preview_fingerprint: str

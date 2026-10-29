@@ -14,6 +14,18 @@ async function doubleClick(wrapper:ReturnType<typeof mount>){
 }
 
 describe('inline field editing',()=>{
+  it.each(['Enter',' '])('opens editing with %s and cancels without saving',async(key)=>{
+    const save=vi.fn()
+    const wrapper=mount(InlineField,{props:{value:'M31',save}})
+    try{
+      await wrapper.get('button').trigger('keydown',{key})
+      expect(wrapper.get('input').element.value).toBe('M31')
+      await wrapper.get('input').setValue('M42')
+      await wrapper.get('input').trigger('keydown',{key:'Escape'})
+      expect(wrapper.find('input').exists()).toBe(false)
+      expect(save).not.toHaveBeenCalled()
+    }finally{wrapper.unmount()}
+  })
   it('saves one changed value when Enter is pressed',async()=>{
     const save=vi.fn().mockResolvedValue(undefined)
     const wrapper=mount(InlineField,{props:{value:'M31',save}})

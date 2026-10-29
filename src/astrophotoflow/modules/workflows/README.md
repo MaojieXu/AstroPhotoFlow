@@ -1,8 +1,13 @@
 # ⑤工作流、执行与 Agent 交互概要设计
 
-**⑤统一负责工作流、执行与Agent交互；新增能力尚未实现。** [现行需求](../../../../docs/requirements/README.md)维护产品范围，[总架构](../../../../docs/architecture/overview.md)维护五模块关系，[数据设计](../../../../docs/architecture/data-models/05-workflows.md)维护本模块必要数据。这里是唯一概要，不另建执行器、编辑器或协作平台。
+2026-10-29 首个 Siril 节点窄接入：software_calls.py 复用原生 prompt_id／node_id，固定工作目录，调用②公开科学解析与检查、③invoke／cancel／inspect，保存该次调用 JSON 和日志；不向网页代理／CLI／MCP开放直接执行。完整项目图关联、SQLite 运行权威、保存前运行及 Agent 执行准入仍按 M5 实施，不能由该窄适配代签。测试仅编写，未执行。
 
-未来操作与失败规则见[⑤接口契约](../../../../docs/api/platform-contracts.md#workflows)，精确签名／文件／测试见[⑤详细设计](../../../../docs/api/platform-contracts.md#workflows-design)及[原生交接](../../../../docs/api/platform-contracts.md#native-design)；现有58工具及OpenAPI不变。
+
+2026-10-28 窄范围本地候选：`canvas.py` 接入②公开固定引用准备，提供在线画布列表、精确目标加数据和会话回执查询。网页更多菜单明确交回加数据控制，手动改图、切图／子图和断连撤销；MCP／CLI不能自行授权，超时先查同一请求。宿主复用原生节点创建、撤销和草稿，不复制图、文件或执行器。仅素材入画布已形成代码；下文完整项目、改图、运行和预览目标仍未实现。测试只编写，实际验收未执行，见当前上下文及验证矩阵。
+
+**⑤统一负责工作流、执行与Agent交互；除上述素材入画布候选，完整新增能力尚未实现。** [现行需求](../../../../docs/requirements/README.md)维护产品范围，[总架构](../../../../docs/architecture/overview.md)维护五模块关系，[数据设计](../../../../docs/architecture/data-models/05-workflows.md)维护本模块必要数据。这里是唯一概要，不另建执行器、编辑器或协作平台。
+
+未来操作与失败规则见[⑤接口契约](../../../../docs/api/platform-contracts.md#workflows)，精确签名／文件／测试见[⑤详细设计](../../../../docs/api/platform-contracts.md#workflows-design)及[原生交接](../../../../docs/api/platform-contracts.md#native-design)；素材入画布当前候选的HTTP／CLI／MCP新增入口见[现有接口](../../../../docs/api/README.md#library-canvas)，不把原有工具数当作新增候选的固定数量。
 
 <a id="scenarios"></a>
 

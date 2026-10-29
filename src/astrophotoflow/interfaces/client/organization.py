@@ -4,6 +4,7 @@ from astrophotoflow.contracts.projects import ProjectDatasetReferenceCreate, Pro
 from astrophotoflow.contracts.equipment import EquipmentCreate, EquipmentPatch
 from astrophotoflow.contracts.projects import ProjectCreate, ProjectPatch
 from astrophotoflow.contracts.setups import CapturePresetCreate, CapturePresetPatch, EquipmentSetupCreate, EquipmentSetupPatch
+from astrophotoflow.contracts.trash import EquipmentDelete, EquipmentDeleteSelection
 
 
 class OrganizationOperations:
@@ -58,6 +59,12 @@ class OrganizationOperations:
 
     def update_equipment(self, equipment_id: str, body: EquipmentPatch) -> dict[str, Any]:
         return self.request("PATCH", f"/equipment/{equipment_id}", json=body)
+
+    def preview_equipment_delete(self, body: EquipmentDeleteSelection) -> dict[str, Any]:
+        return self.request("POST", "/equipment-management/delete-preview", json=body)
+
+    def delete_equipment_entries(self, body: EquipmentDelete) -> dict[str, Any]:
+        return self.request("POST", "/equipment-management/delete", json=body)
 
     def list_equipment_setups(self, limit: int = 50, offset: int = 0, q: str | None = None,
                               status: str = "active", sort_by: str = "created_at", order: str = "desc") -> dict[str, Any]:

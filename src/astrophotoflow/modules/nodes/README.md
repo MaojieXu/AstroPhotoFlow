@@ -4,7 +4,7 @@
 
 本文是④的唯一概要，依据[现行需求](../../../../docs/requirements/README.md)及[总架构](../../../../docs/architecture/overview.md)。数据设计见[④节点构建](../../../../docs/architecture/data-models/04-nodes.md)。2026-10-27用户确认简化方向，替代原有项目草稿、强制测试发布和旧版并存要求。
 
-**设计已成文，新增能力待实现。** Python和自研UI仍仅README／AGENTS；原生节点注册、控件、节点库和子图可复用，不等于平台节点制作、更新或试运行已经完成。
+**B41 已实现workspace JSON定义契约和公开文件操作；B42／B43 的原生加载、HTTP组合与UI仍待实现。** ④目前可保存／预览更新／替换定义，不发布NodeDetails路由，也不从文件内容推断节点已加载或可运行。原生节点注册、控件、节点库和子图可复用，不等于平台节点制作、更新或试运行已经完成。
 
 <a id="scenarios"></a>
 
@@ -85,7 +85,7 @@ Python④管理定义，前端④展示制作、最近测试及更新影响，�
 
 参见[模块导航](../../../../docs/architecture/module-map.md#module-4)：[nodes.py](../../../../engine/ComfyUI/nodes.py)、[litegraphService.ts](../../../../frontend/src/services/litegraphService.ts)、[subgraphStore.ts](../../../../frontend/src/stores/subgraphStore.ts)及[executionUtil.ts](../../../../frontend/src/utils/executionUtil.ts)。
 
-现有[迟到注册](../../../../frontend/src/services/litegraphService.lateRegistration.test.ts)、[子图序列化](../../../../frontend/src/lib/litegraph/src/subgraph/SubgraphSerialization.test.ts)及[转换测试](../../../../frontend/src/utils/executionUtil.test.ts)只覆盖原生基础。平台制作、更新、试运行均无独立实现或可运行验收命令；首次实现补真实联调。
+平台JSON定义测试位于[tests/modules/nodes](../../../../tests/modules/nodes/test_service.py)，覆盖文件身份、内容token、输入绑定、端口重映射、默认值、冲突和包替换；真实节点加载／前端控件／试运行仍无完成证据。现有[迟到注册](../../../../frontend/src/services/litegraphService.lateRegistration.test.ts)、[子图序列化](../../../../frontend/src/lib/litegraph/src/subgraph/SubgraphSerialization.test.ts)及[转换测试](../../../../frontend/src/utils/executionUtil.test.ts)只覆盖原生基础。
 
 <a id="phases"></a>
 

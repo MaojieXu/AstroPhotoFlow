@@ -47,7 +47,7 @@
         </div>
       </Button>
       <div
-        v-if="canExportOutputs"
+        v-if="canExportOutputs && !displayOnly"
         class="invisible absolute top-2 right-2 group-focus-within:visible group-hover:visible"
       >
         <button
@@ -128,7 +128,7 @@
       >
         <!-- Mask/Edit Button -->
         <button
-          v-if="!hasMultipleImages && !imageError && !currentImageIsHdr"
+          v-if="!displayOnly && !hasMultipleImages && !imageError && !currentImageIsHdr"
           :class="actionButtonClass"
           :title="$t('g.editOrMaskImage')"
           :aria-label="$t('g.editOrMaskImage')"
@@ -149,7 +149,7 @@
 
         <!-- Layer Editor Button -->
         <button
-          v-if="hasMultipleImages && !imageError"
+          v-if="!displayOnly && hasMultipleImages && !imageError"
           :class="actionButtonClass"
           :title="$t('g.openLayerEditor')"
           :aria-label="$t('g.openLayerEditor')"
@@ -160,7 +160,7 @@
 
         <!-- Download Button -->
         <button
-          v-if="!imageError"
+          v-if="!displayOnly && !imageError"
           :class="actionButtonClass"
           :title="$t('g.downloadImage')"
           :aria-label="$t('g.downloadImage')"
@@ -184,7 +184,7 @@
 
     <!-- Image Dimensions (gallery mode only) -->
     <div
-      v-if="viewMode === 'gallery' && !isHdrPlaceholder(currentImageUrl)"
+      v-if="!displayOnly && viewMode === 'gallery' && !isHdrPlaceholder(currentImageUrl)"
       class="pt-2 text-center text-xs text-base-foreground"
     >
       <span
@@ -259,13 +259,13 @@ import { cn } from '@comfyorg/tailwind-utils'
 import { IMAGE_PREVIEW_CONTENT_MIN_HEIGHT } from './imagePreviewLayout'
 
 interface ImagePreviewProps {
-  /** Array of image URLs to display */
   readonly imageUrls: readonly string[]
-  /** Optional node ID for context-aware actions */
   readonly nodeId?: NodeId
+  readonly displayOnly?: boolean
 }
 
-const { imageUrls, nodeId } = defineProps<ImagePreviewProps>()
+const { imageUrls, nodeId, displayOnly = false } = defineProps<ImagePreviewProps>()
+const emit = defineEmits<{ 'load-error': [] }>()
 
 const { t } = useI18n()
 const maskEditor = useMaskEditor()
@@ -315,6 +315,7 @@ const gridImageUrls = computed(() =>
   imageUrls.map((url) => getHdrPreviewUrl(url) ?? getGridThumbnailUrl(url))
 )
 const hasMultipleImages = computed(() => imageUrls.length > 1)
+watch(imageError, failed => { if (failed) emit('load-error') })
 const canExportOutputs = computed(() => {
   const node = nodeId ? resolveNode(nodeId) : undefined
   return !!node && hasMultipleOutputs(node)

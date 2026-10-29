@@ -1,0 +1,79 @@
+.apf-workspace .apf-equipment-management{width:100%;min-width:0;margin-inline:0;gap:8px}
+.apf-equipment-management .apf-records.grid{gap:4px}
+.apf-workspace .apf-equipment-management .apf-record{min-height:48px;padding:6px 8px;gap:8px}
+.apf-equipment-management .apf-record-icon{font-size:16px}
+.apf-equipment-management .apf-record strong{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.apf-equipment-management .apf-record span:last-child{gap:0}
+.apf-equipment-management .apf-setup-table-scroll{min-width:0;min-height:0;max-width:100%;margin-inline:10px;overflow-x:auto}
+.apf-equipment-management .apf-setup-table{width:100%;min-width:720px;table-layout:fixed;font-size:12px}
+.apf-equipment-management .apf-setup-table th,.apf-equipment-management .apf-setup-table td{height:48px;box-sizing:border-box;vertical-align:middle}
+.apf-equipment-management .apf-setup-table .apf-setup-select-cell{width:28px;padding-inline:4px}
+.apf-equipment-management .apf-setup-table .apf-setup-name-cell{width:140px}
+.apf-equipment-management .apf-setup-table th:last-child{width:128px}
+.apf-equipment-management .apf-setup-table .apf-sort-button{min-height:28px;padding:4px 6px;border-radius:8px;background:var(--comfy-menu-secondary-bg,#292929);font:inherit}
+.apf-workspace .apf-equipment-management .apf-setup-table .apf-setup-name{display:block;width:100%;min-height:28px;padding:2px 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left;font-size:12px;background:transparent}
+.apf-equipment-management .apf-setup-equipment-cell{display:flex;align-items:center;min-width:0}
+.apf-equipment-management .apf-setup-equipment-cell>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.apf-equipment-management .apf-setup-presets{display:flex;flex-direction:column;align-items:flex-start;gap:8px;margin:8px 10px;min-width:0;max-width:calc(100% - 20px)}
+.apf-equipment-management .apf-setup-presets ul{margin:0;padding-left:0;list-style:none;max-width:100%}
+.apf-equipment-management .apf-setup-presets li{display:flex;align-items:center;gap:8px;min-width:0}
+.apf-equipment-management .apf-setup-presets .apf-preset-name{flex:0 1 auto;min-width:0;max-width:320px}
+.apf-equipment-management .apf-search{flex:1 1 160px;width:auto;min-width:120px;max-width:none;height:32px}
+.apf-equipment-management .apf-equipment-kind-filter{flex:0 1 120px;width:120px;min-width:100px;max-width:120px}
+.apf-workspace .apf-equipment-management .apf-toolbar>button{height:32px;min-height:32px;flex-shrink:0;font-size:12px}
+.apf-workspace .apf-equipment-management .apf-heading .apf-equipment-back{width:32px;height:32px;min-height:32px;padding:0;background:transparent}
+.apf-equipment-management .apf-management-tabs{align-items:flex-start}
+.apf-equipment-management .apf-equipment-record{display:flex;align-items:center;gap:8px;min-width:0}
+.apf-equipment-management .apf-equipment-record>.apf-record{flex:1;min-width:0}
+.apf-workspace .apf-equipment-management .apf-equipment-record>.apf-record{border:0;background:transparent}
+.apf-workspace .apf-equipment-management .apf-equipment-record>.apf-record:hover:not(.selected):not(:disabled){background:color-mix(in srgb,var(--color-secondary-background) 50%,transparent)}
+.apf-workspace .apf-equipment-management .apf-equipment-record>.apf-record.selected{outline:0;background:var(--color-secondary-background);box-shadow:none}
+.apf-workspace .apf-equipment-management .apf-equipment-record>.apf-record:focus-visible{outline:1px solid var(--color-border-default);outline-offset:1px}
+.apf-workspace .apf-equipment-management .apf-management-tabs button{height:32px;background:transparent;color:var(--color-muted-foreground)}
+.apf-workspace .apf-equipment-management .apf-management-tabs button[aria-current=page]{background:var(--color-secondary-background);color:var(--color-base-foreground)}
+.apf-workspace .apf-equipment-management button[data-slot=checkbox]{min-height:16px;height:16px;width:16px;padding:0;background:transparent;border:1px solid var(--color-border-default);border-radius:3px}
+.apf-workspace .apf-equipment-management button[data-slot=checkbox][data-state=checked],.apf-workspace .apf-equipment-management button[data-slot=checkbox][data-state=indeterminate]{background:var(--color-primary-background);border-color:var(--color-primary-background)}
+.apf-equipment-management .apf-equipment-edit-slot{display:flex;flex:0 0 48px;justify-content:flex-end}
+.apf-equipment-management .apf-equipment-record .apf-record small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.apf-equipment-management .apf-equipment-record .apf-record>span:last-child{min-width:0}
+.apf-equipment-management .apf-equipment-more{position:relative;flex:none}
+.apf-equipment-management .apf-equipment-more>summary{display:flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:8px;color:var(--input-text,#ddd);background:var(--comfy-menu-secondary-bg,#292929);cursor:pointer;list-style:none}
+.apf-equipment-management .apf-equipment-more>summary::-webkit-details-marker{display:none}
+.apf-equipment-management .apf-equipment-more>div{position:absolute;z-index:12;top:calc(100% + 4px);right:0;display:flex;flex-direction:column;gap:4px;min-width:140px;padding:4px;border:1px solid var(--border-color,#555);border-radius:8px;background:var(--comfy-menu-bg,#292929);box-shadow:0 6px 24px #0008}
+.apf-equipment-management .apf-equipment-more button{height:32px;min-height:32px;font-size:12px}
+.apf-equipment-management .apf-details{padding:8px}
+.apf-equipment-management .apf-detail-fields{grid-template-columns:1fr;gap:4px}
+.apf-equipment-management .apf-detail-fields>label{display:grid;grid-template-columns:minmax(96px,1fr) minmax(0,2fr);align-items:center;gap:8px;min-height:28px}
+.apf-equipment-management .apf-setup-actions{margin:8px 10px;display:flex;gap:8px}
+.apf-equipment-management .apf-setup-manager>p{margin:8px 10px}
+.apf-equipment-management .apf-setup-manager li{margin:4px 0;overflow-wrap:anywhere}
+.apf-equipment-modal-backdrop{position:fixed;inset:0;z-index:1700;display:flex;align-items:center;justify-content:center;background:#0008}
+.apf-equipment-dialog{display:flex;flex-direction:column;width:calc(100vw - 16px);max-width:576px;max-height:85vh;min-height:0;font-size:14px;line-height:1.4}
+.apf-equipment-modal-backdrop>.apf-equipment-dialog{border:1px solid var(--border-color,#444);border-radius:16px;background:var(--comfy-menu-bg,#171717);color:var(--input-text,#ddd)}
+.apf-equipment-dialog-header{display:flex;flex:none;justify-content:space-between;align-items:center;padding:16px 16px 8px}
+.apf-equipment-dialog h2{margin:0;font-size:16px;font-weight:600}
+.apf-equipment-dialog h3{font-size:14px;margin:8px 0;font-weight:500}
+.apf-equipment-dialog .apf-editor{position:static;inset:auto;z-index:auto;display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden;margin:0;padding:0;border:0;border-radius:0;background:transparent;box-shadow:none}
+.apf-equipment-dialog .apf-equipment-dialog-body{min-height:0;overflow:auto;overflow-wrap:anywhere;padding:8px 16px;display:flex;flex-direction:column;gap:8px}
+.apf-equipment-dialog .apf-equipment-dialog-footer{display:flex;flex-shrink:0;align-items:center;justify-content:flex-end;gap:8px;padding:12px 16px 16px}
+.apf-equipment-dialog .apf-equipment-fields{display:flex;flex-direction:column;gap:8px}
+.apf-equipment-dialog .apf-editor .apf-field-row{display:grid;grid-template-columns:96px minmax(0,1fr);align-items:center;align-self:center;gap:8px;margin:0;width:100%;max-width:464px;min-width:0;font-size:14px;line-height:18px}
+.apf-equipment-dialog .apf-field-row>*{min-width:0}
+.apf-equipment-dialog .apf-field-row>:last-child{width:100%;max-width:320px}
+.apf-equipment-dialog .apf-field-row>:last-child>input{width:100%}
+.apf-equipment-dialog .apf-combination-fields{display:flex;flex-direction:column;align-self:center;gap:8px;padding:4px 0;width:100%;max-width:464px}
+.apf-equipment-dialog .apf-combination-row{display:grid;grid-template-columns:96px minmax(0,1fr) 32px;align-items:center;gap:8px;min-width:0;min-height:32px}
+.apf-equipment-dialog .apf-equipment-select{width:100%;min-width:0;max-width:320px}
+.apf-equipment-dialog .apf-combination-row>span{display:flex;align-items:center;white-space:nowrap}
+.apf-equipment-dialog .apf-legacy-component{display:flex;align-items:center;gap:8px;min-width:0}
+.apf-equipment-dialog .apf-legacy-component>span{flex:1;min-width:0;overflow-wrap:anywhere}
+.apf-equipment-dialog .apf-editor input:not([type=checkbox]),.apf-equipment-dialog .apf-editor select{width:100%;max-width:320px;height:32px;min-height:32px;padding:4px 10px;font-size:14px;box-sizing:border-box}
+.apf-equipment-dialog .apf-editor textarea{width:100%;max-width:320px;height:64px;min-height:64px;resize:vertical;box-sizing:border-box}
+.apf-equipment-dialog button{height:32px;min-height:32px;flex-shrink:0}
+.apf-equipment-dialog .apf-info{display:inline-flex;align-items:center;justify-content:center;background:transparent;color:var(--descrip-text,#999);width:24px;height:24px;min-height:24px;padding:0;margin-left:2px}
+.apf-equipment-dialog .apf-info i{font-size:14px}
+.apf-equipment-dialog .apf-inline-field{width:100%;max-width:320px}
+.apf-equipment-dialog .apf-inline-value{min-height:32px;max-width:100%;white-space:normal;overflow-wrap:anywhere;text-align:left}
+.apf-equipment-dialog .apf-equipment-dialog-body p{margin:0;font-size:12px;line-height:18px}
+.apf-equipment-dialog .apf-equipment-dialog-body ul{margin:0;padding-left:20px}
+.apf-equipment-dialog .apf-error{color:var(--error-text,#f99)}

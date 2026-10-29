@@ -11,10 +11,12 @@ from astrophotoflow.modules.data import common as shared
 from astrophotoflow.core.http import ERROR_RESPONSES, Limit, Offset, ReadSession, WriteSession, authenticate
 from astrophotoflow.core.errors import ApiError, not_found
 from astrophotoflow.contracts.trash import ManagementTrashDelete, ManagementTrashDeleteOut, ManagementTrashDependencyOut, ManagementTrashItemOut, ManagementTrashPage, ManagementTrashPreviewOut, ManagementTrashSelection
+from astrophotoflow.contracts.trash import EquipmentDelete, EquipmentDeleteSelection
 from astrophotoflow.modules.data.models import Asset, AssetVersion, CapturePreset, Dataset, Equipment, EquipmentSetup, Project, ProjectAssetReference, ProjectDatasetReference
 
 
 router = APIRouter(prefix="/api/v1/settings/trash", responses=ERROR_RESPONSES)
+equipment_router = APIRouter(prefix="/api/v1/equipment-management", responses=ERROR_RESPONSES)
 _MODELS = {"project": Project, "equipment": Equipment, "equipment_setup": EquipmentSetup, "capture_preset": CapturePreset}
 
 
@@ -32,7 +34,7 @@ def _item(entry_type: str, row) -> ManagementTrashItemOut:
                                   revision=row.revision, updated_at=shared._utc(row.updated_at), details=details)
 
 
-def _resolve_selection(session, body: ManagementTrashSelection, expected_status: str):
+def _resolve_selection(session, body, expected_status: str | None):
     seen = set()
     resolved = []
     for item in body.items:
@@ -44,8 +46,8 @@ def _resolve_selection(session, body: ManagementTrashSelection, expected_status:
         row = session.get(model, key[1])
         if row is None:
             raise not_found()
-        if row.status != expected_status or row.revision != item.revision:
-            raise ApiError(409, "REVISION_CONFLICT", "设置记录已变化，请刷新回收站后重试。")
+        if (expected_status is not None and row.status != expected_status) or row.revision != item.revision:
+            raise ApiError(409, "REVISION_CONFLICT", "记录已变化，请重新读取后重试。")
         resolved.append((item.entry_type, row))
     return resolved
 
@@ -61,10 +63,11 @@ def _equipment_snapshot(row: Equipment) -> dict:
             "serial_number": row.serial_number, "specs": row.specs or {}, "notes": row.notes}
 
 
-def _preview(session, body: ManagementTrashSelection):
-    resolved = _resolve_selection(session, body, "archived")
+def _preview(session, body, *, direct: bool = False):
+    resolved = _resolve_selection(session, body, None if direct else "archived")
     dependencies = []
     detail = []
+    dependency_revisions = []
     for entry_type, row in resolved:
         detail.append(_item(entry_type, row))
         if entry_type == "project":
@@ -93,23 +96,29 @@ def _preview(session, body: ManagementTrashSelection):
                 Asset.parameters["optical_system_id"].as_string() == row.id,
                 Asset.parameters["filter_id"].as_string() == row.id))).all()
             material_by_id={asset.id:asset.name for asset in material_assets}
+            dependency_revisions.extend(("asset", asset.id, asset.revision) for asset in material_assets)
+            dependency_revisions.extend(("equipment_setup", setup.id, setup.revision) for setup in setups)
+            dependency_revisions.extend(("capture_preset", preset.id, preset.revision) for preset in presets)
             for asset_id in version_asset_ids:
                 asset=session.get(Asset,asset_id)
                 if asset is not None:material_by_id.setdefault(asset.id,asset.name)
             if material_by_id:
                 dependencies.append(_dependency(entry_type, row, "materials", "素材记录中的设备快照（保留）", len(material_by_id), False, list(material_by_id.values())))
             if setups:
-                dependencies.append(_dependency(entry_type, row, "equipment_setups", "使用组合中的注册设备（转为组合内快照）", len(setups), False, [setup.name for setup in setups]))
+                dependencies.append(_dependency(entry_type, row, "equipment_setups", "设备组合中的关联（移除）" if direct else "使用组合中的注册设备（转为组合内快照）", len(setups), False, [setup.name for setup in setups]))
             if presets:
-                dependencies.append(_dependency(entry_type, row, "capture_presets", "拍摄预设中的设备默认值（保留于组合设备快照）", len(presets), False, [preset.name for preset in presets]))
+                dependencies.append(_dependency(entry_type, row, "capture_presets", "拍摄预设中的设备默认值（清除）" if direct else "拍摄预设中的设备默认值（保留于组合设备快照）", len(presets), False, [preset.name for preset in presets]))
         elif entry_type == "equipment_setup":
             presets = session.scalars(select(CapturePreset).where(CapturePreset.equipment_setup_id == row.id)).all()
+            dependency_revisions.extend(("capture_preset", preset.id, preset.revision) for preset in presets)
             if presets:
                 dependencies.append(_dependency(entry_type, row, "capture_presets", "组合内拍摄预设（随组合永久删除）", len(presets), False, [preset.name for preset in presets]))
     fingerprint_data = {
         "items": sorted((item.entry_type, str(item.id), item.revision) for item in body.items),
         "dependencies": sorted((item.entry_type, str(item.id), item.kind, item.count, item.blocks_delete, item.references) for item in dependencies),
     }
+    if direct:
+        fingerprint_data["dependency_revisions"] = sorted(dependency_revisions)
     fingerprint = hashlib.sha256(json.dumps(fingerprint_data, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
     return resolved, detail, dependencies, fingerprint
 
@@ -160,6 +169,10 @@ def delete_management_entries(body: ManagementTrashDelete, session: WriteSession
     if any(item.blocks_delete for item in dependencies):
         raise ApiError(409, "REFERENCES_EXIST", "部分设置仍有项目内素材，请先处理引用。",
                        [{"path": item.kind, "message": f"{item.name}：{item.count} 项"} for item in dependencies if item.blocks_delete])
+    return _delete_entries(session, resolved)
+
+
+def _delete_entries(session, resolved, *, direct: bool = False):
     detached_material_count = 0
     deleted_count = len(resolved)
     selected_preset_ids={row.id for entry_type,row in resolved if entry_type=="capture_preset"}
@@ -195,8 +208,9 @@ def delete_management_entries(body: ManagementTrashDelete, session: WriteSession
                 components = []
                 for component in setup.components or []:
                     if component.get("source") == "registered" and component.get("equipment_id") == row.id:
-                        components.append({"source": "inline", "equipment": {key: snapshot.get(key) for key in
-                                          ("kind", "name", "model", "serial_number", "notes", "specs")}})
+                        if not direct:
+                            components.append({"source": "inline", "equipment": {key: snapshot.get(key) for key in
+                                              ("kind", "name", "model", "serial_number", "notes", "specs")}})
                         changed = True
                     else:
                         components.append(component)
@@ -211,7 +225,7 @@ def delete_management_entries(body: ManagementTrashDelete, session: WriteSession
                     if parameters.get(key) == row.id:
                         parameters[key] = None
                         changed = True
-                if changed:
+                if changed and not direct:
                     setup = session.get(EquipmentSetup, preset.equipment_setup_id)
                     components = list(setup.components or [])
                     inline_equipment = {key: snapshot.get(key) for key in ("kind", "name", "model", "serial_number", "notes", "specs")}
@@ -221,6 +235,7 @@ def delete_management_entries(body: ManagementTrashDelete, session: WriteSession
                         setup.components = components
                         setup.revision += 1
                         setup.updated_at = shared._now()
+                if changed:
                     preset.parameters = parameters
                     preset.revision += 1
                     preset.updated_at = shared._now()
@@ -232,3 +247,18 @@ def delete_management_entries(body: ManagementTrashDelete, session: WriteSession
         session.delete(row)
     session.flush()
     return ManagementTrashDeleteOut(deleted_count=deleted_count, detached_material_count=detached_material_count)
+
+
+@equipment_router.post("/delete-preview", response_model=ManagementTrashPreviewOut, dependencies=[Depends(authenticate)])
+def preview_equipment_delete(body: EquipmentDeleteSelection, session: ReadSession):
+    _, items, dependencies, fingerprint = _preview(session, body, direct=True)
+    return ManagementTrashPreviewOut(items=items, dependencies=dependencies, blocked=False,
+                                     preview_fingerprint=fingerprint)
+
+
+@equipment_router.post("/delete", response_model=ManagementTrashDeleteOut, dependencies=[Depends(authenticate)])
+def delete_equipment_entries(body: EquipmentDelete, session: WriteSession):
+    resolved, _, _, fingerprint = _preview(session, body, direct=True)
+    if fingerprint != body.preview_fingerprint:
+        raise ApiError(409, "PREVIEW_STALE", "关联记录已变化，请重新查看删除影响。")
+    return _delete_entries(session, resolved, direct=True)

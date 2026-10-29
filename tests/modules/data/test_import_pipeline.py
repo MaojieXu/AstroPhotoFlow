@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
+from dataclasses import replace
 from copy import deepcopy
 from pathlib import Path
 from threading import Event, Lock, Thread
@@ -22,6 +23,103 @@ from astrophotoflow.core.database.schema import database_lock, upgrade_database
 from astrophotoflow.core.config import ImportRoot, Settings
 
 AUTH = {"Authorization": "Bearer import-pipeline-test"}
+
+
+def test_direct_absolute_import_without_configured_roots_keeps_original_and_manages_copy(service):
+    settings, app, client, root = service
+    settings = replace(settings, import_roots=())
+    app.state.settings = settings
+    source = root / "direct.fits"
+    original = image(source, GAIN=0)
+    response = client.post("/api/v1/imports", headers=AUTH, json={"sources": [{"path": str(source)}], "storage_mode": "managed"})
+    assert response.status_code == 202
+    result = task(client, response.json()["task_id"])
+    assert result["status"] == "completed"
+    assert len(result["items"]) == 1
+    item = result["items"][0]
+    assert item["root_id"] == ""
+    asset = client.get(f"/api/v1/library/assets/{item['asset_id']}", headers=AUTH).json()
+    copied = settings.data_dir / asset["current_version"]["storage_location"]
+    assert copied.read_bytes() == source.read_bytes() == original
+    assert not copied.samefile(source)
+    assert asset["current_version"]["content_hash"] == "blake3:" + blake3.blake3(original).hexdigest()
+
+
+def test_direct_folder_freezes_current_level_only_without_root_configuration(service, monkeypatch):
+    settings, app, client, root = service
+    app.state.settings = replace(settings, import_roots=())
+    image(root / "one.fits")
+    image(root / "nested/two.fits")
+    from astrophotoflow.modules.data import imports
+    monkeypatch.setattr(imports, "process_task", lambda *args: None)
+    response = client.post("/api/v1/imports", headers=AUTH, json={"sources": [{"path": str(root)}], "storage_mode": "managed"})
+    assert response.status_code == 202
+    image(root / "late.fits")
+    with app.state.database.read_session() as session:
+        created = session.get(AssetTask, response.json()["task_id"])
+        assert len(created.sources[0]["entries"]) == 1
+        entry = created.sources[0]["entries"][0]
+        assert Path(entry["path"]).name == "one.fits"
+        assert entry["source_stamp"]["size"] > 0
+
+
+def test_native_selection_cancellation_and_empty_roots_do_not_create_tasks(service, monkeypatch):
+    settings, app, client, root = service
+    app.state.settings = replace(settings, import_roots=())
+    from astrophotoflow.modules.data import imports
+    monkeypatch.setattr(imports, "select_local_paths", lambda *args: [])
+    response = client.post("/api/v1/imports/select-local", headers=AUTH, json={"mode": "files"})
+    assert response.status_code == 200
+    assert response.json() == {"cancelled": True, "files": [], "name": None, "folder": False}
+    with app.state.database.read_session() as session:
+        assert session.scalar(select(func.count()).select_from(AssetTask)) == 0
+    image(root / "native.fits")
+    monkeypatch.setattr(imports, "select_local_paths", lambda *args: [root])
+    selected = client.post("/api/v1/imports/select-local", headers=AUTH, json={"mode": "folder"})
+    assert selected.status_code == 200
+    assert selected.json()["files"][0]["path"] == str((root / "native.fits").resolve())
+    assert selected.json()["files"][0]["name"] == "native.fits"
+    assert client.post("/api/v1/imports", headers=AUTH, json={"sources": [{"path": "relative.fits"}], "storage_mode": "managed"}).status_code == 422
+
+
+def test_native_selection_busy_is_explicit_and_does_not_create_import_tasks(service, monkeypatch):
+    _, app, client, _ = service
+    from astrophotoflow.modules.data import imports
+    from astrophotoflow.modules.data.local_selection import LocalSelectionBusy
+
+    def busy(*args):
+        raise LocalSelectionBusy("已有本机选择窗口打开。")
+
+    monkeypatch.setattr(imports, "select_local_paths", busy)
+    response = client.post("/api/v1/imports/select-local", headers=AUTH, json={"mode": "files"})
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "LOCAL_PICKER_BUSY"
+    with app.state.database.read_session() as session:
+        assert session.scalar(select(func.count()).select_from(AssetTask)) == 0
+
+
+def test_native_selection_disconnect_cancels_the_owned_chooser_without_importing(tmp_path, monkeypatch):
+    import asyncio
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+    from astrophotoflow.modules.data import imports
+    from astrophotoflow.contracts.imports import LocalSelectionRequest
+
+    stopped = Event()
+
+    def choose(mode, initial_path, cancelled):
+        assert cancelled.wait(3)
+        stopped.set()
+        return []
+
+    request = SimpleNamespace(
+        app=SimpleNamespace(state=SimpleNamespace(settings=SimpleNamespace(workspace=tmp_path))),
+        is_disconnected=AsyncMock(return_value=True),
+    )
+    monkeypatch.setattr(imports, "select_local_paths", choose)
+    result = asyncio.run(imports.select_local_import(LocalSelectionRequest(mode="files"), request))
+    assert stopped.is_set()
+    assert result.cancelled and not result.files
 
 
 @pytest.mark.parametrize("change_stage", ["before_content", "during_copy"])
@@ -275,7 +373,7 @@ def test_service_worker_limits_are_shared_between_tasks(service, monkeypatch):
 
 
 @pytest.mark.parametrize("service", [{"preview_workers": 2}], indirect=True)
-def test_stretch_uses_position_not_content_completion_and_survives_resume(service, monkeypatch):
+def test_each_photo_stretches_independently_of_content_order_and_survives_resume(service, monkeypatch):
     settings, app, client, root = service
     for name, offset, filter_name in (("a", 0, "L"), ("b", 1000, "L"), ("c", 0, "Ha"), ("d", 2000, "Ha")):
         image(root / f"{name}.fits", offset=offset, FILTER=filter_name)
@@ -297,13 +395,17 @@ def test_stretch_uses_position_not_content_completion_and_survives_resume(servic
     items = {Path(row["source_path"]).stem: row for row in current["items"]}
     with app.state.database.read_session() as session:
         displays = {name: session.scalar(select(Preview).where(Preview.asset_version_id == items[name]["asset_version_id"])).display_parameters for name in ("a", "b", "d")}
-    assert displays["b"]["stretch_reference_version_id"] == items["a"]["asset_version_id"]
-    assert displays["d"]["stretch_reference_version_id"] == items["d"]["asset_version_id"]
+    assert displays["b"]["auto_stretch"]["highlights"] == pytest.approx(displays["a"]["auto_stretch"]["highlights"] + 1000)
+    assert displays["d"]["auto_stretch"]["highlights"] == pytest.approx(displays["a"]["auto_stretch"]["highlights"] + 2000)
+    assert all("stretch_reference_version_id" not in recipe and "stretch_group" not in recipe
+               for recipe in displays.values())
+    assert "preview_stretch_groups" not in current["report"]
     assert items["c"]["preview_status"] == "failed"
     with app.state.database.write_session() as session:
         preview = session.scalar(select(Preview).where(Preview.asset_version_id == items["b"]["asset_version_id"]))
         session.delete(preview)
         session.get(AssetTaskItem, items["b"]["id"]).status = "running"
+        session.get(AssetTaskItem, items["b"]["id"]).preview_status = "pending"
         session.get(AssetTask, task_id).status = "running"
     ingestion.mark_interrupted_tasks(app.state.database)
     assert client.post(f"/api/v1/asset-tasks/{task_id}/resume", headers=AUTH, json={}).status_code == 202
@@ -322,10 +424,10 @@ def test_upload_renames_without_second_write_and_recovers_identity_after_rename_
     assert client.put(f"/api/v1/uploads/{task_id}/0", headers=AUTH, content=data).status_code == 200
     read, replace = ingestion._read_hash_and_copy, ingestion.os.replace
     reads = []
-    def hash_only(path, stage, cancelled):
+    def hash_only(path, stage, cancelled, progress=None):
         assert stage is None
         reads.append(path)
-        return read(path, stage, cancelled)
+        return read(path, stage, cancelled, progress)
     def crash_after_rename(source, destination):
         replace(source, destination)
         if Path(destination).parent.parent.name == "objects":
@@ -360,7 +462,7 @@ def test_cancelled_managed_copy_retries_registered_identity_and_preserves_source
     data = image(root / "original.fits")
     task_id = enqueue(app)
     read = ingestion._read_hash_and_copy
-    def cancel_copy(path, stage, cancelled):
+    def cancel_copy(path, stage, cancelled, progress=None):
         stage.write_bytes(b"partial")
         with app.state.database.write_session() as session:
             session.get(AssetTask, task_id).status = "cancelling"
@@ -461,7 +563,7 @@ def test_service_shutdown_drains_submitted_file_and_preview_jobs(service):
     app.state.database.close()
 
 
-def test_preview_retry_reuses_persisted_group_stretch(service, monkeypatch):
+def test_preview_retry_computes_failed_photos_own_stretch_and_keeps_other_recipe(service, monkeypatch):
     settings, app, client, root = service
     image(root / "a.fits")
     image(root / "b.fits", offset=1000)
@@ -476,6 +578,9 @@ def test_preview_retry_reuses_persisted_group_stretch(service, monkeypatch):
     original = task(client, task_id)
     first, second = original["items"]
     assert first["preview_status"] == "failed"
+    with app.state.database.read_session() as session:
+        other_recipe = dict(session.scalar(select(Preview).where(
+            Preview.asset_version_id == second["asset_version_id"])).display_parameters)
     monkeypatch.setattr(ingestion, "create_preview", create)
     retried = client.post(f"/api/v1/asset-tasks/{task_id}/retry", headers=AUTH, json={"item_ids": [first["id"]]})
     recovered = task(client, retried.json()["task_id"])
@@ -483,8 +588,295 @@ def test_preview_retry_reuses_persisted_group_stretch(service, monkeypatch):
     assert recovered["items"][0]["asset_version_id"] == first["asset_version_id"]
     with app.state.database.read_session() as session:
         preview = session.scalar(select(Preview).where(Preview.asset_version_id == first["asset_version_id"]))
-        assert preview.display_parameters["stretch_reference_version_id"] == second["asset_version_id"]
-        assert recovered["report"]["preview_stretch_groups"] == original["report"]["preview_stretch_groups"]
+        assert preview.display_parameters["auto_stretch"]["highlights"] == pytest.approx(other_recipe["auto_stretch"]["highlights"] - 1000)
+        assert "stretch_reference_version_id" not in preview.display_parameters
+        assert not recovered["report"].get("preview_stretch_groups")
+        assert session.scalar(select(Preview).where(
+            Preview.asset_version_id == second["asset_version_id"])).display_parameters == other_recipe
+
+
+@pytest.mark.parametrize("service", [{"preview_workers": 2}], indirect=True)
+def test_second_preview_can_finish_while_first_is_blocked(service, monkeypatch):
+    settings, app, client, root = service
+    image(root / "a.fits")
+    image(root / "b.fits", offset=1000)
+    entered, release, second_finished = Event(), Event(), Event()
+    process = ingestion._process_preview
+
+    def blocked(database, current_settings, task_data, item_id):
+        with database.read_session() as session:
+            name = Path(session.get(AssetTaskItem, item_id).source_path).name
+        if name == "a.fits":
+            entered.set()
+            assert release.wait(5)
+        process(database, current_settings, task_data, item_id)
+        if name == "b.fits":
+            second_finished.set()
+
+    monkeypatch.setattr(ingestion, "_process_preview", blocked)
+    task_id = enqueue(app)
+    thread = run(app, settings, task_id)
+    try:
+        assert entered.wait(3)
+        assert second_finished.wait(3)
+        current = task(client, task_id)
+        assert current["report"]["content"]["completed"] is True
+        assert current["items"][1]["preview_status"] == "available"
+    finally:
+        release.set()
+        thread.join(5)
+    assert not thread.is_alive()
+    assert task(client, task_id)["status"] == "completed"
+
+
+@pytest.mark.parametrize("service", [{"preview_workers": 2}], indirect=True)
+@pytest.mark.parametrize("category", ["fits", "xisf"])
+def test_folder_subframes_reuse_first_object_recipe_and_masters_measure_independently(service, monkeypatch, category):
+    from xisf import XISF
+    from astrophotoflow.modules.data import fits_preview
+
+    settings, app, client, root = service
+    cases = [("a", "Light Frame", " M42 ", 0), ("b", "Light Frame", "m42", 1000),
+             ("c", "Master Light", "M42", 2000), ("d", "Master Light", "M42", 3000),
+             ("e", "Light Frame", "M31", 4000), ("f", "Light Frame", "M31", 5000),
+             ("g", "Light Frame", None, 6000), ("h", "Light Frame", None, 7000)]
+    originals = {}
+    for name, label, target, offset in cases:
+        path = root / f"{name}.{category}"
+        if category == "fits":
+            image(path, label=label, offset=offset, **({"OBJECT": target} if target is not None else {}))
+        else:
+            keywords = {"IMAGETYP": [{"value": label, "comment": ""}]}
+            if target is not None:
+                keywords["OBJECT"] = [{"value": target, "comment": ""}]
+            XISF.write(str(path), (np.arange(120, dtype=np.float32).reshape(10, 12) + offset)[..., None],
+                       image_metadata={"FITSKeywords": keywords})
+        originals[path] = path.read_bytes()
+    measured = []
+    module = fits_preview if category == "fits" else ingestion
+    calculate = module.calculate_stretch
+
+    def counted(pixels):
+        measured.append(float(np.min(pixels)))
+        return calculate(pixels)
+
+    monkeypatch.setattr(module, "calculate_stretch", counted)
+    task_id = enqueue(app, paths=[f"{name}.{category}" for name, *_ in cases])
+    ingestion.process_task(app.state.database, settings, task_id, app.state.import_workers)
+    result = task(client, task_id)
+    assert result["status"] == "completed"
+    with app.state.database.read_session() as session:
+        recipes = [session.scalar(select(Preview).where(Preview.asset_version_id == item["asset_version_id"])).display_parameters
+                   for item in result["items"]]
+    assert sorted(measured) == [0, 2000, 3000, 4000, 6000, 7000]
+    assert recipes[0]["auto_stretch"] == recipes[1]["auto_stretch"]
+    assert recipes[1]["stretch_reference_version_id"] == result["items"][0]["asset_version_id"]
+    assert recipes[4]["auto_stretch"] == recipes[5]["auto_stretch"]
+    assert recipes[5]["stretch_reference_version_id"] == result["items"][4]["asset_version_id"]
+    assert recipes[0]["stretch_group"] != recipes[4]["stretch_group"]
+    assert recipes[2]["auto_stretch"] != recipes[3]["auto_stretch"]
+    assert all("stretch_group" not in recipes[index] for index in (2, 3, 6, 7))
+    assert len(result["report"]["preview_stretch_groups"]) == 2
+    assert all(path.read_bytes() == data for path, data in originals.items())
+
+
+def test_same_object_in_different_folders_or_incompatible_layouts_never_shares_recipe(service):
+    settings, app, client, root = service
+    image(root / "one/a.fits", OBJECT="M42")
+    image(root / "two/b.fits", OBJECT="M42", offset=1000)
+    hdu = fits.PrimaryHDU(np.stack([np.arange(120, dtype=np.float32).reshape(10, 12) + value for value in (10, 20, 40)]))
+    hdu.header["CTYPE3"] = "RGB"
+    hdu.header["OBJECT"], hdu.header["IMAGETYP"] = "M42", "Light Frame"
+    hdu.writeto(root / "one/rgb.fits")
+    task_id = enqueue(app, paths=["one/a.fits", "two/b.fits", "one/rgb.fits"])
+    ingestion.process_task(app.state.database, settings, task_id, app.state.import_workers)
+    result = task(client, task_id)
+    assert result["status"] == "completed"
+    assert len(result["report"]["preview_stretch_groups"]) == 3
+    with app.state.database.read_session() as session:
+        for item in result["items"]:
+            recipe = session.scalar(select(Preview).where(Preview.asset_version_id == item["asset_version_id"])).display_parameters
+            assert recipe["stretch_reference_version_id"] == item["asset_version_id"]
+
+
+def test_first_failed_subframe_uses_next_valid_frame_then_retry_and_backfill_keep_shared_recipe(service, monkeypatch):
+    from astrophotoflow.modules.data import fits_preview
+
+    settings, app, client, root = service
+    for name, offset in (("a", 0), ("b", 1000), ("c", 2000)):
+        image(root / f"{name}.fits", OBJECT="M42", offset=offset)
+    create = ingestion.create_preview
+
+    def fail_first(path, *args, **kwargs):
+        if path.name == "a.fits":
+            raise ValueError("controlled first-frame failure")
+        return create(path, *args, **kwargs)
+
+    monkeypatch.setattr(ingestion, "create_preview", fail_first)
+    task_id = enqueue(app, storage_mode="reference")
+    ingestion.process_task(app.state.database, settings, task_id, app.state.import_workers)
+    original = task(client, task_id)
+    first, second, third = original["items"]
+    assert first["preview_status"] == "failed" and second["preview_status"] == third["preview_status"] == "available"
+    monkeypatch.setattr(ingestion, "create_preview", create)
+
+    def no_measurement(*args, **kwargs):
+        raise AssertionError("a saved group recipe must be reused")
+
+    monkeypatch.setattr(fits_preview, "calculate_stretch", no_measurement)
+    retried = client.post(f"/api/v1/asset-tasks/{task_id}/retry", headers=AUTH, json={"item_ids": [first["id"]]})
+    recovered = task(client, retried.json()["task_id"])
+    assert recovered["status"] == "completed"
+    assert recovered["items"][0]["asset_version_id"] == first["asset_version_id"]
+    assert recovered["report"]["preview_stretch_groups"] == original["report"]["preview_stretch_groups"]
+    with app.state.database.write_session() as session:
+        row = session.scalar(select(Preview).where(Preview.asset_version_id == third["asset_version_id"]))
+        recipe = dict(row.display_parameters)
+        assert recipe["stretch_reference_version_id"] == second["asset_version_id"]
+        session.delete(row)
+    (root / "b.fits").unlink()
+    assert ingestion.backfill_missing_previews(app.state.database, settings) == {"generated": 1, "failed": 0}
+    with app.state.database.read_session() as session:
+        assert session.scalar(select(Preview).where(Preview.asset_version_id == third["asset_version_id"])).display_parameters == recipe
+    assert task(client, task_id) == original
+
+
+def test_resume_recovers_first_subframe_recipe_from_published_thumbnail_after_report_gap(service, monkeypatch):
+    from astrophotoflow.modules.data import fits_preview
+
+    settings, app, client, root = service
+    image(root / "a.fits", OBJECT="M42")
+    image(root / "b.fits", OBJECT="M42", offset=1000)
+    task_id = enqueue(app)
+    ingestion.process_task(app.state.database, settings, task_id, app.state.import_workers)
+    result = task(client, task_id)
+    first, second = result["items"]
+    with app.state.database.write_session() as session:
+        row = session.scalar(select(Preview).where(Preview.asset_version_id == second["asset_version_id"]))
+        recipe = dict(row.display_parameters)
+        session.delete(row)
+        item = session.get(AssetTaskItem, second["id"])
+        item.preview_status, item.status = "pending", "interrupted"
+        current = session.get(AssetTask, task_id)
+        current.status = "running"
+        current.report = {key: value for key, value in current.report.items() if key != "preview_stretch_groups"}
+
+    def no_measurement(*args, **kwargs):
+        raise AssertionError("the first published thumbnail owns the measured values")
+
+    monkeypatch.setattr(fits_preview, "calculate_stretch", no_measurement)
+    ingestion.process_task(app.state.database, settings, task_id, app.state.import_workers)
+    assert task(client, task_id)["status"] == "completed"
+    with app.state.database.read_session() as session:
+        restored = session.scalar(select(Preview).where(Preview.asset_version_id == second["asset_version_id"]))
+        assert restored.display_parameters == recipe
+        assert restored.display_parameters["stretch_reference_version_id"] == first["asset_version_id"]
+
+
+def test_backfill_after_all_group_previews_failed_uses_fixed_member_order_without_rewriting_history(service, monkeypatch):
+    from astrophotoflow.modules.data import fits_preview
+
+    settings, app, client, root = service
+    image(root / "a.fits", OBJECT="M42")
+    image(root / "b.fits", OBJECT="M42", offset=1000)
+    create = ingestion.create_preview
+
+    def failed(*args, **kwargs):
+        raise ValueError("controlled preview outage")
+
+    monkeypatch.setattr(ingestion, "create_preview", failed)
+    task_id = enqueue(app, paths=["b.fits", "a.fits"])
+    ingestion.process_task(app.state.database, settings, task_id, app.state.import_workers)
+    original = task(client, task_id)
+    first, second = original["items"]
+    assert all(item["preview_status"] == "failed" for item in original["items"])
+    monkeypatch.setattr(ingestion, "create_preview", create)
+    calculate = fits_preview.calculate_stretch
+    measured = []
+
+    def counted(pixels):
+        measured.append(float(np.min(pixels)))
+        return calculate(pixels)
+
+    monkeypatch.setattr(fits_preview, "calculate_stretch", counted)
+    assert ingestion.backfill_missing_previews(app.state.database, settings) == {"generated": 2, "failed": 0}
+    assert measured == [1000]
+    with app.state.database.read_session() as session:
+        for item in (first, second):
+            recipe = session.scalar(select(Preview).where(Preview.asset_version_id == item["asset_version_id"])).display_parameters
+            assert recipe["stretch_reference_version_id"] == first["asset_version_id"]
+    assert task(client, task_id) == original
+
+
+@pytest.mark.parametrize("category", ["fits", "xisf", "tif"])
+def test_import_and_missing_cache_backfill_use_each_photos_own_range(service, category):
+    from PIL import Image
+    from xisf import XISF
+
+    settings, app, client, root = service
+    originals = {}
+    for name, offset in (("a", 0), ("b", 1000)):
+        path = root / f"{name}.{category}"
+        values = np.arange(120, dtype=np.uint16).reshape(10, 12) + offset
+        if category == "fits":
+            fits.PrimaryHDU(values).writeto(path)
+        elif category == "xisf":
+            XISF.write(str(path), values[..., None])
+        else:
+            Image.fromarray(values).save(path)
+        originals[path] = path.read_bytes()
+    task_id = enqueue(app)
+    ingestion.process_task(app.state.database, settings, task_id, app.state.import_workers)
+    current = task(client, task_id)
+    assert current["status"] == "completed"
+    first, second = current["items"]
+    with app.state.database.write_session() as session:
+        rows = [session.scalar(select(Preview).where(Preview.asset_version_id == item["asset_version_id"]))
+                for item in (first, second)]
+        recipes = [dict(row.display_parameters) for row in rows]
+        assert recipes[1]["stretch_low"] == pytest.approx(recipes[0]["stretch_low"] + 1000)
+        session.delete(rows[1])
+    assert ingestion.backfill_missing_previews(app.state.database, settings) == {"generated": 1, "failed": 0}
+    with app.state.database.read_session() as session:
+        for item, recipe in zip((first, second), recipes):
+            restored = session.scalar(select(Preview).where(
+                Preview.asset_version_id == item["asset_version_id"])).display_parameters
+            assert {key: restored[key] for key in ("stretch_low", "stretch_high")} == {
+                key: recipe[key] for key in ("stretch_low", "stretch_high")}
+            assert "stretch_reference_version_id" not in restored
+    assert task(client, task_id) == current
+    assert all(path.read_bytes() == data for path, data in originals.items())
+
+
+@pytest.mark.parametrize("category", ["xisf", "tif"])
+def test_high_depth_thumbnail_maps_only_preview_sized_pixels(tmp_path, monkeypatch, category):
+    from PIL import Image
+    from xisf import XISF
+
+    values = np.arange(1200 * 1600, dtype=np.uint16).reshape(1200, 1600)
+    path = tmp_path / f"large.{category}"
+    if category == "xisf":
+        XISF.write(str(path), values[..., None])
+        decode = ingestion._xisf_image
+    else:
+        Image.fromarray(values).save(path)
+        decode = ingestion._ordinary_image
+    original = path.read_bytes()
+    display = ingestion._display
+    sizes = []
+
+    def counted(pixels, stretch):
+        sizes.append(pixels.shape)
+        return display(pixels, stretch)
+
+    monkeypatch.setattr(ingestion, "_display", counted)
+    thumbnail, recipe = decode(path)
+    assert thumbnail.size == (100, 75)
+    assert sizes == [(150, 200)]
+    large, large_recipe = decode(path, (recipe["stretch_low"], recipe["stretch_high"]), 1080)
+    assert large.size == (1080, 810)
+    assert large_recipe == recipe
+    assert path.read_bytes() == original
 
 
 def test_xisf_headers_register_without_pixels_and_override_preset_defaults(service, monkeypatch):
@@ -632,3 +1024,119 @@ def test_fits_metadata_retry_preserves_cfa_precedence_and_frozen_snapshot(
         assert asset.revision == (2 if manual_cfa is not None else 1)
         assert (settings.data_dir / version.storage_location).read_bytes() == original_bytes
     assert (root / "retry.fits").read_bytes() == original_bytes
+
+
+def test_local_task_freezes_accepted_scope_and_source_stamp(service, monkeypatch):
+    from astrophotoflow.modules.data import imports
+    settings, app, client, root = service
+    original = image(root / "first.fits", EXPTIME=30)
+    monkeypatch.setattr(imports, "process_task", lambda *_args: None)
+    response = client.post("/api/v1/imports", headers=AUTH, json={
+        "sources": [{"root_id": "science", "path": ""}], "storage_mode": "managed",
+    })
+    assert response.status_code == 202
+    task_id = response.json()["task_id"]
+    image(root / "arrived-later.fits")
+    ingestion.process_task(app.state.database, settings, task_id, app.state.import_workers)
+    result = task(client, task_id)
+    assert [item["source_path"] for item in result["items"]] == ["first.fits"]
+    assert result["report"]["content"] == {
+        "total": 1, "succeeded": 1, "failed": 0, "skipped": 0, "metadata_failed": 0,
+        "bytes_total": len(original), "bytes_copied": len(original), "completed": True,
+    }
+    assert result["report"]["preview"]["completed"] is True
+    assert (root / "first.fits").read_bytes() == original
+    with app.state.database.read_session() as session:
+        version = session.get(AssetVersion, result["items"][0]["asset_version_id"])
+        assert version.content_hash == "blake3:" + blake3.blake3(original).hexdigest()
+        destination = settings.data_dir / version.storage_location
+    assert destination.read_bytes() == original
+    assert not os.path.samefile(root / "first.fits", destination)
+
+
+def test_changed_source_after_acceptance_is_not_silently_imported(service, monkeypatch):
+    from astrophotoflow.modules.data import imports
+    settings, app, client, root = service
+    image(root / "changing.fits")
+    monkeypatch.setattr(imports, "process_task", lambda *_args: None)
+    accepted = client.post("/api/v1/imports", headers=AUTH, json={
+        "sources": [{"root_id": "science", "path": "changing.fits"}], "storage_mode": "managed",
+    }).json()
+    source = root / "changing.fits"
+    stamp = source.stat()
+    os.utime(source, ns=(stamp.st_atime_ns, stamp.st_mtime_ns + 1_000_000_000))
+    ingestion.process_task(app.state.database, settings, accepted["task_id"], app.state.import_workers)
+    result = task(client, accepted["task_id"])
+    assert result["report"]["content"]["failed"] == 1
+    assert result["items"][0]["error"]["code"] == "SOURCE_CHANGED"
+    assert result["items"][0]["asset_version_id"] is None
+
+
+def test_copy_starts_before_last_registration_and_originals_finish_before_previews(service, monkeypatch):
+    settings, app, client, root = service
+    for index in range(3):
+        image(root / f"{index}.fits")
+    copied, second_copy, release_copy, preview_entered, release_preview = Event(), Event(), Event(), Event(), Event()
+    original_read, original_register, original_preview = ingestion._read_hash_and_copy, ingestion._register_asset, ingestion._process_preview
+    def read(*args, **kwargs):
+        copied.set()
+        if args[0].name == "1.fits":
+            second_copy.set()
+        assert release_copy.wait(5)
+        return original_read(*args, **kwargs)
+    def register(database, selected_settings, data, item_id):
+        with database.read_session() as session:
+            item = session.get(AssetTaskItem, item_id)
+            if item.source_path == "2.fits" and item.asset_version_id is None:
+                assert copied.wait(5)
+                assert second_copy.wait(5)
+        return original_register(database, selected_settings, data, item_id)
+    def preview(*args, **kwargs):
+        preview_entered.set()
+        assert release_preview.wait(5)
+        return original_preview(*args, **kwargs)
+    monkeypatch.setattr(ingestion, "_read_hash_and_copy", read)
+    monkeypatch.setattr(ingestion, "_register_asset", register)
+    monkeypatch.setattr(ingestion, "_process_preview", preview)
+    task_id = enqueue(app)
+    thread = run(app, settings, task_id)
+    try:
+        assert copied.wait(5)
+        release_copy.set()
+        assert preview_entered.wait(5)
+        current = task(client, task_id)
+        assert current["status"] == "running"
+        assert current["report"]["content"]["completed"] is True
+        assert current["report"]["content"]["succeeded"] == 3
+        assert current["report"]["preview"]["completed"] is False
+        with app.state.database.read_session() as session:
+            assert all(version.availability == "available" for version in session.scalars(select(AssetVersion)).all())
+    finally:
+        release_copy.set()
+        release_preview.set()
+        thread.join(10)
+    assert not thread.is_alive()
+    assert task(client, task_id)["report"]["preview"]["completed"] is True
+
+
+def test_preview_only_retry_reuses_available_managed_content(service, monkeypatch):
+    settings, app, client, root = service
+    image(root / "ready.fits")
+    task_id = enqueue(app)
+    ingestion.process_task(app.state.database, settings, task_id, app.state.import_workers)
+    original = task(client, task_id)["items"][0]
+    with app.state.database.write_session() as session:
+        item = session.get(AssetTaskItem, original["id"])
+        item.status, item.preview_status = "completed_with_errors", "failed"
+        item.error = {"code": "PREVIEW_FAILED", "message": "injected preview failure"}
+        session.get(AssetTask, task_id).status = "completed_with_errors"
+    def unexpected_copy(*_args, **_kwargs):
+        raise AssertionError("available original must not be copied or hashed again")
+    monkeypatch.setattr(ingestion, "_read_hash_and_copy", unexpected_copy)
+    retry = client.post(f"/api/v1/asset-tasks/{task_id}/retry", headers=AUTH, json={"item_ids": [original["id"]]})
+    assert retry.status_code == 202
+    result = task(client, retry.json()["task_id"])
+    assert result["status"] == "completed"
+    assert result["items"][0]["asset_id"] == original["asset_id"]
+    assert result["items"][0]["asset_version_id"] == original["asset_version_id"]
+    assert result["report"]["content"]["succeeded"] == 1

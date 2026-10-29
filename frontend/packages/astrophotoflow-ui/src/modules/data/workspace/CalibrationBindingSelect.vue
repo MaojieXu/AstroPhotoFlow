@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import {computed} from 'vue'
+import LibraryInfo from './LibraryInfo.vue'
 import type {CalibrationTarget,CalibrationTargetOption} from '../api/contracts'
 const props=defineProps<{modelValue:CalibrationTarget|null|undefined;frameType:string;targets:CalibrationTargetOption[];inherit?:boolean;disabled?:boolean;label:string}>()
 const emit=defineEmits<{'update:modelValue':[value:CalibrationTarget|null|undefined]}>()
@@ -15,10 +16,10 @@ function changed(event:Event){
 }
 </script>
 <template>
-  <select :aria-label="label" :value="value" :disabled="disabled" @change="changed">
+  <span class="apf-binding-select"><select :aria-label="label" :value="value" :disabled="disabled" @change="changed">
     <option value="inherit">{{inherit?'继承组默认':'未设置默认值'}}</option>
     <option value="none">不使用</option>
-    <option v-if="historical" :value="value">已固定的历史版本 · {{modelValue?.id}}</option>
+    <option v-if="historical" :value="value">已固定的历史版本</option>
     <option v-for="target in choices" :key="token(target.target)" :value="token(target.target)">{{target.name}} · {{target.target.kind==='asset_version'?'Master':'校准组'}} v{{target.version_number}}</option>
-  </select>
+  </select><LibraryInfo v-if="modelValue" :label="label+'固定引用'" :text="modelValue.id" /></span>
 </template>

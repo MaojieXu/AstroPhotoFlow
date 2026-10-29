@@ -1,14 +1,19 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { assetApi } from '../api/index'
-import { equipmentSchema, importAcceptedSchema, pageSchema, taskActionSchema, uploadCreatedSchema } from '../api/contracts'
+import { equipmentSchema, importAcceptedSchema, pageSchema } from '../api/contracts'
 import { ApiClientError } from '../api/client'
+import type { LocalImportFile } from '../api/contracts'
 import CapturePresetPicker from './CapturePresetPicker.vue'
+import LibraryInfo from './LibraryInfo.vue'
+import LibraryButton from './LibraryButton.vue'
+import LibraryInput from './LibraryInput.vue'
+import LibraryTextField from './LibraryTextField.vue'
 
 type Field = { key: string; title: string; integer?: boolean; positive?: boolean; nonnegative?: boolean }
 
-const props = defineProps<{ open: boolean; files: File[]; createDataset?: boolean; datasetName?: string }>()
-const emit = defineEmits<{ close: []; submitted: [taskId: string]; 'upload-progress': [taskId: string, index: number, loaded: number, total: number]; 'upload-failed': [taskId: string] }>()
+const props = defineProps<{ open: boolean; files: LocalImportFile[]; createDataset?: boolean; datasetName?: string }>()
+const emit = defineEmits<{ close: []; submitted: [taskId: string] }>()
 const submitting = ref(false)
 const error = ref('')
 const datasetName = ref('')
@@ -75,36 +80,18 @@ async function submitImport(){
   if(!props.files.length)return
   submitting.value=true;error.value=''
   try{
-    const accepted=await assetApi.send('/astrophotoflow/api/v1/uploads',uploadCreatedSchema,'POST',{
-      files:props.files.map(file=>({name:file.name,size:file.size})),
+    const accepted=await assetApi.send('/astrophotoflow/api/v1/imports',importAcceptedSchema,'POST',{
+      sources:props.files.map(file=>({...(file.root_id?{root_id:file.root_id}:{}),path:file.path})),
+      storage_mode:'managed',
       ...(manualClassification.value?{classification:{frame_class:frameClass.value||null,frame_type:frameClass.value==='video'?null:frameType.value||null}}:{}),
       parameters:buildParameters(),
       ...(capturePresetId.value ? {capture_preset_id:capturePresetId.value} : {}),
       notes:notes.value||null,
       dataset_name:isDataset.value?(datasetName.value||props.datasetName||null):null,
-      create_dataset:Boolean(props.createDataset)
     })
     emit('submitted',accepted.task_id)
-    void uploadFiles(accepted.task_id)
   }catch(cause){error.value=clientError(cause)}
   finally{submitting.value=false}
-}
-async function uploadFiles(taskId:string){
-  try{
-    const loadedByFile = props.files.map(()=>0)
-    const totalBytes = props.files.reduce((sum,file)=>sum+file.size,0)
-    for(const [index,file] of props.files.entries()){
-      await assetApi.upload('/astrophotoflow/api/v1/uploads/'+taskId+'/'+index,file,loaded=>{
-        loadedByFile[index]=loaded
-        emit('upload-progress',taskId,index,loadedByFile.reduce((sum,value)=>sum+value,0),totalBytes)
-      })
-    }
-    await assetApi.send('/astrophotoflow/api/v1/uploads/'+taskId+'/start',importAcceptedSchema,'POST',{})
-  }catch(cause){
-    error.value=clientError(cause)
-    await assetApi.send('/astrophotoflow/api/v1/uploads/'+taskId+'/fail',taskActionSchema,'POST',{}).catch(()=>undefined)
-    emit('upload-failed',taskId)
-  }
 }
 watch(()=>props.open,open=>{if(open){
   error.value='';datasetName.value=props.datasetName??'';notes.value='';manualClassification.value=false;frameClass.value='';frameType.value='';parameterMode.value=''
@@ -117,28 +104,28 @@ watch(()=>props.open,open=>{if(open){
 <template>
   <div v-if="open" class="apf-import-overlay" role="dialog" aria-modal="true" aria-label="导入天文素材">
     <section class="apf-import-dialog">
-      <header><h2>确认素材信息</h2><button type="button" @click="emit('close')">关闭</button></header>
+      <header><h2>确认素材信息</h2><LibraryButton type="button" @click="emit('close')">关闭</LibraryButton></header>
       <form @submit.prevent="submitImport">
-        <p>已选择 {{ files.length }} 个文件：{{ files.map(file=>file.name).join('、') }}</p>
+        <p>已选择 {{ files.length }} 个文件<LibraryInfo label="选中文件" :text="files.map(file=>file.root_id?file.root_id+':/'+file.path:file.path).join('\n')" /></p>
+        <p class="apf-optional-note">本机文件将复制并托管到工作台数据目录。以下资料均为可选。</p>
+        <p class="apf-optional-note">{{(files.reduce((sum,file)=>sum+file.size,0)/1024/1024).toFixed(1)}} MiB · 仅本次选择的文件</p>
         <CapturePresetPicker v-model="capturePresetId" :disabled="submitting" />
-        <label v-if="isDataset">数据集名称<input v-model="datasetName" :placeholder="props.datasetName||'可留空，使用来源名称'" /></label>
-        <label><span><input v-model="manualClassification" type="checkbox" /> 手动指定整批分类</span></label>
-        <p v-if="!manualClassification">按每个文件的明确 Header 分类；缺少资料时保留未知。</p>
-        <label v-if="manualClassification">素材形态<select v-model="frameClass"><option value="">未指定</option><option value="subframe">Subframe</option><option value="masterframe">Masterframe</option><option value="video">Video</option></select></label>
-        <label v-if="manualClassification&&frameClass!==''&&frameClass!=='video'">帧用途<select v-model="frameType"><option value="">未指定</option><option value="light">Light</option><option value="bias">Bias</option><option value="dark">Dark</option><option value="flat">Flat</option><option value="dark_flat">Dark Flat</option></select></label>
+        <LibraryTextField v-if="isDataset" id="import-dataset-name" v-model="datasetName" name="图像组名称（可选）" hint="留空使用来源名称。" />
+        <label><span><input v-model="manualClassification" type="checkbox" /> 手动指定整批分类<LibraryInfo label="整批分类" text="默认按每个文件内的拍摄信息分类；缺少资料时保留未知。手动指定时对本批次全部文件生效。" /></span></label><small v-if="!manualClassification">自动识别文件拍摄信息</small>
+        <label v-if="manualClassification">素材形态<select v-model="frameClass"><option value="">未指定</option><option value="subframe">单帧</option><option value="masterframe">合成帧</option><option value="video">视频</option></select></label>
+        <label v-if="manualClassification&&frameClass!==''&&frameClass!=='video'">帧用途<select v-model="frameType"><option value="">未指定</option><option value="light">亮场</option><option value="bias">偏置场</option><option value="dark">暗场</option><option value="flat">平场</option><option value="dark_flat">暗平场</option></select></label>
         <label>相机<select v-model="parameters.camera_id"><option value="">未指定</option><option v-for="item in cameraOptions" :key="item.id" :value="item.id">{{item.name}}</option></select></label>
         <label v-if="['light','flat'].includes(frameType)">成像系统<select v-model="parameters.optical_system_id"><option value="">未指定</option><option v-for="item in opticalOptions" :key="item.id" :value="item.id">{{item.name}}</option></select></label>
         <label v-if="['light','flat'].includes(frameType)">滤镜<select v-model="parameters.filter_id"><option value="">未指定</option><option v-for="item in filterOptions" :key="item.id" :value="item.id">{{item.name}}</option></select></label>
         <label>增益模式<select v-model="parameterMode"><option value="">未指定</option><option value="iso">ISO</option><option value="gain">Gain／Offset</option></select></label>
-        <label v-if="parameterMode==='iso'">ISO<input v-model="parameters.iso" type="number" step="1" /></label>
-        <template v-else-if="parameterMode==='gain'"><label>Gain<input v-model="parameters.gain" type="number" step="any" /></label><label>Offset<input v-model="parameters.offset" type="number" step="any" /></label></template>
+        <label v-if="parameterMode==='iso'">ISO<LibraryInput v-model="parameters.iso" type="number" step="1" /></label>
+        <template v-else-if="parameterMode==='gain'"><label>Gain<LibraryInput v-model="parameters.gain" type="number" step="any" /></label><label>Offset<LibraryInput v-model="parameters.offset" type="number" step="any" /></label></template>
         <label v-for="field in fields" :key="field.key" v-show="field.key!=='integration_seconds'||frameClass==='masterframe'">{{field.title}}<input v-model="parameters[field.key]" type="number" :step="field.integer?'1':'any'" /></label>
         <label>Bin<select v-model="parameters.binning"><option value="">未指定</option><option v-for="value in 16" :key="value" :value="String(value)">Bin{{value}}</option></select></label>
         <label>CFA 排列<select v-model="parameters.cfa_pattern"><option value="">未指定</option><option value="MONO">无 CFA（单色）</option><option value="RGGB">RGGB</option><option value="BGGR">BGGR</option><option value="GRBG">GRBG</option><option value="GBRG">GBRG</option><option value="XTRANS">X-Trans 6×6</option><option value="QUAD_BAYER">Quad Bayer</option></select></label>
-        <label>多行备注<textarea v-model="notes" rows="3" /></label>
-        <p v-if="isDataset">备注写入数据集；图片资产仍分别保留自己的分类及参数。</p>
+        <label>{{isDataset?'图像组备注（可选）':'素材备注（可选）'}}<LibraryInfo v-if="isDataset" label="备注" text="多文件备注写入图像组；成员仍分别保留自己的分类及参数。" /><textarea v-model="notes" rows="3" /></label>
         <p v-if="error" class="apf-error" role="alert">{{ error }}</p>
-        <footer class="apf-import-actions"><button type="button" :disabled="submitting" @click="emit('close')">取消</button><button type="submit" :disabled="submitting">{{submitting?'创建批次…':'开始导入'}}</button></footer>
+        <footer class="apf-import-actions"><LibraryButton type="button" :disabled="submitting" @click="emit('close')">取消</LibraryButton><LibraryButton type="submit" variant="primary" :disabled="submitting">{{submitting?'创建批次…':'开始导入'}}</LibraryButton></footer>
       </form>
     </section>
   </div>
@@ -146,9 +133,9 @@ watch(()=>props.open,open=>{if(open){
 
 <style scoped>
 .apf-import-overlay{position:absolute;inset:0;z-index:5;display:flex;justify-content:center;align-items:center;padding:12px;background:#0009}
-.apf-import-dialog{width:min(760px,100%);max-height:100%;overflow:auto;padding:16px;background:var(--comfy-menu-bg,#272727);border:1px solid var(--border-color,#555);border-radius:10px;color:var(--input-text,#ddd);box-shadow:0 12px 44px #0008}
+.apf-import-dialog{display:flex;flex-direction:column;min-height:0;width:min(760px,100%);max-height:100%;overflow:hidden;padding:16px;background:var(--comfy-menu-bg,#272727);border:1px solid var(--border-color,#555);border-radius:10px;color:var(--input-text,#ddd);box-shadow:0 12px 44px #0008}
 .apf-import-dialog header,.apf-import-actions,.apf-import-pages,.apf-import-entry{display:flex;align-items:center;gap:8px}
-.apf-import-dialog header h2{margin-right:auto}
+.apf-import-dialog header{flex:none}.apf-import-dialog header h2{margin-right:auto}.apf-import-dialog form{min-height:0;overflow:auto;padding-right:4px}.apf-import-actions{position:sticky;bottom:0;background:var(--comfy-menu-bg,#272727);padding:12px 0;border-top:1px solid var(--border-color,#555)}.apf-optional-note{color:var(--descrip-text,#999);font-size:12px}
 .apf-import-dialog label{display:flex;flex-direction:column;gap:4px;margin:8px 0}
 .apf-import-dialog input,.apf-import-dialog select,.apf-import-dialog textarea{min-height:34px;padding:6px 8px;color:var(--input-text,#ddd);background:var(--comfy-input-bg,#202020);border:1px solid var(--border-color,#555);border-radius:6px;font:inherit}
 .apf-import-dialog input[type=checkbox]{min-height:auto}

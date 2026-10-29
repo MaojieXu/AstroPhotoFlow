@@ -1,9 +1,18 @@
 # AstroPhotoFlow 原生应用桥接
 
-NativeShell 保留原生 GraphView；LibrarySidebarTab 挂载私有 UI 包并提供侧栏关闭保护；useLibrarySidebarTab 注册现有素材库标签。WorkbenchSettingsPanel 经UI包公开导出挂载工作台配置，作为原生设置窗口中的独立“工作台”页面；FormItem／Button／Input由宿主传入，保留整组保存与显式重启。settingsPresentation集中控制APF本地设置的分类、搜索及面板定位可见性，不修改底层设置值；原生云版／桌面版保持原有呈现。
+2026-10-29 SirilPreviewWidget／sirilPreviewDisplay：通过原生ComponentWidget生命周期挂载非序列化的实时预览区，读取当前素材连线与三个参数；350ms防抖、当前成员切换、AbortController、代次隔离和释放均不写工作流或触发Agent接管。UI包仅公开固定预览API消费函数；组件复用原生ImagePreview displayOnly及Button。正式执行仍由原生队列处理原件，结果预览关闭二次自动拉伸。组件和桥接用例仅编写不运行。
+
+
+2026-10-29 MediaViewer通过原生Dialog／Button／Input与OpenSeadragon6.1.1实现共用查看器；mediaViewport隔离缩放、DPI、瓦片来源和视口快照。CanvasDataWidget取2048px概览并打开当前固定引用；LibrarySidebarTab注入mediaViewer给Workspace／FixedDatasetMembers。公开请求与HTTP消费类型归UI包api/media.ts；不写图、不序列化查看状态、不操作Agent控制。视频复用HTML video控制和实际呈现帧回调，源帧放大走相同查看器。组件测试仅编写，真实视觉与运行验收由用户进行。
+
+Nodes 2.0 展示候选：dataReferenceDisplay通过原生扩展nodeCreated／afterConfigureGraph挂载ComponentWidgetImpl，reference控件只隐藏呈现，不改变保存或执行字段；展示控件不写widgets_values或prompt。WidgetDOM支持直接挂载ComponentWidget，避免为APF创建第二个Vue应用或旧Canvas绘图路径。CanvasDataWidget复用ImagePreview displayOnly模式、Button与Dialog，按当前固定成员查询inspect并取预览，使用原生临时测量布局；切图／卸载撤销网络请求并释放URL。原生Agent控制与应用回执保持，查看行为不发graphChanged。
+
+素材入画布候选：LibraryCanvasSource复用原生pragmatic拖放；canvasDataBridge复用addNodeOnGraph和一次beforeChange／afterChange事务，把②准备的固定引用写入APF_DATA_REFERENCE的reference控件。useCanvasDataSession仅管理当前在线加数据控制、内容标记和真实应用回执，NativeShell随页面注册／清理；手动变化、切图／子图、断线撤销，视口不入内容标记。无第二份图或运行系统。测试仅编写，见验证矩阵的library-canvas；完整Agent图编辑及运行仍待后续批次。
+
+NativeShell 保留原生 GraphView；LibrarySidebarTab 挂载私有 UI 包并提供侧栏关闭保护，注入FormItem／Button／Input／搜索多选及单选／Textarea；LibraryFormDialog复用原生Reka Dialog的焦点、Escape和限宽结构，提供受控关闭及同窗内容切换，不保存业务草稿；useLibrarySidebarTab 注册现有素材库标签。WorkbenchSettingsPanel 经UI包公开导出挂载工作台配置，作为原生设置窗口中的独立“工作台”页面；FormItem／Button／Input由宿主传入，保留整组保存与显式重启。settingsPresentation集中控制APF本地设置的分类、搜索及面板定位可见性，不修改底层设置值；原生云版／桌面版保持原有呈现。
 
 本区域可以依赖原生应用的 Store 和组件，但只通过 @astrophotoflow/ui 包公开入口使用业务界面。业务实现不得反向依赖这里。
 
-保持节点库 → 素材库 → 工作流顺序；工作台配置统一从底部设置入口进入，旧工作台侧栏已移除。保留原生分栏、设备按钮位置及草稿保护。未来画布同步协议需要单独实现，不能由现有挂载代码推断已支持 Agent 编辑。
+保持节点库 → 素材库 → 工作流 → 软件包顺序；工作台配置统一从底部设置入口进入，旧工作台侧栏已移除。保留原生分栏、设备按钮位置及草稿保护。未来画布同步协议需要单独实现，不能由现有挂载代码推断已支持 Agent 编辑。
 
 验证：原生 GraphView、侧栏状态测试和隔离浏览器验收。

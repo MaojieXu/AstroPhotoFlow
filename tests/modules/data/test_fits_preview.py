@@ -216,3 +216,95 @@ def test_sampled_rows_avoid_per_pixel_fits_reads(tmp_path, monkeypatch):
     create_preview(path, 0, "mono", {}, 31)
     assert len(calls) == 20
     assert old_count == 600
+
+
+@pytest.mark.parametrize("color", [False, True])
+def test_percentile_statistics_are_bounded_and_keep_finite_zero_samples(color, monkeypatch):
+    from astrophotoflow.modules.data.fits_preview import stretch_bounds
+    from astrophotoflow.modules.data.auto_stretch import STATISTICS_SAMPLES, sample_statistics
+
+    pixels = np.arange(1025 * 777, dtype=np.float64).reshape(1025, 777)
+    if color:
+        pixels = np.repeat(pixels[..., None], 3, axis=-1)
+    pixels[5, 5] = np.nan
+    original = pixels.copy()
+    sampled = sample_statistics(pixels)
+    finite = sampled[np.isfinite(sampled)]
+    expected = np.percentile(finite, (1, 99))
+    sizes = []
+    percentile = np.percentile
+
+    def counted(values, *args, **kwargs):
+        sizes.append(values.size)
+        return percentile(values, *args, **kwargs)
+
+    monkeypatch.setattr(np, "percentile", counted)
+    assert stretch_bounds(pixels) == pytest.approx(expected)
+    assert sizes == [finite.size]
+    assert sizes[0] <= STATISTICS_SAMPLES * (3 if color else 1)
+    np.testing.assert_array_equal(pixels, original)
+
+
+@pytest.mark.parametrize("layout", ["mono", "uint16", "scaled", "planar", "interleaved", "compressed"])
+def test_fits_statistics_sample_original_spatial_strata_with_row_reads(tmp_path, monkeypatch, layout):
+    from astrophotoflow.modules.data.auto_stretch import sample_statistics, statistics_indices
+    from astrophotoflow.modules.data.fits_preview import read_stretch_pixels
+
+    values = np.arange(1025 * 777, dtype=np.float32).reshape(1025, 777) / 100
+    kind = "mono"
+    if layout == "uint16":
+        values = values.astype(np.uint16)
+    hdu = fits.CompImageHDU(values) if layout == "compressed" else fits.PrimaryHDU(values)
+    if layout == "scaled":
+        hdu.scale("int16", bscale=.5, bzero=1000)
+    elif layout in {"planar", "interleaved"}:
+        values = np.stack([values, values + 10, values + 20], axis=-1)
+        hdu = fits.PrimaryHDU(np.moveaxis(values, -1, 0) if layout == "planar" else values)
+        hdu.header["CTYPE3" if layout == "planar" else "CTYPE1"] = "RGB"
+        kind = "rgb"
+    path = tmp_path / f"{layout}.fits"
+    index = 1 if layout == "compressed" else 0
+    fits.HDUList([fits.PrimaryHDU(), hdu]).writeto(path) if index else hdu.writeto(path)
+    original = path.read_bytes()
+    with fits.open(path, memmap=False) as hdus:
+        expected_pixels = hdus[index].data
+        if layout == "planar":
+            expected_pixels = np.moveaxis(expected_pixels, 0, -1)
+        expected = sample_statistics(expected_pixels)
+    calls = []
+    read = fits.ImageHDU._get_scaled_image_data if index else fits.PrimaryHDU._get_scaled_image_data
+
+    def counted(*args, **kwargs):
+        calls.append(1)
+        return read(*args, **kwargs)
+
+    if layout != "compressed":
+        monkeypatch.setattr(fits.PrimaryHDU, "_get_scaled_image_data", counted)
+    actual = read_stretch_pixels(path, index, kind, {})
+    np.testing.assert_array_equal(actual, expected)
+    if layout != "compressed":
+        rows, _ = statistics_indices(1025, 777)
+        assert len(calls) <= len(rows) * (3 if kind == "rgb" else 1)
+    assert path.read_bytes() == original
+
+
+@pytest.mark.parametrize("pattern", ["RGGB", "BGGR", "GRBG", "GBRG"])
+def test_bayer_statistics_keep_rgb_cells_and_offsets_together(tmp_path, pattern):
+    from astrophotoflow.modules.data.auto_stretch import sample_statistics
+    from astrophotoflow.modules.data.fits_preview import read_stretch_pixels
+
+    values = np.arange(600 * 800, dtype=np.float32).reshape(600, 800)
+    mosaic = np.empty((1200, 1600), dtype=np.float32)
+    gains = {"R": 1, "G": 2, "B": 4}
+    for dy in range(2):
+        for dx in range(2):
+            mosaic[dy::2, dx::2] = values * gains[pattern[((dy + 1) % 2) * 2 + ((dx + 1) % 2)]]
+    hdu = fits.PrimaryHDU(mosaic)
+    hdu.header["BAYERPAT"] = pattern
+    hdu.header["XBAYROFF"] = hdu.header["YBAYROFF"] = 1
+    path = tmp_path / f"{pattern}.fits"
+    hdu.writeto(path)
+    original = path.read_bytes()
+    expected = sample_statistics(values[..., None] * np.array([1, 2, 4], dtype=np.float32))
+    np.testing.assert_array_equal(read_stretch_pixels(path, 0, "bayer", {}), expected)
+    assert path.read_bytes() == original

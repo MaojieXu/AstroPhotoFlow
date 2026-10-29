@@ -3,6 +3,7 @@
 Uses the median/MAD background estimate, -2.8 sigma shadow clipping and
 0.25 target background of astronomical auto-stretch. Original samples, not
 JPEG previews, are the input. This is display white balance, not photometry.
+Statistics use deterministic stratified random samples across the source image.
 """
 from __future__ import annotations
 from astrophotoflow.contracts.previews import AutoStretch
@@ -16,10 +17,33 @@ from pydantic import Field
 from astrophotoflow.contracts.common import StrictModel
 
 
+STATISTICS_SAMPLES = 262_144
+
+
+def statistics_indices(height: int, width: int) -> tuple[np.ndarray, np.ndarray]:
+    rows = min(height, STATISTICS_SAMPLES, max(1, int(np.sqrt(STATISTICS_SAMPLES * height / width))))
+    columns = min(width, max(1, STATISTICS_SAMPLES // rows))
+    row_edges = np.linspace(0, height, rows + 1, dtype=np.int64)
+    column_edges = np.linspace(0, width, columns + 1, dtype=np.int64)
+    rng = np.random.default_rng(0)
+    selected_rows = rng.integers(row_edges[:-1], row_edges[1:])
+    selected_columns = rng.integers(column_edges[:-1], column_edges[1:], size=(rows, columns))
+    return selected_rows, selected_columns
+
+
+def sample_statistics(pixels: np.ndarray) -> np.ndarray:
+    rows, columns = statistics_indices(*pixels.shape[:2])
+    return np.asarray(pixels[rows[:, None], columns], dtype=np.float32)
+
+
+
+def sample_pixels(pixels: np.ndarray, max_edge: int) -> np.ndarray:
+    stride = max(1, (max(pixels.shape[:2]) + max_edge - 1) // max_edge)
+    return np.asarray(pixels[::stride, ::stride], dtype=np.float32)
 
 
 def calculate_stretch(pixels: np.ndarray) -> dict:
-    values = np.asarray(pixels, dtype=np.float32)
+    values = sample_statistics(pixels)
     color = values.ndim == 3
     valid = values[np.isfinite(values).all(axis=-1)] if color else values[np.isfinite(values)]
     if not valid.size:

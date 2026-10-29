@@ -155,7 +155,7 @@ watch(() => [props.value.parameter_mode, props.value.iso, props.value.gain, prop
       </template>
       <small v-if="saving">保存中…</small><small v-if="error" class="apf-mode-error" role="alert">{{error}}</small>
     </template>
-    <button v-else type="button" class="apf-inline-value" title="双击编辑" @dblclick.stop.prevent="begin">{{display}}</button>
+    <button v-else type="button" class="apf-inline-value" title="双击或按 Enter 编辑" @dblclick.stop.prevent="begin" @keydown.enter.stop.prevent="begin" @keydown.space.stop.prevent="begin">{{display}}<i aria-hidden="true" class="pi pi-pencil apf-edit-icon" /></button>
   </span>
 </template>
 

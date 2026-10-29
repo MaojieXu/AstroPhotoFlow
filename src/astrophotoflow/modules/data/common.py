@@ -186,6 +186,7 @@ def _fits_hdu_out(row: FitsHduMetadata) -> dict:
 def _read_preview(request: Request, version_id: str, hdu_index: int | None, size: str) -> Response:
     if size not in {"thumbnail", "display"} or hdu_index is None:
         raise not_found()
+    request.app.state.import_workers[1].prioritize({version_id})
     with request.app.state.database.read_session() as session:
         from astrophotoflow.modules.data.fits_preview import PREVIEW_ALGORITHM_VERSION
         algorithm = [Preview.algorithm_version == PREVIEW_ALGORITHM_VERSION] if size == "display" else []

@@ -43,7 +43,7 @@ it('removes the old page groups while the next top-level page is loading', async
   try {
     await flushPromises()
     await wrapper.findAll('button').find(button => button.text() === '下一页')!.trigger('click')
-    expect(wrapper.text()).toContain('正在读取垃圾桶')
+    expect(wrapper.text()).toContain('正在读取回收站')
     expect(wrapper.text()).not.toContain('Old page group')
     expect(wrapper.findAll('button').some(button => button.text() === '展开')).toBe(false)
     finishNext(page([item('asset', 2, 'Expected page two')], 21, 20)); await flushPromises()
@@ -105,11 +105,11 @@ it.each(['success', 'failure'])('ignores a child %s after close while the reopen
     if (outcome === 'success') finishChild(page([{ ...item('asset', 1, 'Stale.fit'), source_dataset_id: id(11) }]))
     else failChild(new Error('stale group failure'))
     await flushPromises()
-    expect(wrapper.text()).toContain('正在读取垃圾桶')
+    expect(wrapper.text()).toContain('正在读取回收站')
     expect(wrapper.text()).not.toContain('Stale.fit')
     expect(wrapper.text()).not.toContain('stale group failure')
     finishList(page([])); await flushPromises()
-    expect(wrapper.text()).toContain('垃圾桶为空')
+    expect(wrapper.text()).toContain('回收站为空')
   } finally { wrapper.unmount() }
 })
 

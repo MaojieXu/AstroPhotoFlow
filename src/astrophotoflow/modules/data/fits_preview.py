@@ -6,6 +6,8 @@ import numpy as np
 from astropy.io import fits
 from PIL import Image
 
+from astrophotoflow.modules.data.auto_stretch import calculate_stretch, render_stretch, sample_statistics, statistics_indices
+
 PARSER_VERSION = "fits-1"
 PREVIEW_ALGORITHM_VERSION = "auto-stretch-2"
 CFA_PATTERNS = {"RGGB", "BGGR", "GRBG", "GBRG"}
@@ -203,7 +205,7 @@ def _bayer_demosaic(mosaic: np.ndarray, pattern: str, x_offset: int, y_offset: i
 
 
 def stretch_bounds(array: np.ndarray) -> tuple[float, float]:
-    finite = np.asarray(array, dtype=np.float32)
+    finite = sample_statistics(array)
     finite = finite[np.isfinite(finite)]
     if finite.size == 0:
         raise ValueError("所选 HDU 没有有效像素。")
@@ -264,8 +266,49 @@ def read_preview_pixels(path: Path, hdu_index: int, kind: str, parameters: dict,
         }
 
 
-def create_preview(path: Path, hdu_index: int, kind: str, parameters: dict, max_edge: int, stretch: tuple[float, float] | None = None) -> tuple[Image.Image, dict]:
+def read_stretch_pixels(path: Path, hdu_index: int, kind: str, parameters: dict, check_cancel=None) -> np.ndarray:
+    if kind in {"xtrans", "quad_bayer"}:
+        raise ValueError(f"{kind} CFA 已登记；当前暂不支持其马赛克彩色预览。")
+    with fits.open(path, memmap=False, lazy_load_hdus=True) as file:
+        hdu = file[hdu_index]
+        planar = kind == "rgb" and _rgb_channel_first(hdu.header)
+        height, width = hdu.shape[-2:] if planar else hdu.shape[:2]
+        cell = 2 if kind == "bayer" else 1
+        rows, columns = statistics_indices(height // cell, width // cell)
+        output = np.empty((*columns.shape, 3) if kind in {"rgb", "bayer"} else columns.shape, dtype=np.float32)
+        if kind == "bayer":
+            pattern = str(parameters.get("cfa_pattern") or hdu.header.get("BAYERPAT", hdu.header.get("BAYERPATTERN", ""))).upper()
+            if pattern not in CFA_PATTERNS:
+                raise ValueError("缺少已确认的 Bayer CFA 排列。")
+            x_offset, y_offset = int(hdu.header.get("XBAYROFF", 0)), int(hdu.header.get("YBAYROFF", 0))
+        for index, row in enumerate(rows):
+            if check_cancel is not None:
+                check_cancel()
+            cols = columns[index]
+            if planar:
+                output[index] = np.asarray(hdu.section[:, row:row + 1, :], dtype=np.float32)[:, 0, cols].T
+            elif kind == "rgb":
+                output[index] = np.asarray(hdu.section[row:row + 1, :, :], dtype=np.float32)[0, cols]
+            elif kind == "bayer":
+                strip = np.asarray(hdu.section[row * 2:row * 2 + 2, :], dtype=np.float32)
+                colors = {color: [] for color in "RGB"}
+                for dy in range(2):
+                    for dx in range(2):
+                        color = pattern[((y_offset + dy) % 2) * 2 + ((x_offset + dx) % 2)]
+                        colors[color].append(strip[dy, cols * 2 + dx])
+                output[index] = np.stack([np.mean(colors[color], axis=0) for color in "RGB"], axis=-1)
+            else:
+                output[index] = np.asarray(hdu.section[row:row + 1, :], dtype=np.float32)[0, cols]
+        return output
+
+
+def create_preview(path: Path, hdu_index: int, kind: str, parameters: dict, max_edge: int, stretch: tuple[float, float] | None = None, *, auto: bool = False, auto_stretch: dict | None = None) -> tuple[Image.Image, dict]:
     sample, display_parameters = read_preview_pixels(path, hdu_index, kind, parameters, max_edge)
+    if auto:
+        recipe = auto_stretch if auto_stretch is not None else calculate_stretch(read_stretch_pixels(path, hdu_index, kind, parameters))
+        image = render_stretch(sample, recipe)
+        image.thumbnail((max_edge, max_edge), Image.Resampling.LANCZOS)
+        return image, {**display_parameters, "auto_stretch": recipe, "statistics": "stratified-random-1"}
     low, high = stretch if stretch is not None else stretch_bounds(sample)
     image = _display(sample, (low, high))
     image.thumbnail((max_edge, max_edge), Image.Resampling.LANCZOS)

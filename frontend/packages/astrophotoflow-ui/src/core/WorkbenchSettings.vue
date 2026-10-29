@@ -511,63 +511,6 @@ onMounted(reload)
                 >{{ translate('apfWorkbench.addOrigin') }}</component
               >
             </div>
-            <div class="space-y-2">
-              <p class="m-0 text-sm text-muted">
-                {{ translate('apfWorkbench.importRoots') }}
-              </p>
-              <div
-                v-for="(root, index) in form.import_roots"
-                :key="index"
-                class="flex flex-wrap items-center gap-2"
-              >
-                <component
-                  :is="controls.input"
-                  v-model="root.id"
-                  :aria-label="translate('apfWorkbench.rootId')"
-                  :placeholder="translate('apfWorkbench.rootId')"
-                  required
-                  class="min-w-0 flex-1"
-                />
-                <component
-                  :is="controls.input"
-                  v-model="root.path"
-                  :aria-label="translate('apfWorkbench.rootPath')"
-                  :placeholder="translate('apfWorkbench.rootPath')"
-                  required
-                  class="min-w-0 flex-1"
-                />
-                <component
-                  :is="controls.button"
-                  type="button"
-                  size="icon-sm"
-                  variant="muted-textonly"
-                  icon="icon-[lucide--info]"
-                  :tooltip="root.path"
-                  :aria-label="translate('apfWorkbench.importRootDetails')"
-                  @click.stop
-                >
-                  <template #tooltip
-                    ><span
-                      class="block max-w-sm break-all whitespace-pre-line"
-                      >{{ root.path }}</span
-                    ></template
-                  >
-                </component>
-                <component
-                  :is="controls.button"
-                  type="button"
-                  variant="muted-textonly"
-                  @click="form.import_roots.splice(index, 1)"
-                  >{{ translate('apfWorkbench.remove') }}</component
-                >
-              </div>
-              <component
-                :is="controls.button"
-                type="button"
-                @click="form.import_roots.push({ id: '', path: '' })"
-                >{{ translate('apfWorkbench.addRoot') }}</component
-              >
-            </div>
           </div>
         </section>
       </fieldset>

@@ -12,14 +12,26 @@ beforeEach(()=>{
 })
 
 describe('import dialog defaults',()=>{
+  it('submits selected absolute paths without a configured root',async()=>{
+    send.mockResolvedValue({task_id:'00000000-0000-4000-8000-000000000001',status:'queued'})
+    const path='D:\\Night\\one.fits'
+    const wrapper=mount(ImportDialog,{props:{open:true,files:[{path,name:'one.fits',size:4}]}})
+    await flushPromises()
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+    expect(send.mock.calls[0][3].sources).toEqual([{path}])
+    expect(send.mock.calls[0][3].storage_mode).toBe('managed')
+    expect(upload).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
   it('clears prior metadata when a new import dialog opens',async()=>{
-    const file=new File(['fits'],'first.fits')
+    const file={root_id:'science',path:'first.fits',name:'first.fits',size:4}
     const wrapper=mount(ImportDialog,{props:{open:false,files:[file],createDataset:true,datasetName:'M31'}})
     await wrapper.setProps({open:true})
     await flushPromises()
     const bin=wrapper.findAll('label').find(label=>label.text().startsWith('Bin'))!.get('select').element as HTMLSelectElement
     expect(Array.from(bin.options,value=>value.value)).toEqual(['',...Array.from({length:16},(_,index)=>String(index+1))])
-    const datasetName=wrapper.findAll('label').find(label=>label.text().startsWith('数据集名称'))!.get('input')
+    const datasetName=wrapper.findAll('label').find(label=>label.text().startsWith('图像组名称'))!.get('input')
     await wrapper.get('input[type="checkbox"]').setValue(true)
     const frameClass=wrapper.findAll('label').find(label=>label.text().startsWith('素材形态'))!.get('select')
     const parameterMode=wrapper.findAll('label').find(label=>label.text().startsWith('增益模式'))!.get('select')
@@ -34,7 +46,7 @@ describe('import dialog defaults',()=>{
     await wrapper.setProps({open:true,datasetName:'M42'})
     await flushPromises()
 
-    expect(wrapper.findAll('label').find(label=>label.text().startsWith('数据集名称'))!.get('input').element).toHaveProperty('value','M42')
+    expect(wrapper.findAll('label').find(label=>label.text().startsWith('图像组名称'))!.get('input').element).toHaveProperty('value','M42')
     expect(wrapper.findAll('label').some(label=>label.text().startsWith('素材形态'))).toBe(false)
     expect(wrapper.get('input[type="checkbox"]').element).toHaveProperty('checked',false)
     expect(wrapper.findAll('label').some(label=>label.text().startsWith('帧用途'))).toBe(false)
@@ -48,19 +60,22 @@ describe('import overrides',()=>{
   it('omits blank manual values and classification so file metadata and presets can supply them',async()=>{
     send.mockResolvedValue({task_id:'00000000-0000-4000-8000-000000000001',status:'queued'})
     upload.mockResolvedValue(undefined)
-    const wrapper=mount(ImportDialog,{props:{open:false,files:[new File(['fits'],'one.fits')]}})
+    const wrapper=mount(ImportDialog,{props:{open:false,files:[{root_id:'science',path:'one.fits',name:'one.fits',size:4}]}})
     await wrapper.setProps({open:true})
     await wrapper.get('form').trigger('submit')
     await flushPromises()
     const body=send.mock.calls[0][3]
     expect(body).not.toHaveProperty('classification')
     expect(body.parameters).toEqual({})
+    expect(body.storage_mode).toBe('managed')
+    expect(body.sources).toEqual([{root_id:'science',path:'one.fits'}])
+    expect(upload).not.toHaveBeenCalled()
     wrapper.unmount()
   })
   it('submits a whole-batch manual classification including an intentional unknown frame type',async()=>{
     send.mockResolvedValue({task_id:'00000000-0000-4000-8000-000000000001',status:'queued'})
     upload.mockResolvedValue(undefined)
-    const wrapper=mount(ImportDialog,{props:{open:false,files:[new File(['fits'],'one.fits')]}})
+    const wrapper=mount(ImportDialog,{props:{open:false,files:[{root_id:'science',path:'one.fits',name:'one.fits',size:4}]}})
     await wrapper.setProps({open:true})
     await wrapper.get('input[type="checkbox"]').setValue(true)
     await wrapper.findAll('label').find(label=>label.text().startsWith('素材形态'))!.get('select').setValue('masterframe')

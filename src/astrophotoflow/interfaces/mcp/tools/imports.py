@@ -33,7 +33,7 @@ def register(server, call):
 
     @server.tool()
     def import_local(body: ImportCreate) -> dict[str, Any]:
-        """Import configured-root files or folders using reference or managed storage. Preset values are frozen by the service when accepted."""
+        """Import local absolute paths with managed storage and no configured root; folders select their current level only. Existing root_id relative sources also support reference mode. Preset values freeze at acceptance."""
         return call(lambda client: client.import_local(body))
 
 

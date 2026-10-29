@@ -1,7 +1,8 @@
 """Registered/inline equipment combinations and their owned capture presets."""
 from uuid import UUID, uuid4
+from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
 
 from astrophotoflow.modules.data import common as shared
@@ -14,6 +15,7 @@ from astrophotoflow.contracts.setups import CapturePresetCreate, CapturePresetOu
 
 
 router = APIRouter(prefix="/api/v1", responses=ERROR_RESPONSES)
+SetupSortBy = Annotated[Literal["created_at", "name", "camera", "telescope", "mount", "filter", "accessory"], Query()]
 
 
 def _setup_out(row: EquipmentSetup) -> dict:
@@ -41,27 +43,45 @@ def _check_components(session, components: list[dict]) -> None:
 
 @router.get("/equipment-setups", response_model=EquipmentSetupPage, dependencies=[Depends(authenticate)])
 def list_setups(session: ReadSession, limit: Limit = 50, offset: Offset = 0,
-                sort_by: SortBy = "created_at", order: Order = "desc", q: str | None = None,
+                sort_by: SetupSortBy = "created_at", order: Order = "desc", q: str | None = None,
                 status: StatusFilter = "active", component_kind: EquipmentKind | None = None):
     filters = [] if status == "all" else [EquipmentSetup.status == status]
     if q:
         filters.append(EquipmentSetup.name.contains(q, autoescape=True))
     column = EquipmentSetup.name if sort_by == "name" else EquipmentSetup.created_at
     statement = select(EquipmentSetup).where(*filters).order_by(shared._order(column, order), EquipmentSetup.id.asc())
-    if component_kind is None:
+    if component_kind is None and sort_by in {"created_at", "name"}:
         total = session.scalar(select(func.count()).select_from(EquipmentSetup).where(*filters)) or 0
         rows = session.scalars(statement.limit(limit).offset(offset)).all()
         return shared._page([_setup_out(row) for row in rows], total, limit, offset)
     rows = session.scalars(statement).all()
     registered_ids = {component["equipment_id"] for row in rows for component in (row.components or [])
                       if component.get("source") == "registered"}
-    kinds = {item.id: item.kind for item in session.scalars(select(Equipment).where(Equipment.id.in_(registered_ids))).all()} if registered_ids else {}
-    matched = [row for row in rows if any(
-        component.get("equipment", {}).get("kind") == component_kind
-        if component.get("source") == "inline" else kinds.get(component.get("equipment_id")) == component_kind
-        for component in row.components or []
-    )]
-    return shared._page([_setup_out(row) for row in matched[offset:offset + limit]], len(matched), limit, offset)
+    equipment = {item.id: (item.kind, item.name) for item in session.scalars(
+        select(Equipment).where(Equipment.id.in_(registered_ids))
+    ).all()} if registered_ids else {}
+    components: dict[str, list[tuple[str, str]]] = {}
+    for row in rows:
+        labels = []
+        for component in row.components or []:
+            if component["source"] == "inline":
+                labels.append((component["equipment"]["kind"], component["equipment"]["name"]))
+            elif component["equipment_id"] in equipment:
+                labels.append(equipment[component["equipment_id"]])
+        components[row.id] = labels
+    if component_kind is not None:
+        rows = [row for row in rows if any(kind == component_kind for kind, _ in components[row.id])]
+    if sort_by not in {"created_at", "name"}:
+        names = {
+            row.id: " / ".join(name for kind, name in components[row.id]
+                              if kind == sort_by or (sort_by == "telescope" and kind == "optical_system")).casefold()
+            for row in rows
+        }
+        rows = sorted(rows, key=lambda row: (row.name.casefold(), row.id))
+        populated = sorted((row for row in rows if names[row.id]),
+                           key=lambda row: names[row.id], reverse=order == "desc")
+        rows = populated + [row for row in rows if not names[row.id]]
+    return shared._page([_setup_out(row) for row in rows[offset:offset + limit]], len(rows), limit, offset)
 
 
 @router.post("/equipment-setups", response_model=EquipmentSetupOut, status_code=201, dependencies=[Depends(authenticate)])

@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { onMounted, watch } from 'vue'
+import { useRoute } from 'vue-router'
 
 import { setActiveLocale } from '@/i18n'
 import { getDefaultLocale } from '@/locales/localeConfig'
@@ -7,10 +8,24 @@ import { useSettingStore } from '@/platform/settings/settingStore'
 import { useColorPaletteService } from '@/services/colorPaletteService'
 import { useSidebarTabStore } from '@/stores/workspace/sidebarTabStore'
 import GraphView from '@/views/GraphView.vue'
+import { useCanvasDataSession } from './useCanvasDataSession'
+import { useApp } from '@/scripts/appInstance'
+import { registerDataReferenceDisplay } from './dataReferenceDisplay'
+import { registerSirilPreviewDisplay } from './sirilPreviewDisplay'
+
+registerDataReferenceDisplay(useApp())
+registerSirilPreviewDisplay(useApp())
+useCanvasDataSession()
 
 const settings = useSettingStore()
 const paletteService = useColorPaletteService()
-useSidebarTabStore().activeSidebarTabId = 'library'
+const sidebarTabs = useSidebarTabStore()
+const route = useRoute()
+sidebarTabs.activeSidebarTabId = route.query.apf_panel === 'software' ? 'software' : 'library'
+
+watch(() => route.query.apf_panel, (panel) => {
+  if (panel === 'software') sidebarTabs.activeSidebarTabId = 'software'
+})
 
 onMounted(async () => {
   const palette = paletteService.getActiveColorPalette()

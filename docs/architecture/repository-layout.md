@@ -39,7 +39,7 @@
 
 1. contracts 不依赖数据库、服务端、配置、客户端或引擎。
 2. core 不依赖业务模块和接入层；Alembic env 是明确的元数据装配例外。
-3. interfaces/http/app.py 通过 data/public.py 与 data/routes.py 装配现有业务；其他模块通过相应公开入口合作。
+3. interfaces/http/app.py 通过 data/public.py、data/routes.py及software/public.py、software/routes.py装配业务，并组合nodes/public.py与B32页面确认；其他模块通过相应公开入口合作。
 4. 客户端、CLI、MCP 的业务操作使用 HTTP 服务，不直接操作业务 ORM 或 SQLite；①本机生命周期控制在服务未启动或关闭后仍可执行。
 5. UI 包不导入原生应用；原生应用通过包导出消费 UI，画布协调集中在桥接区。
 6. 后续模块的依赖与入口随真实实现补齐，不以占位目录宣称功能可用。
@@ -61,6 +61,6 @@
 
 ## 工作流归属
 
-Python及私有UI业务统一进入workflows目录，接入层interfaces和原生桥接位置保持；不提前拆execution／control／catalog内部层级。原生workspace内工作流JSON为唯一当前图，项目只保存关联；运行记录保存当次实际图和参数。原生保存、改名、删除需与项目关联联动，但本轮不实现。
+Python及私有UI业务统一进入workflows目录，接入层interfaces和原生桥接位置保持；不提前拆execution／control／catalog内部层级。原生workspace内工作流JSON为唯一当前图，项目只保存关联；运行记录保存当次实际图和参数。原生保存、改名、删除需与项目关联联动，当前尚未实现。
 
-第④阶段的[具体文件规划](../api/platform-contracts.md#file-design)沿上述根目录落位：④定义JSON、⑤现有SQLite内自有记录；一个`interfaces/comfyui.py`承接原生消息／注册的薄适配，既有`comfyui/proxy.py`仍只作网关。workspace白名单目录只安装薄引导，不另建产品源码树。精确公开函数、DTO及测试文件见详设，所有拟新增源文件、迁移和测试仍未创建。
+第④阶段的[具体文件规划](../api/platform-contracts.md#file-design)沿上述根目录落位：④定义JSON、⑤现有SQLite内自有记录；一个`interfaces/comfyui.py`承接原生薄适配；当前已有B32页面消息中继，节点注册／执行和图写入／入队guard仍待实现，既有`comfyui/proxy.py`仍只作网关。workspace白名单目录只安装薄引导，不另建产品源码树。当前实际文件、公开函数和消费者见[源码映射](module-map.md#31-当前文件与公开函数映射)，后续签名及文件规划见详设。M1／M2及B31／B32／B41已产生对应实现和测试；⑤业务文件、0010迁移、节点路由／编辑器仍未创建，不按规划路径推断能力已存在。

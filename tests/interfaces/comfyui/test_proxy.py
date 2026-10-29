@@ -1,12 +1,56 @@
 import asyncio
 import json
 from pathlib import Path
+from contextlib import asynccontextmanager
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, Mock
 
 from aiohttp import web
 from aiohttp.test_utils import TestClient, TestServer
 import pytest
 
 from astrophotoflow.comfyui import proxy
+
+
+def test_aborted_native_selection_closes_the_upstream_request(monkeypatch):
+    async def run():
+        released = asyncio.Event()
+        entered = asyncio.Event()
+
+        async def read_forever():
+            await asyncio.Future()
+
+        class Session:
+            def __init__(self, timeout):
+                assert timeout.total is None
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *args):
+                return False
+
+            @asynccontextmanager
+            async def request(self, *args, **kwargs):
+                entered.set()
+                try:
+                    yield SimpleNamespace(read=read_forever)
+                finally:
+                    released.set()
+
+        monkeypatch.setattr(proxy.aiohttp, "ClientSession", Session)
+        monkeypatch.setattr(proxy, "_configuration", lambda: ("http://127.0.0.1:32690", set(), "test-token"))
+        monkeypatch.setattr(proxy, "_deny_origin", lambda *args: None)
+        request = SimpleNamespace(
+            method="POST", match_info={}, path="/astrophotoflow/api/v1/imports/select-local",
+            rel_url=SimpleNamespace(query={}), headers={}, read=AsyncMock(return_value=b'{"mode":"files"}'),
+            transport=Mock(is_closing=Mock(return_value=True)),
+        )
+        with pytest.raises(asyncio.CancelledError):
+            await proxy.forward(request, "/imports/select-local")
+        assert entered.is_set() and released.is_set()
+
+    asyncio.run(run())
 
 
 def config_file(path: Path, port: int, data_dir: Path, origins: list[str], roots: list[tuple[str, str]] = ()) -> None:
@@ -159,12 +203,16 @@ def test_proxy_whitelist_origin_headers_and_upstream_status(tmp_path, monkeypatc
             selection = await client.post("/api" + proxy.BASE_PATH + "/settings/workbench/select-directory",
                                           headers={"Origin": origin}, json={"path": "data"})
             assert selection.status == 200 and seen["path"] == "/api/v1/settings/workbench/select-directory"
-            assert len(proxy.ROUTES) == 85
+            canvas_data = await client.post("/api" + proxy.BASE_PATH + "/library/canvas-data", headers={"Origin": origin}, json={"entry_type": "asset", "id": "asset", "version_id": "fixed"})
+            assert canvas_data.status == 200 and seen["path"] == "/api/v1/library/canvas-data"
+            assert seen["authorization"] == "Bearer server-only-token"
             assert all(
                 method == "GET" or (method == "POST" and path == "/datasets/{dataset_id}/versions")
                 or (method == "PATCH" and path == "/datasets/{dataset_id}/member-parameters")
                 or (method == "POST" and path in {"/library/assets/{asset_id}/versions/{version_id}/previews/display", "/projects/{project_id}/asset-references/{reference_id}/previews/display"})
                 or (method == "POST" and path in {"/library/assets/{asset_id}/versions/{version_id}/previews/display/auto-stretch", "/projects/{project_id}/asset-references/{reference_id}/previews/display/auto-stretch"})
+                or (method == "POST" and path.endswith("/previews/viewer"))
+                or (method == "DELETE" and path.endswith("/previews/viewer/consumer/{consumer_id}"))
                 for method, path, _ in proxy.ROUTES
                 if "/versions" in path or path.endswith("/previews/{size}")
             )
@@ -179,6 +227,8 @@ def test_proxy_whitelist_origin_headers_and_upstream_status(tmp_path, monkeypatc
                 and path != "/datasets/{dataset_id}/member-parameters"
                 and not (method == "POST" and path == "/library/assets/{asset_id}/versions/{version_id}/previews/display")
                 and not (method == "POST" and path == "/library/assets/{asset_id}/versions/{version_id}/previews/display/auto-stretch")
+                and not (method == "POST" and path.endswith("/previews/viewer"))
+                and not (method == "DELETE" and path.endswith("/previews/viewer/consumer/{consumer_id}"))
                 for method, path, _ in proxy.ROUTES
             )
         finally:

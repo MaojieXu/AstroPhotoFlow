@@ -10,6 +10,15 @@ const response = (value: unknown, status = 200) =>
   new Response(JSON.stringify(value), { status, headers: { 'Content-Type': 'application/json' } })
 
 describe('AstroPhotoFlow API client', () => {
+  it('passes the caller abort signal through without changing the request body', async () => {
+    const fetchApi = vi.fn().mockResolvedValue(response(project))
+    const client = createApiClient(fetchApi)
+    const controller = new AbortController()
+    await client.send('/projects', projectSchema, 'POST', {name:'M31'}, {signal:controller.signal})
+    expect(fetchApi).toHaveBeenCalledWith('/projects', {
+      method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:'M31'}),signal:controller.signal
+    })
+  })
   it('fetches updated preview bytes without cache and still enforces JPEG', async () => {
     const fetchApi = vi.fn().mockImplementation(async () => new Response('pixels', {headers: {'Content-Type':'image/jpeg'}}))
     const client = createApiClient(fetchApi)

@@ -96,7 +96,7 @@ function focusin(event:FocusEvent){if(editing.value&&event.target===editor.value
       <input v-else ref="editor" v-model="draft" :type="kind==='number'?'number':'text'" :step="kind==='number'?(integer?'1':step):undefined" :disabled="saving" @keydown="keydown" />
       <small v-if="saving">保存中…</small><small v-if="error" class="apf-inline-error" role="alert">{{error}}</small>
     </template>
-    <button v-else type="button" class="apf-inline-value" :title="activation==='doubleclick'?'双击编辑':undefined" @click="activate" @dblclick.stop.prevent="activateDoubleClick">{{display ?? (value===null||value===undefined||value===''?'未设置':value)}}</button>
+    <button v-else type="button" class="apf-inline-value" :title="activation==='doubleclick'?'双击或按 Enter 编辑':undefined" @click="activate" @dblclick.stop.prevent="activateDoubleClick" @keydown.enter.stop.prevent="begin" @keydown.space.stop.prevent="begin">{{display ?? (value===null||value===undefined||value===''?'未设置':value)}}<i aria-hidden="true" class="pi pi-pencil apf-edit-icon" /></button>
   </span>
 </template>
 

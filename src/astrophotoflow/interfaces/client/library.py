@@ -4,9 +4,13 @@ from typing import Any
 from astrophotoflow.contracts.assets import AssetContentAccept, AssetContentObservation, AssetOut, AssetParametersPatch, AssetPatch
 from astrophotoflow.contracts.datasets import DatasetCreate, DatasetMemberParametersUpdate, DatasetMembersCreate, DatasetPatch
 from astrophotoflow.contracts.trash import LibraryEntriesRemove, LibraryTrashDelete, LibraryTrashSelection
+from astrophotoflow.contracts.inputs import CanvasDataRequest
 
 
 class LibraryOperations:
+    def prepare_canvas_data(self, body: CanvasDataRequest) -> dict[str, Any]:
+        return self.request("POST", "/library/canvas-data", json=body)
+
     def list_assets(self, limit: int = 50, offset: int = 0, q: str | None = None, status: str = "active",
                     frame_type: str | None = None, role: str | None = None, sort_by: str = "created_at",
                     order: str = "desc") -> dict[str, Any]:

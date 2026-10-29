@@ -27,17 +27,19 @@ vi.mock(import('@/composables/sidebarTabs/useNodeLibrarySidebarTab'), () => ({
   useNodeLibrarySidebarTab: () => stubTab('node-library')
 }))
 vi.mock(import('@/platform/astrophotoflow'), () => ({
-  useLibrarySidebarTab: () => stubTab('library')
+  useLibrarySidebarTab: () => stubTab('library'),
+  useSoftwareSidebarTab: () => stubTab('software')
 }))
 vi.mock(
   import('@/platform/workflow/management/composables/useWorkflowsSidebarTab'),
   () => ({ useWorkflowsSidebarTab: () => stubTab('workflows') })
 )
-const coreTabIds = ['node-library', 'library', 'workflows']
+const coreTabIds = ['node-library', 'library', 'workflows', 'software']
 
 const coreToggleCommandIds = [
   'Workspace.ToggleSidebarTab.library',
   'Workspace.ToggleSidebarTab.node-library',
+  'Workspace.ToggleSidebarTab.software',
   'Workspace.ToggleSidebarTab.workflows'
 ]
 
@@ -45,6 +47,7 @@ const allToggleCommandIds = [
   'Workspace.ToggleSidebarTab.job-history',
   'Workspace.ToggleSidebarTab.library',
   'Workspace.ToggleSidebarTab.node-library',
+  'Workspace.ToggleSidebarTab.software',
   'Workspace.ToggleSidebarTab.workflows'
 ]
 

@@ -22,6 +22,28 @@ def format_for_path(path: Path) -> str | None:
     return None
 
 
+def enumerate_local(path: Path) -> list[dict]:
+    if not path.is_absolute():
+        raise ApiError(422, "VALIDATION_ERROR", "请选择本机绝对路径。")
+    try:
+        selected = path.resolve(strict=True)
+        candidates = sorted(selected.iterdir(), key=lambda child: (child.name.casefold(), child.name)) if selected.is_dir() else [selected]
+        entries = []
+        for candidate in candidates:
+            actual = candidate.resolve(strict=True)
+            if not actual.is_file() or format_for_path(actual) is None:
+                continue
+            stamp = actual.stat()
+            entries.append({
+                "root_id": "", "path": str(actual), "identity": str(actual), "kind": "file",
+                "format": format_for_path(actual), "size": stamp.st_size,
+                "source_stamp": {"size": stamp.st_size, "mtime_ns": stamp.st_mtime_ns},
+            })
+        return entries
+    except OSError as exc:
+        raise ApiError(404, "SOURCE_UNAVAILABLE", "所选本机路径当前无法读取。") from exc
+
+
 def find_root(settings: Settings, root_id: str) -> tuple[ImportRoot, Path]:
     root = next((item for item in settings.import_roots if item.id == root_id), None)
     if root is None:
@@ -113,10 +135,12 @@ def enumerate_source(settings: Settings, root_id: str, relative_path: str, stopp
             }
             return
         if resolved.is_file():
+            stamp = resolved.stat()
             yield {
                 "root_id": root_id, "path": relative_posix(root, path),
                 "identity": str(resolved), "kind": "file",
-                "format": format_for_path(path), "size": resolved.stat().st_size,
+                "format": format_for_path(path), "size": stamp.st_size,
+                "source_stamp": {"size": stamp.st_size, "mtime_ns": stamp.st_mtime_ns},
             }
             return
         if not resolved.is_dir():
@@ -154,10 +178,12 @@ def enumerate_source(settings: Settings, root_id: str, relative_path: str, stopp
             if actual.is_dir():
                 yield from visit(child)
             elif actual.is_file():
+                stamp = actual.stat()
                 yield {
                     "root_id": root_id, "path": relative_posix(root, child),
                     "identity": str(actual), "kind": "file",
-                    "format": format_for_path(child), "size": actual.stat().st_size,
+                    "format": format_for_path(child), "size": stamp.st_size,
+                    "source_stamp": {"size": stamp.st_size, "mtime_ns": stamp.st_mtime_ns},
                 }
 
     yield from visit(start)

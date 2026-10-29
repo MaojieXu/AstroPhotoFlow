@@ -3,6 +3,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiClientError } from '@ui/modules/data/api/client'
 import App from '@ui/modules/data/App.vue'
+import Workspace from '@ui/modules/data/workspace/Workspace.vue'
 import type { Asset } from '@ui/modules/data/api/contracts'
 import realApiFixtureJson from '../../../fixtures/dataset-groups-real-api.json?raw'
 import { useWorkspaceStore } from '@ui/modules/data/workspace/store'
@@ -83,6 +84,24 @@ async function enterGroup(name:string){
   await flushPromises()
 }
 describe('dataset group member table',()=>{
+  it('adds the fixed group version or one member without using the current canonical version',async()=>{
+    const group=dataset(8101,'Canvas group',8102,1)
+    const asset=assetFor(8103,'Pinned canvas member.fit')
+    const pinned=member(asset,8102,0,9104)
+    configureLibrary([{dataset:group,version:version(group.id,8102,[pinned])}])
+    await mountLibrary()
+    const action=wrapper.get('button[aria-label="将 Canvas group 加入画布"]')
+    expect(action.classes()).toContain('apf-canvas-action')
+    expect(action.text()).not.toContain('加入画布')
+    expect(action.element.closest('td')?.classList.contains('apf-canvas-action-cell')).toBe(true)
+    await wrapper.get('button[aria-label="将 Canvas group 加入画布"]').trigger('click')
+    expect(wrapper.findComponent(Workspace).emitted('add-to-canvas')?.[0]).toEqual([{entry_type:'dataset',id:group.id,version_id:idAt(8102)}])
+    await enterGroup('Canvas group')
+    await wrapper.get('button[aria-label="将 Pinned canvas member.fit 加入画布"]').trigger('click')
+    expect(wrapper.findComponent(Workspace).emitted('add-to-canvas')?.[1]).toEqual([{entry_type:'asset',id:asset.id,version_id:pinned.version.id}])
+    expect(send).not.toHaveBeenCalled()
+  })
+
   it('clicks a group member thumbnail to preview its pinned version',async()=>{
     const group=dataset(8001,'Preview group',8002,1)
     const asset=assetFor(8003,'Pinned member.fit')
@@ -101,10 +120,10 @@ describe('dataset group member table',()=>{
     const group=dataset(9001,'Direct group',9002,1)
     configureLibrary([{dataset:group,version:version(group.id,9002,[member(assetFor(9003,'Direct member.fit'),9002,0)])}])
     await mountLibrary()
-    expect(wrapper.text()).not.toMatch(/管理成员|编辑成员|编辑数据集成员/)
+    expect(wrapper.text()).not.toMatch(/管理成员|编辑成员|编辑图像组成员/)
     await enterGroup('Direct group')
     expect(wrapper.text()).toContain('Direct member.fit')
-    expect(wrapper.text()).not.toMatch(/管理成员|编辑成员|编辑数据集成员/)
+    expect(wrapper.text()).not.toMatch(/管理成员|编辑成员|编辑图像组成员/)
     expect(wrapper.findComponent({name:'DatasetEditor'}).exists()).toBe(false)
   })
 
@@ -149,7 +168,7 @@ describe('dataset group member table',()=>{
     expect(wrapper.get('.apf-table-scroll').classes()).toContain('detail')
     expect(get).toHaveBeenCalledWith('/astrophotoflow/api/v1/datasets/'+first.id+'/versions/'+firstVersion.id,expect.anything())
 
-    await wrapper.get('.apf-library-view button').trigger('click')
+    await wrapper.get('select[aria-label="显示方式"]').setValue('simple')
     expect(wrapper.get('.apf-table-scroll').classes()).toContain('simple')
     await wrapper.findAll('button').find(button=>button.text()==='← 返回素材库')!.trigger('click')
     await flushPromises()
@@ -172,10 +191,10 @@ describe('dataset group member table',()=>{
     configureLibrary([{dataset:group,version:groupVersion}])
     await mountLibrary();await enterGroup('Navigation group')
 
-    await wrapper.get('nav button[aria-label="设置"]').trigger('click');await flushPromises()
-    expect(get.mock.calls.some(([path])=>String(path).startsWith('/astrophotoflow/api/v1/projects?')&&String(path).includes('status=active'))).toBe(true)
-    expect(wrapper.get('h1').text()).toBe('设置')
-    for(const [label,path] of [['设备','/astrophotoflow/api/v1/equipment?status=active'],['使用组合','/astrophotoflow/api/v1/equipment-setups?status=active']] as const){
+    await wrapper.get('nav button[aria-label="设备管理"]').trigger('click');await flushPromises()
+    expect(get.mock.calls.some(([path])=>String(path).startsWith('/astrophotoflow/api/v1/equipment-setups?')&&String(path).includes('status=active'))).toBe(true)
+    expect(wrapper.get('h1').text()).toBe('设备管理')
+    for(const [label,path] of [['我的设备','/astrophotoflow/api/v1/equipment?status=active'],['设备组合','/astrophotoflow/api/v1/equipment-setups?status=active']] as const){
       await wrapper.findAll('.apf-management-tabs button').find(button=>button.text()===label)!.trigger('click');await flushPromises()
       expect(get.mock.calls.some(([request])=>String(request).startsWith(path.split('?')[0]+'?')&&String(request).includes('status=active'))).toBe(true)
     }
@@ -223,9 +242,9 @@ describe('dataset group member table',()=>{
     })
     await mountLibrary()
     await wrapper.findAll('.apf-member-open').find(button=>button.text().includes('图像组'))!.trigger('click')
-    await wrapper.get('nav button[aria-label="设置"]').trigger('click');await flushPromises()
+    await wrapper.get('nav button[aria-label="设备管理"]').trigger('click');await flushPromises()
     resolveVersion(groupVersion);await flushPromises()
-    expect(wrapper.get('h1').text()).toBe('设置')
+    expect(wrapper.get('h1').text()).toBe('设备管理')
     expect(wrapper.text()).not.toContain('Late group')
     expect(wrapper.text()).not.toContain('Late member.fit')
   })
@@ -257,7 +276,7 @@ describe('dataset group member table',()=>{
     configureLibrary([{dataset:group,version:groupVersion}])
     await mountLibrary();await enterGroup('Paged group')
 
-    const pageSize=wrapper.get('select[aria-label="每页显示数量"]')
+    const pageSize=wrapper.get('select[aria-label="每页数量"]')
     await pageSize.setValue('10')
     await flushPromises()
     expect(wrapper.findAll('.apf-assets-table tbody tr')).toHaveLength(10)
@@ -289,7 +308,7 @@ describe('dataset group member table',()=>{
 
     expect(realApiFixture.version.members).toHaveLength(31)
     expect(wrapper.findAll('.apf-assets-table tbody tr')).toHaveLength(31)
-    await wrapper.get('select[aria-label="每页显示数量"]').setValue('10');await flushPromises()
+    await wrapper.get('select[aria-label="每页数量"]').setValue('10');await flushPromises()
     expect(wrapper.findAll('.apf-assets-table tbody tr')).toHaveLength(10)
     await wrapper.findAll('button').find(button=>button.text()==='下一页')!.trigger('click');await flushPromises()
     expect(wrapper.findAll('.apf-assets-table tbody tr')).toHaveLength(10)
@@ -323,9 +342,9 @@ describe('dataset group member table',()=>{
 
     const rows=wrapper.findAll('.apf-assets-table tbody tr')
     expect(rows).toHaveLength(2)
-    expect(rows[0].find('td:nth-child(3)').text()).toContain('masterframe')
-    expect(rows[1].find('td:nth-child(3)').text()).toContain('video')
-    expect(rows[1].find('td:nth-child(3)').text()).not.toContain('subframe')
+    expect(rows[0].find('td:nth-child(3)').text()).toContain('合成帧')
+    expect(rows[1].find('td:nth-child(3)').text()).toContain('视频')
+    expect(rows[1].find('td:nth-child(3)').text()).not.toContain('单帧')
   })
 
   it('shows the fixed member thumbnail and uses the latest asset revision for consecutive edits',async()=>{
@@ -397,7 +416,7 @@ describe('dataset group member table',()=>{
     ])
     configureLibrary([{dataset:group,version:groupVersion}])
     await mountLibrary();await enterGroup('Numeric group')
-    const names=()=>wrapper.findAll('.apf-assets-table tbody tr').map(row=>row.find('td:nth-child(2)').text().replace('固定版本 · light',''))
+    const names=()=>wrapper.findAll('.apf-assets-table tbody tr').map(row=>row.find('td:nth-child(2) button.apf-inline-value').text())
     const exposure=wrapper.findAll('.apf-sort-button').find(button=>button.text().startsWith('曝光'))!
     await exposure.trigger('click');await flushPromises()
     expect(names()).toEqual(['Zero.fit','Quarter.fit','Half.fit','Missing.fit'])
@@ -425,7 +444,7 @@ describe('dataset group member table',()=>{
     ])
     configureLibrary([{dataset:group,version:groupVersion}])
     await mountLibrary();await enterGroup('Gain group')
-    const names=()=>wrapper.findAll('.apf-assets-table tbody tr').map(row=>row.find('td:nth-child(2)').text().replace('固定版本 · light',''))
+    const names=()=>wrapper.findAll('.apf-assets-table tbody tr').map(row=>row.find('td:nth-child(2) button.apf-inline-value').text())
     const parameterMode=wrapper.findAll('.apf-sort-button').find(button=>button.text().startsWith('ISO／Gain'))!
     await parameterMode.trigger('click');await flushPromises()
     expect(names()).toEqual(['Zero gain.fit','Quarter gain.fit','Half gain.fit','Missing gain.fit'])

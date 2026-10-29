@@ -13,6 +13,7 @@ import axios from 'axios'
 import { get } from 'es-toolkit/compat'
 import { trimEnd } from 'es-toolkit'
 import { ref } from 'vue'
+import type { CanvasEvent } from '@/platform/astrophotoflow/canvasContracts'
 
 import defaultClientFeatureFlags from '@/config/clientFeatureFlags.json' with { type: 'json' }
 import type { ApiAuthProvider } from '@/platform/auth/apiAuthProvider'
@@ -242,6 +243,7 @@ export type PromptQueuedEventPayload = FrontendApiCalls['promptQueued']
 
 /** Dictionary of calls originating from ComfyUI core */
 interface BackendApiCalls {
+  'apf.canvas_command': unknown
   progress: ProgressWsMessage
   executing: ExecutingWsMessage
   executed: ExecutedWsMessage
@@ -269,7 +271,20 @@ interface BackendApiCalls {
   feature_flags: FeatureFlagsWsMessage
   asset_download: AssetDownloadWsMessage
   asset_export: AssetExportWsMessage
+  'apf.page_result': NativePageReply
 }
+
+export interface NativePageReply {
+  event_id: string
+  page_id: string
+  page_token: string
+  result: unknown
+  error: { code: string; message: string; fields: { path: string; message: string }[] } | null
+}
+
+export type NativePageSendResult =
+  | { ok: true; reply: NativePageReply }
+  | { ok: false; reason: 'unsupported' | 'offline' | 'connection_closed' | 'send_failed' }
 
 /** Dictionary of all api calls */
 interface ApiCalls extends BackendApiCalls, FrontendApiCalls {
@@ -445,6 +460,7 @@ export class ComfyApi extends EventTarget {
    */
   user: string
   socket: WebSocket | null = null
+  private pendingNativePage = new Map<string, (result: NativePageSendResult) => void>()
 
   /**
    * Monotonic id bumped by every createSocket() attempt. Because createSocket()
@@ -849,6 +865,53 @@ export class ComfyApi extends EventTarget {
     return super.dispatchEvent(event)
   }
 
+  sendNativePage(action: 'open', payload: null): Promise<NativePageSendResult>
+  sendNativePage(action: 'confirm_software', payload: { operation_id: string }): Promise<NativePageSendResult>
+  sendNativePage(
+    action: 'open' | 'confirm_software',
+    payload: null | { operation_id: string }
+  ): Promise<NativePageSendResult> {
+    if (!this.serverSupportsFeature('apf_page')) return Promise.resolve({ ok: false, reason: 'unsupported' })
+    const socket = this.socket
+    if (!socket || socket.readyState !== WebSocket.OPEN) {
+      return Promise.resolve({ ok: false, reason: 'offline' })
+    }
+    const eventId = crypto.randomUUID()
+    return new Promise((resolve) => {
+      this.pendingNativePage.set(eventId, resolve)
+      try {
+        socket.send(JSON.stringify({ type: 'apf.page', data: { event_id: eventId, action, payload } }))
+      } catch {
+        this.pendingNativePage.delete(eventId)
+        resolve({ ok: false, reason: 'send_failed' })
+      }
+    })
+  }
+
+  sendCanvasEvent(data: CanvasEvent): boolean {
+    if (!this.serverSupportsFeature('apf_page') || this.socket?.readyState !== WebSocket.OPEN) return false
+    try {
+      this.socket.send(JSON.stringify({ type: 'apf.canvas', data }))
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  private settleNativePageConnection(): void {
+    for (const resolve of this.pendingNativePage.values()) {
+      resolve({ ok: false, reason: 'connection_closed' })
+    }
+    this.pendingNativePage.clear()
+  }
+
+  private settleNativePageReply(reply: NativePageReply): void {
+    const resolve = this.pendingNativePage.get(reply.event_id)
+    if (!resolve) return
+    this.pendingNativePage.delete(reply.event_id)
+    resolve({ ok: true, reply })
+  }
+
   /** @deprecated Use {@link dispatchCustomEvent}. */
   override dispatchEvent(event: never): boolean {
     return super.dispatchEvent(event)
@@ -960,6 +1023,7 @@ export class ComfyApi extends EventTarget {
       // A replaced socket (e.g. after resetSocket on an account switch) must
       // not reconnect; only the active socket owns the reconnect lifecycle.
       if (this.socket !== socket) return
+      this.settleNativePageConnection()
       this.serverFeatureFlagsSettled.value = true
       clearTimeout(settleTimer)
       setTimeout(async () => {
@@ -1108,6 +1172,11 @@ export class ComfyApi extends EventTarget {
               this.serverFeatureFlags.value = msg.data
               this.serverFeatureFlagsSettled.value = true
               this.dispatchCustomEvent('feature_flags', msg.data)
+              if (this.serverSupportsFeature('apf_page')) void this.sendNativePage('open', null)
+              break
+            case 'apf.page_result':
+              this.settleNativePageReply(msg.data)
+              this.dispatchCustomEvent('apf.page_result', msg.data)
               break
             default:
               if (this._registered.has(msg.type)) {
@@ -1161,6 +1230,7 @@ export class ComfyApi extends EventTarget {
 
   private async replaceSocket(): Promise<void> {
     const previous = this.socket
+    this.settleNativePageConnection()
     // serverFeatureFlags deliberately keeps the previous map: clearing it would
     // downgrade every serverSupportsFeature() caller until the next delivery.
     this.serverFeatureFlagsSettled.value = false

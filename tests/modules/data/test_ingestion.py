@@ -666,7 +666,7 @@ def test_ordinary_images_create_only_small_preview(tmp_path):
         app.state.database.close()
 
 
-def test_fits_batch_reuses_group_stretch_and_restores_it_on_resume(tmp_path):
+def test_fits_batch_stretches_each_photo_independently_and_restores_it_on_resume(tmp_path):
     root = tmp_path / "science"
     root.mkdir()
     cases = (
@@ -700,31 +700,29 @@ def test_fits_batch_reuses_group_stretch_and_restores_it_on_resume(tmp_path):
                 name: session.scalar(select(Preview).where(Preview.asset_version_id == items[name]["asset_version_id"], Preview.size == "thumbnail")).display_parameters
                 for name in ("a.fit", "b.fit", "c.fit", "e.fit")
             }
-            groups = session.get(AssetTask, task_id).report["preview_stretch_groups"]
-        assert len(groups) == 3
-        assert displays["a.fit"]["stretch_low"] == displays["b.fit"]["stretch_low"]
-        assert displays["a.fit"]["stretch_high"] == displays["b.fit"]["stretch_high"]
-        assert displays["b.fit"]["stretch_reference_version_id"] == items["a.fit"]["asset_version_id"]
-        assert displays["c.fit"]["stretch_group"] != displays["a.fit"]["stretch_group"]
-        assert displays["e.fit"]["stretch_reference_version_id"] == items["e.fit"]["asset_version_id"]
+            assert "preview_stretch_groups" not in session.get(AssetTask, task_id).report
+        for name, offset in (("b.fit", 1000), ("c.fit", 2000), ("e.fit", 3000)):
+            assert displays[name]["auto_stretch"]["highlights"] == pytest.approx(displays["a.fit"]["auto_stretch"]["highlights"] + offset)
+            assert "stretch_reference_version_id" not in displays[name]
+            assert "stretch_group" not in displays[name]
         assert client.get(f"/api/v1/library/assets/{items['b.fit']['asset_id']}/versions/{items['b.fit']['asset_version_id']}/previews/detail",headers=AUTH).status_code==404
         assert len(list((settings.data_dir / "previews" / items["b.fit"]["asset_version_id"]).glob("*.jpg"))) == 1
         with app.state.database.write_session() as session:
             session.delete(session.scalar(select(Preview).where(Preview.asset_version_id == items["b.fit"]["asset_version_id"], Preview.size == "thumbnail")))
             session.get(AssetTaskItem, items["b.fit"]["id"]).status = "interrupted"
+            session.get(AssetTaskItem, items["b.fit"]["id"]).preview_status = "pending"
             session.get(AssetTask, task_id).status = "running"
         process_task(app.state.database, settings, task_id)
         with app.state.database.read_session() as session:
             resumed = session.scalar(select(Preview).where(Preview.asset_version_id == items["b.fit"]["asset_version_id"], Preview.size == "thumbnail"))
-            assert resumed.display_parameters["stretch_reference_version_id"] == items["a.fit"]["asset_version_id"]
-            assert resumed.display_parameters["stretch_low"] == displays["a.fit"]["stretch_low"]
+            assert resumed.display_parameters == displays["b.fit"]
         assert len(list((settings.data_dir / "previews" / items["b.fit"]["asset_version_id"]).glob("*.jpg"))) == 1
     finally:
         client.__exit__(None, None, None)
         app.state.database.close()
 
 
-def test_xisf_and_high_depth_images_share_stretch_within_each_format(tmp_path):
+def test_xisf_and_high_depth_images_stretch_each_photo_independently(tmp_path):
     root = tmp_path / "science"
     root.mkdir()
     values = np.arange(2400, dtype=np.uint16).reshape(40, 60)
@@ -749,12 +747,11 @@ def test_xisf_and_high_depth_images_share_stretch_within_each_format(tmp_path):
                 name: session.scalar(select(Preview).where(Preview.asset_version_id == item["asset_version_id"], Preview.size == "thumbnail")).display_parameters
                 for name, item in items.items()
             }
-            assert len(session.get(AssetTask, created.json()["task_id"]).report["preview_stretch_groups"]) == 2
+            assert "preview_stretch_groups" not in session.get(AssetTask, created.json()["task_id"]).report
         for first, second in (("a.xisf", "b.xisf"), ("a.tif", "b.tif")):
-            assert displays[first]["stretch_low"] == displays[second]["stretch_low"]
-            assert displays[first]["stretch_high"] == displays[second]["stretch_high"]
-            assert displays[second]["stretch_reference_version_id"] == items[first]["asset_version_id"]
-        assert displays["a.xisf"]["stretch_group"] != displays["a.tif"]["stretch_group"]
+            assert displays[second]["auto_stretch"]["highlights"] == pytest.approx(displays[first]["auto_stretch"]["highlights"] + 1000)
+            assert "stretch_reference_version_id" not in displays[second]
+            assert "stretch_group" not in displays[second]
     finally:
         client.__exit__(None, None, None)
         app.state.database.close()

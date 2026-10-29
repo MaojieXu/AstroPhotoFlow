@@ -26,6 +26,8 @@ import struct
 import ssl
 import socket
 import ipaddress
+import secrets
+import secrets
 from PIL import Image, ImageOps
 from PIL.PngImagePlugin import PngInfo
 from io import BytesIO
@@ -338,15 +340,23 @@ class PromptServer():
             await ws.prepare(request)
             sid = request.rel_url.query.get('clientId', '')
             if sid:
-                # Reusing existing session, remove old
-                self.sockets.pop(sid, None)
+                existing = self.sockets.get(sid)
+                if existing is not None:
+                    await self.apf_socket_closed(self, existing)
+                    self.sockets.pop(sid, None)
+                    await existing.close()
             else:
                 sid = uuid.uuid4().hex
 
             # Store WebSocket for backward compatibility
             self.sockets[sid] = ws
             # Store metadata separately
-            self.sockets_metadata[sid] = {"feature_flags": {}}
+            page_id = self.apf_page_id_by_client.setdefault(sid, str(uuid.uuid4()))
+            self.sockets_metadata[sid] = {
+                "feature_flags": {},
+                "apf_page_id": page_id,
+                "apf_page_token": secrets.token_urlsafe(32),
+            }
 
             try:
                 # Send initial state to the new client
@@ -381,6 +391,7 @@ class PromptServer():
                                     f"Feature flags negotiated for client {sid}: {client_flags}"
                                 )
                             first_message = False
+                            await self.apf_handle_socket(self, ws, data)
                         except json.JSONDecodeError:
                             logging.warning(
                                 f"Invalid JSON received from client {sid}: {msg.data}"
@@ -388,8 +399,10 @@ class PromptServer():
                         except Exception as e:
                             logging.error(f"Error processing WebSocket message: {e}")
             finally:
-                self.sockets.pop(sid, None)
-                self.sockets_metadata.pop(sid, None)
+                if self.sockets.get(sid) is ws:
+                    await self.apf_socket_closed(self, ws)
+                    self.sockets.pop(sid, None)
+                    self.sockets_metadata.pop(sid, None)
             return ws
 
         @routes.get("/")
@@ -1384,6 +1397,8 @@ class PromptServer():
         self.app.add_routes([
             web.static('/', self.web_root),
         ])
+        from astrophotoflow.interfaces.comfyui import register_native
+        register_native(self)
 
     def get_queue_info(self):
         prompt_info = {}

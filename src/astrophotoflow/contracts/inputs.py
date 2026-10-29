@@ -49,6 +49,53 @@ class DatasetInputReference(StrictModel):
 InputReference = Annotated[AssetInputReference | DatasetInputReference, Field(discriminator="kind")]
 
 
+class CanvasDataRequest(StrictModel):
+    entry_type: Literal["asset", "dataset"]
+    id: UuidInput
+    version_id: UuidInput
+    member_indexes: list[int] | None = None
+
+    @model_validator(mode="after")
+    def valid_members(self):
+        if self.member_indexes is not None:
+            if self.entry_type != "dataset" or not self.member_indexes:
+                raise ValueError("只有图像组可以指定非空成员范围。")
+            if self.member_indexes != sorted(set(self.member_indexes)) or self.member_indexes[0] < 0:
+                raise ValueError("成员索引必须非负、不重复并保持原顺序。")
+        return self
+
+
+class CanvasDataOut(StrictModel):
+    native_type: Literal["APF_DATA_REFERENCE"] = "APF_DATA_REFERENCE"
+    title: str
+    reference: InputReference
+
+
+class CanvasInspectRequest(StrictModel):
+    reference: InputReference
+    member_index: int = Field(default=0, ge=0)
+
+
+class CanvasInspectOut(StrictModel):
+    title: str
+    total: int
+    member_index: int
+    asset_id: UuidInput
+    asset_version_id: UuidInput
+    name: str
+    availability: Literal["unknown", "available", "changed", "missing"]
+    parameters: dict
+    equipment: dict[str, str | None]
+    format: str | None
+    width: int | None
+    height: int | None
+    bitpix: int | None
+    pixel_type: str | None
+    preview_status: Literal["available", "pending", "failed", "unsupported", "not_ready"]
+    preview_url: str | None
+    preview_error: str | None
+
+
 class ResolveInputsRequest(StrictModel):
     project_id: UuidInput
     references: list[InputReference] = Field(min_length=1)

@@ -175,7 +175,7 @@ def validate_input_references(database: Database, project_id: UUID, references: 
         _reference_rows(session, request)
 
 
-def _resolved_asset(settings: Settings, row, request: ResolveInputsRequest, run_directory: Path):
+def _resolved_asset(settings: Settings, row, input_mode: str, run_directory: Path):
     reference_index, asset, version, member_index, dataset_version_id, calibration, selection = row
     if not version.content_hash or version.byte_size is None:
         raise ApiError(422, "SOURCE_UNAVAILABLE", "固定素材版本尚未完成内容登记。")
@@ -185,7 +185,7 @@ def _resolved_asset(settings: Settings, row, request: ResolveInputsRequest, run_
         raise ApiError(409, "SOURCE_CHANGED", "固定素材内容与已登记版本不同；请先检查并确认内容变化。")
     preparation = "existing_managed" if version.storage_mode == "managed" else "reference"
     read_path = path
-    if request.input_mode == "reproducible" and version.storage_mode == "reference":
+    if input_mode == "reproducible" and version.storage_mode == "reference":
         inputs_dir = run_directory / "inputs"
         inputs_dir.mkdir(parents=True, exist_ok=True)
         read_path = inputs_dir / f"{reference_index:04d}-{version.id}{''.join(path.suffixes)}"
@@ -202,6 +202,7 @@ def _resolved_asset(settings: Settings, row, request: ResolveInputsRequest, run_
                 raise ApiError(409, "SOURCE_CHANGED", "素材在固定输入期间发生变化。")
             os.replace(part, read_path)
         preparation = "materialized"
+        mtime_ns = read_path.stat().st_mtime_ns
     metadata = version.scientific_metadata or {}
     return ResolvedAssetInput(
         kind="asset_version", reference_index=reference_index, asset_id=UUID(asset.id),
@@ -226,10 +227,51 @@ def resolve_inputs(database: Database, settings: Settings, request: ResolveInput
         run_directory.mkdir(parents=True, exist_ok=True)
         if shutil.disk_usage(run_directory).free < required_copy_bytes:
             raise ApiError(422, "INSUFFICIENT_STORAGE", "可用空间不足，无法固定本次科学输入。")
-    items = [_resolved_asset(settings, row, request, run_directory) for row in rows]
+    items = [_resolved_asset(settings, row, request.input_mode, run_directory) for row in rows]
     copied_bytes = sum(item.byte_size for item in items if item.preparation == "materialized")
     return ResolvedInputs(input_mode=request.input_mode, items=items,
                           required_copy_bytes=required_copy_bytes, copied_bytes=copied_bytes)
+
+
+def resolve_canvas_inputs(database: Database, settings: Settings, reference: InputReference,
+                          *, run_directory: Path) -> ResolvedInputs:
+    with database.read_session() as session:
+        calibrations = {}
+        if reference.kind == "asset_version":
+            members = [(None, str(reference.asset_version_id), reference.selection)]
+            dataset_version_id = None
+        else:
+            fixed = session.get(DatasetVersion, str(reference.dataset_version_id))
+            dataset = session.get(Dataset, fixed.dataset_id) if fixed else None
+            if dataset is None or dataset.status != "active":
+                raise ApiError(404, "INVALID_REFERENCE", "固定图像组不存在或已移除。")
+            rows = session.scalars(select(DatasetMember).where(DatasetMember.dataset_version_id == fixed.id)).all()
+            for member in rows:
+                calibrations[member.position] = dict(fixed.calibration_defaults or {})
+                calibrations[member.position].update(member.calibration_overrides or {})
+            expected = {row.position: row.asset_version_id for row in rows}
+            indexes = [item.member_index for item in reference.members]
+            if indexes != sorted(set(indexes)) or any(expected.get(item.member_index) != str(item.asset_version_id) for item in reference.members):
+                raise ApiError(422, "INVALID_REFERENCE", "图像组固定成员或顺序不匹配。")
+            members = [(item.member_index, str(item.asset_version_id), item.selection) for item in reference.members]
+            dataset_version_id = str(fixed.id)
+        rows = []
+        for position, version_id, selection in members:
+            version = session.get(AssetVersion, version_id)
+            asset = session.get(Asset, version.asset_id) if version else None
+            if asset is None or asset.scope != "shared" or asset.status != "active" or version.availability != "available":
+                raise ApiError(404, "INVALID_REFERENCE", "固定素材不存在或原件尚未就绪。")
+            _validate_selection(session, version, selection)
+            calibration = {"bias": None, "dark": None, "flat": None, "dark_flat": None}
+            calibration.update(calibrations.get(position, {}))
+            rows.append((0, asset, version, position, dataset_version_id, calibration, selection))
+    required = sum(version.byte_size or 0 for _, _, version, _, _, _, _ in rows if version.storage_mode == "reference")
+    run_directory.mkdir(parents=True, exist_ok=True)
+    if required and shutil.disk_usage(run_directory).free < required:
+        raise ApiError(422, "INSUFFICIENT_STORAGE", "空间不足，无法固定本次科学输入。")
+    items = [_resolved_asset(settings, row, "reproducible", run_directory) for row in rows]
+    return ResolvedInputs(input_mode="reproducible", items=items, required_copy_bytes=required,
+                          copied_bytes=sum(item.byte_size for item in items if item.preparation == "materialized"))
 
 
 def observe_reference_inputs(settings: Settings, inputs: ResolvedInputs) -> list[ReferenceObservation]:
@@ -461,7 +503,7 @@ def check_output(settings: Settings, *, run_directory: Path, path: Path, expecte
 
 
 def render_output_preview(checked: CheckedOutput, destination: Path, *, selection: ScienceSelection | None = None,
-                          max_edge: int, cfa_pattern: str | None = None) -> None:
+                          max_edge: int, cfa_pattern: str | None = None, auto_stretch: bool = True) -> None:
     from astrophotoflow.modules.data.fits_preview import create_preview
     from astrophotoflow.modules.data.ingestion import _ordinary_image, _raw_image, _xisf_image
 
@@ -486,13 +528,17 @@ def render_output_preview(checked: CheckedOutput, destination: Path, *, selectio
             row = next((item for item in inspected["hdus"] if item["hdu_index"] == hdu_index), None)
             if row is None or row["supported_kind"] is None:
                 raise ApiError(422, "PREVIEW_UNSUPPORTED", "FITS 输出没有可预览的受支持 HDU。")
-            image, _ = create_preview(source, hdu_index, row["supported_kind"], {"cfa_pattern": cfa_pattern}, max_edge)
+            if auto_stretch:
+                image, _ = create_preview(source, hdu_index, row["supported_kind"], {"cfa_pattern": cfa_pattern}, max_edge)
+            else:
+                from astrophotoflow.modules.data.siril_preview import direct_fits_image
+                image = direct_fits_image(source, hdu_index, max_edge)
         elif checked.format == "image":
-            image, _ = _ordinary_image(source)
+            image, _ = _ordinary_image(source, max_edge=max_edge)
         elif checked.format == "raw":
             image = _raw_image(source, max_edge)
         elif checked.format == "xisf":
-            image, _ = _xisf_image(source)
+            image, _ = _xisf_image(source, max_edge=max_edge)
         elif checked.format == "video":
             if source.suffix.lower() != ".ser" and shutil.which("ffmpeg") is None:
                 raise ApiError(422, "PREVIEW_DEPENDENCY_UNAVAILABLE", "资产服务未找到 FFmpeg，无法生成视频首帧预览。")

@@ -4,6 +4,9 @@ import {assetApi} from '../api/index'
 import {assetSchema,datasetSchema,pageSchema,type Asset} from '../api/contracts'
 import type {WorkspaceContext} from './Workspace.vue'
 import WorkspaceRecords from './WorkspaceRecords.vue'
+import LibraryInfo from './LibraryInfo.vue'
+import LibraryButton from './LibraryButton.vue'
+import { displayLabel } from './presentation'
 
 const context=inject<WorkspaceContext>('workspace')!
 let active=true
@@ -37,16 +40,15 @@ async function create(){
 </script>
 <template>
   <section class="apf-calibration-library" aria-label="独立校准素材库">
-    <p>Bias、Dark、Flat、Dark Flat 与亮场分开展示；Master Light 仍属于亮场。已有混合组保留完整成员，可在“全部素材”继续查看未知用途。</p>
-    <p>校准组按数据关系保存同一批原件的版本引用和场景说明，不复制照片，也不自动修改原分组。</p>
-    <button type="button" :disabled="saving||context.loading.value" @click="begin">从已有校准照片创建组</button>
+    <h2>校准库<LibraryInfo label="校准库" text="偏置场（Bias）、暗场（Dark）、平场（Flat）、暗平场（Dark Flat）与亮场分开展示；合成亮场（Master Light）仍属于亮场。混合组保留完整成员，未知用途可在“全部素材”查看。校准组只保存原件的固定版本引用及场景说明，不复制照片或修改原分组。" /></h2>
+    <LibraryButton type="button" :disabled="saving||context.loading.value" @click="begin">从已有校准照片创建组</LibraryButton>
     <form v-if="creating" class="apf-editor" aria-label="创建校准组" @submit.prevent="create">
       <label>校准组名称<input v-model="name" required /></label><label>场景说明<textarea v-model="notes" /></label>
-      <label>选择时按用途查看<select v-model="frameType"><option value="">全部校准用途</option><option v-for="type in ['bias','dark','flat','dark_flat']" :key="type" :value="type">{{type}}</option></select></label>
+      <label>选择时按用途查看<select v-model="frameType"><option value="">全部校准用途</option><option v-for="type in ['bias','dark','flat','dark_flat']" :key="type" :value="type">{{displayLabel(type)}}</option></select></label>
       <p>已明确选择 {{chosen.length}} 个版本；切换用途筛选保留已选版本。</p>
       <p v-if="loading" role="status">正在读取已导入校准照片…</p>
-      <div class="apf-calibration-photo-list"><label v-for="photo in visiblePhotos" :key="photo.id"><input v-if="photo.current_version_id" v-model="chosen" type="checkbox" :value="photo.current_version_id" />{{photo.name}} · {{photo.classification?.frame_type}} · {{photo.classification?.frame_class}} · v{{photo.current_version?.version_number}}</label></div>
-      <button type="button" :disabled="saving" @click="creating=false">取消</button><button type="submit" :disabled="saving||loading||chosen.length===0">创建逻辑校准组</button>
+      <div class="apf-calibration-photo-list"><label v-for="photo in visiblePhotos" :key="photo.id"><input v-if="photo.current_version_id" v-model="chosen" type="checkbox" :value="photo.current_version_id" />{{photo.name}} · {{displayLabel(photo.classification?.frame_type)}} · {{displayLabel(photo.classification?.frame_class)}} · v{{photo.current_version?.version_number}}</label></div>
+      <LibraryButton type="button" :disabled="saving" @click="creating=false">取消</LibraryButton><LibraryButton type="submit" variant="primary" :disabled="saving||loading||chosen.length===0">创建逻辑校准组</LibraryButton>
     </form>
     <p v-if="error" role="alert" class="apf-error">{{error}}</p>
     <WorkspaceRecords />

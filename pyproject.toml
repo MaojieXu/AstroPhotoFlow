@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=70.0"]
+requires = ["setuptools>=77.0.3"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -43,7 +43,7 @@ homepage = "https://github.com/MaojieXu/AstroPhotoFlow"
 
 [tool.pytest.ini_options]
 minversion = "8.0"
-addopts = "--confcutdir=tests --basetemp=.artifacts/pytest"
+addopts = "--import-mode=importlib --confcutdir=tests --basetemp=.artifacts/pytest"
 cache_dir = ".artifacts/cache/pytest"
 testpaths = [
     "tests",

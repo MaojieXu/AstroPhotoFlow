@@ -6,6 +6,9 @@ from astrophotoflow.core import http as deps
 from astrophotoflow.modules.data import common as shared
 
 import shutil
+import subprocess
+import asyncio
+from threading import Event
 from typing import Annotated, Literal
 from uuid import UUID, uuid4
 from fastapi import Depends, Query, Request, BackgroundTasks
@@ -13,14 +16,43 @@ from sqlalchemy import func, select
 from astrophotoflow.core.errors import ApiError, not_found
 from astrophotoflow.modules.data.models import AssetTask, AssetTaskItem, Dataset
 from astrophotoflow.contracts.imports import AssetTaskOut, AssetTaskPage, ImportAccepted, ImportRootEntryPage, ImportRootOut
-from astrophotoflow.modules.data.files import entries_page, find_root, resolve_relative
+from astrophotoflow.modules.data.files import entries_page, find_root, resolve_relative, enumerate_source, enumerate_local
 from astrophotoflow.contracts.imports import RetryCreate, ImportCreate, UploadImportCreate
 from pathlib import Path
 from astrophotoflow.modules.data.ingestion import process_task, validate_import_equipment
 from astrophotoflow.modules.data.presets import capture_defaults_snapshot
+from astrophotoflow.modules.data.local_selection import LocalSelectionBusy, select_local_paths
+from astrophotoflow.core.config import ConfigurationError
+from astrophotoflow.contracts.imports import LocalSelectionRequest, LocalSelectionOut
 
 
 router = APIRouter(prefix="/api/v1", responses=ERROR_RESPONSES)
+
+
+@router.post("/imports/select-local", response_model=LocalSelectionOut, dependencies=[Depends(deps.authenticate)])
+async def select_local_import(body: LocalSelectionRequest, request: Request):
+    """打开前置且关联当前桌面宿主的本机选择窗口。请求断开会关闭该窗口；已有选择窗口时返回409 LOCAL_PICKER_BUSY。"""
+    cancelled = Event()
+    chooser = asyncio.create_task(asyncio.to_thread(select_local_paths, body.mode, request.app.state.settings.workspace, cancelled))
+    try:
+        while not chooser.done():
+            if await request.is_disconnected():
+                cancelled.set()
+            await asyncio.wait({chooser}, timeout=0.1)
+        paths = await chooser
+    except LocalSelectionBusy as exc:
+        raise ApiError(409, "LOCAL_PICKER_BUSY", str(exc)) from exc
+    except (OSError, ConfigurationError, subprocess.SubprocessError) as exc:
+        raise ApiError(503, "LOCAL_PICKER_UNAVAILABLE", "无法打开本机选择窗口，请检查本机桌面会话。") from exc
+    finally:
+        cancelled.set()
+    if not paths:
+        return LocalSelectionOut(cancelled=True, files=[], name=None, folder=body.mode == "folder")
+    files = [entry for path in paths for entry in enumerate_local(path)]
+    return LocalSelectionOut(
+        cancelled=False, files=[{"path": entry["path"], "name": Path(entry["path"]).name, "size": entry["size"]} for entry in files],
+        name=paths[0].name or "素材集", folder=body.mode == "folder",
+    )
 
 
 @router.post("/uploads", status_code=202, dependencies=[Depends(deps.authenticate)])
@@ -201,23 +233,33 @@ def import_root_entries(
 def create_import(body: ImportCreate, request: Request, background: BackgroundTasks, admission: deps.TaskAdmission, session: deps.WriteSession):
     validate_import_equipment(session, body.parameters.model_dump(mode="json"))
     sources = []
-    is_dataset = len(body.sources) > 1
+    is_dataset = len(body.sources) > 1 or body.dataset_name is not None
     for source in body.sources:
-        _, root = find_root(request.app.state.settings, source.root_id)
-        selected = resolve_relative(root, source.path, allow_empty=True)
+        if source.root_id is None:
+            selected = Path(source.path)
+            entries = enumerate_local(selected)
+            if not entries:
+                raise ApiError(422, "NO_SUPPORTED_FILES", "所选路径没有当前支持的素材文件。")
+            source_path = str(selected.resolve(strict=True))
+        else:
+            _, root = find_root(request.app.state.settings, source.root_id)
+            selected = resolve_relative(root, source.path, allow_empty=True)
+            data_root = request.app.state.settings.data_dir.resolve()
+            try:
+                data_root.relative_to(root)
+            except ValueError:
+                pass
+            else:
+                raise ApiError(422, "VALIDATION_ERROR", "素材根目录不能包含 AstroPhotoFlow 数据目录。")
+            entries = list(enumerate_source(request.app.state.settings, source.root_id, source.path, lambda: False, lambda: None))
+            source_path = source.path
         kind = "directory" if selected.is_dir() else "file"
         if kind == "directory":
             is_dataset = True
-        data_root = request.app.state.settings.data_dir.resolve()
-        try:
-            data_root.relative_to(root)
-        except ValueError:
-            pass
-        else:
-            raise ApiError(422, "VALIDATION_ERROR", "素材根目录不能包含 AstroPhotoFlow 数据目录。")
         sources.append({
-            "root_id": source.root_id, "path": source.path, "kind": kind,
+            "root_id": source.root_id or "", "path": source_path, "kind": kind,
             "enumeration_completed": False, "error": None,
+            "entries": entries,
         })
     task_id = str(uuid4())
     target_dataset_id = str(uuid4()) if is_dataset else None
@@ -329,9 +371,12 @@ def retry_asset_task(task_id: UUID, body: RetryCreate, request: Request, backgro
     retry_task_id = str(uuid4())
     target_dataset_id = source_task.target_dataset_id
     dataset = session.get(Dataset, target_dataset_id) if target_dataset_id else None
+    source_stamps = {(entry["root_id"], entry["path"]): entry.get("source_stamp")
+                     for source in original.sources for entry in source.get("entries", [])}
     retry_task = AssetTask(
         id=retry_task_id, status="queued",
-        sources=[{"root_id": item.root_id, "path": item.source_path, "kind": "file", "enumeration_completed": True, "error": None} for item in items],
+        sources=[{"root_id": item.root_id, "path": item.source_path, "kind": "file", "enumeration_completed": True, "error": None,
+                  "entries": [{"root_id": item.root_id, "path": item.source_path, "source_stamp": source_stamps.get((item.root_id, item.source_path))}]} for item in items],
         storage_mode=source_task.storage_mode, classification=source_task.classification,
         parameters=source_task.parameters, notes=source_task.notes, dataset_name=source_task.dataset_name,
         import_defaults_snapshot=source_task.import_defaults_snapshot,

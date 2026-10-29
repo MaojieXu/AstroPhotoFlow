@@ -70,7 +70,7 @@ uv run --locked --no-sync pytest tests/modules/data/test_ingestion.py tests/modu
 
 ## B62：构建资源、仓库外安装与交付状态核对
 
-状态：未开工；待确认总计划/前置，满足后才Ready。
+状态：B62正式卡未Ready，B61尚未通过。独立预检包含准确Node 26根构建及v18当前GHT SP/LP assessment/文档wheel/sdist：隔离主构建通过（setuptools 84.2.1），仓库外wheel安装和Node-free sdist重建／再安装通过；重建阶段使用现有setuptools 78.1且未隔离。v18 sidecar／manifest散列一致，包内GHT说明和文档在build时核对通过；OpenAPI snapshot仍与app.openapi()语义一致。v17b Sol Low审查无发现；Sol Low v18独立审查无artifact正确性发现。详见[验证矩阵](../test-matrix.md#demo-b62-packaging-preflight)；上述预检不代替B61真实集成或B61通过后的同候选完整B62验收。
 
 1. **目标与分支**：`codex/first-loop-delivery-check`。使B61真实业务候选进入既有构建/发行资源链，验证仓库外wheel安装与无Node的sdist重建，回写同候选真实状态。覆盖A62-1～3、E-BOUNDARY/E-DELIVERY；完整Windows升级恢复、其他软件及Linux/WSL不前移。
 

@@ -15,12 +15,27 @@ BASE_PATH = "/astrophotoflow/api/v1"
 
 # Public route, corresponding API path, and method. No wildcard proxy route is registered.
 ROUTES = [
+    ("POST", "/imports/select-local", "/imports/select-local"),
+    ("POST", "/library/canvas-data/inspect", "/library/canvas-data/inspect"),
+    ("POST", "/library/canvas-data", "/library/canvas-data"),
     ("GET", "/settings/workbench", "/settings/workbench"),
     ("POST", "/settings/workbench/restart", "/settings/workbench/restart"),
     ("GET", "/settings/workbench/restart/{operation_id}", "/settings/workbench/restart/{operation_id}"),
     ("PATCH", "/settings/workbench", "/settings/workbench"),
     ("POST", "/settings/workbench/select-directory", "/settings/workbench/select-directory"),
     ("GET", "/health", "/health"),
+    ("GET", "/software/packages", "/software/packages"),
+    (
+        "GET",
+        "/software/packages/{package_id}/versions/{version}/commands",
+        "/software/packages/{package_id}/versions/{version}/commands",
+    ),
+    ("GET", "/software/packages/{package_id}", "/software/packages/{package_id}"),
+    ("POST", "/software/packages/{package_id}/install", "/software/packages/{package_id}/install"),
+    ("POST", "/software/packages/{package_id}/uninstall", "/software/packages/{package_id}/uninstall"),
+    ("POST", "/software/packages/siril/autostretch-preview", "/software/packages/siril/autostretch-preview"),
+    ("DELETE", "/software/packages/siril/autostretch-preview/{consumer_id}", "/software/packages/siril/autostretch-preview/{consumer_id}"),
+    ("POST", "/software/packages/{package_id}/prepare", "/software/packages/{package_id}/prepare"),
     ("GET", "/capabilities", "/capabilities"),
     ("GET", "/projects", "/projects"),
     ("POST", "/projects", "/projects"),
@@ -35,6 +50,8 @@ ROUTES = [
     ("POST", "/settings/trash/restore", "/settings/trash/restore"),
     ("POST", "/settings/trash/delete-preview", "/settings/trash/delete-preview"),
     ("POST", "/settings/trash/delete", "/settings/trash/delete"),
+    ("POST", "/equipment-management/delete-preview", "/equipment-management/delete-preview"),
+    ("POST", "/equipment-management/delete", "/equipment-management/delete"),
     ("GET", "/equipment-setups", "/equipment-setups"),
     ("POST", "/equipment-setups", "/equipment-setups"),
     ("GET", "/equipment-setups/{setup_id}", "/equipment-setups/{setup_id}"),
@@ -110,6 +127,11 @@ class ProxyError(Exception):
         self.message = message
 
 
+for _scope in ("/library/assets/{asset_id}/versions/{version_id}/previews", "/projects/{project_id}/asset-references/{reference_id}/previews"):
+    for _method, _suffix in (("POST", "/viewer"), ("DELETE", "/viewer/consumer/{consumer_id}"), ("GET", "/viewer/{key}/status"), ("GET", "/viewer/{key}/tiles/{level}/{x}/{y}"), ("GET", "/viewer/{key}/{file}")):
+        ROUTES.append((_method, _scope + _suffix, _scope + _suffix))
+
+
 def _configuration(*, allow_missing_token: bool = False):
     try:
         settings = load_running_settings(Path(os.environ["APF_WORKSPACE"])) if "APF_WORKSPACE" in os.environ else load_settings()
@@ -148,7 +170,7 @@ def _error_response(request_id: str, status: int, code: str, message: str) -> we
     return web.json_response(body, status=status, headers={"X-Request-ID": request_id})
 
 
-async def forward(request: web.Request, path_template: str) -> web.Response:
+async def forward(request: web.Request, path_template: str) -> web.StreamResponse:
     request_id = str(uuid4())
     try:
         upstream, allowed_origins, token = _configuration()
@@ -158,19 +180,47 @@ async def forward(request: web.Request, path_template: str) -> web.Response:
         url = f"{upstream}/api/v1{upstream_path}"
         query = list(request.rel_url.query.items())
         headers = {"Authorization": f"Bearer {token}", "X-Request-ID": request_id}
+        media_stream = request.method == "GET" and "/previews/viewer/" in path_template
+        if media_stream:
+            for header in ("Range", "If-Range", "If-None-Match", "If-Modified-Since"):
+                if header in request.headers:
+                    headers[header] = request.headers[header]
         if request.method in {"POST", "PATCH", "DELETE", "PUT"}:
             headers["Content-Type"] = request.headers.get("Content-Type", "application/json")
         streaming_upload = request.method == "PUT" and "/uploads/" in request.path
         body = request.content if streaming_upload else await request.read() if request.method in {"POST", "PATCH", "DELETE", "PUT"} else None
-        directory_selection = request.method == "POST" and path_template == "/settings/workbench/select-directory"
-        timeout = aiohttp.ClientTimeout(total=None, sock_connect=10, sock_read=None) if streaming_upload or directory_selection else aiohttp.ClientTimeout(total=10)
+        directory_selection = request.method == "POST" and path_template in {"/settings/workbench/select-directory", "/imports/select-local"}
+        timeout = aiohttp.ClientTimeout(total=None, sock_connect=10, sock_read=None) if streaming_upload or directory_selection or media_stream else aiohttp.ClientTimeout(total=10)
         async with aiohttp.ClientSession(timeout=timeout) as client:
-            async with client.request(request.method, url, params=query, data=body, headers=headers, allow_redirects=False) as response:
-                response_body = await response.read()
-                response_headers = {"X-Request-ID": response.headers.get("X-Request-ID", request_id)}
-                if content_type := response.headers.get("Content-Type"):
-                    response_headers["Content-Type"] = content_type
-                return web.Response(body=response_body, status=response.status, headers=response_headers)
+            async def upstream_response():
+                async with client.request(request.method, url, params=query, data=body, headers=headers, allow_redirects=False) as response:
+                    if media_stream:
+                        selected_headers = {key: value for key, value in response.headers.items() if key.lower() in {
+                            "content-type", "content-length", "content-range", "accept-ranges", "etag", "last-modified", "cache-control", "x-request-id"}}
+                        downstream = web.StreamResponse(status=response.status, headers=selected_headers)
+                        await downstream.prepare(request)
+                        async for chunk in response.content.iter_chunked(256 * 1024):
+                            await downstream.write(chunk)
+                        await downstream.write_eof()
+                        return downstream
+                    response_body = await response.read()
+                    response_headers = {"X-Request-ID": response.headers.get("X-Request-ID", request_id)}
+                    if content_type := response.headers.get("Content-Type"):
+                        response_headers["Content-Type"] = content_type
+                    return web.Response(body=response_body, status=response.status, headers=response_headers)
+            if path_template != "/imports/select-local" and not media_stream:
+                return await upstream_response()
+            pending = asyncio.create_task(upstream_response())
+            try:
+                while not pending.done():
+                    await asyncio.wait({pending}, timeout=0.1)
+                    if request.transport is None or request.transport.is_closing():
+                        raise asyncio.CancelledError()
+                return await pending
+            finally:
+                if not pending.done():
+                    pending.cancel()
+                await asyncio.gather(pending, return_exceptions=True)
     except ProxyError as exc:
         return _error_response(request_id, exc.status, exc.code, exc.message)
     except (asyncio.TimeoutError, TimeoutError):
@@ -180,6 +230,9 @@ async def forward(request: web.Request, path_template: str) -> web.Response:
 
 
 def register_proxy_routes(routes: web.RouteTableDef) -> None:
+    from astrophotoflow.interfaces.canvas_native import register_canvas_routes
+
+    register_canvas_routes(routes)
     if os.environ.get("APF_WORKSPACE") and (native_server := sys.modules.get("server")) is not None:
         native_server.PromptServer.instance.app.middlewares.append(native_admission_middleware())
     for method, public_path, upstream_path in ROUTES:

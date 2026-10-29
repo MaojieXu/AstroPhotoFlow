@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import PhotoPreviewDialog from '@ui/modules/data/workspace/PhotoPreviewDialog.vue'
 import FixedDatasetMembers from '@ui/modules/data/workspace/FixedDatasetMembers.vue'
 import App from '@ui/modules/data/App.vue'
+import Workspace from '@ui/modules/data/workspace/Workspace.vue'
 import { createPinia } from 'pinia'
 import { displayPreviewSchema } from '@ui/modules/data/api/contracts'
 
@@ -189,9 +190,9 @@ it('keeps project dataset member browsing pinned to A while the current dataset 
   })
   send.mockResolvedValue(state('available'))
   wrapper=mount(App,{global:{plugins:[createPinia()]}});await flushPromises()
-  await wrapper.get('nav button[aria-label="设置"]').trigger('click');await flushPromises()
+  await wrapper.findComponent(Workspace).vm.selectArea('settings','projects');await flushPromises()
   await wrapper.get('.apf-record').trigger('click');await flushPromises()
-  await wrapper.findAll('.apf-details button').find(button=>button.text()==='查看项目数据集')!.trigger('click');await flushPromises()
+  await wrapper.findAll('.apf-details button').find(button=>button.text()==='查看项目图像组')!.trigger('click');await flushPromises()
   await wrapper.findAll('button').find(button=>button.text()==='查看固定版本 · 1 张')!.trigger('click');await flushPromises()
   expect(wrapper.get('[aria-label="固定版本照片"]').text()).toContain('Pinned A photo')
   await wrapper.get('[aria-label="固定版本照片"] button[aria-label="查看 Pinned A photo 大图"]').trigger('click');await flushPromises()

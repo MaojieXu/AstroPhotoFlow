@@ -81,7 +81,7 @@ async function load() {
     rows.value = result.items
     total.value = result.total
   } catch (cause) {
-    if (generation === readGeneration && props.open) error.value = cause instanceof Error ? cause.message : '垃圾桶读取失败。'
+    if (generation === readGeneration && props.open) error.value = cause instanceof Error ? cause.message : '回收站读取失败。'
   } finally { if (generation === readGeneration && props.open) loading.value = false }
 }
 watch(() => props.open, open => {
@@ -161,7 +161,7 @@ async function permanentlyDelete() {
       ...previewSelection.value,preview_fingerprint:preview.value.preview_fingerprint
     })
     notice.value=`已清理 ${result.deleted_count} 张照片、${result.deleted_entry_count} 条记录；删除文件 ${result.deleted_file_count} 个（${bytes(result.deleted_bytes)}），缺失文件 ${result.missing_file_count} 个。`+
-      (result.failed.length?` ${result.failed.length} 项保留在垃圾桶中。${result.failed.map(item=>item.error).join('；')}`:'')
+      (result.failed.length?` ${result.failed.length} 项保留在回收站中。${result.failed.map(item=>item.error).join('；')}`:'')
     if (result.failed.length) error.value=result.failed.map(item=>`${item.id}：${item.error}`).join('；')
     emit('changed')
     await load()
@@ -175,8 +175,8 @@ const bytes = (value:number) => value < 1024 ? `${value} B` : value < 1024*1024 
   <div v-if="open" class="trash-backdrop" role="presentation" @click.self="!busy&&emit('close')">
     <section class="trash-dialog" role="dialog" aria-modal="true" aria-labelledby="trash-title">
       <header class="trash-header">
-        <h2 id="trash-title">垃圾桶</h2>
-        <button type="button" aria-label="关闭垃圾桶" :disabled="busy" @click="emit('close')">关闭</button>
+        <h2 id="trash-title">回收站</h2>
+        <button type="button" aria-label="关闭回收站" :disabled="busy" @click="emit('close')">关闭</button>
       </header>
       <div class="trash-content">
         <p class="trash-description">恢复会保留原资产身份与资料。永久删除无法在应用内恢复。</p>
@@ -186,8 +186,8 @@ const bytes = (value:number) => value < 1024 ? `${value} B` : value < 1024*1024 
           <table>
             <thead><tr><th class="trash-select"><input type="checkbox" aria-label="全选当前页" :checked="allSelected" :disabled="loading||busy" @change="togglePage"></th><th>名称</th><th>类型</th><th>移除时间</th><th>清理状态</th></tr></thead>
             <tbody>
-              <tr v-if="loading&&!expandedGroup"><td colspan="5" class="trash-empty">正在读取垃圾桶…</td></tr>
-              <tr v-else-if="!rows.length"><td colspan="5" class="trash-empty">垃圾桶为空。</td></tr>
+              <tr v-if="loading&&!expandedGroup"><td colspan="5" class="trash-empty">正在读取回收站…</td></tr>
+              <tr v-else-if="!rows.length"><td colspan="5" class="trash-empty">回收站为空。</td></tr>
               <template v-for="row in displayRows" :key="row.entry_type+':'+row.id">
                 <tr :class="{'trash-child-row':row.entry_type==='asset'&&rows.some(group=>group.entry_type==='dataset'&&group.member_asset_ids.includes(row.id))}">
                   <td class="trash-select"><input type="checkbox" :aria-label="'选择 '+row.name" :checked="selected.has(row.entry_type+':'+row.id)" :disabled="loading||busy" @change="toggleRow(row)"></td>
@@ -227,12 +227,12 @@ const bytes = (value:number) => value < 1024 ? `${value} B` : value < 1024*1024 
         <section v-if="preview" class="trash-preview" aria-label="永久删除预览">
           <h3>删除范围</h3><p>照片 {{preview.photo_count}} 张；托管文件 {{preview.managed_file_count}} 个，共 {{bytes(preview.managed_bytes)}}。</p>
           <p v-if="preview.tasks.length" class="trash-error">导入任务仍占用：{{preview.tasks.join('、')}}。请先通过导入任务取消。</p>
-          <div v-if="preview.references.length"><h4>{{preview.references.some(reference=>reference.kind==='calibration')?'项目、组或校准关联':'将一并清理'}} {{preview.references.length}} 条项目或组关联</h4><p v-for="reference in preview.references" :key="reference.id">{{reference.name}} · {{reference.kind==='project_asset'?'项目照片':reference.kind==='project_dataset'?'项目数据集':reference.kind==='calibration'?'保留中的校准引用':'数据集成员'}} · 第 {{reference.version}} 版</p></div>
+          <div v-if="preview.references.length"><h4>{{preview.references.some(reference=>reference.kind==='calibration')?'项目、组或校准关联':'将一并清理'}} {{preview.references.length}} 条项目或组关联</h4><p v-for="reference in preview.references" :key="reference.id">{{reference.name}} · {{reference.kind==='project_asset'?'项目照片':reference.kind==='project_dataset'?'项目图像组':reference.kind==='calibration'?'保留中的校准引用':'图像组成员'}} · 第 {{reference.version}} 版</p></div>
           <p v-if="preview.references.some(reference=>reference.kind==='calibration')" role="alert">其他组的历史版本仍使用此校准目标，已阻止清理。先清理引用组；系统不会自动清空关联。</p>
         </section>
       </div>
       <footer class="trash-footer">
-        <nav class="trash-pages" aria-label="垃圾桶分页">
+        <nav class="trash-pages" aria-label="回收站分页">
           <button type="button" :disabled="offset===0||loading||busy" @click="offset=Math.max(0,offset-pageSize);void load()">上一页</button>
           <span>{{total?offset+1:0}}–{{Math.min(offset+rows.length,total)}} / {{total}}</span>
           <button type="button" :disabled="offset+rows.length>=total||loading||busy" @click="offset+=pageSize;void load()">下一页</button>

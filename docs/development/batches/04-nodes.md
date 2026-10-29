@@ -1,14 +1,17 @@
 # M4任务卡：节点构建与原生加载
 
+2026-10-29：本轮 M3 按用户要求提前接通一个固定 Siril Auto Stretch V3 节点，控件读取包／workspace JSON，使用原生节点注册与队列；新增测试未执行。该窄接入不等于 B42 通用定义加载／确认更新或 B43 编辑器已完成，详见[本轮 M3](03-software.md)。
+
+
 本文件落实[近期总计划](../implementation-plan.md#m4)，不另定义协议。文件路径均相对仓库根；N＝本卡新增，M＝修改既有或前置卡创建的文件，R＝只复用。当前③④业务/UI仍待实现，M不代表文件今天存在；不先建空实现。每卡先读根及所改作用域AGENTS。
 
-状态均为未开工，前置及总计划确认后才Ready；每卡自动集成与Milestone人工批准分记。M3/M4按真实Batch依赖交叉实施，同轮分别用户批准，不建立彼此整M批准循环。共享HTTP仅复用B13窄移的同一实现。工作目录/工具和共享runtime恢复按[验证环境](../implementation-plan.md#validation-environment)，用户真实操作/批准按[人工验收门](../implementation-plan.md#acceptance-gates)；tmp_path单元无需停dev，本轮不操作环境。
+状态：B41进行中，B42／B43未开工；前置及总计划条件按卡检查，自动集成与Milestone人工批准分记。M3/M4按真实Batch依赖交叉实施，同轮分别用户批准，不建立彼此整M批准循环。共享HTTP仅复用B13窄移的同一实现。工作目录/工具和共享runtime恢复按[验证环境](../implementation-plan.md#validation-environment)，用户真实操作/批准按[人工验收门](../implementation-plan.md#acceptance-gates)；tmp_path单元无需停dev，本轮不操作环境。
 
 <a id="b41"></a>
 
 ## B41：唯一JSON节点定义与六个public函数
 
-状态：未开工；待确认总计划/前置，满足后才Ready。
+状态：通过（本地`demo`候选）；④定义契约、JSON文件CRUD／token／替换及定向测试已实现，9项节点测试与6项架构测试通过，GPT-6.1 Sol Low独立审查无剩余问题。未集成dev；M4 Milestone人工验收待B42／B43同轮完成后进行。证据见[验证矩阵](../test-matrix.md#demo-b31-probe)。
 
 ### 1. 目标与可观察结果
 

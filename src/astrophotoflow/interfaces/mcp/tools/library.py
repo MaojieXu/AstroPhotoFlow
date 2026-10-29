@@ -6,10 +6,16 @@ from mcp.types import ImageContent
 from astrophotoflow.contracts.assets import AssetParametersPatch, AssetPatch
 from astrophotoflow.contracts.datasets import DatasetCreate, DatasetMemberParametersUpdate, DatasetMembersCreate, DatasetPatch
 from astrophotoflow.contracts.trash import LibraryEntriesRemove, LibraryTrashDelete, LibraryTrashSelection
+from astrophotoflow.contracts.inputs import CanvasDataRequest
 
 
 
 def register(server, call):
+    @server.tool()
+    def prepare_canvas_data(body: CanvasDataRequest) -> dict[str, Any]:
+        """Prepare a fixed scientific reference for a single asset or ordered group; this does not apply it to a canvas."""
+        return call(lambda client: client.prepare_canvas_data(body))
+
     @server.tool()
     def list_assets(limit: int = 50, offset: int = 0, q: str | None = None, status: str = "active", frame_type: str | None = None, role: str | None = None, sort_by: str = "created_at", order: str = "desc") -> dict[str, Any]:
         """Page through shared assets, optionally filtering names, status, role or frame use."""

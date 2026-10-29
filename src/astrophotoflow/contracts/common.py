@@ -1,11 +1,12 @@
 from datetime import datetime
 from math import isfinite
-from pydantic import BaseModel, ConfigDict, Field, model_serializer
+from pydantic import BaseModel, ConfigDict, Field, JsonValue, model_serializer
 from typing import Annotated, Literal
 from uuid import UUID
 
 
 UuidInput = Annotated[UUID, Field(strict=False)]
+JsonObject = dict[str, JsonValue]
 
 
 CfaPattern = Literal["MONO", "RGGB", "BGGR", "GRBG", "GBRG", "XTRANS", "QUAD_BAYER"]

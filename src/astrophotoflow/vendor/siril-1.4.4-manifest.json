@@ -1,0 +1,21 @@
+{
+  "package_id": "siril",
+  "name": "Siril CLI",
+  "version": "1.4.4",
+  "license": "GNU General Public License, Version 3 (GPLv3)",
+  "release_page": "https://siril.org/download/2026-06-17-siril-1-4-4/",
+  "download_url": "https://free-astro.org/download/siril-1.4.4-ucrt64_win.zip",
+  "commands_reference": "https://siril.readthedocs.io/en/stable/Commands.html",
+  "headless_reference": "https://siril.readthedocs.io/en/stable/Headless.html",
+  "commands_file": "siril-1.4.4-commands.json",
+  "commands_file_sha256": "359284FF9A569369DB15749D461C09ED3331E254ABB7C80D576EE9C08F76EE8A",
+  "commands_retrieved_at_utc": "2026-10-28T08:20:07.156748+00:00",
+  "indexed_commands": 199,
+  "scriptable_commands": 181,
+  "non_scriptable_commands": 18,
+  "unknown_scriptability": 0,
+  "command_assessments_file": "siril-1.4.4-command-assessments.json",
+  "command_assessments_file_sha256": "0EBBD74E5F907CC9BDA91804C8D83F3312830BA90891A65EBA0E956916979B2E",
+  "command_assessments_source_sha256": "359284FF9A569369DB15749D461C09ED3331E254ABB7C80D576EE9C08F76EE8A",
+  "command_assessment_records": 199
+}

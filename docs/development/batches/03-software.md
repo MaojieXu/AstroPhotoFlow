@@ -1,14 +1,30 @@
 # M3任务卡：外部软件接入与环境
 
-本文件落实[近期总计划](../implementation-plan.md#m3)，不另定义协议。文件路径均相对仓库根；N＝本卡新增，M＝修改既有或前置卡创建的文件，R＝只复用。当前③④业务/UI仍待实现，M不代表文件今天存在；不先建空实现。每卡先读根及所改作用域AGENTS。
+## 2026-10-29 M3 本地实现候选（未执行测试、未获用户验收）
 
-状态均为未开工，前置及总计划确认后才Ready；每卡自动集成与Milestone人工批准分记。M3/M4按真实Batch依赖交叉实施，同轮分别用户批准，不建立彼此整M批准循环。共享HTTP仅复用B13窄移的同一实现。工作目录/工具和共享runtime恢复按[验证环境](../implementation-plan.md#validation-environment)，用户真实操作/批准按[人工验收门](../implementation-plan.md#acceptance-gates)；tmp_path单元无需停dev，本轮不操作环境。
+本条覆盖下文历史记录中 B31 首操作未选、B33 未开工及软件包页面命令目录的对应现状；不覆盖 M4/M5 的其余任务。
+
+- B31：用户授权选择首个 CLI 工具，本轮锁定 Siril 1.4.4 Auto Stretch。单件／固定有序 FITS 组由一次脚本按顺序 load → autostretch → save，原件不作输出；完整文件、数值 0、缺失文件和不支持的指定 HDU 明确处理。199 条命令仍为资料目录，不批量生成可运行节点。
+- B32：沿用同一原生 WebSocket 的计划／真实按钮确认，修复 NativePageEvent 联合类型解析。页面只常驻软件名、红绿就绪点和安装／卸载按钮，计划进入原生 Dialog；红点原因可悬停／聚焦查看。新增程序副本卸载接口，确认后只删除 workspace/software/siril/app，保留素材、定义及画布。包状态／节点 token 变化拒绝旧计划，调用及维护繁忙时拒绝。
+- B33：software.public 提供 invoke_operation／inspect_operation／cancel_operation／get_usage，保存真实阶段、日志、退出及候选文件。定向终止当前调用的专用进程，发送与实际退出分别返回；未知句柄不猜已停。启动前观察失败不运行，运行后观察失败不自动重算；服务恢复核对已有 PID／创建时间，未知占用继续阻止维护。
+- 首节点：interfaces/siril_node.py 注册 V3 的 Siril Auto Stretch（APF_169de0837f814cdea3295541ecacf463），使用 APF_SCIENCE；控件从既有 JSON 定义读取，默认绑定变更明确拒绝。原生队列、停止及输出预览复用，不引入第二执行队列。软件未安装时节点可见，运行明确拒绝；安装后无需为首节点重启。
+- 科学交接：data.public.resolve_canvas_inputs 验证固定成员顺序、完整内容哈希及当前资料／设备／校准快照；workflows/software_calls.py 接收仅原生内部调用，固定运行目录、保存必要调用事实并检查输出，输出保持引用，不自动登记为素材。普通网页代理、CLI 和 MCP 不开放直接 Siril 执行路由。
+- 边界：当前仅首个固定节点接入；完整 M4 动态节点库／编辑器、M5 项目图关联／SQLite 运行权威及更新影响、Agent 软件入口仍按后续任务实施。提前交付的卸载不改写任何图，不冒充 B55 完整维护影响闭环。必要调用 JSON 与日志位于本次原生 prompt 的 runs/<prompt_id>/，后续完整运行记录接入仍待实现。
+
+编写用例但不运行；已完成 UI 类型检查、原生类型检查及前端生产构建，Python 语法／OpenAPI 导出及隔离 demo-preview 更新证据统一存于 `.artifacts/implementation/m3-software-20261029/`。真实安装、下载、原生图执行／定向停止与视觉质量均待用户验收；不操作浏览器、不开展性能实验，不提交、推送或合并。
+
+
+本文件落实[近期总计划](../implementation-plan.md#m3)，不另定义协议。文件路径均相对仓库根；N＝本卡新增，M＝修改既有或前置卡创建的文件，R＝只复用。B31已实现只读包查询、版本绑定命令目录和单图原型；B41已实现定义JSON操作；安装、真实调用和原生加载仍待实现。每卡先读根及所改作用域AGENTS。
+
+状态：B31／B32进行中；B33未开始。B41本地候选通过，B42／B43未开始。各卡仍须核对自身前置和Ready条件；自动验证与Milestone人工批准分开记录。M3/M4按真实Batch依赖交叉实施，同轮分别用户批准，不建立彼此整M批准循环。共享HTTP仅复用B13窄移的同一实现。工作目录/工具和共享runtime恢复按[验证环境](../implementation-plan.md#validation-environment)，用户真实操作/批准按[人工验收门](../implementation-plan.md#acceptance-gates)；tmp_path单元无需停dev，本轮不操作环境。
 
 <a id="b31"></a>
 
 ## B31：锁定首软件、目录与准确操作
 
-状态：未开工；待确认总计划/前置，满足后才Ready。
+状态：进行中；`demo` 上开展 G02 隔离原型，实际证据和未完成项见[验证矩阵](../test-matrix.md#demo-b31-probe)。本卡尚未通过。
+
+用户决定待答：首个Siril操作；同滤镜序列选用官方样例、用户提供素材还是记录缺口。候选参数实验与当前CLI/图像门槛见[验证矩阵](../test-matrix.md#demo-b31-probe)。
 
 ### 1. 目标与可观察结果
 
@@ -22,7 +38,7 @@
 
 ### 3. 前置与运行依赖
 
-前置 B12、B22；首软件／准确版本／来源／操作及素材的用户CHOICE已记录。真实软件包清单与许可条件未选前，本卡不可Ready，不创建空适配或默认某个候选。隔离workspace使用B12实际ready地址和B22科学文件交接，正常dev数据不参与写入。B31原型允许验证真实软件操作，但正式安装网页流程归B32，③正式invoke归B33。
+前置 B12、B22；首软件和版本固定为Siril 1.4.4 CLI，release及portable archive/GPLv3信息已核对，但发布物无可核验校验和／签名。初始操作选择（Auto Stretch仅为已测候选）和同目标同滤镜多成员素材来源仍待用户决定；本地无可用科学序列，故本卡当前不可Ready。正式安装／许可准备归B32用户操作，③正式invoke归B33。隔离workspace使用B12实际ready地址和B22科学文件交接，正常dev数据不参与写入。
 
 ### 4. 文件与职责／依赖
 
@@ -32,7 +48,7 @@
 | `src/astrophotoflow/contracts/common.py` | R | 沿StrictModel／UuidInput／JsonObject；不重复公共类型。 |
 | `src/astrophotoflow/contracts/inputs.py` | R | 复用B22科学引用／ResolvedInput／选择；不重建另一份文件Schema。 |
 | `src/astrophotoflow/modules/software/public.py` | N | 项目维护的已选包／准确操作与配套定义读取；当前软件state.json事实读取。模块只依赖core/contracts，不import节点或工作流实现。 |
-| `src/astrophotoflow/modules/software/routes.py` | N | 本卡只发布真实list查询；包动作／组合details在B32接通，不建立未实现安装／更新路径。 |
+| `src/astrophotoflow/modules/software/routes.py` | N | 本卡发布真实包列表与版本绑定只读命令目录；包动作／组合details在B32接通，不建立未实现安装／更新路径。 |
 | `src/astrophotoflow/interfaces/http/app.py` | M | 装配真实software路由，沿当前settings／认证，零③④⑤ORM旁写。 |
 | `src/astrophotoflow/comfyui/proxy.py` | M | 只加入本卡实际公开查询的固定白名单，沿B12实际采用地址。 |
 | `src/astrophotoflow/interfaces/client/software.py` | N | SoftwareOperations真实list查询；get组合详情归B32，无任意URL调用。 |
@@ -51,6 +67,7 @@
 ~~~python
 def list_packages(settings: Settings) -> list[SoftwarePackage]: ...
 def get_package(settings: Settings, package_id: str) -> SoftwarePackage: ...
+def get_command_catalog(package_id: str, version: str) -> list[SirilCommand]: ...
 def get_operation(settings: Settings, package_id: str, version: str, operation_id: str) -> SoftwareOperation: ...
 def get_bundled_definitions(settings: Settings, package_id: str, version: str) -> list[dict[str, JsonValue]]: ...
 ~~~
@@ -64,7 +81,7 @@ class SoftwareOperations:
     def list_software_packages(self) -> list[SoftwarePackage]: ...
 ~~~
 
-最终HTTP：GET /api/v1/software/packages返回200 list[SoftwarePackage]；GET包详情的SoftwarePackageDetails组合及get_software_package由B32接入，不临时以SoftwarePackage改变同一路径最终响应。
+最终HTTP：GET /api/v1/software/packages返回200 list[SoftwarePackage]；GET /api/v1/software/packages/{package_id}/versions/{version}/commands返回固定包／准确版本的list[SirilCommand]，每条含官方资料与逐命令参数、输入输出、Headless、依赖、风险、定义、registry和CLI证据备注，unknown保持显式；GET包详情的SoftwarePackageDetails组合及get_software_package由B32接入，不临时以SoftwarePackage改变同一路径最终响应。
 
 ### 6. 有序实施步骤
 
@@ -97,13 +114,17 @@ uv run --locked --no-sync pytest tests/architecture -q
 
 ### 9. 完成、证据与Ready阻塞
 
-A31-1～3；V05/V13；G02的首包／操作部分；P-SOFTWARE/P-INTEGRATION。交接准确软件来源／版本、素材hash、实际调用与产物、支持格式／HDU／集合及取消待验点、测试日志及候选提交/脏差异至`.artifacts/implementation/B31/`。未有首软件用户选择、真实产物或前置候选，相关项不得标Ready／完成。M3最终真实invoke与停止由B33，安装网页由B32，配套节点真实加载由B42。
+A31-1～3；V05/V13；G02的首包／操作部分；P-SOFTWARE/P-INTEGRATION。交接准确软件来源／版本、素材hash、实际调用与产物、支持格式／HDU／集合及停止待验点、测试日志及候选提交/脏差异至`.artifacts/implementation/B31/`。现有停止证据只覆盖真实CLI进程在操作中被强制终止；Siril优雅取消或③调用API取消仍待验证。参数错误原型只覆盖一个不支持选项并观测退出码1。未有同类至少两成员科学运算、首软件操作用户选择、完整支持矩阵或前置候选，相关项不得标Ready／完成。M3最终真实invoke与定向停止由B33，安装网页由B32，配套节点真实加载由B42。
 
 <a id="b32"></a>
 
 ## B32：网页具体计划确认后的安装／准备
 
-状态：未开工；待确认总计划/前置，满足后才Ready。
+状态：进行中；G03同一ComfyUI WebSocket页面事件传输候选已落代码和单元测试；安装计划／准备HTTP及SoftwarePanel候选已接通。真实WebSocket／按钮来源／用户确认／下载安装仍未验证；G03未通过前不执行安装。
+
+2026-10-28最新只读runtime复核见`.artifacts/implementation/B32/runtime-reuse-preflight-20261028-1303.json`：当前vendor archive／manifest为`c6c7a476…`，真实用户runtime的`.apf-native-build`仍为旧hash `ec74c9e9…`；此前匹配结论只适用于旧候选。`--reuse-runtime`当前会因marker不匹配而明确失败，普通init会触及共享ComfyUI源码／依赖，因此没有初始化W1或启动共享runtime。G03仍需与当前候选hash匹配且可隔离使用的验证环境。 16:23 UTC只读复核进一步确认用户runtime的server.py hash与archive内candidate不同，详情见.artifacts/implementation/B32/runtime-marker-current-readonly-20261028-1623.json。
+
+13:09 UTC请求的两文件临时runtime切换被sandbox自动审查拒绝：原因是修改workspace以外的共享ComfyUI源码和持久marker，且对这项精确改动缺少可信用户授权。原文件备份及拒绝后hash核对见`.artifacts/implementation/B32/runtime-maintenance-backup-20261028-1305/`和`runtime-write-auto-review-rejection-20261028-1309.json`。未通过其他路径重试；需用户明确授权该精确、可恢复维护操作，或提供marker与当前候选匹配的隔离runtime。
 
 ### 1. 目标与可观察结果
 

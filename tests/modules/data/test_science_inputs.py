@@ -281,6 +281,28 @@ def test_checked_output_preview_and_registration_reuse_asset_task(tmp_path):
         client.__exit__(None, None, None)
 
 
+@pytest.mark.parametrize("category", ["image", "xisf"])
+def test_high_depth_output_preview_keeps_requested_size_above_thumbnail(tmp_path, category):
+    from xisf import XISF
+
+    run_directory = tmp_path / "runs" / "preview-size"
+    run_directory.mkdir(parents=True)
+    settings = Settings("127.0.0.1", 8190, tmp_path / "data", (), workspace=tmp_path)
+    values = np.arange(240 * 320, dtype=np.uint16).reshape(240, 320)
+    source = run_directory / ("out.xisf" if category == "xisf" else "out.tif")
+    if category == "xisf":
+        XISF.write(str(source), values[..., None])
+    else:
+        Image.fromarray(values).save(source)
+    original = source.read_bytes()
+    checked = check_output(settings, run_directory=run_directory, path=source, expected_format=category)
+    destination = run_directory / "preview.jpg"
+    render_output_preview(checked, destination, max_edge=320)
+    with Image.open(destination) as preview:
+        assert preview.size == (320, 240)
+    assert source.read_bytes() == original
+
+
 def test_output_preview_reports_missing_dependency_and_decode_failure(tmp_path, monkeypatch):
     run_directory = tmp_path / "runs" / "preview-errors"
     run_directory.mkdir(parents=True)

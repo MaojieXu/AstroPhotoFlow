@@ -53,7 +53,7 @@ async function openBindings(){
 describe('calibration library and fixed bindings',()=>{
   it('keeps All default, separates Master Light from calibration, and opens mixed groups with complete members',async()=>{
     wrapper=mount(App,{global:{plugins:[createPinia()]}});await flushPromises()
-    expect(wrapper.get('nav[aria-label="素材用途"] button[aria-current="page"]').text()).toBe('全部素材')
+    expect(wrapper.get('[role="tablist"][aria-label="素材用途"] button[aria-current="page"]').text()).toBe('全部素材')
     expect(wrapper.text()).toContain(unknown.name)
     await click('亮场')
     expect(wrapper.text()).toContain(light.name)
@@ -104,9 +104,9 @@ describe('calibration library and fixed bindings',()=>{
     get.mockImplementation(async(path:string)=>path.endsWith('/datasets/'+group.id)&&saved?{...group,revision:2,current_version_id:newer.id}:implementation(path))
     send.mockImplementation(async()=>{saved=true;return newer})
     await openBindings()
-    expect(wrapper!.text()).toContain('全部 3 个成员')
-    await wrapper!.get('select[aria-label="组默认 dark"]').setValue('asset_version:'+dark.current_version_id)
-    await wrapper!.get('select[aria-label="'+light.name+' dark"]').setValue('none')
+    expect(wrapper!.text()).toContain('完整成员 3 张')
+    await wrapper!.get('select[aria-label="组默认 暗场"]').setValue('asset_version:'+dark.current_version_id)
+    await wrapper!.get('select[aria-label="'+light.name+' 暗场"]').setValue('none')
     await click('保存校准关联为新版本')
     const body=send.mock.calls[0][3]
     expect(body.asset_version_ids).toEqual(members.map(member=>member.asset_version_id))
@@ -132,7 +132,7 @@ describe('calibration library and fixed bindings',()=>{
   it('shows surviving calibration references and blocks the permanent-delete confirmation',async()=>{
     const item={entry_type:'asset',id:dark.id,name:dark.name,removed_at:timestamp,revision:1,current_version_id:dark.current_version_id,cleanup_status:'trash',cleanup_error:null,photo_count:1,member_asset_ids:[],groups:[],source_dataset_id:null}
     get.mockResolvedValue(page([item]))
-    send.mockResolvedValue({items:[item],references:[{id:id(900),kind:'calibration',name:'Old light group · 组默认 dark',version:1}],tasks:[],photo_count:1,managed_file_count:1,managed_bytes:10,preview_fingerprint:'protected'})
+    send.mockResolvedValue({items:[item],references:[{id:id(900),kind:'calibration',name:'Old light group · 组默认 暗场',version:1}],tasks:[],photo_count:1,managed_file_count:1,managed_bytes:10,preview_fingerprint:'protected'})
     wrapper=mount(LibraryTrashDialog,{props:{open:true}});await flushPromises()
     await wrapper.get('input[aria-label="选择 '+dark.name+'"]').setValue(true);await click('永久删除')
     expect(wrapper.text()).toContain('保留中的校准引用')
@@ -150,6 +150,6 @@ describe('calibration library and fixed bindings',()=>{
     wrapper=mount(LibraryTrashDialog,{props:{open:true}});await flushPromises()
     await wrapper.get('input[aria-label="选择 '+dark.name+'"]').setValue(true);await click('永久删除');await click('确认永久删除')
     expect(wrapper.text()).toContain(reason)
-    expect(wrapper.text()).toContain('1 项保留在垃圾桶中')
+    expect(wrapper.text()).toContain('1 项保留在回收站中')
   })
 })

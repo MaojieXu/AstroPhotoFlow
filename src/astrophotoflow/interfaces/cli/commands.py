@@ -14,6 +14,8 @@ from astrophotoflow.contracts.equipment import EquipmentCreate, EquipmentPatch
 from astrophotoflow.contracts.projects import ProjectCreate, ProjectPatch
 from astrophotoflow.contracts.setups import CapturePresetCreate, CapturePresetPatch, EquipmentSetupCreate, EquipmentSetupPatch
 from astrophotoflow.contracts.imports import PhotoImportOptions
+from astrophotoflow.contracts.inputs import CanvasDataRequest
+from astrophotoflow.contracts.workflows import CanvasAddRequest
 
 
 def read_body(value: str, schema):
@@ -47,6 +49,11 @@ def _group(commands, name):
 
 
 def register(commands, assets):
+    canvas = _group(commands, "canvas")
+    _command(canvas, "pages", "list_canvas_pages")
+    _command(canvas, "add-data", "add_canvas_data", schema=CanvasAddRequest)
+    _command(canvas, "result", "get_canvas_request", ids=("operation_id",))
+
     photo = commands.add_parser("import-photos", help="Upload multiple local photos in supplied order")
     photo.add_argument("paths", nargs="+", type=Path)
     photo.add_argument("--data", help="Optional upload metadata JSON or @file (classification, parameters, preset, dataset)")
@@ -73,6 +80,7 @@ def register(commands, assets):
     _command(assets, "versions", "list_asset_versions", ids=("asset_id",), page=True)
     _command(assets, "version", "get_asset_version", ids=("asset_id", "version_id"))
     library = _group(commands, "library")
+    _command(library, "canvas-data", "prepare_canvas_data", schema=CanvasDataRequest)
     _command(library, "list", "list_library_items", page=True,
              filters=("q", "frame_type", "frame_class", "role", "sort_by", "order"))
     _command(library, "remove", "remove_library_items", schema=LibraryEntriesRemove)

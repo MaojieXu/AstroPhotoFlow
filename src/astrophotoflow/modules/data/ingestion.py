@@ -1,5 +1,4 @@
 from __future__ import annotations
-import json
 from contextlib import contextmanager
 from concurrent.futures import ThreadPoolExecutor, wait
 from copy import deepcopy
@@ -9,6 +8,8 @@ import tempfile
 from io import BytesIO
 from datetime import datetime, timezone
 from pathlib import Path
+from time import monotonic
+from threading import Condition
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -18,10 +19,14 @@ from sqlalchemy import delete, func, select
 
 from astrophotoflow.core.database.db import Database
 from astrophotoflow.core.errors import ApiError, invalid_reference, not_found
+from astrophotoflow.modules.data.auto_stretch import calculate_stretch, render_stretch, sample_pixels
 from astrophotoflow.modules.data.files import SUPPORTED_EXTENSIONS, enumerate_source, find_root, format_for_path, resolve_relative
 from astrophotoflow.modules.data.fits_preview import PARSER_VERSION, PREVIEW_ALGORITHM_VERSION, _display, _parsed_parameters, create_preview, inspect_fits, stretch_bounds
 from astrophotoflow.modules.data.models import Asset, AssetTask, AssetTaskItem, AssetVersion, Dataset, DatasetMember, DatasetVersion, Equipment, FitsHduMetadata, Preview
 from astrophotoflow.core.config import Settings
+from astrophotoflow.modules.data.import_progress import ImportProgress
+from astrophotoflow.modules.data.preview_executor import PreviewExecutor
+from astrophotoflow.modules.data.preview_recipes import backfill_context, describe_recipe, preview_context, save_group_recipe
 from astrophotoflow.modules.data.video_preview import first_video_frame
 from pillow_heif import register_heif_opener
 
@@ -143,7 +148,9 @@ def _enumerate_task(database: Database, settings: Settings, task_id: str, task_d
                 stop_state[0] = True
             return value
         try:
-            for entry in enumerate_source(settings, source["root_id"], source["path"], stopped, lambda: stop_state.__setitem__(0, True)):
+            for entry in (source["entries"] if "entries" in source else enumerate_source(settings, source["root_id"], source["path"], stopped, lambda: stop_state.__setitem__(0, True))):
+                if stopped():
+                    break
                 if entry["identity"] in already_registered:
                     continue
                 _source_item(database, task_id, entry, position, known)
@@ -173,7 +180,7 @@ def _sort_task_items(database: Database, task_id: str, sources: list[dict]) -> N
                 if source["root_id"] != item.root_id:
                     continue
                 source_path = source["path"].rstrip("/")
-                if not source_path or item.source_path == source_path or item.source_path.startswith(source_path + "/"):
+                if not source_path or item.source_path == source_path or item.source_path.startswith(source_path + (os.sep if not source["root_id"] else "/")):
                     return index, item.source_path.casefold(), item.source_path
             return len(sources), item.source_path.casefold(), item.source_path
 
@@ -186,7 +193,7 @@ def _sort_task_items(database: Database, task_id: str, sources: list[dict]) -> N
             item.position = position
 
 
-def _read_hash_and_copy(path: Path, stage_path: Path | None, cancelled) -> tuple[str, int]:
+def _read_hash_and_copy(path: Path, stage_path: Path | None, cancelled, progress=None) -> tuple[str, int]:
     try:
         import blake3
     except ImportError as exc:
@@ -203,6 +210,8 @@ def _read_hash_and_copy(path: Path, stage_path: Path | None, cancelled) -> tuple
                 total += len(chunk)
                 if destination is not None:
                     destination.write(chunk)
+                if progress is not None:
+                    progress(total)
             if destination is not None:
                 destination.flush()
                 os.fsync(destination.fileno())
@@ -244,11 +253,11 @@ def _current_classification(request_values: dict, file_values: dict, defaults: d
 def import_workers(settings: Settings):
     # One pair per service; direct maintenance/test callers own their pair.
     with ThreadPoolExecutor(max_workers=settings.file_workers, thread_name_prefix="asset-file") as files, \
-            ThreadPoolExecutor(max_workers=settings.preview_workers, thread_name_prefix="asset-preview") as previews:
+            PreviewExecutor(settings.preview_workers) as previews:
         yield files, previews
 
 
-def _fit_preview_rows(database: Database, settings: Settings, version_id: str, hdu_rows: list[dict], parameters: dict, path: Path, missing_only: bool = False, stretch: tuple[float, float] | None = None, group_key: str | None = None, reference_version_id: str | None = None) -> tuple[str, str | None, dict | None]:
+def _fit_preview_rows(database: Database, settings: Settings, version_id: str, hdu_rows: list[dict], parameters: dict, path: Path, missing_only: bool = False, context: dict | None = None) -> tuple[str, str | None, dict | None]:
     selected = next((row for row in hdu_rows if row["is_selected"]), None)
     if selected is None:
         return "unsupported", None, None
@@ -267,9 +276,10 @@ def _fit_preview_rows(database: Database, settings: Settings, version_id: str, h
                     ))
                 if existing:
                     continue
-            image, display = create_preview(path, selected["hdu_index"], selected["supported_kind"], parameters, edge, stretch)
-            if group_key is not None:
-                display.update(stretch_group=group_key, stretch_reference_version_id=reference_version_id or version_id)
+            image, display = create_preview(path, selected["hdu_index"], selected["supported_kind"], parameters, edge,
+                auto=context["auto"] if context else False, auto_stretch=context["auto_stretch"] if context else None)
+            if context:
+                display = describe_recipe(context, display)
             preview_id = str(uuid4())
             relative = Path("previews") / version_id / f"{PREVIEW_ALGORITHM_VERSION}-{selected['hdu_index']}-thumbnail.jpg"
             final = settings.data_dir / relative
@@ -356,14 +366,24 @@ def _save_preview(database: Database, settings: Settings, version_id: str, hdu_i
             preview.status, preview.error = "available", None
 
 
-def _ordinary_image(path: Path, stretch: tuple[float, float] | None = None) -> tuple[Image.Image, dict | None]:
+def _ordinary_image(path: Path, stretch: tuple[float, float] | None = None, max_edge: int = 100, *, auto: bool = False, auto_stretch: dict | None = None) -> tuple[Image.Image, dict | None]:
     with Image.open(path) as source:
         source.seek(0)
         image = ImageOps.exif_transpose(source)
+        if auto:
+            if image.mode not in {"L", "I;16", "I;16B", "I;16L", "I", "F"}:
+                image = image.convert("RGB")
+            pixels = np.asarray(image)
+            recipe = auto_stretch if auto_stretch is not None else calculate_stretch(pixels)
+            preview = render_stretch(sample_pixels(pixels, max_edge * 2), recipe)
+            preview.thumbnail((max_edge, max_edge), Image.Resampling.LANCZOS)
+            return preview, {"auto_stretch": recipe, "statistics": "stratified-random-1"}
         if image.mode in {"I;16", "I;16B", "I;16L", "I", "F"}:
-            values = np.asarray(image, dtype=np.float32)
+            values = sample_pixels(np.asarray(image), max_edge * 2)
             low, high = stretch if stretch is not None else stretch_bounds(values)
-            return _display(values, (low, high)), {"stretch_low": low, "stretch_high": high}
+            preview = _display(values, (low, high))
+            preview.thumbnail((max_edge, max_edge), Image.Resampling.LANCZOS)
+            return preview, {"stretch_low": low, "stretch_high": high}
         return image.convert("RGB").copy(), None
 
 
@@ -388,72 +408,28 @@ def _xisf_pixels(path: Path) -> np.ndarray:
     return array
 
 
-def _xisf_image(path: Path, stretch: tuple[float, float] | None = None) -> tuple[Image.Image, dict]:
-    array = _xisf_pixels(path)
+def _xisf_image(path: Path, stretch: tuple[float, float] | None = None, max_edge: int = 100, *, auto: bool = False, auto_stretch: dict | None = None) -> tuple[Image.Image, dict]:
+    pixels = _xisf_pixels(path)
+    array = sample_pixels(pixels, max_edge * 2)
+    if auto:
+        recipe = auto_stretch if auto_stretch is not None else calculate_stretch(pixels)
+        image = render_stretch(array, recipe)
+        image.thumbnail((max_edge, max_edge), Image.Resampling.LANCZOS)
+        return image, {"auto_stretch": recipe, "statistics": "stratified-random-1"}
     low, high = stretch if stretch is not None else stretch_bounds(array)
-    return _display(array, (low, high)), {"stretch_low": low, "stretch_high": high}
+    image = _display(array, (low, high))
+    image.thumbnail((max_edge, max_edge), Image.Resampling.LANCZOS)
+    return image, {"stretch_low": low, "stretch_high": high}
 
 
 def _inspect_xisf(path: Path) -> dict:
     from xisf import XISF
 
-    keywords = XISF(str(path)).get_images_metadata()[0].get("FITSKeywords", {})
-    header = {keyword: entries[0]["value"] for keyword, entries in keywords.items() if entries}
-    return {**_parsed_parameters(header), "xisf_fits_keywords": deepcopy(keywords)}
-
-
-def _xisf_layout(path: Path) -> str:
-    from xisf import XISF
-
     metadata = XISF(str(path)).get_images_metadata()[0]
-    return f"{metadata.get('colorSpace')}:{metadata.get('sampleFormat')}"
-
-
-def _preview_group_key(version: AssetVersion, asset: Asset, layout: str) -> str:
-    parameters = asset.parameters or {}
-    observed = (version.scientific_metadata or {}).get("observed_parameters") or {}
-    return json.dumps([
-        (version.scientific_metadata or {}).get("format"), layout,
-        (asset.classification or {}).get("frame_class"), version.frame_type,
-        parameters.get("camera_id"), parameters.get("filter_id") or observed.get("filter_name"),
-        parameters.get("exposure_seconds"), parameters.get("gain"), parameters.get("offset"),
-        parameters.get("binning_x"), parameters.get("binning_y"),
-    ], ensure_ascii=False, separators=(",", ":"))
-
-
-def _task_stretch(database: Database, task_id: str, group_key: str) -> tuple[tuple[float, float] | None, str | None]:
-    with database.read_session() as session:
-        profile = ((session.get(AssetTask, task_id).report or {}).get("preview_stretch_groups") or {}).get(group_key)
-    if profile is None:
-        return None, None
-    return (profile["low"], profile["high"]), profile["reference_version_id"]
-
-
-def _save_task_stretch(database: Database, task_id: str, group_key: str, display: dict, version_id: str) -> None:
-    with database.write_session() as session:
-        task = session.get(AssetTask, task_id)
-        report = dict(task.report or {})
-        groups = dict(report.get("preview_stretch_groups") or {})
-        if group_key not in groups:
-            groups[group_key] = {
-                "low": display["stretch_low"], "high": display["stretch_high"],
-                "reference_version_id": version_id,
-            }
-            task.report = {**report, "preview_stretch_groups": groups}
-
-
-def _backfill_stretch(database: Database, version_id: str, layout: str) -> tuple[str | None, str | None, tuple[float, float] | None, str | None]:
-    with database.read_session() as session:
-        version = session.get(AssetVersion, version_id)
-        asset = session.get(Asset, version.asset_id)
-        task_ids = session.scalars(select(AssetTaskItem.task_id).join(AssetTask, AssetTask.id == AssetTaskItem.task_id)
-            .where(AssetTaskItem.asset_version_id == version_id).order_by(AssetTask.created_at, AssetTask.id)).all()
-        group_key = _preview_group_key(version, asset, layout)
-    for task_id in task_ids:
-        stretch, reference_id = _task_stretch(database, task_id, group_key)
-        if stretch is not None:
-            return task_id, group_key, stretch, reference_id
-    return (task_ids[0] if task_ids else None), group_key, None, None
+    keywords = metadata.get("FITSKeywords", {})
+    header = {keyword: entries[0]["value"] for keyword, entries in keywords.items() if entries}
+    return {**_parsed_parameters(header), "xisf_fits_keywords": deepcopy(keywords),
+            "preview_layout": [metadata.get("colorSpace"), metadata.get("sampleFormat"), metadata["geometry"][2]]}
 
 
 def _raw_image(path: Path, max_edge: int = 100) -> Image.Image:
@@ -480,7 +456,10 @@ def _raw_image(path: Path, max_edge: int = 100) -> Image.Image:
 def backfill_missing_previews(database: Database, settings: Settings) -> dict[str, int]:
     with database.read_session() as session:
         versions = session.scalars(select(AssetVersion).join(Asset, Asset.id == AssetVersion.asset_id)
-            .where(Asset.scope == "shared", AssetVersion.availability == "available")).all()
+            .outerjoin(AssetTaskItem, AssetTaskItem.asset_version_id == AssetVersion.id)
+            .outerjoin(AssetTask, AssetTask.id == AssetTaskItem.task_id)
+            .where(Asset.scope == "shared", AssetVersion.availability == "available")
+            .order_by(AssetTask.created_at, AssetTask.id, AssetTaskItem.position, AssetVersion.created_at, AssetVersion.id)).unique().all()
         rows = [(row.id, row.storage_mode, row.storage_location, row.scientific_metadata or {}) for row in versions]
     generated = failed = 0
     for version_id, mode, location, metadata in rows:
@@ -497,6 +476,7 @@ def backfill_missing_previews(database: Database, settings: Settings) -> dict[st
         if "thumbnail" in available:
             continue
         try:
+            context = backfill_context(database, version_id)
             if mode == "managed":
                 path = settings.data_dir / location
             else:
@@ -507,12 +487,9 @@ def backfill_missing_previews(database: Database, settings: Settings) -> dict[st
                 if metadata["format"] == "raw":
                     image, display = _raw_image(path), {"algorithm": PREVIEW_ALGORITHM_VERSION}
                 else:
-                    task_id, group_key, stretch, reference_id = _backfill_stretch(database, version_id, _xisf_layout(path))
-                    image, display = _xisf_image(path, stretch)
-                    display.update(stretch_group=group_key, stretch_reference_version_id=reference_id or version_id)
+                    image, display = _xisf_image(path, auto=context["auto"], auto_stretch=context["auto_stretch"])
+                    display = describe_recipe(context, display)
                 _save_preview(database, settings, version_id, 0, "thumbnail", 100, image, display)
-                if metadata["format"] == "xisf" and task_id and reference_id is None:
-                    _save_task_stretch(database, task_id, group_key, display, version_id)
             elif metadata.get("format") == "fits":
                 if selected is None:
                     with database.read_session() as session:
@@ -537,28 +514,17 @@ def backfill_missing_previews(database: Database, settings: Settings) -> dict[st
                     asset = session.get(Asset, version.asset_id)
                     hdu_rows = [{"hdu_index": selected.hdu_index, "is_selected": True, "supported_kind": selected.supported_kind}]
                     parameters = dict(asset.parameters or {})
-                task_id, group_key, stretch, reference_id = _backfill_stretch(database, version_id, f"{selected.supported_kind}:{selected.bitpix}")
-                _, error, display = _fit_preview_rows(database, settings, version_id, hdu_rows, parameters, path, missing_only=True, stretch=stretch, group_key=group_key, reference_version_id=reference_id)
+                _, error, _ = _fit_preview_rows(database, settings, version_id, hdu_rows, parameters, path, missing_only=True, context=context)
                 if error:
                     raise ValueError(error)
-                if display is not None and task_id and reference_id is None:
-                    _save_task_stretch(database, task_id, group_key, display, version_id)
             elif metadata.get("format") == "video":
                 image, display = first_video_frame(path, 100)
                 _save_preview(database, settings, version_id, 0, "thumbnail", 100, image, display)
             else:
-                with Image.open(path) as source:
-                    layout = source.mode
-                if layout in {"I;16", "I;16B", "I;16L", "I", "F"}:
-                    task_id, group_key, stretch, reference_id = _backfill_stretch(database, version_id, layout)
-                else:
-                    task_id, group_key, stretch, reference_id = None, None, None, None
-                image, stretch_display = _ordinary_image(path, stretch)
+                image, stretch_display = _ordinary_image(path, auto=context["auto"], auto_stretch=context["auto_stretch"])
                 if stretch_display is not None:
-                    stretch_display.update(stretch_group=group_key, stretch_reference_version_id=reference_id or version_id)
+                    stretch_display = describe_recipe(context, stretch_display)
                 _save_preview(database, settings, version_id, 0, "thumbnail", 100, image, stretch_display)
-                if stretch_display is not None and task_id and reference_id is None:
-                    _save_task_stretch(database, task_id, group_key, stretch_display, version_id)
             generated += 1
         except Exception:
             logger.exception("preview backfill failed version_id=%s", version_id)
@@ -647,6 +613,10 @@ def _register_asset(database: Database, settings: Settings, task_data: dict, ite
         asset_name = task_data.get("output_name") if task_data.get("output_registration") else upload["name"]
         original = settings.data_dir / "upload-staging" / task_data["upload_source_task_id"] / source_path
         location = ""
+    elif not root_id:
+        original = Path(source_path).resolve(strict=True)
+        asset_name = original.name
+        location = ""
     else:
         root_spec, root = find_root(settings, root_id)
         original = resolve_relative(root, source_path)
@@ -654,7 +624,9 @@ def _register_asset(database: Database, settings: Settings, task_data: dict, ite
         location = f"roots/{root_spec.id}/{source_path}"
     if not original.is_file():
         raise IngestionError("SOURCE_UNAVAILABLE", "所选来源不是可读文件。")
-    source_stamp = _source_stamp(original) if root_id != "__upload__" else None
+    source_stamp = (task_data.get("source_stamps", {}).get((root_id, source_path)) or _source_stamp(original)) if root_id != "__upload__" else None
+    if source_stamp is not None and _source_stamp(original) != source_stamp:
+        raise IngestionError("SOURCE_CHANGED", "来源文件在任务受理后发生变化，请确认来源并重新导入。")
     category = format_for_path(original)
     if category not in SUPPORTED_EXTENSIONS.values() and task_data.get("output_registration"):
         category = "other"
@@ -753,6 +725,8 @@ def _create_asset_content(database: Database, settings: Settings, task_data: dic
         original = final
     elif root_id == "__upload__":
         original = settings.data_dir / "upload-staging" / task_data["upload_source_task_id"] / source_path
+    elif not root_id:
+        original = Path(source_path).resolve(strict=True)
     else:
         _, root = find_root(settings, root_id)
         original = resolve_relative(root, source_path)
@@ -764,7 +738,16 @@ def _create_asset_content(database: Database, settings: Settings, task_data: dic
     try:
         if source_stamp is not None and original != final and _source_stamp(original) != source_stamp:
             raise IngestionError("SOURCE_CHANGED", "来源文件在登记后发生变化，请确认来源并重新导入。")
-        content_hash, byte_size = _read_hash_and_copy(original, stage, lambda: _cancelled(database, task_data["id"]))
+        progress = task_data.get("progress")
+        last_check, cancelled = 0.0, False
+        def should_cancel():
+            nonlocal last_check, cancelled
+            if monotonic() - last_check >= 0.25:
+                cancelled = _cancelled(database, task_data["id"])
+                last_check = monotonic()
+            return cancelled
+        content_hash, byte_size = _read_hash_and_copy(original, stage, should_cancel,
+            (lambda size: progress.copied(item_id, size)) if progress is not None else None)
         if source_stamp is not None and original != final and _source_stamp(original) != source_stamp:
             raise IngestionError("SOURCE_CHANGED", "来源文件在后台读取时发生变化，请确认来源并重新导入。")
         if _cancelled(database, task_data["id"]):
@@ -822,7 +805,7 @@ def _publish_dataset(database: Database, task_data: dict, task_id: str) -> dict 
             additions = []
             for item in successes:
                 if item.asset_version_id not in existing_versions:
-                    additions.append((item.asset_version_id, item.source_path))
+                    additions.append((item.asset_version_id, Path(item.source_path).name if not item.root_id else item.source_path))
                     existing_versions.add(item.asset_version_id)
             if not additions and dataset.current_version_id is not None:
                 return None
@@ -937,13 +920,11 @@ def _process_preview(database: Database, settings: Settings, task_data: dict, it
         }
     if item_data["content_status"] != "available":
         return
+    context = preview_context(database, task_id, item_data["asset_version_id"])
     if item_data["format"] in {"image", "raw", "xisf", "video"}:
         with database.read_session() as session:
             version = session.get(AssetVersion, item_data["asset_version_id"])
             source_location, source_mode = version.storage_location, version.storage_mode
-            asset = session.get(Asset, item_data["asset_id"])
-            group_asset = asset
-            group_version = version
         try:
             if source_mode == "managed":
                 image_path = settings.data_dir / source_location
@@ -955,21 +936,13 @@ def _process_preview(database: Database, settings: Settings, task_data: dict, it
             elif item_data["format"] == "raw":
                 image, display = _raw_image(image_path), {"algorithm": PREVIEW_ALGORITHM_VERSION}
             elif item_data["format"] == "xisf":
-                group_key = _preview_group_key(group_version, group_asset, _xisf_layout(image_path))
-                stretch, reference_id = _task_stretch(database, task_id, group_key)
-                image, display = _xisf_image(image_path, stretch)
+                image, display = _xisf_image(image_path, auto=context["auto"], auto_stretch=context["auto_stretch"])
             else:
-                with Image.open(image_path) as source:
-                    layout = source.mode
-                group_key = _preview_group_key(group_version, group_asset, layout) if layout in {"I;16", "I;16B", "I;16L", "I", "F"} else None
-                stretch, reference_id = _task_stretch(database, task_id, group_key) if group_key else (None, None)
-                image, stretch_display = _ordinary_image(image_path, stretch)
+                image, stretch_display = _ordinary_image(image_path, auto=context["auto"], auto_stretch=context["auto_stretch"])
                 display = {"algorithm": PREVIEW_ALGORITHM_VERSION, **(stretch_display or {})}
-            if item_data["format"] in {"xisf", "image"} and group_key is not None:
-                display.update(stretch_group=group_key, stretch_reference_version_id=reference_id or item_data["asset_version_id"])
+            display = describe_recipe(context, display)
             _save_preview(database, settings, item_data["asset_version_id"], 0, "thumbnail", 100, image, display)
-            if item_data["format"] in {"xisf", "image"} and group_key is not None and reference_id is None:
-                _save_task_stretch(database, task_id, group_key, display, item_data["asset_version_id"])
+            save_group_recipe(database, context, display)
             with database.write_session() as session:
                 item = session.get(AssetTaskItem, item_id)
                 item.preview_status = "available"
@@ -993,6 +966,9 @@ def _process_preview(database: Database, settings: Settings, task_data: dict, it
             item.updated_at = datetime.now(timezone.utc)
         return
     if item_data["format"] != "fits":
+        with database.write_session() as session:
+            item = session.get(AssetTaskItem, item_id)
+            item.preview_status, item.status = "unsupported", "completed"
         return
     with database.read_session() as session:
         hdu = session.scalar(select(FitsHduMetadata).where(
@@ -1031,15 +1007,13 @@ def _process_preview(database: Database, settings: Settings, task_data: dict, it
                 FitsHduMetadata.is_selected.is_(True),
             ))
             current_version = version_for_parse
-        group_key = _preview_group_key(current_version, asset, f"{hdu_for_parse.supported_kind}:{hdu_for_parse.bitpix}")
-        stretch, reference_id = _task_stretch(database, task_id, group_key)
         preview_state, preview_error, display = _fit_preview_rows(
             database, settings, current_version.id,
             [{"hdu_index": hdu_index, "is_selected": True, "supported_kind": hdu_for_parse.supported_kind}],
-            parameters, image_path, stretch=stretch, group_key=group_key, reference_version_id=reference_id,
+            parameters, image_path, context=context,
         )
-        if display is not None and reference_id is None:
-            _save_task_stretch(database, task_id, group_key, display, current_version.id)
+        if display is not None:
+            save_group_recipe(database, context, display)
         with database.write_session() as session:
             item = session.get(AssetTaskItem, item_id)
             item.preview_status = preview_state
@@ -1076,10 +1050,15 @@ def _content_item(database: Database, settings: Settings, task_data: dict, item_
         if error == "CANCELLED":
             with database.write_session() as session:
                 session.get(AssetTaskItem, item_id).status = "cancelled"
+        elif error is None:
+            with database.write_session() as session:
+                item = session.get(AssetTaskItem, item_id)
+                if item.content_status == "available" and item.metadata_status != "failed" and item.preview_status in {"available", "unsupported"}:
+                    item.status = "completed"
     except Exception as exc:
         logger.exception("asset content failed task_id=%s item_id=%s", task_data["id"], item_id)
-        code = exc.code if isinstance(exc, IngestionError) else "CONTENT_READ_FAILED"
-        message = exc.message if isinstance(exc, IngestionError) else "文件读取、散列或复制失败；已登记资料保留。"
+        code = exc.code if isinstance(exc, (IngestionError, ApiError)) else "CONTENT_READ_FAILED"
+        message = exc.message if isinstance(exc, (IngestionError, ApiError)) else "文件读取、散列或复制失败；已登记资料保留。"
         with database.write_session() as session:
             item = session.get(AssetTaskItem, item_id)
             item.status = "cancelled" if code == "CANCELLED" else "failed"
@@ -1088,6 +1067,9 @@ def _content_item(database: Database, settings: Settings, task_data: dict, item_
             if code == "SOURCE_CHANGED":
                 session.get(AssetVersion, item.asset_version_id).availability = "changed"
             item.updated_at = datetime.now(timezone.utc)
+    finally:
+        if task_data.get("progress") is not None:
+            task_data["progress"].flush()
 
 
 def _registration_progress(database: Database, task_id: str, total: int, registered: int, completed: bool = False) -> None:
@@ -1099,12 +1081,6 @@ def _registration_progress(database: Database, task_id: str, total: int, registe
             "completed": completed,
         }}
         task.updated_at = datetime.now(timezone.utc)
-
-
-def _preview_group(database: Database, settings: Settings, task_data: dict, item_ids: list[str]) -> None:
-    # A group is a single executor job: reference selection always follows position.
-    for item_id in item_ids:
-        _process_preview(database, settings, task_data, item_id)
 
 
 def process_task(database: Database, settings: Settings, task_id: str, workers=None) -> None:
@@ -1138,52 +1114,107 @@ def process_task(database: Database, settings: Settings, task_id: str, workers=N
                                     .order_by(AssetTaskItem.position)).all()
             item_ids = [item.id for item in items if item.status in {"queued", "interrupted", "running"}]
             counted = {item.id for item in items if item.asset_id is not None or item.status in {"failed", "skipped"}}
+        progress = ImportProgress(database, task_id)
+        task_data["progress"] = progress
+        task_data["source_stamps"] = {(entry["root_id"], entry["path"]): entry["source_stamp"]
+            for source in task_data["sources"] for entry in source.get("entries", []) if entry.get("source_stamp")}
         _registration_progress(database, task_id, len(items), len(counted))
         registered_ids = []
-        for item_id in item_ids:
-            if _cancelled(database, task_id):
-                with database.write_session() as session:
-                    session.get(AssetTaskItem, item_id).status = "cancelled"
-                continue
-            try:
-                _register_asset(database, settings, task_data, item_id)
-                registered_ids.append(item_id)
-            except Exception as exc:
-                logger.exception("asset registration failed task_id=%s item_id=%s", task_id, item_id)
-                with database.write_session() as session:
-                    item = session.get(AssetTaskItem, item_id)
-                    item.status, item.content_status = "failed", "failed"
-                    item.metadata_status, item.preview_status = "unsupported", "unsupported"
-                    item.error = {"code": exc.code if isinstance(exc, IngestionError) else "REGISTRATION_FAILED",
-                                  "message": exc.message if isinstance(exc, IngestionError) else "文件资料登记失败。"}
-            counted.add(item_id)
-            _registration_progress(database, task_id, len(items), len(counted))
-        _publish_dataset(database, task_data, task_id)
-        _registration_progress(database, task_id, len(items), len(counted), not _cancelled(database, task_id))
         file_workers, preview_workers = workers
-        futures = [file_workers.submit(_content_item, database, settings, task_data, item_id) for item_id in registered_ids]
-        wait(futures)
-        for future in futures:
-            future.result()
-        groups = {}
+        condition = Condition()
+        registration_finished = False
+        def wake_copy(_future):
+            with condition:
+                condition.notify()
+        def copy_registered():
+            pending = set()
+            index = 0
+            try:
+                while True:
+                    with condition:
+                        finished = {future for future in pending if future.done()}
+                        pending.difference_update(finished)
+                        for future in finished:
+                            future.result()
+                        while index < len(registered_ids) and len(pending) < settings.file_workers * 2:
+                            future = file_workers.submit(_content_item, database, settings, task_data, registered_ids[index])
+                            pending.add(future)
+                            future.add_done_callback(wake_copy)
+                            index += 1
+                        if registration_finished and index == len(registered_ids) and not pending:
+                            return
+                        if any(future.done() for future in pending):
+                            continue
+                        condition.wait()
+            finally:
+                wait(pending)
+                for future in pending:
+                    future.result()
+        with ThreadPoolExecutor(max_workers=1, thread_name_prefix="asset-copy-dispatch") as dispatcher:
+            copied = dispatcher.submit(copy_registered)
+            try:
+                for item_id in item_ids:
+                    if _cancelled(database, task_id):
+                        with database.write_session() as session:
+                            session.get(AssetTaskItem, item_id).status = "cancelled"
+                        continue
+                    try:
+                        _register_asset(database, settings, task_data, item_id)
+                    except Exception as exc:
+                        logger.exception("asset registration failed task_id=%s item_id=%s", task_id, item_id)
+                        with database.write_session() as session:
+                            item = session.get(AssetTaskItem, item_id)
+                            item.status, item.content_status = "failed", "failed"
+                            item.metadata_status, item.preview_status = "unsupported", "unsupported"
+                            item.error = {"code": exc.code if isinstance(exc, (IngestionError, ApiError)) else "REGISTRATION_FAILED",
+                                          "message": exc.message if isinstance(exc, (IngestionError, ApiError)) else "文件资料登记失败。"}
+                    else:
+                        with condition:
+                            registered_ids.append(item_id)
+                            condition.notify()
+                    progress.update()
+                _publish_dataset(database, task_data, task_id)
+                progress.flush(registration_completed=not _cancelled(database, task_id))
+            finally:
+                with condition:
+                    registration_finished = True
+                    condition.notify()
+            copied.result()
+        progress.flush(content_completed=not _cancelled(database, task_id))
+        pending_previews = []
         with database.read_session() as session:
             for item_id in registered_ids:
                 item = session.get(AssetTaskItem, item_id)
                 if item.content_status != "available" or item.status == "cancelled":
                     continue
-                version = session.get(AssetVersion, item.asset_version_id)
-                asset = session.get(Asset, item.asset_id)
-                category = (version.scientific_metadata or {}).get("format")
-                # FITS headers already supply the full homogeneous grouping key.
-                # Other formats run in their fixed order within one format job.
-                hdu = session.scalar(select(FitsHduMetadata).where(FitsHduMetadata.asset_version_id == version.id,
-                                                                 FitsHduMetadata.is_selected.is_(True)))
-                key = _preview_group_key(version, asset, f"{hdu.supported_kind}:{hdu.bitpix}") if hdu else category
-                groups.setdefault(key, []).append(item_id)
-        futures = [preview_workers.submit(_preview_group, database, settings, task_data, group) for group in groups.values()]
+                if item.preview_status in {"available", "unsupported"} and item.metadata_status != "failed":
+                    continue
+                pending_previews.append((item_id, item.asset_version_id))
+        def preview(item_id):
+            try:
+                _process_preview(database, settings, task_data, item_id)
+            finally:
+                progress.flush()
+        futures = []
+        groups = {}
+        for item_id, version_id in pending_previews:
+            context = preview_context(database, task_id, version_id)
+            if context["group_key"] is not None and context["auto_stretch"] is None:
+                groups.setdefault(context["group_key"], []).append((item_id, version_id))
+            else:
+                futures.append(preview_workers.submit_background(version_id, preview, item_id))
+        for group in groups.values():
+            remaining = iter(group)
+            for item_id, version_id in remaining:
+                preview_workers.submit_background(version_id, preview, item_id, priority=2).result()
+                if preview_context(database, task_id, version_id)["auto_stretch"] is not None:
+                    futures.extend(preview_workers.submit_background(version_id, preview, item_id)
+                                   for item_id, version_id in remaining)
+                    break
         wait(futures)
         for future in futures:
             future.result()
+        progress.flush(preview_completed=not _cancelled(database, task_id))
         _finish_task(database, task_id, _cancelled(database, task_id))
     except Exception:
         logger.exception("asset import task failed task_id=%s", task_id)

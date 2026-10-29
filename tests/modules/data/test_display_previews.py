@@ -130,7 +130,7 @@ def test_auto_stretch_updates_both_previews_and_rebuilds_without_accumulating(se
         assert len(list((settings.data_dir / "previews" / version.id).glob("*.jpg"))) == 2
 
 
-def test_auto_stretch_uses_this_photo_instead_of_its_group_reference(service):
+def test_import_and_auto_stretch_both_use_this_photos_own_pixels(service):
     _, app, client, root = service
     first = np.random.default_rng(1).normal(30, 1, (100, 120)).astype(np.float32)
     second = np.random.default_rng(2).normal(900, 7, (100, 120)).astype(np.float32)
@@ -146,12 +146,70 @@ def test_auto_stretch_uses_this_photo_instead_of_its_group_reference(service):
     with app.state.database.read_session() as session:
         original_recipe = dict(session.scalar(select(Preview).where(Preview.asset_version_id == a["asset_version_id"])).display_parameters)
         other_recipe = session.scalar(select(Preview).where(Preview.asset_version_id == b["asset_version_id"])).display_parameters
-        assert other_recipe["stretch_low"] == original_recipe["stretch_low"]
+        assert other_recipe["stretch_low"] > original_recipe["stretch_low"] + 800
+        assert "stretch_reference_version_id" not in other_recipe
     client.post(base(b) + "/display/auto-stretch", headers=AUTH, json={})
     assert finished(client, base(b))["stretch"] == previews.calculate_stretch(second)
     assert client.get(base(a) + "/thumbnail", headers=AUTH).content == original_small
     with app.state.database.read_session() as session:
         assert session.scalar(select(Preview).where(Preview.asset_version_id == a["asset_version_id"])).display_parameters == original_recipe
+
+
+@pytest.mark.parametrize("category", ["fits", "xisf"])
+def test_folder_auto_mtf_is_shared_only_by_object_subframes_and_big_view_reuses_recipe(service, monkeypatch, category):
+    settings, app, client, root = service
+    pixels = np.arange(240 * 320, dtype=np.float32).reshape(240, 320)
+    for name, label, offset in (("a", "Light Frame", 0), ("b", "Light Frame", 1000),
+                                ("c", "Master Light", 2000), ("d", "Master Light", 3000)):
+        path = root / f"{name}.{category}"
+        if category == "fits":
+            hdu = fits.PrimaryHDU(pixels + offset)
+            hdu.header["OBJECT"], hdu.header["IMAGETYP"] = "M42", label
+            hdu.writeto(path)
+        else:
+            XISF.write(str(path), (pixels + offset)[..., None], image_metadata={"FITSKeywords": {
+                "OBJECT": [{"value": "M42", "comment": ""}], "IMAGETYP": [{"value": label, "comment": ""}]}})
+    accepted = client.post("/api/v1/imports", headers=AUTH, json={
+        "sources": [{"root_id": "science", "path": ""}], "storage_mode": "managed"})
+    result = client.get("/api/v1/asset-tasks/" + accepted.json()["task_id"], headers=AUTH).json()
+    assert result["status"] == "completed"
+    with app.state.database.read_session() as session:
+        recipes = [dict(session.scalar(select(Preview).where(Preview.asset_version_id == item["asset_version_id"])).display_parameters)
+                   for item in result["items"]]
+    assert recipes[0]["auto_stretch"] == recipes[1]["auto_stretch"]
+    assert recipes[2]["auto_stretch"] != recipes[3]["auto_stretch"]
+    assert all("stretch_low" not in recipe and "auto_stretch" in recipe for recipe in recipes)
+
+    def no_statistics(*args, **kwargs):
+        raise AssertionError("opening a view must reuse the saved MTF")
+
+    monkeypatch.setattr(previews, "calculate_stretch", no_statistics)
+    monkeypatch.setattr(previews, "read_stretch_pixels", no_statistics)
+    for item, recipe in zip(result["items"], recipes):
+        thumbnail = client.get(base(item) + "/thumbnail", headers=AUTH).content
+        assert client.post(base(item) + "/display/auto-stretch", headers=AUTH, json={}).status_code in {200, 202}
+        state = finished(client, base(item))
+        assert state["status"] == "available" and state["stretch"] == recipe["auto_stretch"]
+        with Image.open(BytesIO(client.get(base(item) + "/display", headers=AUTH).content)) as image:
+            assert image.size == (320, 240)
+        assert client.get(base(item) + "/thumbnail", headers=AUTH).content == thumbnail
+
+
+def test_new_auto_mtf_statistics_use_source_strata_rather_than_display_grid(service):
+    _, app, client, root = service
+    values = np.broadcast_to(100 + (np.arange(1600) % 2) * 100, (1200, 1600)).astype(np.float32)
+    path = root / "periodic.fits"
+    fits.PrimaryHDU(values).writeto(path)
+    original = path.read_bytes()
+    item = imported(client, path.name)
+    client.post(base(item) + "/display/auto-stretch", headers=AUTH, json={})
+    state = finished(client, base(item))
+    assert state["status"] == "available"
+    assert state["stretch"] == previews.calculate_stretch(values)
+    with app.state.database.read_session() as session:
+        row = session.scalar(select(Preview).where(Preview.asset_version_id == item["asset_version_id"], Preview.size == "display"))
+        assert row.display_parameters["statistics"] == "stratified-random-1"
+    assert path.read_bytes() == original
 
 
 def test_auto_stretch_scope_and_failure_keep_old_thumbnail(service, monkeypatch):
@@ -290,7 +348,7 @@ def test_display_is_lazy_sized_cached_and_keeps_thumbnail(service, monkeypatch, 
         assert len({row.storage_path for row in rows}) == 2
 
 
-def test_second_group_member_uses_saved_first_reference_and_not_ready_never_decodes(service, monkeypatch):
+def test_second_group_member_reuses_its_own_recipe_and_not_ready_never_decodes(service, monkeypatch):
     _, app, client, root = service
     for name, offset in (("a", 0), ("b", 1000)):
         fits.PrimaryHDU(np.arange(200 * 300, dtype=np.float32).reshape(200, 300) + offset).writeto(root / f"{name}.fits")
@@ -299,12 +357,12 @@ def test_second_group_member_uses_saved_first_reference_and_not_ready_never_deco
     first, second = task["items"]
     with app.state.database.read_session() as session:
         recipe = dict(session.scalar(select(Preview).where(Preview.asset_version_id == second["asset_version_id"])).display_parameters)
-    assert recipe["stretch_reference_version_id"] == first["asset_version_id"]
+    assert "stretch_reference_version_id" not in recipe
     client.post(base(second) + "/display", headers=AUTH, json={})
     assert finished(client, base(second))["status"] == "available"
     with app.state.database.read_session() as session:
         display = session.scalar(select(Preview).where(Preview.asset_version_id == second["asset_version_id"], Preview.size == "display"))
-        assert display.display_parameters["stretch_reference_version_id"] == first["asset_version_id"]
+        assert "stretch_reference_version_id" not in display.display_parameters
         assert display.display_parameters["stretch_low"] == recipe["stretch_low"]
         assert display.display_parameters["stretch_high"] == recipe["stretch_high"]
         assert not session.scalar(select(Preview).where(Preview.asset_version_id == first["asset_version_id"], Preview.size == "display"))
@@ -342,10 +400,14 @@ def test_deleting_stretch_reference_keeps_surviving_display_reproducible(service
     task = client.get("/api/v1/asset-tasks/" + accepted.json()["task_id"], headers=AUTH).json()
     assert task["status"] == "completed", task
     first, second = task["items"]
-    with app.state.database.read_session() as session:
-        recipe = dict(session.scalar(select(Preview).where(
-            Preview.asset_version_id == second["asset_version_id"], Preview.size == "thumbnail",
-        )).display_parameters)
+    with app.state.database.write_session() as session:
+        first_recipe = session.scalar(select(Preview).where(
+            Preview.asset_version_id == first["asset_version_id"], Preview.size == "thumbnail")).display_parameters
+        row = session.scalar(select(Preview).where(
+            Preview.asset_version_id == second["asset_version_id"], Preview.size == "thumbnail"))
+        recipe = {**row.display_parameters, "stretch_low": first_recipe["stretch_low"],
+                  "stretch_high": first_recipe["stretch_high"], "stretch_reference_version_id": first["asset_version_id"]}
+        row.display_parameters = recipe
     assert recipe["stretch_reference_version_id"] == first["asset_version_id"]
     asset = client.get("/api/v1/library/assets/" + first["asset_id"], headers=AUTH).json()
     removed = client.request("DELETE", "/api/v1/library/items", headers=AUTH, json={"items": [{
@@ -774,7 +836,9 @@ def test_metadata_retry_barrier_and_cancelled_preview_stage_stay_uncached_until_
     assert client.get("/api/v1/asset-tasks/" + recovered.json()["task_id"], headers=AUTH).json()["status"] == "completed"
     with app.state.database.read_session() as session:
         thumbnail = session.scalar(select(Preview).where(Preview.size == "thumbnail"))
-        assert thumbnail.display_parameters["stretch_group"] != old_recipe["stretch_group"]
+        assert "stretch_group" not in thumbnail.display_parameters
+        assert thumbnail.display_parameters["stretch_low"] == old_recipe["stretch_low"]
+        assert thumbnail.display_parameters["stretch_high"] == old_recipe["stretch_high"]
         assert not session.scalar(select(Preview).where(Preview.size == "display"))
     client.post(base(item) + "/display", headers=AUTH, json={})
     assert finished(client, base(item))["status"] == "available"
@@ -821,8 +885,9 @@ def test_backfilled_thumbnail_is_display_authority_without_rewriting_task_histor
         assert red < green < blue
     with app.state.database.read_session() as session:
         display = session.scalar(select(Preview).where(Preview.asset_version_id == item["asset_version_id"], Preview.size == "display"))
-        for key in ("stretch_low", "stretch_high", "stretch_reference_version_id"):
+        for key in ("stretch_low", "stretch_high"):
             assert display.display_parameters[key] == recipe[key]
+        assert "stretch_reference_version_id" not in display.display_parameters
     assert client.get("/api/v1/asset-tasks/" + task_id, headers=AUTH).json() == history
     assert client.get(base(item) + "/thumbnail", headers=AUTH).content == thumbnail_bytes
     assert source.read_bytes() == original_bytes

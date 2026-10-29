@@ -157,12 +157,14 @@ export function createApiClient(fetchApi: FetchApi) {
       path: string,
       schema: ZodType<T>,
       method: 'POST' | 'PATCH' | 'DELETE',
-      data: unknown
+      data: unknown,
+      options?: Pick<RequestInit, 'signal'>
     ) =>
       request(path, schema, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
+        body: JSON.stringify(data),
+        ...options
       })
   }
 }

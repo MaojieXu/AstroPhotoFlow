@@ -1,8 +1,19 @@
 # ② 数据与资产管理概要设计
 
+2026-10-29 统一媒体查看候选：MediaViews公开供应用装配，内部media_view／sources／cache／video实现按需512px瓦片、NumPy数组／切片、原件视频Range流、播放代理及暂停源帧。复用Preview模型、预览执行器和原件清理保护，无新增表或迁移；不把显示选择转成科学输入／帧资产。原生节点、素材库和固定成员使用同一查看器；旧100／1080接口保留。测试已编写未执行，编译与隔离交付证据见当前上下文，不能宣称性能或用户验收通过。
+
+2026-10-28 来源规则按用户修订：网页本机选择器直接返回绝对文件清单，无预设根目录限制；imports允许无root_id的绝对路径托管，local_selection调用系统选择器，files.enumerate_local冻结当前层支持文件，ingestion沿同一登记／托管／恢复链路消费。旧root_id模式保持。测试只编写、未运行，状态及证据见当前上下文；此条覆盖此前网页授权目录前置要求。
+
+Nodes 2.0展示候选补充：canvas.py新增inspect_canvas_data及只读HTTP端点，按既有固定科学引用返回当前成员资料与预览定位，不访问大原件或发布新版本。固定HDU尺寸／像素类型与当前Asset拍摄资料分开；未记录值保留未知，预览不能替代科学原件。测试仅编写，未运行，实际编译与隔离更新见当前上下文。
+
+2026-10-28 素材入画布候选：新增公开prepare_canvas_data(database, body)，按显式素材／图像组版本提供既有InputReference。核对共享范围、归属、回收站、原件就绪及可选有序成员范围，不读缩略图、不复制原件、不写项目或工作流。HTTP、⑤、CLI／MCP及网页消费同一事实，画布实际应用归⑤；测试未运行，完整科学运行交接仍待后续联调。
+
 具体交接见[②接口契约](../../../../docs/api/platform-contracts.md#data)及[文件级详细设计](../../../../docs/api/platform-contracts.md#data-design)：复用现有导入／查询，补科学输入解析、同素材新内容确认、移除影响、所选完整结果保存及后续偏好。确认新内容只显式更新选中引用，固定组与旧运行保持；新增交接不等于现有模型或工具已支持。
 
 M2实施状态：B21复用既有素材、项目、集合、设备、校准、导入、预览与回收站，并按确认方案精简前端设备录入；B22新增固定科学输入解析；B23新增网页可确认的内容观察／接纳HTTP交接；B24复用`AssetTask`完成所选输出检查、预览、登记与查询，并提供内部只读移除范围查询。本轮新增的HTTP端点共两个；其余科学输入和输出交接仍是②公开Python能力，等待⑤真实运行消费。没有新增数据库表或迁移。B21～B24已通过自动验证并合入dev；M2用户Milestone验收及跨⑤工作流的影响、排队运行输入保护和网页结果选择仍由B51／B53／B54／B57联调验收。
+
+2026-10-28本地候选补充：网页本机授权目录托管、受理范围冻结、登记与有界复制衔接、原件／预览分阶段报告及一次性原生通知已形成代码；import_progress和preview_executor均为②私有实现，不新增公共模块或表。测试仅编写，未运行或进行性能／真实样本验收，不能据此认定吞吐改善或用户通过。实际编译／隔离实例更新证据见当前上下文。
+
 
 数据细化入口：[②数据与资产数据结构初稿](../../../../docs/architecture/data-models/02-data.md)。当前为待逐项确认的逻辑草案，区分已有字段、新增建议与派生视图；本概要继续维护能力和行为边界，草案不代表新增实现、接口或迁移已完成。
 
@@ -138,7 +149,7 @@ flowchart LR
 
 ### 5.3 查看与比较
 
-先按共享或项目固定引用解析目标版本，再分别表达原件、解析、缩略图及大图状态。打开单图时自动配方从原件分析，RGB背景估计白平衡与统一MTF、Mono拉伸均为显示操作；大图和缩略图按既有规则一同发布，不修改科学原件、拍摄参数及其他成员。已保存配方独立于参考照片存活，可用于缓存重建；历史导入错误不代替当前缓存状态。
+先按共享或项目固定引用解析目标版本，再分别表达原件、解析、缩略图及大图状态。组内相同Object的兼容subframe按固定顺序测首张有效帧MTF／RGB背景白平衡，其余仅渲染；masterframe逐张独立，Object缺失独立，未知分类保持旧规则。统计直接在原图分层随机取样，最多262144个空间样本、固定种子，取消256×256固定网格；FITS按选中行连续读取，Bayer按色彩单元统计。任务report与各版本配方保存数值，重试及缓存重建复用，参考文件删除不影响已存配方。XISF仍可能全帧解码，8位映射限定在预览规模。大图复用已有MTF，不修改原件、拍摄参数或成员范围；已有缓存及历史配方不批量重算，历史导入错误不代替当前缓存状态。
 
 预览生成持有明确所有权；清理开始后不能新增或迟到发布缓存，中断生成转为可显式重试的失败。关闭对话框释放轮询与图像资源，迟到响应不重新打开。完整比较另补固定版本、相同 ROI、尺寸／配准、相同或独立拉伸条件；指标说明算法、单位、样本及不可用原因，0 不当成缺失。处理方案依据用户目标及多项可核实信息，不以单一背景指标或 Agent 意见判优。现有行为见[预览说明](../../../../docs/development/library-preview.md)。
 
@@ -221,7 +232,7 @@ Python 保存业务权威，执行认证范围内的资料与版本校验、文�
 | 资产、集合、项目 | [library.py](library.py)、[datasets.py](datasets.py)、[projects.py](projects.py)、[common.py](common.py) | test_ingestion 的固定引用、独立重复、组资料原子编辑；[test_library_sort.py](../../../../tests/modules/data/test_library_sort.py)及test_service作用域；不能当作通用内容版本发布已实现 |
 | 设备与接收快照 | [equipment.py](equipment.py)、[setups.py](setups.py)、[presets.py](presets.py) | [test_setups.py](../../../../tests/modules/data/test_setups.py)、[test_equipment_snapshots.py](../../../../tests/modules/data/test_equipment_snapshots.py)、[test_domain_foundation.py](../../../../tests/modules/data/test_domain_foundation.py) |
 | 校准与回收站 | [calibration.py](calibration.py)、[trash.py](trash.py)、[management_trash.py](management_trash.py) | [test_calibration.py](../../../../tests/modules/data/test_calibration.py)、test_service 的确认引用、部分清理、恢复和新依赖检查；未来⑤保护需另补 |
-| 预览及科学解析 | [previews.py](previews.py)、[fits_preview.py](fits_preview.py)、[auto_stretch.py](auto_stretch.py)、[video_preview.py](video_preview.py) | [test_display_previews.py](../../../../tests/modules/data/test_display_previews.py)、[test_auto_stretch.py](../../../../tests/modules/data/test_auto_stretch.py)、[test_fits_preview.py](../../../../tests/modules/data/test_fits_preview.py)、[test_video_preview.py](../../../../tests/modules/data/test_video_preview.py) |
+| 预览及科学解析 | [previews.py](previews.py)、[preview_recipes.py](preview_recipes.py)（同Object子帧配方、重试及回填）、[fits_preview.py](fits_preview.py)、[auto_stretch.py](auto_stretch.py)、[video_preview.py](video_preview.py) | [test_display_previews.py](../../../../tests/modules/data/test_display_previews.py)、[test_import_pipeline.py](../../../../tests/modules/data/test_import_pipeline.py)、[test_auto_stretch.py](../../../../tests/modules/data/test_auto_stretch.py)、[test_fits_preview.py](../../../../tests/modules/data/test_fits_preview.py)、[test_video_preview.py](../../../../tests/modules/data/test_video_preview.py) |
 | 公共契约及客户端 | [contracts](../../contracts)、[HTTP客户端](../../interfaces/client)、[CLI](../../interfaces/cli)、[MCP](../../interfaces/mcp) | [test_client_operations.py](../../../../tests/integration/test_client_operations.py)、[test_cli_mcp_protocol.py](../../../../tests/integration/test_cli_mcp_protocol.py)、[OpenAPI快照](../../../../docs/api/openapi.json)；58工具是已有数据范围，不能替代目标能力验收 |
 | 数据界面及宿主 | [UI API](../../../../frontend/packages/astrophotoflow-ui/src/modules/data/api)、[workspace](../../../../frontend/packages/astrophotoflow-ui/src/modules/data/workspace)、[UI公开入口](../../../../frontend/packages/astrophotoflow-ui/src/index.ts)、[LibrarySidebarTab](../../../../frontend/src/platform/astrophotoflow/LibrarySidebarTab.vue) | [UI数据测试](../../../../frontend/packages/astrophotoflow-ui/tests/modules/data)、[现有隔离浏览器](../../../../tests/browser/native-web.mjs)；模拟fixture不是整批真实素材业务验收 |
 

@@ -1,7 +1,9 @@
 import { useCanvasStore } from '@/renderer/core/canvas/canvasStore'
 import { LGraphNode } from '@/lib/litegraph/src/litegraph'
 import { fromPartial } from '@total-typescript/shoehorn'
-import { render } from '@testing-library/vue'
+import { render, screen } from '@testing-library/vue'
+import { defineComponent, nextTick } from 'vue'
+import type { ComponentWidget } from '@/scripts/domWidget'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const resolveMock = vi.hoisted(() => vi.fn())
@@ -13,8 +15,10 @@ vi.mock(
 )
 
 const isDOMWidgetMock = vi.hoisted(() => vi.fn(() => true))
+const isComponentWidgetMock = vi.hoisted(() => vi.fn(() => false))
 vi.mock<unknown>(import('@/scripts/domWidget'), () => ({
-  isDOMWidget: isDOMWidgetMock
+  isDOMWidget: isDOMWidgetMock,
+  isComponentWidget: isComponentWidgetMock
 }))
 
 import { toNodeId } from '@/types/nodeId'
@@ -32,6 +36,7 @@ beforeEach(() => {
 describe('WidgetDOM', () => {
   beforeEach(() => {
     isDOMWidgetMock.mockReturnValue(true)
+    isComponentWidgetMock.mockReturnValue(false)
   })
 
   function mountWithWidget(domElement: HTMLElement | null) {
@@ -55,6 +60,33 @@ describe('WidgetDOM', () => {
       }
     })
   }
+
+  it('mounts a native Vue ComponentWidget in Nodes 2.0 without a second app', async () => {
+    const node = new LGraphNode('Data')
+    vi.mocked(useCanvasStore().getCanvas().graph!.getNodeById).mockReturnValue(node)
+    const widget = fromPartial<ComponentWidget<string>>({
+      node, name: 'display', value: '', options: { surfaces: { canvas: 'never', vueNode: 'shown', panel: 'never' } },
+      component: defineComponent({ template: '<span>Scientific image preview</span>' }),
+      computeLayoutSize: () => ({ minHeight: 440 })
+    })
+    resolveMock.mockReturnValue({ node, widget })
+    isDOMWidgetMock.mockReturnValue(false)
+    isComponentWidgetMock.mockReturnValue(true)
+    render(WidgetDOM, { props: { widget: createMockWidget<undefined>({ value: undefined, name: 'display', type: 'custom' }), nodeId: toNodeId('n1') } })
+    await nextTick()
+    expect(screen.getByText('Scientific image preview')).toBeInTheDocument()
+  })
+
+  it('leaves existing canvas-backed ComponentWidgets on their original overlay path', () => {
+    const node = new LGraphNode('Existing component')
+    vi.mocked(useCanvasStore().getCanvas().graph!.getNodeById).mockReturnValue(node)
+    const widget = fromPartial<ComponentWidget<string>>({ node, name: 'existing', value: '', options: {}, component: defineComponent({ template: '<span>Existing overlay component</span>' }) })
+    resolveMock.mockReturnValue({ node, widget })
+    isDOMWidgetMock.mockReturnValue(false)
+    isComponentWidgetMock.mockReturnValue(true)
+    render(WidgetDOM, { props: { widget: createMockWidget<undefined>({ value: undefined, name: 'existing', type: 'custom' }), nodeId: toNodeId('n1') } })
+    expect(screen.queryByText('Existing overlay component')).not.toBeInTheDocument()
+  })
 
   it('mounts the resolved DOM widget element inside the container', () => {
     const hosted = document.createElement('div')

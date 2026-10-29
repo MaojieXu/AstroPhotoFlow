@@ -137,6 +137,7 @@
     "marked": "catalog:",
     "mediabunny": "catalog:",
     "mixpanel-browser": "catalog:",
+    "openseadragon": "6.1.1",
     "pinia": "catalog:",
     "posthog-js": "catalog:",
     "primeicons": "catalog:",

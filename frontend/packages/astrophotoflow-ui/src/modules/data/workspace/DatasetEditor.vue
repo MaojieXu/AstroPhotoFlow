@@ -125,8 +125,8 @@ onMounted(load)
 </script>
 
 <template>
-  <section class="apf-editor apf-dataset-editor" aria-label="编辑数据集">
-    <header><h2>数据集资料与成员</h2><button type="button" :disabled="busy" @click="close">关闭</button></header>
+  <section class="apf-editor apf-dataset-editor" aria-label="编辑图像组">
+    <header><h2>图像组资料与成员</h2><button type="button" :disabled="busy" @click="close">关闭</button></header>
     <p v-if="busy" role="status">正在读取或保存…</p>
     <p v-if="errorMessage" class="apf-error" role="alert">{{errorMessage}}</p>
     <template v-if="dataset">
@@ -134,7 +134,7 @@ onMounted(load)
       <label>备注<InlineField :value="dataset.notes" kind="textarea" :save="value=>saveDatasetField('notes',value)" @cancelled="clearInlineFailure('dataset:notes')" /></label>
       <label>状态<InlineField :value="dataset.status" kind="select" :choices="[{value:'active',label:'启用'},{value:'archived',label:'归档'}]" :save="value=>saveDatasetField('status',value)" @cancelled="clearInlineFailure('dataset:status')" /></label>
       <h3>固定成员（{{selection.length}}）</h3>
-      <p>移除或添加成员会产生新数据集版本；已有成员顺序保留，新成员追加。</p>
+      <p>移除或添加成员会产生新图像组版本；已有成员顺序保留，新成员追加。</p>
       <div v-for="asset in assets" :key="asset.id" class="apf-dataset-choice">
       <label>
         <input v-model="selection" type="checkbox" :value="asset.current_version_id" :disabled="!asset.current_version_id" />
@@ -146,14 +146,14 @@ onMounted(load)
         <InlineField :value="asset.parameters?.exposure_seconds as number|null|undefined" @click.stop kind="number" :save="value=>saveAssetField(asset,'exposure_seconds',value)" @cancelled="clearInlineFailure('asset:'+asset.id+':exposure_seconds')" />
         <InlineField :value="asset.status" kind="select" :choices="[{value:'active',label:'启用'},{value:'archived',label:'已归档'}]" :save="value=>saveAssetField(asset,'status',value)" @click.stop @cancelled="clearInlineFailure('asset:'+asset.id+':status')" />
       </label>
-      <button type="button" :disabled="busy||!asset.current_version_id||trashedAssetIds.has(asset.id)" @click="trashConfirmAsset=asset">{{trashedAssetIds.has(asset.id)?'已移入垃圾桶':'移入照片垃圾桶'}}</button>
+      <button type="button" :disabled="busy||!asset.current_version_id||trashedAssetIds.has(asset.id)" @click="trashConfirmAsset=asset">{{trashedAssetIds.has(asset.id)?'已移入回收站':'移入照片回收站'}}</button>
       </div>
       <div class="apf-form-actions"><button type="button" :disabled="busy" @click="close">取消</button><button type="button" :disabled="busy||Boolean(errorMessage)" @click="saveMembers">保存成员版本</button></div>
     </template>
     <div v-if="trashConfirmAsset" class="apf-trash-confirm-backdrop" role="presentation" @click.self="trashConfirmAsset=undefined">
       <section class="apf-trash-confirm" role="alertdialog" aria-modal="true" aria-labelledby="member-trash-title">
-        <h3 id="member-trash-title">移入照片垃圾桶？</h3>
-        <p>将移除“{{trashConfirmAsset.name}}”的正常展示。照片、版本和数据集成员关系保留，可从垃圾桶恢复。</p>
+        <h3 id="member-trash-title">移入照片回收站？</h3>
+        <p>将移除“{{trashConfirmAsset.name}}”的正常展示。照片、版本和图像组成员关系保留，可从回收站恢复。</p>
         <button type="button" :disabled="busy" @click="trashConfirmAsset=undefined">取消</button>
         <button type="button" :disabled="busy" @click="moveMemberToTrash">确认移入</button>
       </section>

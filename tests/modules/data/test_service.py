@@ -960,7 +960,7 @@ def test_gain_sort_applies_to_filtered_results_before_pagination(service):
 def test_openapi_snapshot_matches_service_and_proxy_allowlist(service):
     _, client, _ = service
     actual = client.get("/openapi.json").json()
-    snapshot = json.loads((Path(__file__).resolve().parents[3] / "docs" / "api" / "openapi.json").read_text())
+    snapshot = json.loads((Path(__file__).resolve().parents[3] / "docs" / "api" / "openapi.json").read_text(encoding="utf-8"))
     assert snapshot == actual
     assert all(
         method.lower() in actual["paths"].get("/api/v1" + path, {})
@@ -970,6 +970,8 @@ def test_openapi_snapshot_matches_service_and_proxy_allowlist(service):
         method in {"POST", "PATCH", "PUT", "DELETE"} and "/library/assets/" in path and "/versions" in path
         and not (method == "POST" and path == "/library/assets/{asset_id}/versions/{version_id}/previews/display")
         and not (method == "POST" and path == "/library/assets/{asset_id}/versions/{version_id}/previews/display/auto-stretch")
+        and not (method == "POST" and path.endswith("/previews/viewer"))
+        and not (method == "DELETE" and path.endswith("/previews/viewer/consumer/{consumer_id}"))
         for method, path, _ in ROUTES
     )
 

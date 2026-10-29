@@ -54,4 +54,6 @@ uv run --locked --no-sync python scripts/verify_distribution.py
 
 wheel 携带完整网页与固定引擎；sdist 携带预构建网页，支持无 Node 的 wheel 重建。验证脚本在源码目录外安装两份 wheel，检查入口、迁移、资源和源码包范围。用户安装步骤见[工作台使用](workbench.md)。
 
+验证候选发行物且保留既有 `.artifacts/dist` 时，可向 `scripts/verify_distribution.py` 传入 `--dist`、`--report`、`--rebuilt-wheel-dir`。需要严格仓库外安装时，用`--temp-dir <仓库外可写路径>`放置临时venv和解压源；脚本会检查并报告位置。在不允许build隔离环境访问包索引的机器上，可用`--sdist-build-python <预装setuptools>=77.0.3的Python>`指定Node-free重建解释器；报告会标示是否隔离构建，不能将非隔离重建表述为隔离依赖下载通过。
+
 新日志、临时数据、缓存和报告进入 `.artifacts`。保留原件、既有 workspace、令牌与旧 runtime；未验证的平台和依赖不得写成通过。

@@ -4,7 +4,7 @@
   "comfyui_version": "0.42.0",
   "comfyui_frontend_package": "1.57.1",
   "archive": "comfyui-0.42.0.zip",
-  "sha256": "ec74c9e959ac26a9ef35c77ce9a128e6a197b615635feab5ea8d5cfc20d03a3f",
+  "sha256": "c6c7a47611f87867a0a45aca1f42ea6b4fd37cbd086067135de9484e38f7e224",
   "cpu_torch": "2.14.1+cpu",
   "cpu_torchvision": "0.29.1+cpu",
   "upstream_sha256": "95b5146939bcb4c33d17334001698beec5c88b83493beb13a8ba75a86e033967",

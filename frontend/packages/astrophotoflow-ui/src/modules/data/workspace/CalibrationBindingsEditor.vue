@@ -5,6 +5,10 @@ import {assetApi} from '../api/index'
 import {calibrationTargetOptionSchema,datasetSchema,datasetVersionSchema,pageSchema,type CalibrationBindings,type CalibrationTarget,type CalibrationTargetOption} from '../api/contracts'
 import type {WorkspaceContext} from './Workspace.vue'
 import CalibrationBindingSelect from './CalibrationBindingSelect.vue'
+import LibraryInfo from './LibraryInfo.vue'
+import LibraryButton from './LibraryButton.vue'
+import LibraryTextField from './LibraryTextField.vue'
+import { displayLabel } from './presentation'
 
 const props=defineProps<{datasetId:string}>()
 const emit=defineEmits<{updated:[dataset:z.infer<typeof datasetSchema>]}>()
@@ -85,26 +89,26 @@ async function saveBindings(){
   <details class="apf-calibration-editor" @toggle="toggle">
     <summary>组说明、历史版本与校准关联</summary>
     <p v-if="loading" role="status">正在读取完整组版本…</p>
-    <p v-if="error" role="alert" class="apf-error">{{error}} <button type="button" @click="load">重新读取</button></p>
+    <p v-if="error" role="alert" class="apf-error">{{error}} <LibraryButton type="button" @click="load">重新读取</LibraryButton></p>
     <template v-if="dataset&&version">
-      <label>组名称<input v-model="name" :disabled="saving" /></label><label>场景说明<textarea v-model="notes" :disabled="saving" /></label>
-      <button type="button" :disabled="saving" @click="saveNotes">保存组说明</button>
-      <label>固定组版本<select :value="version.id" :disabled="saving" @change="changeVersion"><option v-for="row in versions" :key="row.id" :value="row.id">v{{row.version_number}}{{row.id===dataset.current_version_id?' · 当前':' · 历史只读'}}</option></select></label>
-      <p>当前展示此版本的全部 {{version.members.length}} 个成员；列表筛选不会改变本次成员范围。关联只保存固定版本，不执行校准或合成。</p>
-      <p v-if="!current">历史版本只读；项目中已选的旧版关联保持原样。组名称和场景说明显示当前资料。</p>
-      <fieldset :disabled="saving||!current"><legend>组默认校准</legend>
-        <label v-for="frameType in frameTypes" :key="frameType">{{frameType}}<CalibrationBindingSelect :model-value="defaults[frameType]" :frame-type="frameType" :targets="targets" :label="'组默认 '+frameType" @update:model-value="setBinding(defaults,frameType,$event)" /></label>
+      <LibraryTextField id="calibration-group-name" v-model="name" name="组名称" :disabled="saving" /><label>场景说明<textarea v-model="notes" :disabled="saving" /></label>
+      <LibraryButton type="button" :disabled="saving" @click="saveNotes">保存组说明</LibraryButton>
+      <label><span>固定组版本<LibraryInfo label="固定组版本" :text="'当前完整版本：'+version.id+'\n列表筛选不会改变本次完整成员范围。校准关联只保存固定版本，不执行校准或合成。'" /></span><select :value="version.id" :disabled="saving" @change="changeVersion"><option v-for="row in versions" :key="row.id" :value="row.id">v{{row.version_number}}{{row.id===dataset.current_version_id?' · 当前':' · 历史只读'}}</option></select></label>
+      <p>完整成员 {{version.members.length}} 张 · 校准关联保存作用于全部成员。</p>
+      <p v-if="!current">历史版本只读。<LibraryInfo label="历史版本" text="项目中已选的旧版关联保持原样。组名称和场景说明显示当前资料。" /></p>
+      <fieldset :disabled="saving||!current"><legend>组默认校准<LibraryInfo label="组默认校准" text="成员默认继承组校准；选择“不使用”明确停用，选择其他目标覆盖组默认值。关联只保存固定版本，不执行校准或合成。" /></legend>
+        <label v-for="frameType in frameTypes" :key="frameType">{{displayLabel(frameType)}}<CalibrationBindingSelect :model-value="defaults[frameType]" :frame-type="frameType" :targets="targets" :label="'组默认 '+displayLabel(frameType)" @update:model-value="setBinding(defaults,frameType,$event)" /></label>
       </fieldset>
-      <div class="apf-calibration-members"><table><thead><tr><th>完整成员列表</th><th v-for="frameType in frameTypes" :key="frameType">{{frameType}}</th></tr></thead><tbody>
-        <tr v-for="member in version.members" :key="member.asset_version_id"><th>{{member.asset.name}} · v{{member.version.version_number}}<small>{{member.asset.classification?.frame_type??'未知用途'}}</small></th>
-          <td v-for="frameType in frameTypes" :key="frameType"><CalibrationBindingSelect :model-value="overrides[member.asset_version_id]?.[frameType]" :frame-type="frameType" :targets="targets" inherit :disabled="saving||!current" :label="member.asset.name+' '+frameType" @update:model-value="setBinding(overrides[member.asset_version_id],frameType,$event)" /></td>
+      <div class="apf-calibration-members"><table><thead><tr><th>完整成员列表</th><th v-for="frameType in frameTypes" :key="frameType">{{displayLabel(frameType)}}</th></tr></thead><tbody>
+        <tr v-for="member in version.members" :key="member.asset_version_id"><th>{{member.asset.name}} · v{{member.version.version_number}}<small>{{displayLabel(member.asset.classification?.frame_type)}}</small></th>
+          <td v-for="frameType in frameTypes" :key="frameType"><span>{{displayLabel(frameType)}}</span><CalibrationBindingSelect :model-value="overrides[member.asset_version_id]?.[frameType]" :frame-type="frameType" :targets="targets" inherit :disabled="saving||!current" :label="member.asset.name+' '+displayLabel(frameType)" @update:model-value="setBinding(overrides[member.asset_version_id],frameType,$event)" /></td>
         </tr>
       </tbody></table></div>
-      <button type="button" :disabled="saving||!current" @click="saveBindings">保存校准关联为新版本</button>
+      <LibraryButton type="button" :disabled="saving||!current" @click="saveBindings">保存校准关联为新版本</LibraryButton>
       <p v-if="notice" role="status">{{notice}}</p>
     </template>
   </details>
 </template>
 <style scoped>
-.apf-calibration-editor{margin:10px;padding:12px;border:1px solid var(--border-color,#555);border-radius:8px}.apf-calibration-editor label{display:flex;flex-direction:column;gap:4px;margin:8px 0}.apf-calibration-editor fieldset{display:flex;gap:12px;flex-wrap:wrap}.apf-calibration-members{overflow:auto;margin:12px 0}.apf-calibration-members table{border-collapse:collapse;width:100%;min-width:680px}.apf-calibration-members td,.apf-calibration-members th{padding:6px;text-align:left;border-bottom:1px solid var(--border-color,#555)}.apf-calibration-members small{display:block;font-weight:normal}
+.apf-calibration-editor{flex:none;min-width:0;margin:10px;padding:12px;border:1px solid var(--border-color,#555);border-radius:8px}.apf-calibration-editor label{display:flex;flex-direction:column;gap:4px;margin:8px 0}.apf-calibration-editor fieldset{display:flex;gap:12px;flex-wrap:wrap}.apf-calibration-members{overflow:auto;margin:12px 0}.apf-calibration-members table{border-collapse:collapse;width:100%;min-width:0}.apf-calibration-members td,.apf-calibration-members th{padding:6px;text-align:left;border-bottom:1px solid var(--border-color,#555)}.apf-calibration-members thead{display:none}.apf-calibration-members tbody tr{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;padding:10px 0;border-bottom:1px solid var(--border-color,#555)}.apf-calibration-members th{grid-column:1/-1}.apf-calibration-members td{min-width:0;border:0}.apf-calibration-members td>span{display:block;margin-bottom:4px;font-size:12px}.apf-calibration-members small{display:block;font-weight:normal}
 </style>

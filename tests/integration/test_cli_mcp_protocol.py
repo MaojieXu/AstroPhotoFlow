@@ -187,7 +187,8 @@ def test_apf_mcp_stdio_tools_and_parameter_patch_protocol(service, tmp_path):
                 await session.initialize()
                 listed_tools = await session.list_tools()
                 assert {tool.name for tool in listed_tools.tools} >= {
-                    "import_photo", "get_import_task", "list_assets", "get_asset", "update_asset_parameters"
+                    "import_photo", "get_import_task", "list_assets", "get_asset", "update_asset_parameters",
+                    "prepare_canvas_data", "list_canvas_pages", "add_canvas_data", "get_canvas_request",
                 }
 
                 photo = tmp_path / "mcp-synthetic.png"
@@ -200,6 +201,10 @@ def test_apf_mcp_stdio_tools_and_parameter_patch_protocol(service, tmp_path):
                 assert asset_id in {str(item["id"]) for item in assets["items"]}
                 asset = _tool_data(await session.call_tool("get_asset", {"asset_id": asset_id}, read_timeout_seconds=5), service)
                 assert asset["revision"] == 1
+
+                prepared = _tool_data(await session.call_tool("prepare_canvas_data", {"body": {"entry_type": "asset", "id": asset_id, "version_id": asset["current_version_id"]}}, read_timeout_seconds=5), service)
+                assert prepared["native_type"] == "APF_DATA_REFERENCE"
+                assert prepared["reference"]["asset_version_id"] == asset["current_version_id"]
 
                 first = _tool_data(
                     await session.call_tool(

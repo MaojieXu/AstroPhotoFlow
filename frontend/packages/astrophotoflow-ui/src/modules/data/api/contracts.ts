@@ -93,7 +93,7 @@ export const assetContentObservationSchema = z.object({
   storage_mode: z.enum(['reference', 'managed']), stored_hash: z.string(),
   state: z.enum(['unchanged', 'changed', 'missing', 'unsupported']),
   observed_hash: z.string().nullable(), observed_byte_size: z.number().int().nonnegative().nullable(),
-  observed_mtime_ns: z.number().int().nonnegative().nullable(),
+  observed_mtime_ns: z.number().nonnegative().nullable(),
   error: z.object({code:z.string(),message:z.string(),fields:z.array(z.record(z.string(),z.string()))}).strict().nullable()
 }).strict()
 
@@ -117,6 +117,24 @@ export const importEntrySchema = z.object({
   name: z.string(), path: z.string(), kind: z.enum(['file', 'directory']),
   format: z.string().nullable(), supported: z.boolean(), size: z.number().int().nonnegative().nullable()
 }).strict()
+export type LocalImportFile = { root_id?: string; path: string; name: string; size: number }
+export const localSelectionSchema = z.object({
+  cancelled: z.boolean(), files: z.array(z.object({path:z.string(),name:z.string(),size:z.number().int().nonnegative()}).strict()),
+  name: z.string().nullable(), folder: z.boolean()
+}).strict()
+export const importContentProgressSchema = z.object({
+  total: z.number().int().nonnegative(), succeeded: z.number().int().nonnegative(), failed: z.number().int().nonnegative(),
+  skipped: z.number().int().nonnegative(), metadata_failed: z.number().int().nonnegative(),
+  bytes_total: z.number().nonnegative(), bytes_copied: z.number().nonnegative(), completed: z.boolean()
+}).strict()
+export const importPreviewProgressSchema = z.object({
+  total: z.number().int().nonnegative(), available: z.number().int().nonnegative(), failed: z.number().int().nonnegative(),
+  unsupported: z.number().int().nonnegative(), completed: z.boolean()
+}).strict()
+export const importReportSchema = z.object({
+  content: importContentProgressSchema.optional(), preview: importPreviewProgressSchema.optional(),
+  registration: z.object({ total: z.number().int().nonnegative(), registered: z.number().int().nonnegative(), completed: z.boolean() }).optional()
+}).catchall(z.unknown())
 export const importAcceptedSchema = z.object({ task_id: id, status: z.literal('queued') }).strict()
 export const uploadCreatedSchema = z.object({ task_id: id, status: z.literal('queued') }).strict()
 export const taskActionSchema = z.object({
@@ -207,7 +225,7 @@ export const taskSchema = z.object({
   notes: nullableText, dataset_name: nullableText, target_dataset_id: id.nullable(),
   dataset_base_revision: z.number().int().positive().nullable(), dataset_id: id.nullable(),
   enumeration_completed: z.boolean(), retry_of_task_id: id.nullable(),
-  report: z.record(z.string(), z.unknown()), error: z.record(z.string(), z.unknown()).nullable(),
+  report: importReportSchema, error: z.record(z.string(), z.unknown()).nullable(),
   created_at: timestamp, updated_at: timestamp, items: z.array(taskItemSchema),
   items_total: z.number().int().nonnegative(), items_completed: z.number().int().nonnegative(),
   items_limit: z.number().int().positive(),

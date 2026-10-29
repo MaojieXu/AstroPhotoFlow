@@ -36,6 +36,15 @@ beforeEach(()=>{
 afterEach(()=>{vi.useRealTimers();vi.unstubAllGlobals();document.body.replaceChildren()})
 
 describe('library filter panel',()=>{
+  it('explains an empty facet response instead of presenting a blank filter form',async()=>{
+    get.mockResolvedValue({frame_classes:[],frame_types:[],roles:[],parameter_modes:[],bin_values:[],equipment:{camera_id:[],optical_system_id:[],filter_id:[]},numeric_ranges:{}})
+    const {wrapper}=mountPanel()
+    await flushPromises()
+    expect(wrapper.text()).toContain('还没有可筛选的素材资料')
+    expect(wrapper.find('fieldset').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('正在读取筛选选项')
+    wrapper.unmount()
+  })
   it('uses only values returned from the full-library facets and applies checked values',async()=>{
     const {wrapper}=mountPanel()
     await flushPromises()

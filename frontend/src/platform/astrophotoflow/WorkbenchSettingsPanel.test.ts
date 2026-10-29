@@ -11,7 +11,7 @@ it('uses native settings controls and saves the complete workbench configuration
     service_port: 32690,
     data_dir: 'data',
     allowed_origins: ['http://127.0.0.1:32688'],
-    import_roots: [],
+    import_roots: [{ id: 'night', path: 'D:/Images/原始素材' }],
     file_workers: 2,
     preview_workers: 1
   }
@@ -61,6 +61,9 @@ it('uses native settings controls and saves the complete workbench configuration
     hint.blur()
     await waitFor(() => expect(queryByRole('tooltip')).toBeNull())
     expect(fetchApi).toHaveBeenCalledTimes(1)
+    expect(queryByRole('textbox', { name: i18n.global.t('apfWorkbench.rootId') })).toBeNull()
+    expect(queryByRole('textbox', { name: i18n.global.t('apfWorkbench.rootPath') })).toBeNull()
+    expect(queryByRole('button', { name: i18n.global.t('apfWorkbench.addRoot') })).toBeNull()
     const input = container.querySelector('input[role="spinbutton"]')!
     await fireEvent.input(input, { target: { value: '4' } })
     await fireEvent.blur(input)

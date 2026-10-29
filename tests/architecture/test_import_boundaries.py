@@ -64,3 +64,11 @@ def test_data_does_not_import_transport_or_other_business_modules():
             assert not name.startswith("astrophotoflow.interfaces"), (path, name)
             if name.startswith("astrophotoflow.modules"):
                 assert name.startswith("astrophotoflow.modules.data"), (path, name)
+
+
+def test_nodes_do_not_import_workflows_or_transport():
+    for path in (PACKAGE / "modules/nodes").rglob("*.py"):
+        for name in imports(path):
+            assert not name.startswith(("astrophotoflow.modules.workflows", "astrophotoflow.interfaces")), (path, name)
+            if name.startswith("astrophotoflow.modules"):
+                assert name.startswith(("astrophotoflow.modules.nodes", "astrophotoflow.modules.software.public")), (path, name)

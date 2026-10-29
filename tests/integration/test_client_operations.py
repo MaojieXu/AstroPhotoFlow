@@ -12,8 +12,10 @@ from astrophotoflow.contracts.datasets import DatasetMembersCreate
 from astrophotoflow.contracts.imports import ImportCreate
 from astrophotoflow.client import AssetClient, ServiceApiError
 from astrophotoflow.contracts.imports import PhotoImportOptions
+from astrophotoflow.contracts.trash import EquipmentDelete, EquipmentDeleteSelection
 from astrophotoflow.interfaces.cli.main import _parser
 from astrophotoflow.interfaces.cli.commands import run
+from astrophotoflow.contracts.workflows import CanvasAddRequest
 
 
 @pytest.fixture
@@ -36,6 +38,44 @@ def client():
 
 def body(request):
     return json.loads(request.content)
+
+
+def test_cli_absolute_local_source_does_not_require_root_id(client):
+    api, calls = client
+    path = str(Path.cwd() / "local-image.fits")
+    request = {"sources": [{"path": path}], "storage_mode": "managed"}
+    args = _parser().parse_args(["imports", "local", "--data", json.dumps(request)])
+    assert run(api, args) == {"ok": True}
+    assert calls[0].url.path == "/api/v1/imports"
+    assert body(calls[0]) == request
+
+
+def test_canvas_cli_and_client_preserve_explicit_target_and_operation_id(client):
+    api, calls = client
+    request = {"operation_id": str(uuid4()), "page_id": str(uuid4()), "workflow_id": str(uuid4()), "graph_id": str(uuid4()), "content_token": "current", "control_token": "handed-over", "source": {"entry_type": "asset", "id": str(uuid4()), "version_id": str(uuid4())}}
+    args = _parser().parse_args(["canvas", "add-data", "--data", json.dumps(request)])
+    assert run(api, args) == {"ok": True}
+    api.get_canvas_request(request["operation_id"])
+    api.list_canvas_pages()
+    assert [(call.method, call.url.path) for call in calls] == [
+        ("POST", "/api/v1/canvas/requests"),
+        ("GET", "/api/v1/canvas/requests/" + request["operation_id"]),
+        ("GET", "/api/v1/canvas/pages"),
+    ]
+    assert body(calls[0]) == CanvasAddRequest.model_validate(request).model_dump(mode="json", exclude_unset=True)
+
+
+def test_equipment_direct_delete_passes_selection_and_current_preview(client):
+    api, calls = client
+    items = [{"entry_type": "equipment", "id": str(uuid4()), "revision": 2}]
+    api.preview_equipment_delete(EquipmentDeleteSelection(items=items))
+    api.delete_equipment_entries(EquipmentDelete(items=items, preview_fingerprint="current"))
+    assert [(request.method, request.url.path) for request in calls] == [
+        ("POST", "/api/v1/equipment-management/delete-preview"),
+        ("POST", "/api/v1/equipment-management/delete"),
+    ]
+    assert body(calls[0]) == {"items": items}
+    assert body(calls[1]) == {"items": items, "preview_fingerprint": "current"}
 
 
 def test_bulk_upload_preserves_order_and_automatic_classification(client, tmp_path):
@@ -90,6 +130,28 @@ def test_service_errors_retain_request_id_and_fields(client):
         api._result(response)
     assert caught.value.status == 409 and caught.value.code == "REVISION_CONFLICT"
     assert caught.value.request_id == "request-123" and caught.value.fields[0]["path"] == "base_revision"
+
+
+def test_software_command_catalog_client_uses_the_exact_package_version():
+    calls = []
+    command = {
+        "command": "autostretch", "scriptable": True, "syntax": "autostretch [-linked]",
+        "description": "Auto-stretches the currently loaded image.",
+        "url": "https://siril.readthedocs.io/en/stable/Commands.html#autostretch",
+        "assessment": next(row["assessment"] for row in json.loads((Path(__file__).resolve().parents[2] / "src/astrophotoflow/vendor/siril-1.4.4-command-assessments.json").read_text(encoding="utf-8"))["commands"] if row["command"] == "autostretch"),
+    }
+
+    def handle(request):
+        calls.append(request)
+        return httpx.Response(200, json=[command])
+
+    api = AssetClient.__new__(AssetClient)
+    api.client = httpx.Client(base_url="http://service/api/v1", transport=httpx.MockTransport(handle))
+    with api:
+        result = api.list_software_commands("siril", "1.4.4")
+    assert result[0].command == "autostretch"
+    assert calls[0].method == "GET"
+    assert calls[0].url.path == "/api/v1/software/packages/siril/versions/1.4.4/commands"
 
 
 def test_cli_json_file_body_and_archive_use_backend_schemas(client, tmp_path):

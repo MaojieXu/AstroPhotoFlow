@@ -43,6 +43,35 @@ function configuration(): ConfigState {
 }
 
 describe('workbench configuration', () => {
+  it.each([{ roots: [] }, { roots: [{ id: 'night', path: 'D:/Images/原始素材' }] }])('hides configured import roots while retaining them when other settings are saved', async ({ roots }) => {
+    const initial = configuration()
+    initial.saved.import_roots = roots
+    const refreshed = configuration()
+    refreshed.saved.import_roots = [...roots, { id: 'later', path: 'E:/More images' }]
+    refreshed.config_token = 'refreshed'
+    const client = {
+      selectDirectory: vi.fn(), restart: vi.fn(), restartResult: vi.fn(),
+      getConfiguration: vi.fn().mockResolvedValueOnce(initial).mockResolvedValue(refreshed),
+      saveConfiguration: vi.fn().mockResolvedValue(refreshed)
+    }
+    const wrapper = mount(WorkbenchSettings, { props: { client, controls, translate: key => key } })
+    await flushPromises()
+    expect(wrapper.text()).not.toContain('apfWorkbench.importRoots')
+    expect(wrapper.text()).not.toContain('apfWorkbench.addRoot')
+    expect(wrapper.find('[aria-label="apfWorkbench.rootId"]').exists()).toBe(false)
+    expect(wrapper.find('[aria-label="apfWorkbench.rootPath"]').exists()).toBe(false)
+    expect(wrapper.find('[aria-label="apfWorkbench.importRootDetails"]').exists()).toBe(false)
+    await wrapper.findAll('button').find(button => button.text() === 'apfWorkbench.reload')!.trigger('click')
+    await flushPromises()
+    await wrapper.get('input[name="file_workers"]').setValue(4)
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+    expect(client.saveConfiguration).toHaveBeenCalledWith(expect.objectContaining({
+      config_token: 'refreshed', values: { ...refreshed.saved, file_workers: 4 }
+    }))
+    expect(client.restart).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
   it('shares the original error class and preserves validation fields', async () => {
     expect(DataApiClientError).toBe(ApiClientError)
     const fetchApi = vi.fn().mockResolvedValue(
@@ -261,11 +290,7 @@ describe('workbench configuration', () => {
         .get('[aria-label="apfWorkbench.workspaceHelp"]')
         .attributes('tooltip')
     ).toContain(initial.default_workspace)
-    expect(
-      wrapper
-        .get('[aria-label="apfWorkbench.importRootDetails"]')
-        .attributes('tooltip')
-    ).toBe(initial.saved.import_roots[0].path)
+    expect(wrapper.find('[aria-label="apfWorkbench.importRootDetails"]').exists()).toBe(false)
     const hint = wrapper.get('[data-testid="data-directory-hint"]')
     expect(hint.attributes('tooltip')).toContain(initial.data_dir_absolute)
     expect(hint.attributes('tooltip')).not.toContain(
@@ -283,6 +308,7 @@ describe('workbench configuration', () => {
     await hint.trigger('click')
     expect(wrapper.text()).toContain('apfWorkbench.saved')
     expect(client.saveConfiguration).toHaveBeenCalledTimes(1)
+    expect(client.saveConfiguration.mock.calls[0][0].values.import_roots).toEqual(initial.saved.import_roots)
     expect(client.restart).not.toHaveBeenCalled()
     wrapper.unmount()
   })

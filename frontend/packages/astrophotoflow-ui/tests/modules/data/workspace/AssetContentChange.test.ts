@@ -1,12 +1,33 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, expect, it, vi } from 'vitest'
 import AssetContentChange from '@ui/modules/data/workspace/AssetContentChange.vue'
+import { assetContentObservationSchema } from '@ui/modules/data/api/contracts'
 
 const { get, send } = vi.hoisted(() => ({ get: vi.fn(), send: vi.fn() }))
 vi.mock('@ui/modules/data/api/index', () => ({ assetApi: { get, send } }))
 const id='00000000-0000-4000-8000-000000000001'
 
 beforeEach(()=>{get.mockReset();send.mockReset()})
+
+it('clears the previous asset error and ignores an observation that arrives after selection changes',async()=>{
+  send.mockRejectedValueOnce(new Error('A unavailable'))
+  const wrapper=mount(AssetContentChange,{props:{assetId:id,hasVersion:true}})
+  try{
+    await wrapper.get('button').trigger('click');await flushPromises()
+    expect(wrapper.text()).toContain('A unavailable')
+    await wrapper.setProps({assetId:'00000000-0000-4000-8000-000000000002'})
+    expect(wrapper.text()).not.toContain('A unavailable')
+    let complete!:(value:ReturnType<typeof assetContentObservationSchema.parse>)=>void
+    send.mockImplementationOnce(()=>new Promise(resolve=>{complete=resolve}))
+    await wrapper.get('button').trigger('click')
+    await wrapper.setProps({assetId:id})
+    complete(assetContentObservationSchema.parse({asset_id:'00000000-0000-4000-8000-000000000002',base_version_id:id,base_revision:1,storage_mode:'reference',stored_hash:'blake3:old',state:'changed',observed_hash:'blake3:new',observed_byte_size:20,observed_mtime_ns:1793223954488571800,error:null}))
+    await flushPromises()
+    expect(wrapper.text()).not.toContain('确认使用新内容')
+    expect(wrapper.get('button').attributes('disabled')).toBeUndefined()
+    expect(wrapper.emitted('accepted')).toBeUndefined()
+  }finally{wrapper.unmount()}
+})
 
 it('requires explicit confirmation and accepts only the observed new hash',async()=>{
   send.mockResolvedValueOnce({asset_id:id,base_version_id:id,base_revision:2,storage_mode:'reference',

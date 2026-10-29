@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import LibraryInfo from './LibraryInfo.vue'
+import LibraryButton from './LibraryButton.vue'
 import type { ZodType } from 'zod'
 import { assetApi } from '../api/index'
 import { capturePresetSchema, equipmentSetupSchema, pageSchema, type CapturePreset, type EquipmentSetup } from '../api/contracts'
@@ -31,13 +33,12 @@ onMounted(load)
 
 <template>
   <fieldset class="apf-preset-picker" :disabled="disabled||loading">
-    <legend>使用组合与拍摄预设</legend>
-    <label>使用组合<select v-model="setupId" aria-label="导入使用组合" @change="emit('update:modelValue','')"><option value="">不使用预设</option><option v-for="setup in setups" :key="setup.id" :value="setup.id">{{setup.name}}</option></select></label>
+    <legend>设备组合与拍摄预设（可选）<LibraryInfo label="设备组合与拍摄预设" text="预设只提供默认值；人工填写和文件实测值优先。接受导入时保存组合与预设快照。" /></legend>
+    <label>设备组合<select v-model="setupId" aria-label="导入设备组合" @change="emit('update:modelValue','')"><option value="">不使用预设</option><option v-for="setup in setups" :key="setup.id" :value="setup.id">{{setup.name}}</option></select></label>
     <label v-if="setupId">拍摄预设<select :value="modelValue" aria-label="导入拍摄预设" @change="emit('update:modelValue',($event.target as HTMLSelectElement).value)"><option value="">选择拍摄预设</option><option v-for="preset in choices" :key="preset.id" :value="preset.id">{{preset.name}}</option></select></label>
     <p v-if="loading" role="status">正在读取使用组合…</p>
-    <p v-else-if="error" role="alert">{{error}} <button type="button" @click="load">重试</button></p>
-    <p v-else-if="!setups.length">尚无使用组合，可在设置→使用组合中创建。</p>
+    <p v-else-if="error" role="alert">{{error}} <LibraryButton type="button" @click="load">重试</LibraryButton></p>
+    <p v-else-if="!setups.length">尚无设备组合，可在设备管理→设备组合中创建。</p>
     <p v-else-if="setupId&&!choices.length">此组合尚无启用的拍摄预设。</p>
-    <small>预设只提供默认值；下方人工填写和文件实测值优先。接受导入时保存组合与预设快照。</small>
   </fieldset>
 </template>

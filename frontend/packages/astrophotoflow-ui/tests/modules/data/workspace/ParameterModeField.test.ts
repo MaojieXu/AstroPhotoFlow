@@ -14,6 +14,17 @@ async function open(wrapper:ReturnType<typeof mount>){
 }
 
 describe('ISO and Gain composite editor',()=>{
+  it('opens the composite editor from the keyboard without changing recorded zero',async()=>{
+    const save=vi.fn()
+    const wrapper=mount(ParameterModeField,{props:{value:{parameter_mode:'standard',iso:null,gain:0,offset:null},display:'模式未指定 · Gain 0',unsetMode:'standard',save}})
+    try{
+      await wrapper.get('button').trigger('keydown',{key:'Enter'})
+      expect(wrapper.get('select').element.value).toBe('standard')
+      await wrapper.get('select').trigger('keydown',{key:'Escape'})
+      expect(wrapper.text()).toContain('Gain 0')
+      expect(save).not.toHaveBeenCalled()
+    }finally{wrapper.unmount()}
+  })
   it('switches the visible input immediately and submits only changed values once',async()=>{
     const save=vi.fn().mockResolvedValue(undefined)
     const wrapper=mount(ParameterModeField,{props:{

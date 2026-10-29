@@ -90,6 +90,14 @@ describe('ImagePreview', () => {
     await nextTick()
   }
 
+  it('keeps the native image but hides editing, downloading and preview dimensions in display-only mode', () => {
+    renderImagePreview({ imageUrls: ['/api/view?filename=one.png&type=input'], displayOnly: true })
+    expect(screen.getByTestId('main-image')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Edit or mask image' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Download image' })).not.toBeInTheDocument()
+    expect(screen.queryByText('Calculating dimensions')).not.toBeInTheDocument()
+  })
+
   it('does not render when no imageUrls provided', () => {
     const { container } = renderImagePreview({ imageUrls: [] })
 
