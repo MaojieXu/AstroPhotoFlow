@@ -115,6 +115,8 @@ def test_bootstrap_offline_rejects_missing_or_corrupt_archive(tmp_path, corrupt)
         archive.write_bytes(b"not a verified executable archive")
     env = {**os.environ, "PATH": ""}
     env.pop("ASTROPHOTOFLOW_DEV_CACHE", None)
+    # Python exposes Windows environment keys in uppercase; do not inject PS7 modules into PS5.1.
+    env.pop("PSMODULEPATH", None)
     result = subprocess.run([str(powershell), "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(script),
                              "--offline", "--workspace", ".artifacts/workspaces/dev"],
                             cwd=tmp_path, env=env, capture_output=True, text=True)
@@ -144,9 +146,85 @@ def test_bootstrap_reuses_compatible_tools_until_version_process_exits(tmp_path)
     (binaries / "pnpm.cmd").write_text('@echo off\necho 11.13.1\nexit /b 0\n', encoding="utf-8")
     env = {**os.environ, "PATH": str(binaries)}
     env.pop("ASTROPHOTOFLOW_DEV_CACHE", None)
+    # Python exposes Windows environment keys in uppercase; do not inject PS7 modules into PS5.1.
+    env.pop("PSMODULEPATH", None)
     result = subprocess.run([str(powershell), "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(scripts / "bootstrap.ps1"),
                              "--offline", "--workspace", ".artifacts/workspaces/dev"],
                             cwd=tmp_path, env=env, capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
     assert (tmp_path / "prepared").exists()
     assert not (tmp_path / ".artifacts/cache/toolchains").exists()
+
+
+@pytest.mark.parametrize("control_state", ["unknown", "starting", "stopping"])
+def test_unresolved_workspace_state_blocks_preparation(preparer, tmp_path, monkeypatch, control_state):
+    module, commands, state = preparer
+    workspace = tmp_path / ".artifacts/workspaces/feature"
+    monkeypatch.setattr(sys, "argv", ["dev_prepare", "--workspace", str(workspace)])
+    assert module.main() == 0
+    state.update(state=control_state, ready=False, processes=[])
+    (tmp_path / "uv.lock").write_text("changed", encoding="utf-8")
+    commands.clear()
+    assert module.main() == 1
+    assert not any("sync" in command or "install" in command or "create" in command
+                   or "build" in command or "runtime" in command for command in commands)
+    receipt = json.loads((tmp_path / ".artifacts/dev-prepare.json").read_text(encoding="utf-8"))
+    assert "状态" in receipt["error"]
+
+
+@pytest.mark.parametrize("running", [False, True])
+@pytest.mark.parametrize("change", ["content", "added", "removed"])
+def test_same_head_changed_assets_sync_when_stopped_and_reject_when_running(
+    preparer, tmp_path, monkeypatch, running, change
+):
+    module, commands, state = preparer
+    workspace = tmp_path / ".artifacts/workspaces/feature"
+    monkeypatch.setattr(sys, "argv", ["dev_prepare", "--workspace", str(workspace)])
+    assert module.main() == 0
+    assets = tmp_path / "assets"
+    installed = workspace / "web"
+    for directory in (assets, installed):
+        directory.mkdir()
+        (directory / "index.html").write_text("index", encoding="utf-8")
+        (directory / "app.js").write_text("old", encoding="utf-8")
+        (directory / "build-manifest.json").write_text(
+            '{"commit":"base-sha","distribution":"localhost"}', encoding="utf-8"
+        )
+    if change == "content":
+        (assets / "app.js").write_text("new", encoding="utf-8")
+    elif change == "added":
+        (assets / "new.js").write_text("new", encoding="utf-8")
+    else:
+        (assets / "app.js").unlink()
+    state.update(state="running" if running else "stopped", ready=running,
+                 processes=[{"pid": 42}] if running else [])
+    monkeypatch.setattr(sys, "argv", ["dev_prepare", "--workspace", str(workspace),
+                                      "--frontend-assets", str(assets)])
+    commands.clear()
+    assert module.main() == (1 if running else 0)
+    workspace_commands = [command for command in commands if "create" in command]
+    if running:
+        assert not workspace_commands
+        assert not any("sync" in command or "install" in command for command in commands)
+    else:
+        assert len(workspace_commands) == 1
+        assert "--frontend-assets" in workspace_commands[0]
+
+
+def test_actual_frontend_sync_removes_obsolete_assets_and_matches(preparer, tmp_path):
+    from astrophotoflow.core.workbench import install_frontend
+
+    module, _, _ = preparer
+    assets = tmp_path / "assets"
+    assets.mkdir()
+    (assets / "index.html").write_text("old", encoding="utf-8")
+    (assets / "old.js").write_text("old", encoding="utf-8")
+    workspace = tmp_path / "workspace"
+    installed = install_frontend(workspace, assets)
+    (assets / "old.js").unlink()
+    (assets / "new.js").write_text("new", encoding="utf-8")
+    (assets / "index.html").write_text("new", encoding="utf-8")
+    assert not module.frontend_matches(assets, installed)
+    install_frontend(workspace, assets)
+    assert not (installed / "old.js").exists()
+    assert module.frontend_matches(assets, installed)

@@ -103,7 +103,11 @@ def install_frontend(workspace: Path, frontend_assets: Path | None = None) -> Pa
     if not (source / "index.html").is_file():
         raise WorkbenchError(f"原生网页资源不存在：{source / 'index.html'}")
     target = workspace / "web"
+    source_files = {path.relative_to(source) for path in source.rglob("*") if path.is_file()}
     shutil.copytree(source, target, dirs_exist_ok=True)
+    for path in target.rglob("*"):
+        if path.is_file() and path.relative_to(target) not in source_files:
+            path.unlink()
     return target
 
 

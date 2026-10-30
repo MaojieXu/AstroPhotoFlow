@@ -775,7 +775,7 @@
 - 证据：Feature Worktree `C:/Users/Administrator/.codex/worktrees/bfe6/AstroPhotoFlow/.artifacts/manager-integration/siril/`保留完整日志、脚本、失败记录、原生记录和截图，主要为`platform-tests.log`、`platform-final.log`、`records-after.log`、`catalog-after.log`、`bundle-final.log`、`ui-tests.log`、`native-frontend-tests.log`、`native-probe.log`、`runtime-matrix/report.json`、`runtime-matrix/focused-report.json`、`cancellation-probe.json`、`browser-acceptance.json`、`completed-native-history.json`、`final-preview-verification.json`、`final-frontend-build-retry.log`和`final-assets.log`。Feature空间及必要运行数据保留。
 
 <a id="environment-bootstrap-feature"></a>
-## 环境与workspace准备拆分（2026-10-30，Feature未集成）
+## 环境与workspace准备拆分（2026-10-30，Manager集成验证）
 
 - 实现：core拆分runtime准备与空workspace创建；固定开发入口默认只准备本地依赖／目录，显式构建、启停，输出阶段回执。保留私有runtime，包缓存及同基点本地网页可复用。
 - 静态：8个修改Python文件语法与文档链接检查通过；引擎归档生成成功，前端源码未变。实现验证使用基点`b625045c388953ac9dc4b28ec5d1a318385ac239`网页及该基点上的工作区改动；最终交接提交与预览版本见Feature Brief。
@@ -785,3 +785,8 @@
 - 证据：本Feature`.artifacts/logs/environment-bootstrap/`中的`implementation-verification.json`、`dev-prepare-first.json`、`dev-prepare-final-repeat.json`、`dev-preview-repeat.json`、`readiness-current.json`，完整阶段日志由`.artifacts/dev-prepare.json`指向。
 
 - Quickstart补充：根README提供clone dev后的无Agent命令；Windows PowerShell 5.1入口复用或在项目内准备工具，固定Node／uv归档校验，Python安装显式禁止注册。已有工具复用、本地Node解压及pnpm准备路径通过；完整构建／启动命令在已有Python与依赖缓存条件下66.985秒完成，热更新入口转发核对通过。全新无缓存机器首装尚未验收；新增离线缺失／校验失败及兼容工具复用回归用例未执行。检查实例已停止，原Feature预览保留。证据为同目录的quickstart-verification.json、quickstart-build.log、bootstrap-existing.log、bootstrap-managed-tools.log、quickstart-watch.log。
+
+- Manager集成审查：基点`b625045c388953ac9dc4b28ec5d1a318385ac239`，原始候选`242b6133257fb3d9230d82527caaf7c032536125`。独立上下文只读Reviewer确认并复审了未知控制状态提前拒绝、同HEAD网页实际内容比较两项修复；网页同步同时删除目标web目录内已淘汰的文件，防止旧hash资源导致持续误拒绝。最终复审无新增可确认缺陷。
+- Manager自动验证：工作台、环境准备、引擎构建及CLI客户端契约共64项通过，包括新增未知／启动中／停止中保护、同SHA内容变更／新增／删除及真实网页同步回归。原损坏归档测试因继承Codex PowerShell 7模块路径失败，已在测试子进程清除`PSMODULEPATH`，恢复PowerShell 5.1默认模块后通过；未为此改bootstrap产品行为。
+- Manager实际验证：固定Quickstart入口离线复用已存在依赖2.848秒，不构建／安装runtime／启停服务；独立空workspace CLI创建0.505秒，runtime与网页未创建、默认配置哈希不变。耗时仅代表本机已有工具和缓存条件。原候选完整构建与33088预览证据仍有效，管理入口修复不涉及前端源码，未重复全量构建或功能验收。未推送、不清理Feature空间。
+- Manager证据：本Feature`.artifacts/manager-integration/environment-bootstrap/targeted-tests-final.log`、`prepare-smoke.log`与`empty-workspace-smoke.json`。全新无缓存机器首装、多Worktree共享缓存并发、Linux／WSL仍未验收。

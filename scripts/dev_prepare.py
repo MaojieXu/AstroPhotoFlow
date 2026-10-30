@@ -54,6 +54,16 @@ def fingerprint(paths: list[Path], versions: list[str]) -> str:
     return digest.hexdigest()
 
 
+def frontend_matches(source: Path, installed: Path) -> bool:
+    if not source.is_dir() or not installed.is_dir():
+        return False
+    source_files = {path.relative_to(source) for path in source.rglob("*") if path.is_file()}
+    installed_files = {path.relative_to(installed) for path in installed.rglob("*") if path.is_file()}
+    return source_files == installed_files and all(
+        (source / path).read_bytes() == (installed / path).read_bytes() for path in source_files
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Prepare this Worktree; build and start only when requested.")
     parser.add_argument("--workspace", type=Path, required=True)
@@ -145,11 +155,11 @@ def main() -> int:
         if config.is_file() and Path(report["python"]).is_file():
             state = json.loads(run("workspace-state", cli + ["status", "--workspace", str(workspace)]))
             report["ready"] = state["ready"]
+            if state.get("state") in {"unknown", "starting", "stopping"}:
+                raise RuntimeError("workspace状态未知或控制操作尚未完成；先查询状态，不要重复准备。")
             active = bool(state["processes"])
             if active:
-                installed = workspace / "web/build-manifest.json"
-                same_assets = (installed.is_file() and (assets / "build-manifest.json").is_file()
-                               and installed.read_bytes() == (assets / "build-manifest.json").read_bytes())
+                same_assets = frontend_matches(assets, workspace / "web")
                 if (not state["ready"] or args.build or stamps.get("python") != python_key
                         or stamps.get("frontend") != frontend_key or ((args.start or args.frontend_assets) and not same_assets)):
                     raise RuntimeError("workspace仍在运行且需要修改环境或网页；先用--stop停止自己的实例。")
@@ -185,8 +195,7 @@ def main() -> int:
         if args.start or args.build or args.frontend_assets:
             manifest = json.loads((assets / "build-manifest.json").read_text(encoding="utf-8"))
             report["frontend"] = {"assets": str(assets), **manifest}
-            installed = workspace / "web/build-manifest.json"
-            if args.build or not installed.is_file() or installed.read_bytes() != (assets / "build-manifest.json").read_bytes():
+            if args.build or not frontend_matches(assets, workspace / "web"):
                 command.extend(["--frontend-assets", str(assets)])
         report["workspace_result"] = json.loads(run("workspace", command))
         if args.start:
