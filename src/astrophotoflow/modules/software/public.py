@@ -173,6 +173,12 @@ def get_operation(settings, package_id, version, operation_id):
     return bundles.operation(settings.workspace, package_id, operation_id, package.availability == "ready", package.reason)
 
 
+def list_operations(settings, package_id):
+    _, entries, _ = bundles.metadata(settings.workspace, package_id)
+    package = get_package(settings, package_id)
+    return [bundles.operation_from_entry(entry, package.availability == 'ready', package.reason) for entry in entries]
+
+
 def get_bundle_metadata(settings, package_id):
     return bundles.metadata(settings.workspace, package_id)
 

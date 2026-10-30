@@ -266,6 +266,10 @@ def operation(workspace: Path, package_id: str, operation_id: str, ready: bool, 
     entry = next((value for value in entries if value['operation']['operation_id'] == operation_id), None)
     if entry is None:
         raise ApiError(404, 'RESOURCE_NOT_FOUND', '未找到软件操作。')
+    return operation_from_entry(entry, ready, reason)
+
+
+def operation_from_entry(entry, ready: bool, reason: str | None):
     value = SoftwareOperation.model_validate(dict(entry['operation'], content_token='', ready=ready, reason=reason))
     encoded = json.dumps(value.model_dump(mode='json', exclude={'content_token', 'ready', 'reason'}), sort_keys=True, separators=(',', ':'), ensure_ascii=False)
     return value.model_copy(update={'content_token': hashlib.sha256(encoded.encode()).hexdigest()})
