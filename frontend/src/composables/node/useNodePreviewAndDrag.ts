@@ -2,6 +2,7 @@ import type { ComputedRef, CSSProperties, MaybeRefOrGetter, Ref } from 'vue'
 import { computed, ref, toValue } from 'vue'
 
 import { useNodeDragToCanvas } from '@/composables/node/useNodeDragToCanvas'
+import type { StartDragOptions } from '@/composables/node/useNodeDragToCanvas'
 import { useSettingStore } from '@/platform/settings/settingStore'
 import type { ComfyNodeDefImpl } from '@/stores/nodeDefStore'
 
@@ -23,7 +24,8 @@ interface UseNodePreviewAndDragReturn {
 export function useNodePreviewAndDrag(
   nodeDef: Ref<ComfyNodeDefImpl | undefined>,
   previewRef: Ref<HTMLElement | null>,
-  panelRef?: MaybeRefOrGetter<HTMLElement | null>
+  panelRef?: MaybeRefOrGetter<HTMLElement | null>,
+  dragOptions?: MaybeRefOrGetter<Pick<StartDragOptions, 'onPlace'>>
 ): UseNodePreviewAndDragReturn {
   const { startDrag, handleNativeDrop } = useNodeDragToCanvas()
   const settingStore = useSettingStore()
@@ -124,7 +126,7 @@ export function useNodePreviewAndDrag(
     isDragging.value = true
     isHovered.value = false
 
-    startDrag(nodeDef.value, { mode: 'native' })
+    startDrag(nodeDef.value, { ...toValue(dragOptions), mode: 'native' })
 
     if (e.dataTransfer) {
       e.dataTransfer.effectAllowed = 'copy'

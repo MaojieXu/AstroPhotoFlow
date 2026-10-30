@@ -1,5 +1,7 @@
 # ② 数据与资产管理概要设计
 
+2026-10-29 文件夹选择窗口：素材库目录选择改用 Windows Common Item Dialog 的文件夹模式，提供资源管理器式地址栏与搜索导航；仍通过现有 select-local 返回当前层素材清单，取消、焦点和单选择窗口规则保持。实现与用户确认见[当前上下文](../../../../docs/development/current-context.md#library-modern-folder-picker)。
+
 2026-10-29 统一媒体查看候选：MediaViews公开供应用装配，内部media_view／sources／cache／video实现按需512px瓦片、NumPy数组／切片、原件视频Range流、播放代理及暂停源帧。复用Preview模型、预览执行器和原件清理保护，无新增表或迁移；不把显示选择转成科学输入／帧资产。原生节点、素材库和固定成员使用同一查看器；旧100／1080接口保留。测试已编写未执行，编译与隔离交付证据见当前上下文，不能宣称性能或用户验收通过。
 
 2026-10-28 来源规则按用户修订：网页本机选择器直接返回绝对文件清单，无预设根目录限制；imports允许无root_id的绝对路径托管，local_selection调用系统选择器，files.enumerate_local冻结当前层支持文件，ingestion沿同一登记／托管／恢复链路消费。旧root_id模式保持。测试只编写、未运行，状态及证据见当前上下文；此条覆盖此前网页授权目录前置要求。

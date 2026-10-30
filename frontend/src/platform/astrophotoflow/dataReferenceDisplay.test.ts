@@ -4,6 +4,8 @@ import { describe, expect, it, vi } from 'vitest'
 import { LGraph, LGraphNode, LiteGraph } from '@/lib/litegraph/src/litegraph'
 import { isComponentWidget } from '@/scripts/domWidget'
 import type { ComfyApp } from '@/types/comfy'
+import { useDomWidgetStore } from '@/stores/domWidgetStore'
+import { isWidgetVisibleOnSurface } from '@/types/widgetVisibility'
 
 import { attachDataReferenceDisplay, registerDataReferenceDisplay } from './dataReferenceDisplay'
 
@@ -24,12 +26,33 @@ describe('Nodes 2.0 data reference display', () => {
     attachDataReferenceDisplay(node)
     const reference = node.widgets?.find(widget => widget.name === 'reference')
     expect(reference?.options.surfaces).toEqual({ canvas: 'never', vueNode: 'never', panel: 'never' })
+    expect(reference && node.isWidgetVisible(reference)).toBe(false)
+    expect(reference?.visibility && isWidgetVisibleOnSurface(reference.visibility, 'vueNode', { showAdvanced: true })).toBe(false)
     const display = node.widgets?.find(widget => widget.name === 'apf_data_display')
     expect(display && isComponentWidget(display)).toBe(true)
     expect(display?.serialize).toBe(false)
     expect(display?.options.serialize).toBe(false)
+    expect(display && node.isWidgetVisible(display)).toBe(true)
+    expect(display?.visibility && isWidgetVisibleOnSurface(display.visibility, 'vueNode', { showAdvanced: false })).toBe(true)
     expect(node.serialize().widgets_values).toEqual([value])
     expect(node.widgets?.filter(widget => widget.name === 'apf_data_display')).toHaveLength(1)
+  })
+
+  it('registers the preview in the native DOM layer when added and releases it when removed', () => {
+    const graph = new LGraph()
+    const node = dataNode()
+    attachDataReferenceDisplay(node)
+    const display = node.widgets?.find(widget => widget.name === 'apf_data_display')
+    expect(display && isComponentWidget(display)).toBe(true)
+    if (!display || !isComponentWidget(display)) return
+    const store = useDomWidgetStore()
+    expect(store.widgetStates.has(display.id)).toBe(false)
+    graph.add(node)
+    expect(store.widgetStates.get(display.id)?.widget).toBe(display)
+    expect(node.size[1]).toBeGreaterThanOrEqual(480)
+    expect(node.serialize().widgets_values).toEqual([value])
+    graph.remove(node)
+    expect(store.widgetStates.has(display.id)).toBe(false)
   })
 
   it('recreates the display for pasted or restored serialized nodes without persisting preview state', () => {

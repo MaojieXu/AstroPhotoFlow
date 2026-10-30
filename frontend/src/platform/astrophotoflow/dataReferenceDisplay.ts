@@ -1,7 +1,7 @@
 import { markRaw } from 'vue'
 
 import type { LGraphNode } from '@/lib/litegraph/src/litegraph'
-import { ComponentWidgetImpl } from '@/scripts/domWidget'
+import { ComponentWidgetImpl, addWidget } from '@/scripts/domWidget'
 import type { ComfyApp } from '@/types/comfy'
 
 import CanvasDataWidget from './CanvasDataWidget.vue'
@@ -12,7 +12,10 @@ export function attachDataReferenceDisplay(node: LGraphNode) {
   if (node.comfyClass !== 'APF_DATA_REFERENCE') return
   const reference = node.widgets?.find(widget => widget.name === 'reference')
   if (!reference) return
-  reference.options.surfaces = { canvas: 'never', vueNode: 'never', panel: 'never' }
+  reference.options = {
+    ...reference.options,
+    surfaces: { canvas: 'never', vueNode: 'never', panel: 'never' }
+  }
   if (node.widgets?.some(widget => widget.name === 'apf_data_display')) return
   const widget = new ComponentWidgetImpl({
     node,
@@ -21,13 +24,14 @@ export function attachDataReferenceDisplay(node: LGraphNode) {
     inputSpec: { name: 'apf_data_display', type: 'STRING' },
     options: {
       serialize: false,
-      surfaces: { canvas: 'never', vueNode: 'shown', panel: 'never' },
-      getMinHeight: () => 440,
-      getMaxHeight: () => 440
+      surfaces: { canvas: 'shown', vueNode: 'shown', panel: 'never' },
+      getMinHeight: () => 480,
+      getMaxHeight: () => 480
     }
   })
   widget.serialize = false
-  node.addCustomWidget(widget)
+  addWidget(node, widget)
+  node.expandToFitContent()
 }
 
 export function registerDataReferenceDisplay(app: ComfyApp) {

@@ -45,7 +45,7 @@ type SetupSortField = 'created_at' | 'name' | 'camera' | 'telescope' | 'mount' |
 const store = useWorkspaceStore()
 const props = defineProps<{ native?: boolean; sidebar?: boolean; controls?: LibraryControls; canvasAgentAllowed?: boolean }>()
 provide(libraryControlsKey, props.controls)
-const emit = defineEmits<{ 'manage-equipment': []; 'back-to-library': []; 'notify-success': [message: string]; 'notify-import': [notice: ImportNotice]; 'open-workbench-settings': []; 'add-to-canvas': [source: CanvasDataRequest]; 'canvas-control': [] }>()
+const emit = defineEmits<{ 'manage-equipment': []; 'back-to-library': []; 'notify-success': [message: string]; 'notify-import': [notice: ImportNotice]; 'open-workbench-settings': []; 'canvas-control': [] }>()
 
 function canvasSource(row: RecordData): CanvasDataRequest | undefined {
   if (row.project_id || bulkSelectMode.value || savingInline.value || inlineSaveFailure.value) return
@@ -62,10 +62,6 @@ function canvasSource(row: RecordData): CanvasDataRequest | undefined {
   return source.success ? source.data : undefined
 }
 
-function addRowToCanvas(row: RecordData) {
-  const source = canvasSource(row)
-  if (source) emit('add-to-canvas', source)
-}
 if (props.sidebar) {
   store.selectSection('library')
   store.setQuery('')
@@ -1732,7 +1728,7 @@ watch(
   }
 )
 const workspaceContext = {
-  canvasSource, addRowToCanvas,
+  canvasSource,
   requestEquipmentDelete, requestEquipmentDeleteSelection,
   store, activeArea, isEquipmentManagement, recordPageSize, managementFilterBlocked, lastManagementSection, capabilities, rows,
   selected, total, loading, error, capabilityError,
@@ -1927,18 +1923,15 @@ onBeforeUnmount(() => {
 .apf-table-scroll { margin:0 10px; min-width:0; min-height:160px; max-height:45vh; flex:0 0 auto; overflow:auto; }
 .apf-assets-table { border-collapse:collapse; min-width:1120px; width:100%; font-size:12px; }
 .apf-table-scroll.simple .apf-assets-table { min-width:0; table-layout:fixed; }
-.apf-table-scroll.simple .apf-column-camera,.apf-table-scroll.simple .apf-column-parameter,.apf-table-scroll.simple .apf-column-temperature{display:none}
+.apf-table-scroll.simple .apf-column-classification,.apf-table-scroll.simple .apf-column-camera,.apf-table-scroll.simple .apf-column-parameter,.apf-table-scroll.simple .apf-column-exposure,.apf-table-scroll.simple .apf-column-temperature{display:none}
 .apf-table-scroll.simple th.apf-column-preview{width:72px}
-.apf-table-scroll.simple th.apf-column-classification{width:100px}
-.apf-table-scroll.simple th.apf-column-exposure{width:64px}
-.apf-assets-table th.apf-column-action,.apf-assets-table td.apf-canvas-action-cell{width:36px;min-width:36px;position:sticky;right:0;background:inherit}
-.apf-workspace .apf-assets-table .apf-canvas-action{opacity:0;min-height:28px;width:28px;padding:4px}
-.apf-assets-table tr:hover .apf-canvas-action,.apf-assets-table tr:focus-within .apf-canvas-action,.apf-assets-table tr[aria-selected=true] .apf-canvas-action{opacity:1}
+.apf-table-scroll.simple .apf-column-name{min-width:0;overflow:hidden}
 .apf-table-scroll.simple .apf-thumb{width:60px;height:52px}
 .apf-table-scroll.simple .apf-inline-field{min-width:0;width:100%}
-.apf-table-scroll.simple .apf-inline-value{min-width:0;overflow-wrap:anywhere;white-space:normal}
+.apf-table-scroll.simple .apf-material-name .apf-inline-value{display:block;min-width:0;width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;overflow-wrap:normal}
+.apf-table-scroll.simple .apf-column-name>.apf-member-open{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.apf-table-scroll.simple .apf-column-name>small{display:none}
 .apf-table-scroll.simple .apf-classification-separator{display:none}
-.apf-table-scroll.simple .apf-compact-meta{display:block}
 .apf-compact-meta{display:none}
 .apf-table-scroll.simple .apf-assets-table.is-selecting th:first-child{width:28px}
 .apf-processing-issue{color:var(--destructive-foreground,#faa)!important;white-space:normal}

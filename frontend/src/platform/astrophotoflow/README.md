@@ -1,5 +1,11 @@
 # AstroPhotoFlow 原生应用桥接
 
+2026-10-29 整行素材拖拽：LibraryCanvasSource支持span／tr宿主及显式clickTarget，拖拽共用整行原生事件，避免名称／缩略图嵌套各自注册。根元素显式接收属性，点击放置仅命中名称，其余click交回UI包原行为；编辑输入起拖不调用原生素材拖拽。原生数据节点、预览、固定引用及撤销链路不变。验证见library-row-drag。
+
+2026-10-29 素材预览保留修复：dataReferenceDisplay使用原生addWidget注册／释放同一个CanvasDataWidget，声明旧版canvas与vueNode均显示；reference通过options整体赋值同步真实可见性，继续隐藏且唯一序列化。WidgetDOM按显式vueNode显示声明挂载组件，未声明的旧组件路径保留。原生节点按内容扩展、预览区480px、成员名称不收缩及参数表清除默认外边距，避免旧版字体将名称挤至零高度。未修改预览解析、固定引用、执行、全局Nodes 2.0开关或新增Vue应用。验证见library-preview-preservation，覆盖下文仅Nodes 2.0显示的旧限制。
+
+2026-10-29 素材放置交互：LibraryCanvasSource复用useNodeDragToCanvas／useNodePreviewAndDrag，名称点击后选择画布落点，名称及缩略图原生拖拽时共用NodeDragPreview。原生放置支持一个可选onPlace回调，②固定引用在落点经现有canvasDataBridge准备与写入，仍为一次原生撤销；取消不调用准备。已移除素材专用pragmatic载荷及“+”事件，既有Agent插入函数保持。验证见library-native-node-placement，此条覆盖下文原pragmatic描述。
+
 2026-10-29 SirilPreviewWidget／sirilPreviewDisplay：通过原生ComponentWidget生命周期挂载非序列化的实时预览区，读取当前素材连线与三个参数；350ms防抖、当前成员切换、AbortController、代次隔离和释放均不写工作流或触发Agent接管。UI包仅公开固定预览API消费函数；组件复用原生ImagePreview displayOnly及Button。正式执行仍由原生队列处理原件，结果预览关闭二次自动拉伸。组件和桥接用例仅编写不运行。
 
 

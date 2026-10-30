@@ -1,5 +1,57 @@
 # 需求、实现与验证矩阵
 
+<a id="library-simple-list-width"></a>
+
+## 2026-10-29 精简列表和长名称：未执行验证
+
+候选：`codex/library-ui-layout` 本地代码。用户报告窄侧栏中长名称逐字竖排，要求精简模式只显示预览／名称。已修改WorkspaceRecords语义列标记、Workspace简约列隐藏／宽度／省略样式及InlineField可选完整标题提示；本段只记录修改和待验证范围，不证明视觉修复已通过。
+
+按用户约定，本轮未运行测试、类型／样式检查、构建或浏览器验收，34388仍使用本轮修改前的构建。后续待用户明确要求验证时检查：窄侧栏中含英文长文件名／中文名称不逐字竖排且预览／名称对齐，悬停读到完整名称；分类／曝光表头及单元格均隐藏；图像组导航、批量勾选、名称双击编辑、整行拖拽继续可用；切至细节模式保留完整资料列。此前45项或其他历史通过记录均不覆盖本次修改。
+
+<a id="library-row-drag"></a>
+
+## 2026-10-29 素材整行拖拽
+
+候选：`codex/library-ui-layout`，Windows、Node26.8.2、独立34388／34390实例。以下验证均在本轮用户同步“默认不执行test和最终验收构建”约定之前完成；收到约定后停止追加测试及构建，仅保存既有结果。
+
+- 原生4文件25项通过，8.85秒：LibraryCanvasSource、canvasDataBridge、dataReferenceDisplay、CanvasDataWidget。整行新增用例覆盖状态说明／参数值／行背景起拖、一次固定引用插入、aria-selected保留、普通行选择与名称点击放置区分、编辑输入拖动隔离；预览和固定引用既有用例继续通过。日志：`.artifacts/verification/library-row-drag-20261029/native-tests.log`。
+- UI组及成员文件20项通过，8.97秒：每条记录只交接一个整行拖拽宿主，组及成员固定版本保持，既有导航和编辑回归通过。UI包vue-tsc及LibraryCanvasSource.vue定向ESLint通过。Vite构建通过，8.80秒，日志同目录build.log；未执行原生全库类型检查或全库回归。
+- 真实页面在新页的独立Unsaved Workflow (4)验证：从“原件已就绪”等状态说明起拖，生成一个29成员数据节点且保留图片、名称、切换按钮及曝光等信息；原生撤销后画布为空。再从行中无文字／按钮的空白区域起拖，生成一个相同固定组节点。原页面保留，未执行科学处理、修改素材资料或批量拖入多条记录。截图：`.artifacts/verification/library-row-drag-20261029/row-drag.jpg`。
+- 部署：stop `ac9b5633-1c5b-4fe0-af1d-2469bb50e4c0`、init `--reuse-runtime --no-activate`、start `c32ff26f-f0c5-42bc-be45-782f6703e8d2`均完成，blockers为空。仅更新当前worktree，未提交／推送／合并，用户验收待反馈。
+
+<a id="library-preview-preservation"></a>
+
+## 2026-10-29 素材预览保留修复
+
+候选：`codex/library-ui-layout`，Windows、Node26.8.2、独立34388／34390实例。此前加入交互验证没有覆盖节点内图片，用户报告缺失后补充本次验证，不将此前节点创建通过解释为预览已通过。
+
+- 最终定向5文件27项通过，9.68秒：dataReferenceDisplay、CanvasDataWidget、WidgetDOM、LibraryCanvasSource、canvasDataBridge。新增实际隐藏状态、DOM生命周期注册／释放、原生内容高度与canvas显示／不显示两种显式vueNode组件挂载；保留固定引用唯一序列化、成员切换及0值、迟到响应隔离和拖放回归。日志：`.artifacts/verification/library-preview-preservation-20261029/tests.log`。
+- Vite生产构建通过，10.66秒，日志同目录build.log；保留既有资源及动态导入警告。dataReferenceDisplay.ts和WidgetDOM.vue定向ESLint通过。CanvasDataWidget.vue检查报告4条既有Tailwind规范错误，均在本次未修改行：两条break-words命名和两条类排序；本轮未顺带整理，因此不声称三个生产文件lint全部通过。未运行全库回归或原生全库类型检查。
+- 真实页面：最终新页确认加载`index-B6TIzAyj.js`，旧版canvas模式未切换。单独空白图拖入Astro_Dataset，显示29成员数据节点、图片和当前成员名称；连按下一张到3／29，名称为Andrew M Weeks - L、曝光从180s变120s。详情显示12238×8082、Bin1／1、fits和BITPIX等既有资料；关闭详情后名称实测19.2px高，修复前为0px。无reference输入框、无页面错误；未运行科学处理或改写素材资料。Nodes 2.0由WidgetDOM的两种surface用例覆盖，本轮没有实际切换全局设置。
+- 部署：最终stop `93d5af4c-9eef-4b2d-ba1e-cbf53ee90f57`，init `--reuse-runtime --no-activate`，start `914f6733-29ba-4b61-b5fc-e0bbaaf4d067`完成且blockers为空。旧页面保留，未保存验证页的刷新未真正离页，改用新页验证最新资源。截图：`.artifacts/verification/library-preview-preservation-20261029/preview-restored.jpg`。仅当前worktree实例；未提交／推送／合并，用户验收待反馈。
+
+<a id="library-native-node-placement"></a>
+
+## 2026-10-29 素材原生节点放置
+
+候选：`codex/library-ui-layout`，Windows、Node26.8.2，独立34388／34390实例。
+
+- 原生定向6文件56项通过（12.07秒）：LibraryCanvasSource、canvasDataBridge、useNodeDragToCanvas、useNodePreviewAndDrag、useCanvasDrop和LibrarySidebarTab。覆盖点击落点、原生拖放、Esc／画布外／双击取消、不就绪、拖起后固定版本不随列表刷新变化，以及原生节点既有交互。首次新增拖放用例因happy-dom事件未携带坐标失败，测试显式构造MouseEvent坐标后通过，生产代码未为测试增加分支。日志：`.artifacts/verification/library-native-node-placement-20261029/native-tests.log`。
+- UI固定组及成员用例20项通过（27.65秒），名称与缩略图交接固定组版本和固定成员版本，原预览／编辑回归通过。UI包vue-tsc通过。定向生产文件ESLint零错误；测试文件由既有ESLint配置忽略。Vite生产构建通过（32.44秒），保留既有资源／动态导入警告；未执行原生全库类型检查或全量回归。
+- 真实浏览器：保留原页面，在新页新建Unsaved Workflow (2)；点击Astro_Dataset名称后落点生成29成员数据节点，缩略图拖入另生成一节点，两次原生撤销逐个移除。打开组后拖动Andrew M Weeks - B名称生成单件asset_version节点；双击名称进入编辑，Esc取消，无资料保存或运行提交。页面错误日志为空。最终验证图留一个单件示例节点。
+- 部署：stop `a50dfe9f-2dac-47ae-99a6-64e435c67425`、init复用私有runtime且不激活默认workspace、start `fbb8ed01-fcd1-4f7f-b1af-9a39412bc155`均完成，blockers为空。只更新当前worktree实例。截图：`.artifacts/verification/library-native-node-placement-20261029/placement.jpg`。上述为Agent验证，用户验收尚待反馈；未提交／推送／合并。
+
+<a id="library-modern-folder-picker"></a>
+
+## 2026-10-29 素材库新版文件夹选择窗口
+
+候选：`codex/library-ui-layout`，基线 `366a311`；环境：Windows、独立worktree及34388／34390实例。用户确认“好的，已经完成了”，窗口呈现按本次用户确认通过。
+
+- 自动检查：`tests/modules/data/test_local_selection.py` 全部用例，加 `test_import_pipeline.py` 的原生选择取消／空根目录、繁忙、断连取消、文件夹固定当前层四项，共13通过（3.49秒）。覆盖取消不返回素材、单窗口互斥、子进程回收及当前层枚举。
+- 原生检查：实际 Windows PowerShell 编译生产选择器C#并创建／释放COM对象成功；通过独立网页接口得到取消空清单，未建立导入任务。Agent未完成中文测试目录的成功选择回传，不将此项记为已实测通过。
+- 部署：平台restart完成，blockers为空；仅本worktree运行实例，沿用已有前端构建。未运行全量回归或重新构建前端。
+- 证据：`.artifacts/verification/folder-picker-20261029/pytest.log`、`compile-picker.log`、`restart.log`；用户确认保留于本chat。
+
 ## 2026-10-29 M2 最终验证通过候选
 
 本条覆盖此前“仅编写测试”“受阻等待确认”的状态：用户已明确授权运行工作台设置及素材库全部现有实现的测试，通过后推送并合入dev。设备管理与素材库复用侧栏内容宽度和左边界，设备组合／我的设备居左；切换类别先清空旧记录，避免设备记录被组合视图误读。根目录单文件导入补存受理时大小／mtime，保证受理后来源变化会失败且不登记素材。

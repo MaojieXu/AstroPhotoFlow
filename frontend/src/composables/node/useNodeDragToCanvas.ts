@@ -1,7 +1,7 @@
 import { ref, shallowRef } from 'vue'
 
 import { t } from '@/i18n'
-import type { LGraphNode } from '@/lib/litegraph/src/litegraph'
+import type { LGraphNode, Point } from '@/lib/litegraph/src/litegraph'
 import { withNodeAddSource } from '@/platform/telemetry/nodeAdded/nodeAddSource'
 import type { NodeAddSource } from '@/platform/telemetry/types'
 import { useToast } from '@/components/ui/toast/toastStore'
@@ -14,10 +14,11 @@ import type { WidgetValueBinding } from '@/utils/widgetBinding'
 type DragMode = 'click' | 'native'
 type Position = { x: number; y: number }
 
-interface StartDragOptions {
+export interface StartDragOptions {
   mode?: DragMode
   widgetValues?: readonly WidgetValueBinding[]
   source?: NodeAddSource
+  onPlace?: (pos: Point) => void
 }
 
 const isDragging = ref(false)
@@ -26,6 +27,7 @@ const dragMode = ref<DragMode>('click')
 const lastNativeDragPosition = shallowRef<Position>()
 const pendingWidgetValues = shallowRef<readonly WidgetValueBinding[]>()
 const pendingSource = ref<NodeAddSource>('sidebar_drag')
+let pendingPlacement: StartDragOptions['onPlace']
 let listenersSetup = false
 
 // Firefox dragend can report stale clientX/Y and `drag` can fire with
@@ -79,6 +81,10 @@ function addNodeAtPosition(clientX: number, clientY: number): boolean {
     clientX,
     clientY
   } as PointerEvent)
+  if (pendingPlacement) {
+    pendingPlacement(pos)
+    return true
+  }
   const node = withNodeAddSource(pendingSource.value, () =>
     useLitegraphService().addNodeOnGraph(nodeDef, { pos })
   )
@@ -145,6 +151,7 @@ function cancelDrag() {
   lastNativeDragPosition.value = undefined
   pendingWidgetValues.value = undefined
   pendingSource.value = 'sidebar_drag'
+  pendingPlacement = undefined
   cleanupGlobalListeners()
 }
 
@@ -154,7 +161,8 @@ export function useNodeDragToCanvas() {
     {
       mode = 'click',
       widgetValues,
-      source = 'sidebar_drag'
+      source = 'sidebar_drag',
+      onPlace
     }: StartDragOptions = {}
   ) {
     isDragging.value = true
@@ -162,6 +170,7 @@ export function useNodeDragToCanvas() {
     dragMode.value = mode
     pendingWidgetValues.value = widgetValues
     pendingSource.value = source
+    pendingPlacement = onPlace
     setupGlobalListeners()
   }
 

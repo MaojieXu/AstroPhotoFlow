@@ -1,5 +1,4 @@
 import type { Ref } from 'vue'
-import { canvasDataRequestSchema } from '@astrophotoflow/ui'
 
 import { useSharedCanvasPositionConversion } from '@/composables/element/useCanvasPositionConversion'
 import { usePragmaticDroppable } from '@/composables/usePragmaticDragAndDrop'
@@ -17,7 +16,6 @@ import { ComfyNodeDefImpl } from '@/stores/nodeDefStore'
 import type { RenderedTreeExplorerNode } from '@/types/treeExplorerTypes'
 import { isSelectOnly } from '@/utils/litegraphUtil'
 import { matchesWidgetName } from '@/utils/widgetBinding'
-import { addLibraryDataToCanvas } from '@/platform/astrophotoflow/canvasDataBridge'
 
 export const useCanvasDrop = (dropTargetRef: Ref<HTMLElement | null>) => {
   const modelToNodeStore = useModelToNodeStore()
@@ -26,20 +24,11 @@ export const useCanvasDrop = (dropTargetRef: Ref<HTMLElement | null>) => {
 
   usePragmaticDroppable(() => dropTargetRef.value, {
     getDropEffect: (args): Exclude<DataTransfer['dropEffect'], 'none'> =>
-      args.source.data.type === 'tree-explorer-node' || args.source.data.type === 'apf-canvas-data' ? 'copy' : 'move',
+      args.source.data.type === 'tree-explorer-node' ? 'copy' : 'move',
     onDrop: async (event) => {
       if (isSelectOnly(comfyApp.canvas)) return
       const loc = event.location.current.input
       const dndData = event.source.data
-
-      if (dndData.type === 'apf-canvas-data') {
-        const source = canvasDataRequestSchema.safeParse(dndData.source)
-        if (source.success) {
-          const position = useSharedCanvasPositionConversion().clientPosToCanvasPos([loc.clientX, loc.clientY])
-          await addLibraryDataToCanvas(source.data, position)
-        }
-        return
-      }
 
       if (dndData.type === 'tree-explorer-node') {
         const node = dndData.data as RenderedTreeExplorerNode

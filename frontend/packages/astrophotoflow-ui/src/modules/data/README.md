@@ -1,5 +1,11 @@
 # ② 数据与资产管理：前端分工
 
+2026-10-29 精简列表代码修订：简约模式只显示预览／名称两列，分类、曝光及名称下参数／状态说明隐藏；语义列样式同时作用表头与数据单元格，移除分类／曝光固定宽度。名称容器允许收缩，按钮单行省略并以完整名称作title；图像组导航也限制在名称列内，保留整行拖拽、编辑和批量选择。细节模式资料列不变。本轮未执行测试、类型／样式检查、构建或运行实例更新，浏览器效果待验证。
+
+2026-10-29 整行拖拽：WorkspaceRecords以LibraryCanvasSource的tr形态包装整条记录，说明／状态／参数／空白均可起拖；名称以clickTarget声明继续支持点击放置。行aria-selected和普通点击穿透至原选择／组导航，缩略图与成员按钮的停止冒泡保持，编辑输入不发起素材拖拽。固定版本、批量禁用和就绪限制继续由canvasSource给出；无宿主时仍为普通tr。覆盖下文仅包装名称和缩略图的描述。
+
+2026-10-29 素材加入交互：移除“+”操作列，以宿主注入的canvasSource包装名称和缩略图；宿主复用原生节点库点击放置、拖拽和节点预览。包内继续只提供固定CanvasDataRequest，单击缩略图查看、名称双击编辑和组成员导航保留。此条覆盖下文旧加入图标描述，验证见验证矩阵library-native-node-placement。
+
 2026-10-29 统一媒体查看候选：api/media.ts公开MediaSelection／MediaState的Zod消费类型和MediaViewerRequest；Workspace和FixedDatasetMembers冻结当前组成员，通过LibraryControls.mediaViewer请求宿主显示。包内不导入OpenSeadragon、原生组件或画布Store；没有宿主注入的既有独立消费者仍保留旧PhotoPreviewDialog。原生产品入口、节点、固定成员共用宿主MediaViewer，不新增科学输入或通知存储。测试只编写不运行，见验证矩阵media-viewer。
 
 2026-10-28 本机选择修订：LocalImportPicker只等待系统文件／文件夹选择结果，取消／空目录／错误明确反馈，不查询import-roots、不要求先打开工作台设置。选中后直接进入ImportDialog确认数量、大小和可选资料，提交无root_id的绝对路径及managed模式。旧root_id消费类型仍可用；无浏览器文件上传或持久授权列表变更，测试未运行。

@@ -3,7 +3,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiClientError } from '@ui/modules/data/api/client'
 import App from '@ui/modules/data/App.vue'
-import Workspace from '@ui/modules/data/workspace/Workspace.vue'
+import LibraryCanvasSource from '@ui/modules/data/workspace/LibraryCanvasSource.vue'
 import type { Asset } from '@ui/modules/data/api/contracts'
 import realApiFixtureJson from '../../../fixtures/dataset-groups-real-api.json?raw'
 import { useWorkspaceStore } from '@ui/modules/data/workspace/store'
@@ -84,21 +84,22 @@ async function enterGroup(name:string){
   await flushPromises()
 }
 describe('dataset group member table',()=>{
-  it('adds the fixed group version or one member without using the current canonical version',async()=>{
+  it('offers the fixed group and member versions through a whole draggable row',async()=>{
     const group=dataset(8101,'Canvas group',8102,1)
     const asset=assetFor(8103,'Pinned canvas member.fit')
     const pinned=member(asset,8102,0,9104)
     configureLibrary([{dataset:group,version:version(group.id,8102,[pinned])}])
     await mountLibrary()
-    const action=wrapper.get('button[aria-label="将 Canvas group 加入画布"]')
-    expect(action.classes()).toContain('apf-canvas-action')
-    expect(action.text()).not.toContain('加入画布')
-    expect(action.element.closest('td')?.classList.contains('apf-canvas-action-cell')).toBe(true)
-    await wrapper.get('button[aria-label="将 Canvas group 加入画布"]').trigger('click')
-    expect(wrapper.findComponent(Workspace).emitted('add-to-canvas')?.[0]).toEqual([{entry_type:'dataset',id:group.id,version_id:idAt(8102)}])
+    expect(wrapper.find('button[aria-label="将 Canvas group 加入画布"]').exists()).toBe(false)
+    const groupSources=wrapper.findAllComponents(LibraryCanvasSource).filter(item=>item.props('source')?.id===group.id)
+    expect(groupSources).toHaveLength(1)
+    expect(groupSources[0].props('as')).toBe('tr')
+    for(const item of groupSources)expect(item.props('source')).toEqual({entry_type:'dataset',id:group.id,version_id:idAt(8102)})
     await enterGroup('Canvas group')
-    await wrapper.get('button[aria-label="将 Pinned canvas member.fit 加入画布"]').trigger('click')
-    expect(wrapper.findComponent(Workspace).emitted('add-to-canvas')?.[1]).toEqual([{entry_type:'asset',id:asset.id,version_id:pinned.version.id}])
+    const memberSources=wrapper.findAllComponents(LibraryCanvasSource)
+    expect(memberSources).toHaveLength(1)
+    expect(memberSources[0].props('as')).toBe('tr')
+    for(const item of memberSources)expect(item.props('source')).toEqual({entry_type:'asset',id:asset.id,version_id:pinned.version.id})
     expect(send).not.toHaveBeenCalled()
   })
 
