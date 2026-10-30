@@ -108,7 +108,7 @@ uv run --locked --no-sync python scripts/export_bundle_catalog.py .artifacts/bun
 $env:ASTROPHOTOFLOW_BUNDLE_CATALOG = "$PWD/.artifacts/siril-preview-catalog.json"
 ```
 
-该变量仅属于启动终端及其独立子进程；停止／启动时仍明确自己的workspace。随后走软件安装计划与当前网页确认，重启后核对程序版本、节点加载与Bundle SHA。目录覆盖只选择固定候选，不绕过安装确认，也不发布GitHub tag。源码未提交、未安装或仅静态资源就绪时须如实标注；不要据此声明节点功能通过。
+该变量仅属于启动终端及其独立子进程；停止／启动时仍明确自己的workspace。随后走软件安装计划与当前网页确认，安装结束后核对程序版本、节点加载与Bundle SHA。目录覆盖只选择固定候选，不绕过安装确认，也不发布GitHub tag。源码未提交、未安装或仅静态资源就绪时须如实标注；不要据此声明节点功能通过。
 
 浏览器验收由 Manager 在集成阶段按需执行，使用 `status` 的实际地址：
 
