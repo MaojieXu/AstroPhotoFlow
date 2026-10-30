@@ -728,3 +728,18 @@
 - 未验证／已知问题：测试套件、完整Bundle更新版本切换、自动热加载可靠性、路径导入真实文件、原生撤销实际恢复和完整科学处理仍交Manager按范围验证；Vue热更新曾出现组件错误，刷新后恢复。当前聊天旧MCP工具schema需宿主重连；实际验收使用绑定本workspace的新stdio会话。预览多页面可有不同草稿，不自动同步；平台目录固定发布版本，不自动发现GitHub最新版本。
 - 跨仓库依赖：`MaojieXu/AstroPhotoFlow-Siril`，Bundle `0.1.2-dev.1`，tag `v0.1.2-dev.1`，commit `12fd2d1d55daeadf7acb3972385d5c2bfcb52d4d`，软件Siril `1.4.4`。平台目录、安装锁及实际checkout一致且checkout干净，本轮未提交Bundle仓库。
 - 本机配置：本轮经用户明确授权将全局 `astrophotoflow` MCP 注册切到本Feature源码和 `hot-reload` workspace；原注册备份在 `.artifacts/implementation/hot-reload/mcp-registration-before-20261030-024945.toml`。这是本机配置变化，不属于Git提交；集成／清理时由Manager决定保留或恢复，不据此修改正常dev或默认workspace。
+
+
+<a id="hot-reload-integration"></a>
+## 热更新与本地画布编辑本地集成验证（2026-10-30）
+
+用户授权独立审查、必要验证、最小修复及本地合并dev；不推送、不清理Feature空间。原候选`ef56e0cef8a66f86f9d8331b41e330f8238aedf3`，基点`2a6053eb3e8351156d7fb2b4b1ed208e6e628bc0`；Manager源码修复提交`52da83199a86e09ce38354503e25f99e4c2ca18a`。最终范围以上方Feature交接及用户本轮Brief为准，保留已明确取消的占用／接管限制，不恢复旧要求。
+
+- 独立审查：Reviewer不继承开发聊天历史，只读审查全部变更；发现并修复三项P2：重载后采用未经加载的新哈希会漏掉连续编辑；卸载后仅注销LiteGraph而搜索目录残留；开发入口裸Python未采用uv项目环境。修复增量复审未发现阻塞合并问题，Reviewer未修改代码或运行测试。
+- 后端回归：软件、节点、工作流、interfaces、CLI／MCP协议／客户端、原生Bundle热加载及Python架构检查首轮113项通过；修复后相关14项复测通过，包含新增的受控Bundle版本替换用例。按唯一用例汇总114项，未执行全仓测试套件。连续编辑与失效目录回归均先在原实现复现失败，再在修复后通过。
+- 前端回归：UI包35文件273项通过；受影响原生前端8文件101项经修复复测全部通过，另有1项Vite同源代理测试通过。修正新增测试与共享清理顺序冲突，并使用仓库既有本地HTTP代理集成测试模式，避免真实外网请求；没有关闭网络保护。前端回归按唯一用例汇总375项。
+- 受控版本切换：fixture从Bundle `0.1.2-dev.1`切至`0.1.2-dev.2`，覆盖安装目录及锁记录替换、Python适配器切换、操作默认值与原生目录刷新、无需重启、卸载保留原件和工作流。checkout及程序版本检测使用受控替身；不等同跨两个真实发布版本升级。Siril实际依赖仍为`0.1.2-dev.1`／`12fd2d1d55daeadf7acb3972385d5c2bfcb52d4d`，未修改Bundle仓库或发布标签。
+- 合成数据浏览器运行：在独立验收workspace、独立32788／32790服务和32789 Vite中，用Chrome无界面浏览器真实从绝对路径导入合成PNG，得到托管固定素材引用，核对原件字节不变；原生键盘撤销／重做恢复科学引用；通过画布编辑桥删除节点后原生撤销恢复节点和引用。4项检查通过，页面错误0。未操作Feature既有图或真实素材，未提交完整科学处理工作流。
+- 静态与构建：修复源码定向ESLint无错误；测试文件不在该ESLint配置范围，另由Vitest及所属类型项目验证。Vite build类型检查通过；前端依赖边界0错误、13条data/workspace循环警告。完整原生类型检查及前端生产构建通过，`build-manifest.json`记录源码`52da83199a86e09ce38354503e25f99e4c2ca18a`。首次构建因类型编译桥`C malloc failed`失败；停止本轮临时验收实例后，以进程级`GOMAXPROCS=2`、`GOMEMLIMIT=2GiB`、`NODE_OPTIONS=--max-old-space-size=4096`串行重试通过，未改项目依赖或编译检查。构建仍有非阻塞资源／动态导入／插件耗时警告。
+- 证据：完整日志、浏览器脚本／结果／截图位于Feature Worktree `C:/Users/Administrator/.codex/worktrees/dbc5/AstroPhotoFlow/.artifacts/manager-integration/hot-reload/`，主要为`python-tests.log`、`python-fixes.log`、`ui-tests.log`、`native-frontend-tests.log`、`frontend-fixes-final.log`、`browser-smoke.json`、`final-frontend-build-retry.log`、`build-typecheck.log`、`frontend-boundaries.log`。初始失败日志一并保留。临时验收实例已准确停止，证据和数据保留。
+- 交付边界：仅本地Git集成；正常dev运行实例、默认workspace、Feature原预览及全局MCP注册未迁移或重启。旧MCP schema仍需宿主重连；全局注册仍指Feature的本机状态及原配置备份继续保留。长期热加载可靠性、完整科学处理／输出保存及用户视觉验收未因此认定完成。
