@@ -9,12 +9,12 @@
 ```powershell
 py -3.12 -m venv .apf-env
 .\.apf-env\Scripts\python.exe -m pip install <开发wheel路径>
-.\.apf-env\Scriptspf.exe init --workspace D:\AstroPhotoFlow\workspace --service-port 18190 --comfyui-port 18188
-.\.apf-env\Scriptspf.exe start --workspace D:\AstroPhotoFlow\workspace
-.\.apf-env\Scriptspf.exe status --workspace D:\AstroPhotoFlow\workspace
+.\.apf-env\Scripts\apf.exe init --workspace D:\AstroPhotoFlow\workspace --service-port 18190 --comfyui-port 18188
+.\.apf-env\Scripts\apf.exe start --workspace D:\AstroPhotoFlow\workspace
+.\.apf-env\Scripts\apf.exe status --workspace D:\AstroPhotoFlow\workspace
 ```
 
-打开start返回的实际网页地址，端口冲突时会自动选择；不要固定猜测地址。首次初始化准备固定CPU运行依赖，手动处理不需要生成式模型。
+打开start返回的实际网页地址，端口冲突时会自动选择；不要固定猜测地址。首次初始化准备固定CPU运行依赖，后续相同版本复用已完成环境。也可先运行`apf runtime prepare`准备软件，再用`apf workspace create --workspace <路径>`只建空配置和目录；打开网页仍需`init`或明确提供已有网页资源。手动处理不需要生成式模型。
 
 ## 日常操作
 
@@ -29,7 +29,7 @@ py -3.12 -m venv .apf-env
 ## 停止、诊断和数据保护
 
 ```powershell
-.\.apf-env\Scriptspf.exe stop --workspace D:\AstroPhotoFlow\workspace
+.\.apf-env\Scripts\apf.exe stop --workspace D:\AstroPhotoFlow\workspace
 ```
 
 停止等待任务排空；超时或身份未知会保留记录，不表示已停止，先查询状态及日志。日志位于workspace的`logs`，不要输出service.token。

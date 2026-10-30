@@ -18,7 +18,7 @@ def test_engine_build_only_publishes_changed_resources(tmp_path, monkeypatch):
     vendor.mkdir(parents=True)
     frontend.mkdir()
     (source / "main.py").write_text("first", encoding="utf-8")
-    (frontend / "LICENSE").write_text("license", encoding="utf-8")
+    (frontend / "LICENSE").write_text("license\n", encoding="utf-8")
     (vendor / "comfyui-source.json").write_text("{}", encoding="utf-8")
     builder.main()
     archive = vendor / "comfyui-0.42.0.zip"
@@ -31,8 +31,10 @@ def test_engine_build_only_publishes_changed_resources(tmp_path, monkeypatch):
         return replace(path, target)
 
     monkeypatch.setattr(Path, "replace", record)
+    (vendor / "comfyui-frontend-LICENSE").write_bytes(b"license\r\n")
     builder.main()
     assert published == []
+    assert (vendor / "comfyui-frontend-LICENSE").read_bytes() == b"license\r\n"
     assert archive.read_bytes() == first
     (source / "main.py").write_text("second", encoding="utf-8")
     builder.main()

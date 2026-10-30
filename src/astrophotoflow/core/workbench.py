@@ -44,6 +44,9 @@ def _app_data() -> Path:
 
 
 def _runtime_dir() -> Path:
+    configured = os.environ.get("ASTROPHOTOFLOW_RUNTIME")
+    if configured:
+        return Path(configured).expanduser().resolve()
     return _app_data() / "runtime" / "native-web-0.1.0"
 
 
@@ -77,7 +80,7 @@ def _uv() -> str:
 
 def _uv_environment(runtime: Path) -> dict[str, str]:
     python_bin_dir = runtime / "python-bin"
-    cache_dir = runtime / "uv-cache"
+    cache_dir = Path(os.environ.get("UV_CACHE_DIR", runtime / "uv-cache"))
     python_bin_dir.mkdir(parents=True, exist_ok=True)
     cache_dir.mkdir(parents=True, exist_ok=True)
     environment = os.environ.copy()
@@ -88,7 +91,10 @@ def _uv_environment(runtime: Path) -> dict[str, str]:
 
 
 def _run(command: list[str], env: dict[str, str] | None = None) -> None:
-    subprocess.run(command, check=True, env=env)
+    try:
+        subprocess.run(command, check=True, env=env)
+    except subprocess.CalledProcessError as exc:
+        raise WorkbenchError(f"runtime准备命令失败（{exc.returncode}）；修复上述错误后重新执行apf runtime prepare。") from exc
 
 
 def install_frontend(workspace: Path, frontend_assets: Path | None = None) -> Path:
@@ -97,13 +103,15 @@ def install_frontend(workspace: Path, frontend_assets: Path | None = None) -> Pa
     if not (source / "index.html").is_file():
         raise WorkbenchError(f"原生网页资源不存在：{source / 'index.html'}")
     target = workspace / "web"
+    source_files = {path.relative_to(source) for path in source.rglob("*") if path.is_file()}
     shutil.copytree(source, target, dirs_exist_ok=True)
+    for path in target.rglob("*"):
+        if path.is_file() and path.relative_to(target) not in source_files:
+            path.unlink()
     return target
 
 
-def _initialize(workspace: Path, service_port: int = 8190, comfyui_port: int = 8188, *,
-               frontend_assets: Path | None = None, activate: bool = True,
-               reuse_runtime: bool = False) -> Path:
+def _create_workspace(workspace: Path, service_port: int, comfyui_port: int) -> Path:
     workspace = workspace.expanduser().resolve()
     workspace.mkdir(parents=True, exist_ok=True)
     config_path = workspace / "config.toml"
@@ -111,14 +119,6 @@ def _initialize(workspace: Path, service_port: int = 8190, comfyui_port: int = 8
         raise WorkbenchError("资产服务与 ComfyUI 必须配置为不同的 1–65535 端口。")
     if config_path.exists():
         _load_config(config_path)
-
-    app_package = Path(__file__).resolve().parents[1]
-    source_archive = app_package / "vendor" / "comfyui-0.42.0.zip"
-    manifest_path = app_package / "vendor" / "comfyui-source.json"
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    digest = hashlib.sha256(source_archive.read_bytes()).hexdigest()
-    if manifest["sha256"] != digest or manifest["commit"] != COMFY_COMMIT:
-        raise WorkbenchError("内置 ComfyUI 源码归档与固定来源清单不匹配。")
 
     for relative in ("data", "input", "output", "logs", "context", "comfyui-user", "comfyui-data", "run"):
         (workspace / relative).mkdir(parents=True, exist_ok=True)
@@ -136,20 +136,42 @@ def _initialize(workspace: Path, service_port: int = 8190, comfyui_port: int = 8
             f'allowed_origins = ["http://127.0.0.1:{comfyui_port}", "http://localhost:{comfyui_port}"]\n',
             encoding="utf-8",
         )
+    return config_path
 
+
+def prepare_runtime(*, reuse_only: bool = False) -> dict:
+    package = Path(__file__).resolve().parents[1]
+    source_archive = package / "vendor/comfyui-0.42.0.zip"
+    manifest = json.loads((package / "vendor/comfyui-source.json").read_text(encoding="utf-8"))
+    digest = hashlib.sha256(source_archive.read_bytes()).hexdigest()
+    if manifest["sha256"] != digest or manifest["commit"] != COMFY_COMMIT:
+        raise WorkbenchError("内置 ComfyUI 源码归档与固定来源清单不匹配。")
     runtime = _runtime_dir()
-    comfyui = runtime / "ComfyUI"
     runtime.mkdir(parents=True, exist_ok=True)
+    try:
+        with FileLock(str(runtime / ".prepare.lock"), timeout=0):
+            return _prepare_runtime(runtime, source_archive, digest, reuse_only=reuse_only)
+    except Timeout as exc:
+        raise WorkbenchError("该runtime已有准备操作，请等待原操作完成。") from exc
+
+
+def _prepare_runtime(runtime: Path, source_archive: Path, digest: str, *, reuse_only: bool) -> dict:
+    comfyui = runtime / "ComfyUI"
     commit_marker = comfyui / ".apf-native-build"
     env_dir = runtime / "comfyui-env"
     comfy_python = env_dir / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
-    if reuse_runtime:
-        if not commit_marker.is_file() or commit_marker.read_text(encoding="utf-8").strip() != digest or not comfy_python.is_file():
-            raise WorkbenchError("可复用的固定 CPU runtime 不完整；请先正常执行 apf init。")
-        install_frontend(workspace, frontend_assets)
-        if activate:
-            _activate_workspace(config_path)
-        return config_path
+    lock = source_archive.with_name("comfyui-0.42.0-windows-py312.lock")
+    fingerprint = {"archive_sha256": digest, "python": "3.12", "platform": sys.platform,
+                   "torch": TORCH_CPU, "torchvision": TORCHVISION_CPU,
+                   "dependencies_sha256": hashlib.sha256(lock.read_bytes()).hexdigest() if os.name == "nt" else digest}
+    receipt = runtime / ".apf-runtime.json"
+    prepared = json.loads(receipt.read_text(encoding="utf-8")) if receipt.is_file() else None
+    if (prepared == fingerprint and comfy_python.is_file() and commit_marker.is_file()
+            and commit_marker.read_text(encoding="utf-8").strip() == digest):
+        return {"runtime": str(runtime), "reused": True, **fingerprint}
+    if reuse_only:
+        raise WorkbenchError("固定 CPU runtime 未准备完成或版本不匹配；请运行 apf runtime prepare。")
+    receipt.unlink(missing_ok=True)
     uv_env = _uv_environment(runtime)
     if not commit_marker.is_file() or commit_marker.read_text(encoding="utf-8").strip() != digest:
         if comfyui.exists():
@@ -159,20 +181,18 @@ def _initialize(workspace: Path, service_port: int = 8190, comfyui_port: int = 8
             archive.extractall(runtime)
         commit_marker.write_text(digest, encoding="utf-8")
 
-    install_frontend(workspace, frontend_assets)
     if not (env_dir / ("Scripts/python.exe" if os.name == "nt" else "bin/python")).is_file():
+        _run([_uv(), "python", "install", *(["--no-registry"] if os.name == "nt" else []), "3.12"], env=uv_env)
         _run([_uv(), "venv", "--managed-python", "--python", "3.12", str(env_dir)], env=uv_env)
     comfy_python = env_dir / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
-    _run([_uv(), "pip", "install", "--python", str(comfy_python), "--index-url", TORCH_CPU_INDEX,
+    _run([_uv(), "pip", "install", "--python", str(comfy_python), *(["--no-deps"] if os.name == "nt" else []), "--index-url", TORCH_CPU_INDEX,
           f"torch=={TORCH_CPU}", f"torchvision=={TORCHVISION_CPU}"], env=uv_env)
-    requirements = app_package / "vendor" / "comfyui-0.42.0-windows-py312.lock" if os.name == "nt" else comfyui / "requirements.txt"
+    requirements = lock if os.name == "nt" else comfyui / "requirements.txt"
     _run([_uv(), "pip", "install", "--python", str(comfy_python), "-r", str(requirements)], env=uv_env)
-
-    if activate:
-        _activate_workspace(config_path)
-    print(f"ComfyUI 源码: {manifest['comfyui_version']} ({manifest['commit']})")
-    print(f"ComfyUI archive SHA-256: {digest}")
-    return config_path
+    pending = receipt.with_suffix(".pending")
+    pending.write_text(json.dumps(fingerprint, indent=2) + "\n", encoding="utf-8")
+    pending.replace(receipt)
+    return {"runtime": str(runtime), "reused": False, **fingerprint}
 
 
 def _port_available(host: str, port: int) -> bool:
@@ -393,8 +413,28 @@ def initialize(workspace: Path, service_port: int = 8190, comfyui_port: int = 81
         observed = status(workspace / "config.toml")
         if observed.processes or observed.state == "unknown":
             raise WorkbenchError("workspace仍在使用或状态无法确认；先停止后再初始化。")
-        return _initialize(workspace, service_port, comfyui_port, frontend_assets=frontend_assets,
-                           activate=activate, reuse_runtime=reuse_runtime)
+        config_path = _create_workspace(workspace, service_port, comfyui_port)
+        prepare_runtime(reuse_only=reuse_runtime)
+        install_frontend(workspace, frontend_assets)
+        if activate:
+            _activate_workspace(config_path)
+        return config_path
+
+
+def create_workspace(workspace: Path, service_port: int = 8190, comfyui_port: int = 8188, *,
+                     frontend_assets: Path | None = None) -> Path:
+    workspace = workspace.expanduser().resolve()
+    with _control_operation(workspace / "config.toml", "initialize"):
+        observed = status(workspace / "config.toml")
+        if observed.ready and frontend_assets is None:
+            _load_config(workspace / "config.toml")
+            return workspace / "config.toml"
+        if observed.processes or observed.state == "unknown":
+            raise WorkbenchError("workspace仍在使用或状态无法确认；先停止后再修改。")
+        config_path = _create_workspace(workspace, service_port, comfyui_port)
+        if frontend_assets is not None:
+            install_frontend(workspace, frontend_assets)
+        return config_path
 
 
 def _choose_port(host: str, preferred: int, *, exclude: int | None = None) -> int:

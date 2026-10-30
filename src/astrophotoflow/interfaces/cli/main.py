@@ -13,7 +13,7 @@ from astrophotoflow.client import AssetClient, ServiceApiError
 from astrophotoflow.interfaces.cli import commands as cli_commands
 from astrophotoflow.contracts.imports import PhotoImportOptions
 from astrophotoflow.core.config import ConfigurationError, resolve_config_path
-from astrophotoflow.core.workbench import WorkbenchError, initialize, start, status, stop, restart
+from astrophotoflow.core.workbench import WorkbenchError, create_workspace, initialize, prepare_runtime, start, status, stop, restart
 
 
 PARAMETER_OPTIONS = {
@@ -60,6 +60,15 @@ def _parser() -> argparse.ArgumentParser:
     init.add_argument("--frontend-assets", type=Path, help="Use this checkout's built JS/CSS")
     init.add_argument("--reuse-runtime", action="store_true", help="Reuse the already prepared fixed CPU runtime")
     init.add_argument("--no-activate", action="store_true", help="Do not change the user's default workspace")
+    runtime = commands.add_parser("runtime", help="Prepare the bundled CPU runtime independently of workspaces")
+    runtime_prepare = runtime.add_subparsers(dest="runtime_command", required=True).add_parser("prepare")
+    runtime_prepare.add_argument("--reuse-only", action="store_true", help="Validate an existing runtime without installing")
+    workspace = commands.add_parser("workspace", help="Create workspace configuration and directories without installing software")
+    create = workspace.add_subparsers(dest="workspace_command", required=True).add_parser("create")
+    create.add_argument("--workspace", type=Path, required=True)
+    create.add_argument("--service-port", type=int, default=8190)
+    create.add_argument("--comfyui-port", type=int, default=8188)
+    create.add_argument("--frontend-assets", type=Path)
     for name in ("start", "status", "stop", "restart"):
         command = commands.add_parser(name)
         command.add_argument("--workspace", type=Path)
@@ -130,7 +139,13 @@ def main() -> None:
         server.run()
         return
     try:
-        if args.command == "init":
+        if args.command == "runtime":
+            print(json.dumps(prepare_runtime(reuse_only=args.reuse_only), ensure_ascii=False, indent=2))
+        elif args.command == "workspace":
+            result = create_workspace(args.workspace, args.service_port, args.comfyui_port,
+                                      frontend_assets=args.frontend_assets)
+            print(json.dumps({"workspace": str(result.parent), "config_path": str(result)}, ensure_ascii=False, indent=2))
+        elif args.command == "init":
             workspace = args.workspace
             if workspace is None:
                 workspace_text = input("请输入 AstroPhotoFlow workspace 路径：").strip()
