@@ -140,7 +140,16 @@
     "noMatchingCommands": "No commands match this filter.",
     "install": "Install",
     "uninstall": "Uninstall",
+    "update": "Update",
+    "confirmUpdate": "Update bundle",
     "installing": "Installing",
+    "installPhase": {
+      "cloning": "Preparing download",
+      "downloading": "Downloading",
+      "resolving": "Resolving objects",
+      "checking_out": "Checking out files",
+      "verifying": "Verifying version"
+    },
     "uninstalling": "Uninstalling",
     "confirmUninstall": "Uninstall Siril",
     "cancel": "Cancel",
@@ -149,6 +158,9 @@
     "loadError": "Unable to read software status."
   },
   "astrophotoflow": {
+    "imagePath": "Absolute image file path",
+    "importImage": "Import",
+    "importingImage": "Importing…",
     "media": {
       "open": "Open image viewer",
       "fit": "Fit",

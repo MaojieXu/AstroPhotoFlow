@@ -244,6 +244,7 @@ export type PromptQueuedEventPayload = FrontendApiCalls['promptQueued']
 /** Dictionary of calls originating from ComfyUI core */
 interface BackendApiCalls {
   'apf.canvas_command': unknown
+  'apf.bundles_changed': unknown
   progress: ProgressWsMessage
   executing: ExecutingWsMessage
   executed: ExecutedWsMessage

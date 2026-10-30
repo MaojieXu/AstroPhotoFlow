@@ -57,6 +57,14 @@ export function applyCanvasNodeEdit(command: CanvasGraphCommand) {
       graph.incrementVersion()
       return { node_id: node.id, link_id: null }
     }
+  } else if (edit.action === 'delete_node') {
+    const node = graph.getNodeById(toNodeId(edit.node_id))
+    if (!node) throw new Error('Node is unavailable')
+    if (node.block_delete || node.ignore_remove) throw new Error('Node cannot be deleted')
+    mutate = () => {
+      graph.remove(node)
+      return { node_id: node.id, link_id: null }
+    }
   } else {
     const source = graph.getNodeById(toNodeId(edit.source_node_id))
     const target = graph.getNodeById(toNodeId(edit.target_node_id))

@@ -1,10 +1,12 @@
 import asyncio
 import os
 import json
+import hashlib
+import logging
 import sys
 from importlib.resources import files
 from pathlib import Path
-from uuid import NAMESPACE_URL, uuid5
+from uuid import NAMESPACE_URL, UUID, uuid5
 
 import aiohttp
 import psutil
@@ -15,9 +17,14 @@ from comfy.model_management import processing_interrupted, throw_exception_if_pr
 from astrophotoflow.core.config import load_running_settings
 from astrophotoflow.core.errors import ApiError
 from astrophotoflow.contracts.nodes import NodeDefinition, definition_content_token
-from astrophotoflow.modules.nodes.public import list_definitions
+from astrophotoflow.modules.nodes.public import list_definitions, replace_package_definitions
+from astrophotoflow.modules.software.metadata import read_bundle
+from astrophotoflow.modules.software.environment import bundle_environment
 from astrophotoflow.contracts.bundles import BundleManifest
 import subprocess
+
+
+logger = logging.getLogger("astrophotoflow.bundles")
 
 
 async def _request(session: aiohttp.ClientSession, method: str, path: str, body=None):
@@ -58,7 +65,7 @@ class BundleNode(io.ComfyNode):
                 options["options"] = parameter.choices
             controls.append(factory.Input(parameter.name, **options))
         return io.Schema(node_id=f"APF_{definition.definition_id.hex}", display_name=definition.name,
-            category="AstroPhotoFlow/" + definition.execution.package_id,
+            category=definition.execution.package_id,
             description=definition.description,
             inputs=[io.Custom(port.type).Input(port.name) for port in definition.inputs] + controls,
             outputs=[io.Custom(port.type).Output(display_name=port.name) for port in definition.outputs],
@@ -94,48 +101,144 @@ class BundleNode(io.ComfyNode):
             return io.NodeOutput(record["output"], ui=ui)
 
 
-def register_bundle_nodes(server, registry, display_names):
+def _bundle_files(workspace):
+    paths = set((workspace / "nodes").glob("*.json"))
+    catalog = json.loads(files("astrophotoflow").joinpath("vendor/bundle-catalog.json").read_text(encoding="utf-8"))
+    for package_id in catalog:
+        root = workspace / "software" / package_id / "bundle"
+        paths.update((root / "bundle.json", root.parent / "bundle-lock.json"))
+        try:
+            manifest = BundleManifest.model_validate_json((root / "bundle.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        for name in [*manifest.operations, *manifest.nodes, manifest.adapter]:
+            path = (root / name).resolve()
+            if not path.is_relative_to(root.resolve()):
+                raise ValueError("Bundle path escapes its checkout.")
+            paths.add(path)
+    digest = hashlib.sha256()
+    for path in sorted(paths):
+        digest.update(str(path).encode())
+        try:
+            digest.update(path.read_bytes())
+        except FileNotFoundError:
+            digest.update(b"missing")
+    return digest.hexdigest()
+
+
+def _collect_bundle_nodes():
     workspace = os.environ.get("APF_WORKSPACE")
     if not workspace:
-        return
+        return {}, {}, []
     settings = load_running_settings(Path(workspace))
     catalog = json.loads(files('astrophotoflow').joinpath('vendor/bundle-catalog.json').read_text(encoding='utf-8'))
-    packages = {}
-    for saved in list_definitions(settings.workspace):
-        package_id = saved.definition.execution.package_id
-        observation = packages.setdefault(package_id, {"ready": True, "reason": None, "nodes": {}})
+    classes, names, observations = {}, {}, []
+    for package_id in catalog:
+        observation = {"ready": True, "reason": None, "nodes": {}}
+        root = settings.workspace / "software" / package_id / "bundle"
         try:
-            if package_id not in catalog:
-                raise ValueError('Package is not in the maintained bundle catalog.')
-            root = settings.workspace / "software" / package_id / "bundle"
-            manifest = BundleManifest.model_validate_json((root / "bundle.json").read_text(encoding="utf-8"))
+            if not root.is_dir():
+                raise ValueError("尚未安装 Bundle。")
+            manifest, operations, bundled = read_bundle(root)
             if manifest.package_id != package_id:
                 raise ValueError('Bundle package identity mismatch.')
             lock = json.loads((root.parent / "bundle-lock.json").read_text(encoding="utf-8"))
             executable = (root / manifest.executable).resolve()
             if not executable.is_relative_to(root.resolve()) or not (root / manifest.adapter).is_file():
                 raise ValueError("Bundle executable or adapter is unavailable.")
-            checked = subprocess.run([str(executable), *manifest.version_args], cwd=executable.parent,
+            checked = subprocess.run([str(executable), *manifest.version_args], cwd=executable.parent, env=bundle_environment(executable),
                 capture_output=True, text=True, timeout=30,
                 creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0)
             if checked.returncode or checked.stdout.strip().casefold() != manifest.version_output.casefold():
                 raise ValueError("Bundle program version check failed.")
             observation["commit"] = lock["commit"]
-            definition = saved.definition
-            if len(definition.inputs) != 1 or len(definition.outputs) != 1 or any(port.type != "APF_SCIENCE" for port in definition.inputs + definition.outputs):
-                raise ValueError("Bundle SDK v1 requires one science input and output.")
-            cls = type(saved.native_type, (BundleNode,), {"definition": definition,
-                "output_node": str(definition.definition_id) in manifest.output_nodes})
-            schema = cls.GET_SCHEMA()
-            registry[schema.node_id] = cls
-            display_names[schema.node_id] = schema.display_name
-            observation["nodes"][str(definition.definition_id)] = saved.content_token
-        except (OSError, ValueError, ImportError, RuntimeError, ApiError, subprocess.SubprocessError) as exc:
+            current = [item for item in list_definitions(settings.workspace)
+                       if item.definition.source == "package" and item.definition.execution.package_id == package_id]
+            incoming = {UUID(value["definition_id"]): NodeDefinition.model_validate(value) for value in bundled}
+            declared = set(incoming)
+            for saved in current:
+                incoming.setdefault(saved.definition.definition_id, saved.definition)
+            expected = {item.definition.definition_id: item.content_token for item in current}
+            if expected != {key: definition_content_token(value) for key, value in incoming.items()}:
+                results = replace_package_definitions(settings.workspace, package_id, list(incoming.values()), expected)
+                if any(not result.applied for result in results):
+                    raise ValueError("Bundle 节点定义同步失败。")
+            operation_ids = {value["operation"]["operation_id"] for value in operations}
+            package_classes, package_names = {}, {}
+            for saved in list_definitions(settings.workspace):
+                definition = saved.definition
+                if definition.execution.package_id != package_id or definition.execution.operation_id not in operation_ids:
+                    continue
+                if definition.source == "package" and definition.definition_id not in declared:
+                    continue
+                if len(definition.inputs) != 1 or len(definition.outputs) != 1 or any(port.type != "APF_SCIENCE" for port in definition.inputs + definition.outputs):
+                    raise ValueError("Bundle SDK v1 requires one science input and output.")
+                cls = type(saved.native_type, (BundleNode,), {"definition": definition,
+                    "RELATIVE_PYTHON_MODULE": "custom_nodes." + package_id,
+                    "output_node": str(definition.definition_id) in manifest.output_nodes})
+                schema = cls.GET_SCHEMA()
+                package_classes[schema.node_id] = cls
+                package_names[schema.node_id] = schema.display_name
+                observation["nodes"][str(definition.definition_id)] = saved.content_token
+            classes.update(package_classes)
+            names.update(package_names)
+        except (OSError, KeyError, ValueError, ImportError, RuntimeError, ApiError, subprocess.SubprocessError) as exc:
             observation.update(ready=False, reason=str(exc))
-    for package_id, observation in packages.items():
         observation.update(pid=os.getpid(), create_time=psutil.Process().create_time())
         path = settings.workspace / "software" / package_id / "native-load.json"
+        observations.append((path, observation))
+    return classes, names, observations
+
+
+def _apply_bundle_nodes(server, registry, display_names, collected):
+    classes, names, observations = collected
+    for name in getattr(server, "apf_bundle_types", set()):
+        registry.pop(name, None)
+        display_names.pop(name, None)
+    registry.update(classes)
+    display_names.update(names)
+    server.apf_bundle_types = set(classes)
+    for path, observation in observations:
         if path.parent.is_dir():
             part = path.with_suffix(".part")
             part.write_text(json.dumps(observation, ensure_ascii=False), encoding="utf-8")
             os.replace(part, path)
+
+
+def register_bundle_nodes(server, registry, display_names):
+    _apply_bundle_nodes(server, registry, display_names, _collect_bundle_nodes())
+
+
+async def reload_bundle_nodes(server):
+    import nodes
+    async with server.apf_bundle_lock:
+        collected = await asyncio.to_thread(_collect_bundle_nodes)
+        _apply_bundle_nodes(server, nodes.NODE_CLASS_MAPPINGS, nodes.NODE_DISPLAY_NAME_MAPPINGS, collected)
+        await server.send_json("apf.bundles_changed", {})
+
+
+def watch_bundle_nodes(server):
+    if not (workspace := os.environ.get("APF_WORKSPACE")):
+        return
+    server.apf_bundle_lock = asyncio.Lock()
+    initial = _bundle_files(Path(workspace))
+
+    async def watch():
+        previous = initial
+        while True:
+            await asyncio.sleep(1)
+            try:
+                current = await asyncio.to_thread(_bundle_files, Path(workspace))
+                if current != previous:
+                    await reload_bundle_nodes(server)
+                    previous = await asyncio.to_thread(_bundle_files, Path(workspace))
+            except (OSError, ValueError, ApiError):
+                logger.exception("Bundle hot reload failed")
+
+    task = server.loop.create_task(watch())
+
+    async def close(_app):
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+
+    server.app.on_cleanup.append(close)

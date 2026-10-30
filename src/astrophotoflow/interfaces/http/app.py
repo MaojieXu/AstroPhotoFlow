@@ -19,14 +19,14 @@ from astrophotoflow.core.workbench import status as workbench_status
 from astrophotoflow.modules.data.public import DisplayPreviews, MediaViews, import_workers, data_busy
 from astrophotoflow.contracts.workbench import BusyState
 from astrophotoflow.contracts.common import ErrorDetail, StrictModel, UuidInput
-from astrophotoflow.contracts.nodes import NodeDefinition, SavedDefinition, definition_content_token
+from astrophotoflow.contracts.nodes import DefinitionWriteResult, NodeDefinition, SavedDefinition, definition_content_token
 from astrophotoflow.contracts.software import ConfirmSoftwareEvent, SoftwareInstallRequest, SoftwareUninstallRequest
 from astrophotoflow.contracts.workflows import (
     NativePageConfirmSoftwareEvent, NativePageEvent, NativePageOpenEvent, NativePageReply,
     PackageMutationResult, PendingSoftwareAction, SoftwarePackageDetails, SoftwarePlanNodeChange,
     SoftwarePlanSummary,
 )
-from astrophotoflow.modules.nodes.public import list_definitions, replace_package_definitions
+from astrophotoflow.modules.nodes.public import list_definitions
 from astrophotoflow.modules.software.public import (
     get_bundled_definitions, get_package, get_package_source, install_package,
     maintain_package, set_package_node_definition_ids, uninstall_package, get_usage, list_packages,
@@ -101,7 +101,7 @@ def create_app(settings: Settings, token: str) -> FastAPI:
                 before_content_token=item.content_token, after_content_token=item.content_token,
             ) for item in package_current.values()]
             changes.sort(key=lambda item: str(item.definition_id))
-            return changes, [item.definition for item in package_current.values()], {key: item.content_token for key, item in package_current.items()}
+            return changes
         bundled = [NodeDefinition.model_validate(item) for item in get_bundled_definitions(settings, package_id, version)]
         changes = []
         definitions_by_id = {}
@@ -110,8 +110,6 @@ def create_app(settings: Settings, token: str) -> FastAPI:
             if saved is not None and (saved.definition.source != "package" or saved.definition.execution.package_id != package_id):
                 raise ApiError(409, "NODE_CONTENT_CONFLICT", "软件包配套节点ID已属于其他定义。")
             token = definition_content_token(definition)
-            if saved is not None and saved.content_token != token and saved.definition.model_dump(exclude={'name', 'description'}) != definition.model_dump(exclude={'name', 'description'}):
-                raise ApiError(409, "SOFTWARE_CONTENT_CONFLICT", "现有软件包定义与待安装版本不同，需先通过B55确认影响。")
             changes.append(SoftwarePlanNodeChange(
                 definition_id=definition.definition_id,
                 name=definition.name,
@@ -130,14 +128,10 @@ def create_app(settings: Settings, token: str) -> FastAPI:
                     after_content_token=saved.content_token,
                 ))
                 definitions_by_id[definition_id] = saved.definition
-        expected_tokens = {definition_id: saved.content_token for definition_id, saved in package_current.items()}
         changes.sort(key=lambda item: str(item.definition_id))
-        definitions = [definitions_by_id[definition_id] for definition_id in sorted(definitions_by_id, key=str)]
-        return changes, definitions, expected_tokens
+        return changes
 
     def validate_install_request(package, body: SoftwareInstallRequest | SoftwareUninstallRequest) -> None:
-        if get_usage(package.package_id) or any(not task.done() for task in app.state.siril_calls.values()):
-            raise ApiError(409, "SOFTWARE_BUSY", "软件仍有实际调用或未知占用。")
         if isinstance(body, SoftwareUninstallRequest):
             if package.package_token != body.package_token:
                 raise ApiError(409, "SOFTWARE_CONTENT_CONFLICT", "软件包状态已变化，请重新读取后卸载。")
@@ -150,7 +144,7 @@ def create_app(settings: Settings, token: str) -> FastAPI:
             raise ApiError(409, "SOFTWARE_CONTENT_CONFLICT", "软件包状态已变化，请重新读取后请求安装。")
         if package.operation_state == "running":
             raise ApiError(409, "SOFTWARE_BUSY", "软件包已有动作正在执行。")
-        if package.availability != "not_installed" and not package.migration_required:
+        if package.availability not in {"not_installed", "ready", "not_ready"} and not package.migration_required:
             raise ApiError(503, "SOFTWARE_NOT_READY", package.reason or "当前软件状态不允许重新安装。")
 
     def request_software_action(package_id: str, body: SoftwareInstallRequest | SoftwareUninstallRequest) -> PendingSoftwareAction:
@@ -163,10 +157,10 @@ def create_app(settings: Settings, token: str) -> FastAPI:
         if not workbench.ready or not workbench.web_url:
             raise ApiError(503, "WORKBENCH_NOT_READY", "必须从已就绪的工作台网页确认软件安装。")
         uninstall = isinstance(body, SoftwareUninstallRequest)
-        node_changes, _, _ = bundle_definition_plan(package_id, body.version if not uninstall else package.installed_version, uninstall=uninstall)
+        node_changes = bundle_definition_plan(package_id, body.version if not uninstall else package.installed_version, uninstall=uninstall)
         operation_id = uuid4()
         plan = SoftwarePlanSummary(
-            action="uninstall" if uninstall else "install",
+            action="uninstall" if uninstall else "update" if package.installed_version and not package.migration_required else "install",
             package_id=package_id,
             current_version=package.installed_version,
             target_version=None if uninstall else body.version,
@@ -174,8 +168,8 @@ def create_app(settings: Settings, token: str) -> FastAPI:
             install_path=settings.workspace / "software" / package_id / "bundle" / "app",
             package_token=body.package_token,
             impact_token=None,
-            restart_required=True,
-            restart_reason="完成后在空闲状态重启工作台以加载节点；繁忙时拒绝重启。",
+            restart_required=False,
+            restart_reason=None,
             node_changes=node_changes,
             workflow_impacts=[],
         )
@@ -207,8 +201,7 @@ def create_app(settings: Settings, token: str) -> FastAPI:
             result = app.state.software_results.get(current_action.operation_id) if current_action is not None else None
         return SoftwarePackageDetails(package=package, current_action=current_action, result=result)
 
-    async def execute_software_action(pending: PendingSoftwareAction, definitions: list[NodeDefinition],
-                                      expected_tokens: dict[UUID, str]) -> None:
+    async def execute_software_action(pending: PendingSoftwareAction) -> None:
         definition_results = []
         error = None
         try:
@@ -222,15 +215,28 @@ def create_app(settings: Settings, token: str) -> FastAPI:
                     installed = await install_package(
                         settings, pending.plan.package_id, pending.plan.target_version, pending.plan.package_token,
                     )
-                    definition_results = replace_package_definitions(
-                        settings.workspace, pending.plan.package_id, definitions, expected_tokens,
-                    )
-                    actual_definition_ids = [
-                        item.definition.definition_id for item in list_definitions(settings.workspace)
-                        if item.definition.source == "package" and item.definition.execution.package_id == pending.plan.package_id
-                    ]
-                    set_package_node_definition_ids(settings, pending.plan.package_id, actual_definition_ids)
+                try:
+                    async with httpx.AsyncClient(timeout=60) as client:
+                        response = await client.post(settings.allowed_origins[0] + "/astrophotoflow/internal/bundles/reload",
+                            headers={"Authorization": f"Bearer {token}"})
+                        response.raise_for_status()
+                except httpx.HTTPError as exc:
+                    raise ApiError(503, "BUNDLE_LOAD_FAILED", "Bundle 文件已更新，但无法确认节点热加载；请查询软件状态。") from exc
                 installed = get_package(settings, pending.plan.package_id)
+                if pending.plan.action != "uninstall" and installed.availability != "ready":
+                    raise ApiError(503, "BUNDLE_LOAD_FAILED", installed.reason or "Bundle 节点热加载失败。")
+                if pending.plan.action != "uninstall":
+                    actual = {item.definition.definition_id: item for item in list_definitions(settings.workspace)
+                              if item.definition.source == "package" and item.definition.execution.package_id == pending.plan.package_id}
+                    set_package_node_definition_ids(settings, pending.plan.package_id, list(actual))
+                    for change in pending.plan.node_changes:
+                        if change.action not in {"create", "update"}:
+                            continue
+                        saved = actual.get(change.definition_id)
+                        applied = saved is not None and saved.content_token == change.after_content_token
+                        definition_results.append(DefinitionWriteResult(definition_id=change.definition_id,
+                            action=change.action, applied=applied, content=saved,
+                            error=None if applied else ErrorDetail(code="BUNDLE_LOAD_FAILED", message="Bundle 节点定义未采用确认的内容。", fields=[])))
                 write_error = next((item.error for item in definition_results if not item.applied), None)
                 if write_error is not None:
                     error = write_error
@@ -257,21 +263,6 @@ def create_app(settings: Settings, token: str) -> FastAPI:
             app.state.software_actions[pending.plan.package_id] = pending.model_copy(
                 update={"state": final_state, "error": result.error}
             )
-        if final_state == "completed" and pending.plan.restart_required:
-            asyncio.get_running_loop().call_soon(schedule_bundle_restart, pending.plan.package_id)
-
-    def schedule_bundle_restart(package_id):
-        from astrophotoflow.core.workbench import request_restart
-        async def restart_when_idle():
-            try:
-                import json
-                operation_id = uuid4()
-                (settings.workspace / 'software' / package_id / 'bundle-restart.json').write_text(
-                    json.dumps({'operation_id': str(operation_id)}), encoding='utf-8')
-                await asyncio.to_thread(request_restart, settings.workspace / "config.toml", operation_id)
-            except Exception:
-                logger.exception("Bundle installed; controlled restart was refused. package=%s", package_id)
-        asyncio.create_task(restart_when_idle())
 
 
     async def confirm_software_action(body: ConfirmSoftwareEvent, *, page_id: UUID, page_token: str) -> PendingSoftwareAction:
@@ -284,9 +275,7 @@ def create_app(settings: Settings, token: str) -> FastAPI:
         if not workbench.ready or workbench.web_url != expected_base:
             raise ApiError(409, "SOFTWARE_ACTION_EXPIRED", "工作台网页地址已变化，请重新查看安装计划。")
         package = get_package(settings, pending.plan.package_id)
-        node_changes, definitions, expected_tokens = bundle_definition_plan(pending.plan.package_id, pending.plan.target_version, uninstall=pending.plan.action == "uninstall")
-        if get_usage(pending.plan.package_id):
-            raise ApiError(409, "SOFTWARE_BUSY", "软件仍有实际调用或未知占用。")
+        node_changes = bundle_definition_plan(pending.plan.package_id, pending.plan.target_version, uninstall=pending.plan.action == "uninstall")
         with app.state.software_action_lock:
             if app.state.software_page_tokens.get(page_id) != page_token:
                 raise ApiError(409, "SOFTWARE_ACTION_EXPIRED", "软件确认页面连接已改变。")
@@ -311,7 +300,7 @@ def create_app(settings: Settings, token: str) -> FastAPI:
                 raise ApiError(409, "SOFTWARE_ACTION_EXPIRED", "配套节点定义已变化，请重新查看安装计划。")
             running = current.model_copy(update={"state": "running"})
             app.state.software_actions[pending.plan.package_id] = running
-            task = asyncio.create_task(execute_software_action(running, definitions, expected_tokens))
+            task = asyncio.create_task(execute_software_action(running))
             app.state.software_tasks[pending.plan.package_id] = task
             return running
 

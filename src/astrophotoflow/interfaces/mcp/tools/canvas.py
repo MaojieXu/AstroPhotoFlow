@@ -16,22 +16,22 @@ def register(server, call):
 
     @server.tool()
     def get_canvas(page_id: str) -> dict[str, Any]:
-        """Read the actual connected canvas through its native page. Reading never grants or restores Agent control."""
+        """Read the actual connected canvas through its native page without changing its content."""
         return call(lambda client: client.get_canvas(page_id))
 
     @server.tool()
     def edit_canvas(body: CanvasGraphRequest) -> dict[str, Any]:
-        """Apply one native add_node, set_parameter or connect operation to the exact authorized canvas. Use current tokens; read the actual receipt and query unknown operation IDs instead of replaying. Does not execute the graph."""
+        """Apply one user-requested add_node, set_parameter, connect or delete_node operation to the exact active canvas using its current target IDs and content_token. Deletion removes the node and attached links through native undo support, retaining source assets. Stop on target/content changes; query unknown operation IDs instead of replaying. Does not execute the graph."""
         return call(lambda client: client.edit_canvas(body))
 
     @server.tool()
     def list_canvas_pages() -> list[dict[str, Any]]:
-        """List connected active canvases; only a non-null control_token permits adding data after explicit user handoff."""
+        """List connected active canvases and their current target IDs and content_token. Only edit the canvas requested by the user; never follow another graph automatically."""
         return call(lambda client: client.list_canvas_pages())
 
     @server.tool()
     def add_canvas_data(body: CanvasAddRequest) -> dict[str, Any]:
-        """Add a fixed asset/group to the exact authorized canvas. Read current tokens first; unknown results require querying the same operation_id, never automatic replay."""
+        """Add a user-requested fixed asset/group to the exact active canvas using current target IDs and content_token. Stop on target/content changes; query unknown results with the same operation_id, never automatic replay."""
         return call(lambda client: client.add_canvas_data(body))
 
     @server.tool()

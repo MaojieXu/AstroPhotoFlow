@@ -52,7 +52,7 @@ def test_cli_absolute_local_source_does_not_require_root_id(client):
 
 def test_canvas_cli_and_client_preserve_explicit_target_and_operation_id(client):
     api, calls = client
-    request = {"operation_id": str(uuid4()), "page_id": str(uuid4()), "workflow_id": str(uuid4()), "graph_id": str(uuid4()), "content_token": "current", "control_token": "handed-over", "source": {"entry_type": "asset", "id": str(uuid4()), "version_id": str(uuid4())}}
+    request = {"operation_id": str(uuid4()), "page_id": str(uuid4()), "workflow_id": str(uuid4()), "graph_id": str(uuid4()), "content_token": "current", "source": {"entry_type": "asset", "id": str(uuid4()), "version_id": str(uuid4())}}
     args = _parser().parse_args(["canvas", "add-data", "--data", json.dumps(request)])
     assert run(api, args) == {"ok": True}
     api.get_canvas_request(request["operation_id"])
@@ -63,6 +63,22 @@ def test_canvas_cli_and_client_preserve_explicit_target_and_operation_id(client)
         ("GET", "/api/v1/canvas/pages"),
     ]
     assert body(calls[0]) == CanvasAddRequest.model_validate(request).model_dump(mode="json", exclude_unset=True)
+
+
+@pytest.mark.parametrize('edit', [
+    {'action': 'connect', 'source_node_id': 10, 'source_port': 'science', 'target_node_id': 11, 'target_port': 'image'},
+    {'action': 'delete_node', 'node_id': 11},
+])
+def test_canvas_cli_edits_use_target_and_content_without_control_marker(client, edit):
+    api, calls = client
+    request = {key: str(uuid4()) for key in ('operation_id', 'page_id', 'workflow_id', 'graph_id')} | {
+        'content_token': 'current',
+        'edit': edit,
+    }
+    args = _parser().parse_args(['canvas', 'edit', '--data', json.dumps(request)])
+    assert run(api, args) == {'ok': True}
+    assert calls[0].url.path == '/api/v1/canvas/graph'
+    assert body(calls[0]) == request
 
 
 def test_equipment_direct_delete_passes_selection_and_current_preview(client):
