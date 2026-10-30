@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest'
 
 import type { Keybinding } from '@/platform/keybindings/types'
+import { CORE_SETTINGS } from '@/platform/settings/constants/coreSettings'
 import { useTelemetry } from '@/platform/telemetry'
 import type { NodeBadgeMode } from '@/types/nodeSource'
 import type { LinkReleaseTriggerAction } from '@/types/searchBoxTypes'
@@ -42,6 +43,31 @@ describe('useSettingStore', () => {
   it('should initialize with empty settings', () => {
     expect(store.settingValues).toEqual({})
     expect(store.settingsById).toEqual({})
+  })
+
+  it.for([undefined, '1.30.0', '1.57.1'])(
+    'enables Nodes 2.0 by default for local installation %s',
+    (installedVersion) => {
+      store.settingValues['Comfy.InstalledVersion'] = installedVersion
+      CORE_SETTINGS.filter((setting) =>
+        ['Comfy.InstalledVersion', 'Comfy.VueNodes.Enabled'].includes(setting.id)
+      ).forEach(store.addSetting)
+
+      expect(store.get('Comfy.VueNodes.Enabled')).toBe(true)
+    }
+  )
+
+  it('uses Nodes 2.0 even when the previous local setting was disabled', () => {
+    store.settingValues['Comfy.VueNodes.Enabled'] = false
+    CORE_SETTINGS.filter(setting => setting.id === 'Comfy.VueNodes.Enabled').forEach(store.addSetting)
+    expect(store.get('Comfy.VueNodes.Enabled')).toBe(true)
+  })
+
+  it('defaults to delayed autosave while preserving an explicit opt-out', async () => {
+    CORE_SETTINGS.filter(setting => setting.id === 'Comfy.Workflow.AutoSave').forEach(store.addSetting)
+    expect(store.get('Comfy.Workflow.AutoSave')).toBe('after delay')
+    await store.set('Comfy.Workflow.AutoSave', 'off')
+    expect(store.get('Comfy.Workflow.AutoSave')).toBe('off')
   })
 
   describe('load', () => {

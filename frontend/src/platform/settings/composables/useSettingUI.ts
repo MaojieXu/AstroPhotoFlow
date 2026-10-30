@@ -8,7 +8,8 @@ import { useVueFeatureFlags } from '@/composables/useVueFeatureFlags'
 import { isCloud, isDesktop } from '@/platform/distribution/types'
 import {
   isSettingPanelVisible,
-  isSettingVisible
+  isSettingVisible,
+  settingCategoryLabelKey
 } from '@/platform/astrophotoflow/settingsPresentation'
 import {
   getSettingInfo,
@@ -20,7 +21,6 @@ import { useWorkspaceUI } from '@/platform/workspace/composables/useWorkspaceUI'
 import { usePartnerNodeGovernanceStore } from '@/platform/workspace/stores/partnerNodeGovernanceStore'
 import { useSkillPacksStore } from '@/platform/skills/stores/skillPacksStore'
 import type { NavGroupData } from '@/types/navTypes'
-import { normalizeI18nKey } from '@/utils/formatUtil'
 import { buildTree } from '@/utils/treeUtil'
 
 const CATEGORY_ICONS: Record<string, string> = {
@@ -310,7 +310,9 @@ export function useSettingUI(
         (panel) => panel.node.key === defaultPanel
       )
       if (hiddenPanel) return translateCategory(hiddenPanel.node)
-      return settingCategories.value[0]
+      return !isCloud && !isDesktop
+        ? translateCategory(workbenchPanel.node)
+        : settingCategories.value[0]
     }
 
     if (scrollToSettingId) {
@@ -325,15 +327,14 @@ export function useSettingUI(
       }
     }
 
-    return settingCategories.value[0]
+    return !isCloud && !isDesktop
+      ? translateCategory(workbenchPanel.node)
+      : settingCategories.value[0]
   })
 
   const translateCategory = (node: SettingTreeNode) => ({
     ...node,
-    translatedLabel: t(
-      `settingsCategories.${normalizeI18nKey(node.label)}`,
-      node.label
-    )
+    translatedLabel: t(settingCategoryLabelKey(node.label), node.label)
   })
 
   const workspaceMenuTreeNodes = computed<SettingTreeNode[]>(() =>
@@ -349,9 +350,9 @@ export function useSettingUI(
         key: 'general',
         label: 'General',
         children: [
+          translateCategory(workbenchPanel.node),
           translateCategory(userPanel.node),
           ...coreSettingCategories.value.slice(0, 1).map(translateCategory),
-          translateCategory(workbenchPanel.node),
           ...(shouldShowSecretsPanel.value
             ? [translateCategory(secretsPanel.node)]
             : []),

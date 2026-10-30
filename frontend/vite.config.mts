@@ -2,6 +2,7 @@ import { sentryVitePlugin } from '@sentry/vite-plugin'
 import tailwindcss from '@tailwindcss/vite'
 import vue from '@vitejs/plugin-vue'
 import { execSync } from 'child_process'
+import { readFileSync } from 'node:fs'
 import { config as dotenvConfig } from 'dotenv'
 import type { IncomingMessage, ServerResponse } from 'http'
 import { Readable } from 'stream'
@@ -26,6 +27,10 @@ import {
 } from './build/sentryUploadConfig.ts'
 
 dotenvConfig()
+const apfProject = readFileSync(new URL('../pyproject.toml', import.meta.url), 'utf8').match(/\[project\]\r?\n([\s\S]*?)(?:\r?\n\[|$)/)?.[1]
+const apfVersion = apfProject?.match(/^version\s*=\s*"([^"]+)"/m)?.[1]
+if (!apfVersion) throw new Error('Missing AstroPhotoFlow project version')
+
 
 const IS_DEV = process.env.NODE_ENV === 'development'
 const SHOULD_MINIFY = process.env.ENABLE_MINIFY === 'true'
@@ -800,6 +805,7 @@ export default defineConfig({
   },
 
   define: {
+    __ASTROPHOTOFLOW_VERSION__: JSON.stringify(apfVersion),
     __COMFYUI_FRONTEND_VERSION__: JSON.stringify(
       process.env.npm_package_version
     ),

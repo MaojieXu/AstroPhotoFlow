@@ -1,4 +1,19 @@
 {
+  "apfSettings": {
+    "general": "General",
+    "canvas": "Canvas",
+    "about": "About AstroPhotoFlow",
+    "advanced": "Advanced",
+    "precisionHelp": "Numeric precision affects actual node parameter values. Keep node-defined precision unless you need to override it.",
+    "description": "Local astronomy assets and visual workflows.",
+    "version": "Version",
+    "documentation": "Documentation",
+    "feedback": "Feedback",
+    "license": "License",
+    "components": "Technical components and sources",
+    "componentsHelp": "Upstream source repositories include their license and attribution information.",
+    "diagnostics": "Diagnostic details"
+  },
   "apfWorkbench": {
     "configurationHelp": "Workbench configuration help",
     "configurationPath": "Current configuration file path",

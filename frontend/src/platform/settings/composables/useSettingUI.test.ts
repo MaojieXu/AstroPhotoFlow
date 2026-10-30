@@ -142,9 +142,9 @@ describe('useSettingUI', () => {
     return categories.find((c) => c.label === label)
   }
 
-  it('defaults to first category when no params are given', () => {
-    const { defaultCategory, settingCategories } = useSettingUI()
-    expect(defaultCategory.value).toBe(settingCategories.value[0])
+  it('opens the workbench by default in the local product', () => {
+    const { defaultCategory } = useSettingUI()
+    expect(defaultCategory.value.key).toBe('workbench')
   })
 
   it('resolves category from scrollToSettingId', () => {
@@ -170,12 +170,12 @@ describe('useSettingUI', () => {
     expect(defaultCategory.value).toBe(appearanceCategory)
   })
 
-  it('falls back to first category for unknown scrollToSettingId', () => {
-    const { defaultCategory, settingCategories } = useSettingUI(
+  it('opens the workbench for an unknown setting link', () => {
+    const { defaultCategory } = useSettingUI(
       undefined,
       'NonExistent.Setting'
     )
-    expect(defaultCategory.value).toBe(settingCategories.value[0])
+    expect(defaultCategory.value.key).toBe('workbench')
   })
 
   it.for([false, true])(
@@ -244,12 +244,12 @@ describe('useSettingUI', () => {
       expect(
         useSettingUI(panel as Parameters<typeof useSettingUI>[0])
           .defaultCategory.value.key
-      ).toBe('root/Comfy')
+      ).toBe('workbench')
     }
     expect(
       useSettingUI(undefined, 'Comfy.EditAttention.Delta').defaultCategory.value
         .key
-    ).toBe('root/Comfy')
+    ).toBe('workbench')
     for (const id of hiddenIds) expect(store.get(id)).toBe('unchanged')
   })
 
@@ -309,13 +309,13 @@ describe('useSettingUI', () => {
             .find((group) => group.title === 'General')
             ?.items.map(({ id }) => id)
         ).toEqual([
-          ...(isCloud ? ['user'] : []),
+          ...(isCloud ? ['user'] : ['workbench']),
           'root/Comfy',
-          ...(isCloud ? ['secrets'] : ['workbench']),
+          ...(isCloud ? ['secrets'] : []),
           'root/LiteGraph',
           'root/Appearance',
           'keybinding',
-          'extension',
+          ...(isCloud ? ['extension'] : []),
           'about'
         ])
       }

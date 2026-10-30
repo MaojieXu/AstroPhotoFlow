@@ -352,11 +352,11 @@ onMounted(reload)
           </div>
         </div>
 
-        <section class="border-t border-border-default pt-4">
+        <details class="border-t border-border-default pt-4">
+          <summary class="cursor-pointer font-medium">
+            {{ translate('apfWorkbench.advanced') }}
+          </summary>
           <div class="flex items-center gap-1">
-            <h3 class="m-0 text-base font-medium">
-              {{ translate('apfWorkbench.advanced') }}
-            </h3>
             <component
               :is="controls.button"
               type="button"
@@ -512,7 +512,7 @@ onMounted(reload)
               >
             </div>
           </div>
-        </section>
+        </details>
       </fieldset>
 
       <p v-if="saved" role="status" class="m-0 text-sm">

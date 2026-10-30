@@ -11,6 +11,7 @@ import { LiteGraph } from '@/lib/litegraph/src/litegraph'
 import type { LinkRenderType } from '@/lib/litegraph/src/types/globalEnums'
 import { LinkMarkerShape } from '@/lib/litegraph/src/types/globalEnums'
 import { useSettingStore } from '@/platform/settings/settingStore'
+import { isCloud, isDesktop } from '@/platform/distribution/types'
 import { WidgetInputBaseClass } from '@/renderer/extensions/vueNodes/widgets/components/layout'
 import { useSettingsDialog } from '@/platform/settings/composables/useSettingsDialog'
 import { cn } from '@comfyorg/tailwind-utils'
@@ -109,6 +110,7 @@ function openFullSettings() {
           :tooltip="t('settings.Comfy_Canvas_SelectionToolbox.tooltip')"
         />
         <FieldSwitch
+          v-if="isCloud || isDesktop"
           v-model="nodes2Enabled"
           :label="t('rightSidePanel.globalSettings.nodes2')"
           :tooltip="t('settings.Comfy_VueNodes_Enabled.tooltip')"

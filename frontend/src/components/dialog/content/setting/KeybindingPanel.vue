@@ -118,6 +118,7 @@ import { useKeybindingStore } from '@/platform/keybindings/keybindingStore'
 import { useKeybindingPresetService } from '@/platform/keybindings/presetService'
 import { useSettingStore } from '@/platform/settings/settingStore'
 import { useCommandStore } from '@/stores/commandStore'
+import { isSettingCommandVisible } from '@/platform/astrophotoflow/settingsPresentation'
 import { useDialogStore } from '@/stores/dialogStore'
 import { normalizeI18nKey } from '@/utils/formatUtil'
 
@@ -217,21 +218,23 @@ const menuEntries = computed<MenuItem[]>(() => [
 
 // Keybinding table logic
 const commandsData = computed<KeybindingCommand[]>(() => {
-  return Object.values(commandStore.commands).map((command) => {
-    const keybindings = keybindingStore.getKeybindingsByCommandId(command.id)
-    return {
-      expandable: keybindings.length >= 2,
-      id: command.id,
-      isModified: keybindingStore.isCommandKeybindingModified(command.id),
-      keybindings,
-      label: t(
-        `commands.${normalizeI18nKey(command.id)}.label`,
-        command.label ?? command.id
-      ),
-      rowId: `keybinding-row-${command.id}`,
-      source: command.source
-    }
-  })
+  return Object.values(commandStore.commands)
+    .filter((command) => isSettingCommandVisible(command.id))
+    .map((command) => {
+      const keybindings = keybindingStore.getKeybindingsByCommandId(command.id)
+      return {
+        expandable: keybindings.length >= 2,
+        id: command.id,
+        isModified: keybindingStore.isCommandKeybindingModified(command.id),
+        keybindings,
+        label: t(
+          `commands.${normalizeI18nKey(command.id)}.label`,
+          command.label ?? command.id
+        ),
+        rowId: `keybinding-row-${command.id}`,
+        source: command.source
+      }
+    })
 })
 
 const commandSortDirection = ref<TableSortDirection | null>(null)

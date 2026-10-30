@@ -44,6 +44,7 @@ import Button from '@/components/ui/button/Button.vue'
 import Menu from '@/components/ui/menu/Menu.vue'
 import type { MenuItem } from '@/components/ui/menu/types'
 import { useWorkflowTemplateSelectorDialog } from '@/composables/useWorkflowTemplateSelectorDialog'
+import { isCloud, isDesktop } from '@/platform/distribution/types'
 import { useSettingStore } from '@/platform/settings/settingStore'
 import type { SettingPanelType } from '@/platform/settings/types'
 import { useTelemetry } from '@/platform/telemetry'
@@ -124,6 +125,7 @@ const extraMenuItems = computed<MenuItem[]>(() => [
   },
   {
     key: 'nodes-2.0-toggle',
+    visible: isCloud || isDesktop,
     label: 'Nodes 2.0',
     checked: nodes2Enabled.value,
     presentation: 'switch',
@@ -133,6 +135,7 @@ const extraMenuItems = computed<MenuItem[]>(() => [
   { separator: true },
   {
     key: 'browse-templates',
+    visible: isCloud || isDesktop,
     label: t('menuLabels.Browse Templates'),
     icon: 'icon-[comfy--template]',
     command: () => useWorkflowTemplateSelectorDialog().show('menu')
@@ -151,6 +154,7 @@ const extraMenuItems = computed<MenuItem[]>(() => [
   },
   {
     key: 'manage-extensions',
+    visible: isCloud || isDesktop,
     label: t('menu.manageExtensions'),
     icon: 'icon-[comfy--extensions-blocks]',
     command: showManageExtensions
@@ -166,7 +170,6 @@ const translatedItems = computed<AppMenuItem[]>(() => {
 
   if (helpIndex !== -1) {
     items[helpIndex].icon = 'mdi mdi-help-circle-outline'
-    // If help is not the last item (i.e. we have extension commands), separate them
     const isLastItem = helpIndex !== items.length - 1
     helpItem = items.splice(
       helpIndex,
@@ -180,7 +183,7 @@ const translatedItems = computed<AppMenuItem[]>(() => {
     helpIndex,
     0,
     ...extraMenuItems.value,
-    ...(helpItem ? [menuSeparator, helpItem] : [])
+    ...(helpItem && (isCloud || isDesktop) ? [menuSeparator, helpItem] : [])
   )
 
   return items

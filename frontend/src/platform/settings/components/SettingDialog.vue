@@ -91,7 +91,7 @@
           </Suspense>
         </template>
         <template v-else-if="inSearch">
-          <SettingsPanel :setting-groups="searchResults" />
+          <SettingsPanel :setting-groups="searchResults" expand-advanced />
         </template>
         <template v-else-if="activeSettingCategory">
           <CurrentUserMessage v-if="activeSettingCategory.label === 'Comfy'" />
@@ -100,6 +100,7 @@
           />
           <SettingsPanel
             :setting-groups="sortedGroups(activeSettingCategory)"
+            :expand-advanced="Boolean(scrollToSettingId)"
           />
         </template>
       </div>
