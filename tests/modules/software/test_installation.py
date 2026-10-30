@@ -1,12 +1,44 @@
 import asyncio
 import json
+import os
 import shutil
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 import pytest
 from astrophotoflow.core.config import Settings
 from astrophotoflow.core.errors import ApiError
 from astrophotoflow.modules.software import public, bundles
+from astrophotoflow.modules.software.environment import bundle_environment
+
+
+@pytest.mark.parametrize('exit_code', [0, 7])
+def test_git_streams_transfer_progress_and_keeps_process_errors(monkeypatch, exit_code):
+    monkeypatch.setattr(bundles, 'ensure_git', lambda _root: sys.executable)
+    updates = []
+    script = "import sys;sys.stderr.write('Receiving objects: 42% (42/100)\\rReceiving objects: 42% (42/100)\\rUpdating files: 75% (3/4)\\n');sys.stderr.flush();sys.exit(" + str(exit_code) + ")"
+    def run():
+        return bundles.git(['-c', script], on_progress=lambda phase, value: updates.append((phase, value)))
+    if exit_code:
+        with pytest.raises(ApiError) as failed:
+            run()
+        assert failed.value.code == 'BUNDLE_FETCH_FAILED'
+    else:
+        assert run() == ''
+    assert updates == [('downloading', 0.42), ('checking_out', 0.75)]
+
+
+@pytest.mark.skipif(os.name != 'nt', reason='Windows Bundle process environment')
+def test_bundle_process_uses_its_own_program_search_path_without_changing_parent(tmp_path, monkeypatch):
+    original = 'C:/host/conda/bin'
+    monkeypatch.setenv('PATH', original)
+    monkeypatch.setenv('APF_WORKSPACE', str(tmp_path))
+    executable = tmp_path/'app/bin/siril-cli.exe'
+    environment = bundle_environment(executable)
+    windows = Path(os.environ['SystemRoot'])
+    assert environment['PATH'].split(os.pathsep) == [str(executable.resolve().parent), str(windows/'System32'), str(windows)]
+    assert environment['APF_WORKSPACE'] == str(tmp_path)
+    assert os.environ['PATH'] == original
 
 
 def test_checkout_rejects_tag_moving_before_loading_code(tmp_path, monkeypatch):
@@ -45,19 +77,88 @@ def test_install_uses_verified_checkout_and_waits_for_native_load(tmp_path,monke
     source=bundle_install(source_settings)
     settings=Settings('127.0.0.1',8190,tmp_path/'target/data',(),workspace=tmp_path/'target')
     def clone(package_id,destination,**kwargs):
+        kwargs['on_progress']('downloading', 0.42)
+        observed = public.get_package(settings, 'siril')
+        assert observed.progress == 0.42 and observed.phase == 'downloading'
         shutil.copytree(source,destination)
         return bundles.read_bundle(destination)[0], 'pinned-commit'
     monkeypatch.setattr(bundles,'checkout',clone)
     before=public.get_package(settings,'siril')
     after=asyncio.run(public.install_package(settings,'siril','1.4.4',before.package_token))
-    assert after.availability=='not_ready' and after.restart_required
+    assert after.availability=='not_ready' and not after.restart_required
+    assert after.progress is None
     assert after.bundle_commit=='pinned-commit' and after.bundle_version==bundles.release('siril')['manifest']['bundle_version']
     assert after.install_path==settings.workspace/'software/siril/bundle/app'
+
+
+@pytest.mark.skipif(os.name != 'nt', reason='Windows reader blocks progress state replacement')
+def test_install_continues_when_a_progress_write_is_blocked(tmp_path, monkeypatch, bundle_install, caplog):
+    source_settings = Settings('127.0.0.1', 8190, tmp_path/'source/data', (), workspace=tmp_path/'source')
+    source = bundle_install(source_settings)
+    settings = Settings('127.0.0.1', 8190, tmp_path/'target/data', (), workspace=tmp_path/'target')
+    def clone(package_id, destination, **kwargs):
+        with (settings.workspace/'software/siril/state.json').open(encoding='utf-8'):
+            kwargs['on_progress']('downloading', 0.42)
+            assert public.get_package(settings, 'siril').progress == 0.0
+        kwargs['on_progress']('downloading', 0.75)
+        assert public.get_package(settings, 'siril').progress == 0.75
+        shutil.copytree(source, destination)
+        return bundles.read_bundle(destination)[0], 'pinned-commit'
+    monkeypatch.setattr(bundles, 'checkout', clone)
+    before = public.get_package(settings, 'siril')
+    after = asyncio.run(public.install_package(settings, 'siril', '1.4.4', before.package_token))
+    assert after.operation_state == 'completed' and after.progress is None
+    assert '保留上次进度' in caplog.text
+
+
+@pytest.mark.skipif(os.name != 'nt', reason='Windows final state sharing violation')
+def test_install_final_save_failure_reports_need_to_verify(tmp_path, monkeypatch, bundle_install):
+    source_settings = Settings('127.0.0.1', 8190, tmp_path/'source/data', (), workspace=tmp_path/'source')
+    source = bundle_install(source_settings)
+    settings = Settings('127.0.0.1', 8190, tmp_path/'target/data', (), workspace=tmp_path/'target')
+    calls = []
+    def clone(package_id, destination, **kwargs):
+        calls.append(package_id)
+        shutil.copytree(source, destination)
+        return bundles.read_bundle(destination)[0], 'pinned-commit'
+    replace = public.os.replace
+    def blocked_final(part, path):
+        if json.loads(Path(part).read_text(encoding='utf-8'))['operation_state'] == 'completed':
+            error = PermissionError('final state is busy')
+            error.winerror = 5
+            raise error
+        replace(part, path)
+    monkeypatch.setattr(bundles, 'checkout', clone)
+    monkeypatch.setattr(public.os, 'replace', blocked_final)
+    monkeypatch.setattr(public.time, 'sleep', lambda _: None)
+    before = public.get_package(settings, 'siril')
+    with pytest.raises(ApiError, match='安装结果未能保存，需核对') as failed:
+        asyncio.run(public.install_package(settings, 'siril', '1.4.4', before.package_token))
+    after = public.get_package(settings, 'siril')
+    assert failed.value.code == 'SOFTWARE_STATE_SAVE_FAILED'
+    assert after.operation_state == 'failed' and after.last_error.code == 'SOFTWARE_STATE_SAVE_FAILED'
+    assert after.installed_version is None and not (settings.workspace/'software/siril/bundle').exists()
+    assert calls == ['siril']
 
 
 def test_manifest_paths_cannot_escape_checkout(tmp_path):
     with pytest.raises(ValueError):
         bundles.contained(tmp_path,'../outside.py')
+
+
+def test_adapter_changes_apply_without_commit_timestamp_or_size_changes(tmp_path, bundle_install):
+    import os
+    settings = Settings('127.0.0.1', 8190, tmp_path/'data', (), workspace=tmp_path)
+    root = bundle_install(settings)
+    path = root/'adapter/siril.py'
+    source = "from astrophotoflow.contracts.bundles import ProcessPlan\ndef build_plan(operation_id,sources,parameters,directory,**options):\n return ProcessPlan(arguments=['A'],outputs=[directory/'result.fit'],output_format='fits')\n"
+    path.write_text(source, encoding='utf-8')
+    timestamp = path.stat()
+    first = bundles.adapter_plan(tmp_path, 'siril', 'autostretch', [], {}, tmp_path/'runs/first')
+    path.write_text(source.replace("['A']", "['B']"), encoding='utf-8')
+    os.utime(path, ns=(timestamp.st_atime_ns, timestamp.st_mtime_ns))
+    second = bundles.adapter_plan(tmp_path, 'siril', 'autostretch', [], {}, tmp_path/'runs/second')
+    assert first.arguments == ['A'] and second.arguments == ['B']
 
 
 def test_remove_checkout_handles_git_readonly_pack_files_and_keeps_siblings(tmp_path):
@@ -73,3 +174,46 @@ def test_remove_checkout_handles_git_readonly_pack_files_and_keeps_siblings(tmp_
     assert not root.exists() and protected.read_bytes()==b'original'
     with pytest.raises(ValueError):
         bundles.remove_checkout(tmp_path,tmp_path)
+
+
+def test_update_switches_installed_metadata_and_adapter_without_touching_user_files(tmp_path, monkeypatch, bundle_install):
+    settings = Settings('127.0.0.1', 8190, tmp_path/'workspace/data', (), workspace=tmp_path/'workspace')
+    root = bundle_install(settings)
+    adapter = root/'adapter/siril.py'
+    implementation = "from astrophotoflow.contracts.bundles import ProcessPlan\ndef build_plan(operation_id,sources,parameters,directory,**options):\n return ProcessPlan(arguments=['before'],outputs=[directory/'result.fit'],output_format='fits')\n"
+    adapter.write_text(implementation, encoding='utf-8')
+    first = bundles.adapter_plan(settings.workspace, 'siril', 'autostretch', [], {}, tmp_path/'runs/before')
+    upstream = tmp_path/'updated-bundle'
+    shutil.copytree(root, upstream)
+    manifest_path = upstream/'bundle.json'
+    manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
+    manifest['bundle_version'] = '0.1.2-dev.2'
+    manifest_path.write_text(json.dumps(manifest), encoding='utf-8')
+    operation_path = upstream/manifest['operations'][0]
+    operation = json.loads(operation_path.read_text(encoding='utf-8'))
+    operation['operation']['parameters'][2]['default'] = 0.4
+    operation_path.write_text(json.dumps(operation), encoding='utf-8')
+    (upstream/'adapter/siril.py').write_text(implementation.replace("['before']", "['after']"), encoding='utf-8')
+    release = json.loads(json.dumps(bundles.release('siril')))
+    release.update(manifest=manifest, tag='v0.1.2-dev.2', commit='updated-fixture', operations=[operation])
+    monkeypatch.setattr(bundles, 'catalog', lambda: {'siril': release})
+    def checkout(package_id, destination, **kwargs):
+        shutil.copytree(upstream, destination)
+        return bundles.read_bundle(destination)[0], release['commit']
+    monkeypatch.setattr(bundles, 'checkout', checkout)
+    original = settings.workspace/'science.fit'
+    workflow = settings.workspace/'workflow.json'
+    original.write_bytes(b'protected original')
+    workflow.write_text('{}', encoding='utf-8')
+    before = public.get_package(settings, 'siril')
+    assert before.update_available
+    after = asyncio.run(public.install_package(settings, 'siril', '1.4.4', before.package_token))
+    second = bundles.adapter_plan(settings.workspace, 'siril', 'autostretch', [], {}, tmp_path/'runs/after')
+    assert first.arguments == ['before'] and second.arguments == ['after']
+    assert after.bundle_version == '0.1.2-dev.2' and after.bundle_commit == 'updated-fixture'
+    assert after.availability == 'not_ready' and not after.update_available and not after.restart_required
+    assert bundles.metadata(settings.workspace, 'siril')[1][0]['operation']['parameters'][2]['default'] == 0.4
+    assert not (root.parent/'previous-bundle').exists() and not list(root.parent.glob('.bundle-install-*'))
+    removed = asyncio.run(public.uninstall_package(settings, 'siril', after.package_token))
+    assert removed.availability == 'not_installed' and not root.exists()
+    assert original.read_bytes() == b'protected original' and workflow.read_text(encoding='utf-8') == '{}'

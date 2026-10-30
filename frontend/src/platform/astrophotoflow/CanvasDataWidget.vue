@@ -5,6 +5,7 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import Button from '@/components/ui/button/Button.vue'
+import Input from '@/components/ui/input/Input.vue'
 import Dialog from '@/components/ui/dialog/Dialog.vue'
 import DialogContent from '@/components/ui/dialog/DialogContent.vue'
 import DialogHeader from '@/components/ui/dialog/DialogHeader.vue'
@@ -14,6 +15,7 @@ import DialogTitle from '@/components/ui/dialog/DialogTitle.vue'
 import ImagePreview from '@/renderer/extensions/vueNodes/components/ImagePreview.vue'
 import type { ComponentWidget } from '@/scripts/domWidget'
 import { api } from '@/scripts/api'
+import { useApp } from '@/scripts/appInstance'
 import MediaViewer from './MediaViewer.vue'
 
 const { widget } = defineProps<{ widget: ComponentWidget<string | object> }>()
@@ -31,6 +33,39 @@ const phase = ref<MediaState['phase']>()
 const failure = ref('')
 const details = ref(false)
 const mediaRequest = ref<MediaViewerRequest>()
+const importPath = ref('')
+const importing = ref(false)
+const importFailure = ref('')
+const importController = new AbortController()
+
+async function importImage() {
+  const node = widget.node
+  const graph = node.graph
+  const reference = node.widgets?.find(item => item.name === 'reference')
+  if (!graph || !reference || importing.value || !importPath.value.trim()) return
+  importing.value = true
+  importFailure.value = ''
+  try {
+    const prepared = await createCanvasDataClient((path, init) => fetch(path, { ...init, signal: importController.signal })).importPath(importPath.value.trim())
+    if (node.graph !== graph || importController.signal.aborted) return
+    const canvas = useApp().canvas
+    canvas.emitBeforeChange()
+    graph.beforeChange()
+    try {
+      reference.value = JSON.stringify(prepared.reference)
+      node.title = prepared.title
+      canvas.setDirty(true, true)
+    } finally {
+      graph.afterChange()
+      canvas.emitAfterChange()
+    }
+    revision.value++
+  } catch (cause) {
+    if (!importController.signal.aborted) importFailure.value = cause instanceof Error ? cause.message : String(cause)
+  } finally {
+    importing.value = false
+  }
+}
 let generation = 0
 let controller: AbortController | undefined
 let timer: ReturnType<typeof setTimeout> | undefined
@@ -187,6 +222,7 @@ function openViewer() {
 watch(referenceText, () => { index.value = 0; details.value = false; mediaRequest.value = undefined })
 watch([referenceText, index], () => void load(), { immediate: true })
 onBeforeUnmount(() => {
+  importController.abort()
   generation++
   controller?.abort()
   clearTimeout(timer)
@@ -197,6 +233,11 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="flex h-full w-full min-w-0 flex-col gap-2 px-2 py-1" @pointerdown.stop @pointermove.stop @pointerup.stop @keydown.stop @wheel.stop>
+    <div class="flex shrink-0 items-center gap-1">
+      <Input v-model="importPath" class="min-w-0 flex-1" :aria-label="t('astrophotoflow.imagePath')" :placeholder="t('astrophotoflow.imagePath')" :disabled="importing" @keydown.enter.prevent="importImage" />
+      <Button size="sm" variant="secondary" :disabled="importing || !importPath.trim()" @click="importImage">{{ t(importing ? 'astrophotoflow.importingImage' : 'astrophotoflow.importImage') }}</Button>
+    </div>
+    <span v-if="importFailure" role="alert" class="text-error">{{ importFailure }}</span>
     <strong class="shrink-0 truncate text-base-foreground" :title="data?.name">{{ data?.name ?? t('astrophotoflow.libraryImage') }}</strong>
     <div class="group relative h-56 min-h-56 w-full overflow-hidden rounded-sm bg-component-node-widget-background" role="button" tabindex="0" :aria-label="t('astrophotoflow.media.open')" @click="openViewer" @keydown.enter.prevent="openViewer" @keydown.space.prevent="openViewer">
       <ImagePreview v-if="image" :image-urls="[image]" display-only @load-error="imageFailed" />

@@ -26,7 +26,7 @@ class CanvasOperations:
             raise ValueError('Canvas is offline; no graph snapshot is available.')
         body = CanvasGraphRequest(operation_id=uuid4(), page_id=page['page_id'], workflow_id=page['workflow_id'],
                                   graph_id=page['graph_id'], content_token=page['content_token'],
-                                  control_token=page['control_token'], edit={'action': 'inspect'})
+                                  edit={'action': 'inspect'})
         return self.request('POST', '/canvas/graph', json=body)
 
     def edit_canvas(self, body: CanvasGraphRequest):

@@ -1,4 +1,5 @@
 import asyncio
+import json
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 from uuid import uuid4
@@ -26,6 +27,9 @@ def test_software_page_union_is_parsed_and_identity_comes_from_actual_socket(tmp
         async def json(self):
             return {"event_id": event_id, "page_id": page_id, "page_token": "actual-token", "result": None, "error": None}
 
+        async def text(self):
+            return json.dumps(await self.json())
+
     def post(url, **kwargs):
         received.append(kwargs["json"])
         return Response()
@@ -40,3 +44,30 @@ def test_software_page_union_is_parsed_and_identity_comes_from_actual_socket(tmp
     assert received[0]["action"] == "confirm_software"
     assert server.send_json.call_args.args[0] == "apf.page_result"
     assert server.send_json.call_args.args[2] == "client"
+    assert server.send_json.call_args.args[1]["error"] is None
+    assert server.send_json.call_args.args[1]["event_id"] == event_id
+
+
+def test_bundle_reload_route_requires_service_token(monkeypatch):
+    import sys
+    from aiohttp import web
+    from aiohttp.test_utils import TestClient, TestServer
+    from astrophotoflow.comfyui import proxy
+
+    reload = AsyncMock()
+    monkeypatch.setattr(proxy, "_configuration", lambda: ("http://domain", set(), "secret"))
+    monkeypatch.setitem(sys.modules, "server", SimpleNamespace(PromptServer=SimpleNamespace(instance=object())))
+    monkeypatch.setitem(sys.modules, "astrophotoflow.interfaces.bundle_nodes", SimpleNamespace(reload_bundle_nodes=reload))
+
+    async def scenario():
+        app = web.Application()
+        routes = web.RouteTableDef()
+        comfyui.register_bundle_routes(routes)
+        app.add_routes(routes)
+        async with TestClient(TestServer(app)) as client:
+            assert (await client.post("/astrophotoflow/internal/bundles/reload")).status == 401
+            reload.assert_not_awaited()
+            result = await client.post("/astrophotoflow/internal/bundles/reload", headers={"Authorization": "Bearer secret"})
+            assert result.status == 200 and await result.json() == {"status": "loaded"}
+            reload.assert_awaited_once()
+    asyncio.run(scenario())

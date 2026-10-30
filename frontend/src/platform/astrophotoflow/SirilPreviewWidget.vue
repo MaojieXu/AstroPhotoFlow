@@ -56,7 +56,7 @@ const parameters = computed(() => {
   return Object.fromEntries(capability.value.node.definition.parameters.map(parameter => [parameter.name,
     controls.find(control => control.name === parameter.name)?.value ?? parameter.default]))
 })
-const signature = computed(() => JSON.stringify([sourceText.value, parameters.value, index.value]))
+const signature = computed(() => JSON.stringify([sourceText.value, parameters.value, index.value, capability.value?.available, capability.value?.node.content_token]))
 
 function clearImage() {
   if (image.value) URL.revokeObjectURL(image.value)
@@ -69,6 +69,13 @@ function schedule() {
   clearTimeout(timer)
   failure.value = ''
   notInstalled.value = false
+  if (capability.value && !capability.value.available) {
+    failure.value = capability.value.reason ?? t('apfSoftware.unavailable')
+    notInstalled.value = true
+    phase.value = 'failed'
+    clearImage()
+    return
+  }
   if (!reference.value || !parameters.value) {
     phase.value = 'idle'
     clearImage()
@@ -85,7 +92,7 @@ async function render() {
   const signal = controller.signal
   const fixed = reference.value
   const values = parameters.value
-  if (!fixed || !values || !capability.value) return
+  if (!fixed || !values || !capability.value?.operation) return
   phase.value = 'updating'
   failure.value = ''
   try {
@@ -127,7 +134,7 @@ onBeforeUnmount(() => {
       <ImagePreview v-if="image" :image-urls="[image]" display-only :class="phase !== 'ready' ? 'opacity-40' : ''" @load-error="imageFailed" />
       <div v-if="phase !== 'ready'" class="absolute inset-0 flex flex-col items-center justify-center gap-2 overflow-auto p-2 text-center text-xs text-muted-foreground" :role="failure ? 'alert' : 'status'">
         <i v-if="phase === 'waiting' || phase === 'updating'" class="icon-[lucide--loader-circle] size-4 animate-spin" aria-hidden="true" />
-        <span class="max-h-24 overflow-auto break-words">{{ failure || t(phase === 'idle' ? 'astrophotoflow.siril.connectSource' : 'astrophotoflow.siril.updating') }}</span>
+        <span class="max-h-24 overflow-auto wrap-break-word">{{ failure || t(phase === 'idle' ? 'astrophotoflow.siril.connectSource' : 'astrophotoflow.siril.updating') }}</span>
         <Button v-if="notInstalled" size="sm" variant="secondary" @click="tabs.activeSidebarTabId = 'software'">{{ t('apfSoftware.install') }}</Button>
         <Button v-if="phase === 'failed'" size="sm" variant="textonly" @click="render">{{ t('g.retry') }}</Button>
       </div>

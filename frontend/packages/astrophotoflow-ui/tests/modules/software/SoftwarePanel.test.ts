@@ -60,6 +60,77 @@ function client(overrides: Partial<SoftwareClient> = {}): SoftwareClient {
 }
 
 describe('SoftwarePanel', () => {
+  it('keeps an unsaved final result visible after reload without showing ready or reinstalling', async () => {
+    const error = { code: 'SOFTWARE_STATE_SAVE_FAILED', message: '安装结果未能保存，需核对软件状态；请勿直接重复安装。', fields: [] }
+    const apiClient = client({ getPackage: vi.fn().mockResolvedValue({ ...details,
+      package: { ...packageInfo, installed_version: '1.4.4', availability: 'ready' },
+      current_action: { ...pending, state: 'failed', error }
+    }) })
+    const confirmSoftware = vi.fn()
+    const wrapper = mount(SoftwarePanel, { props: { client: apiClient, confirmSoftware, confirmationAvailable: true, translate } })
+    await flushPromises()
+    expect(wrapper.get('[role="alert"]').text()).toContain(error.message)
+    expect(wrapper.get('[data-testid="software-status"]').classes()).not.toContain('bg-success-background')
+    await wrapper.get('[role="alert"] button').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[role="alert"]').text()).toContain(error.message)
+    expect(apiClient.requestInstall).not.toHaveBeenCalled()
+    expect(confirmSoftware).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
+  it('shows the reported percentage and its actual installation phase', async () => {
+    const apiClient = client({ getPackage: vi.fn().mockResolvedValue({ ...details,
+      package: { ...packageInfo, phase: 'downloading', progress: 0.42 },
+      current_action: { ...pending, state: 'running' }
+    }) })
+    const wrapper = mount(SoftwarePanel, { props: { client: apiClient, confirmSoftware: vi.fn(), confirmationAvailable: true, translate } })
+    await flushPromises()
+    expect(wrapper.text()).toContain('42%')
+    expect(wrapper.text()).toContain('apfSoftware.installPhase.downloading')
+    expect(wrapper.get('[aria-label="apfSoftware.installPhase.downloading"]').attributes('value')).toBe('0.42')
+    wrapper.unmount()
+  })
+
+  it('shows indeterminate installation progress and hides it after completion', async () => {
+    vi.useFakeTimers()
+    const getPackage = vi.fn()
+      .mockResolvedValueOnce({ ...details, current_action: { ...pending, state: 'running' } })
+      .mockResolvedValue({ ...details, current_action: { ...pending, state: 'completed' } })
+    const wrapper = mount(SoftwarePanel, { props: {
+      client: client({ getPackage }), confirmSoftware: vi.fn(), confirmationAvailable: true, translate
+    } })
+    try {
+      await flushPromises()
+      expect(wrapper.get('[aria-label="apfSoftware.installing"]').attributes('value')).toBeUndefined()
+      await vi.advanceTimersByTimeAsync(1000)
+      await flushPromises()
+      expect(wrapper.find('[aria-label="apfSoftware.installing"]').exists()).toBe(false)
+    } finally {
+      wrapper.unmount()
+      vi.useRealTimers()
+    }
+  })
+
+  it('reviews an available bundle update before confirming it', async () => {
+    const update = { ...pending, plan: { ...pending.plan, action: 'update' as const } }
+    const apiClient = client({
+      getPackage: vi.fn().mockResolvedValue({ ...details, package: { ...packageInfo,
+        installed_version: '1.4.4', availability: 'ready', update_available: true } }),
+      requestInstall: vi.fn().mockResolvedValue(update)
+    })
+    const confirmSoftware = vi.fn().mockResolvedValue({ ok: true, pending: { ...update, state: 'completed' } })
+    const wrapper = mount(SoftwarePanel, { props: { client: apiClient, confirmSoftware, confirmationAvailable: true, translate } })
+    await flushPromises()
+    await wrapper.get('[data-testid="request-update"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="confirm-software"]').text()).toBe('apfSoftware.update')
+    expect(confirmSoftware).not.toHaveBeenCalled()
+    await wrapper.get('[data-testid="confirm-software"]').trigger('click')
+    await flushPromises()
+    expect(confirmSoftware).toHaveBeenCalledWith(pending.operation_id)
+    wrapper.unmount()
+  })
   it('reads current installed state after a restart expires the old confirmation', async () => {
     const getPackage = vi.fn().mockRejectedValueOnce(new ApiClientError('Expired', 'service', 409, 'SOFTWARE_ACTION_EXPIRED'))
       .mockResolvedValue({ ...details, package: { ...packageInfo, installed_version: '1.4.4', availability: 'ready', reason: null } })

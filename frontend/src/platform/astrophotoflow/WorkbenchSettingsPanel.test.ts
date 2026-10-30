@@ -36,7 +36,7 @@ it('saves workbench configuration and exposes directory details in advanced sett
   await user.clear(input)
   await user.type(input, '4')
   await user.tab()
-  await user.click(screen.getByRole('button', { name: i18n.global.t('apfWorkbench.save'), exact: true }))
+  await user.click(screen.getByRole('button', { name: i18n.global.t('apfWorkbench.save') }))
   await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2))
   expect(vi.mocked(fetch).mock.calls[1][0]).toBe('/astrophotoflow/api/v1/settings/workbench')
   expect(JSON.parse(String(vi.mocked(fetch).mock.calls[1][1]?.body))).toEqual({

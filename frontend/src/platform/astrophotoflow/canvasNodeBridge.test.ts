@@ -59,4 +59,32 @@ describe('bundle canvas edits', () => {
     expect(() => validateNodeValue(parameter, NaN)).toThrow()
     expect(() => validateNodeValue(undefined, 1)).toThrow()
   })
+
+  it('deletes only the requested node and its links through the native change lifecycle', () => {
+    source.connect(0, target, 0)
+    const before = vi.fn()
+    const after = vi.fn()
+    host.app = { canvas: { graph, read_only: false, selectOnly: false, emitBeforeChange: before, emitAfterChange: after, setDirty: vi.fn() } }
+    const result = applyCanvasNodeEdit(command({ action: 'delete_node', node_id: target.id }))
+    expect(result.node_id).toBe(target.id)
+    expect(graph.getNodeById(target.id)).toBeFalsy()
+    expect(graph.getNodeById(source.id)).toBe(source)
+    expect(source.outputs[0].links ?? []).toHaveLength(0)
+    expect(graph.links.size).toBe(0)
+    expect(before).toHaveBeenCalledOnce()
+    expect(after).toHaveBeenCalledOnce()
+  })
+
+  it.each(['block_delete', 'ignore_remove'] as const)('respects native %s without changing the graph', (flag) => {
+    target[flag] = true
+    const before = graph.serialize()
+    expect(() => applyCanvasNodeEdit(command({ action: 'delete_node', node_id: target.id }))).toThrow('cannot be deleted')
+    expect(graph.serialize()).toEqual(before)
+  })
+
+  it('rejects a missing node without changing the graph', () => {
+    const before = graph.serialize()
+    expect(() => applyCanvasNodeEdit(command({ action: 'delete_node', node_id: 'missing' }))).toThrow('unavailable')
+    expect(graph.serialize()).toEqual(before)
+  })
 })

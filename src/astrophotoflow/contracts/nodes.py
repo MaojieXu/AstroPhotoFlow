@@ -109,7 +109,7 @@ class NativeNodeLoad(StrictModel):
 
 class NodeCapability(StrictModel):
     node: SavedDefinition
-    operation: SoftwareOperation
+    operation: SoftwareOperation | None
     available: bool
     reason: str | None
     preview: BundlePreview | None

@@ -23,6 +23,14 @@ apf imports browse science --path '2026-10-25' --limit 50 --offset 0
 
 There is no arbitrary-HTTP MCP tool. Legacy capture-profile endpoints, FITS HDU/header inspection, every numeric library filter and service-admin endpoints are not exposed as dedicated MCP tools. Existing service administration commands remain available.
 
+## Active canvas editing
+
+Read `list_canvas_pages` and `get_canvas` to locate the user's exact active graph. On an explicit user edit request, use `edit_canvas` or `add_canvas_data` directly with the current target and content; no handoff or control marker is required. CLI equivalents are `apf canvas pages`, `get`, `edit`, `add-data` and `result`. Discover processing nodes with `list_nodes` / `get_node` before adding or configuring them. Canvas editing does not execute the workflow.
+
+`edit_canvas` supports `delete_node` for one explicit node. It removes that node and attached links through the native change/undo lifecycle, retaining other nodes and source assets. Missing nodes and native deletion-protected nodes fail without changing the graph.
+
+Stop if the page, graph or content changes; do not automatically follow a new graph or overwrite manual changes after rereading. For an unknown result, query `get_canvas_request` with the original operation ID instead of replaying. Request fields and schemas remain defined by the published contracts.
+
 ## Command and tool inventory
 
 List commands accept `--limit/--offset`. Searchable registries accept `--q/--status/--sort-by/--order`; asset lists additionally accept `--frame-type/--role`; equipment accepts `--kind`; presets accept `--equipment-setup-id`. `apf <group> <command> --help` lists the actual supported flags. `tasks get` has `--items-limit/--items-offset` for member paging. `library list` offers `--frame-class` in addition to frame type/role/name/order. Reference lists, version lists, calibration targets and trash retain their own paging scope.

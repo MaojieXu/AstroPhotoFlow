@@ -235,8 +235,10 @@ async def forward(request: web.Request, path_template: str) -> web.StreamRespons
 
 def register_proxy_routes(routes: web.RouteTableDef) -> None:
     from astrophotoflow.interfaces.canvas_native import register_canvas_routes
+    from astrophotoflow.interfaces.comfyui import register_bundle_routes
 
     register_canvas_routes(routes)
+    register_bundle_routes(routes)
     if os.environ.get("APF_WORKSPACE") and (native_server := sys.modules.get("server")) is not None:
         native_server.PromptServer.instance.app.middlewares.append(native_admission_middleware())
     for method, public_path, upstream_path in ROUTES:

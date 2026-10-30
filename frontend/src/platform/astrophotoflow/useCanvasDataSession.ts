@@ -1,6 +1,5 @@
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { onBeforeUnmount, onMounted, watch } from 'vue'
 
-import { useToast } from '@/components/ui/toast/toastStore'
 import { t } from '@/i18n'
 import type { LGraph, Subgraph } from '@/lib/litegraph/src/litegraph'
 import { useWorkflowStore } from '@/platform/workflow/management/stores/workflowStore'
@@ -14,13 +13,6 @@ import type { CanvasPage } from './canvasContracts'
 import { insertPreparedCanvasData } from './canvasDataBridge'
 import { applyCanvasNodeEdit } from './canvasNodeBridge'
 
-export const canvasDataAgentAllowed = ref(false)
-let toggleControl: (() => void) | undefined
-
-export function toggleCanvasDataControl() {
-  toggleControl?.()
-}
-
 export function serializeCanvasContent(graph: LGraph | Subgraph) {
   const snapshot = graph.serialize()
   return JSON.stringify({ ...snapshot, revision: undefined, extra: { ...snapshot.extra, ds: undefined } })
@@ -30,16 +22,9 @@ export function useCanvasDataSession() {
   const canvasStore = useCanvasStore()
   const workflows = useWorkflowStore()
   let state: CanvasPage | null = null
-  let controlToken: string | null = null
   let applying = false
   let generation = 0
   let serialized = ''
-
-  function clearControl() {
-    controlToken = null
-    canvasDataAgentAllowed.value = false
-    state = null
-  }
 
   async function publish() {
     const current = ++generation
@@ -47,7 +32,7 @@ export function useCanvasDataSession() {
     const canvas = canvasStore.canvas
     const graph = canvas?.graph
     if (!app.isGraphReady || !canvas || !graph || !workflows.activeWorkflow || isSelectOnly(canvas)) {
-      clearControl()
+      state = null
       api.sendCanvasEvent({ action: 'state', state: null })
       return
     }
@@ -57,30 +42,29 @@ export function useCanvasDataSession() {
     const parsed = canvasPageSchema.safeParse({
       workflow_id: app.graph.id, graph_id: graph.id,
       title: workflows.activeWorkflow.filename,
-      content_token: Array.from(new Uint8Array(hash), byte => byte.toString(16).padStart(2, '0')).join(''),
-      control_token: controlToken
+      content_token: Array.from(new Uint8Array(hash), byte => byte.toString(16).padStart(2, '0')).join('')
     })
     if (!parsed.success) {
-      clearControl()
+      state = null
       api.sendCanvasEvent({ action: 'state', state: null })
       return
     }
     serialized = text
     state = parsed.data
-    if (!api.sendCanvasEvent({ action: 'state', state })) clearControl()
+    if (!api.sendCanvasEvent({ action: 'state', state })) state = null
   }
 
-  function revoke() {
-    clearControl()
+  function refreshState() {
+    state = null
     void publish()
   }
 
   function changed() {
-    if (!applying) revoke()
+    if (!applying) refreshState()
   }
 
   function connectionChanged() {
-    revoke()
+    refreshState()
   }
 
   async function apply(event: CustomEvent<unknown>) {
@@ -97,7 +81,7 @@ export function useCanvasDataSession() {
     try {
       const app = useApp()
       const current = state
-      if (!current || (!inspecting && !controlToken) || request.control_token !== controlToken || request.workflow_id !== current.workflow_id || request.graph_id !== current.graph_id || request.content_token !== current.content_token || app.graph.id !== request.workflow_id || app.canvas.graph?.id !== request.graph_id || serializeCanvasContent(app.canvas.graph) !== serialized || applying) {
+      if (!current || request.workflow_id !== current.workflow_id || request.graph_id !== current.graph_id || request.content_token !== current.content_token || app.graph.id !== request.workflow_id || app.canvas.graph?.id !== request.graph_id || serializeCanvasContent(app.canvas.graph) !== serialized || applying) {
         throw new Error(t('astrophotoflow.canvasChanged'))
       }
       applying = true
@@ -125,22 +109,9 @@ export function useCanvasDataSession() {
     } })
   }
 
-  watch(() => [canvasStore.canvas, workflows.activeWorkflow, workflows.activeSubgraph, canvasStore.isReadOnly], revoke, { flush: 'sync' })
+  watch(() => [canvasStore.canvas, workflows.activeWorkflow, workflows.activeSubgraph, canvasStore.isReadOnly], refreshState, { flush: 'sync' })
 
   onMounted(() => {
-    toggleControl = () => {
-      if (canvasDataAgentAllowed.value) revoke()
-      else {
-        const canvas = canvasStore.canvas
-        if (!canvas?.graph || !workflows.activeWorkflow || isSelectOnly(canvas)) {
-          useToast().error(t('astrophotoflow.canvasUnavailable'))
-          return
-        }
-        controlToken = crypto.randomUUID()
-        canvasDataAgentAllowed.value = true
-        void publish()
-      }
-    }
     api.addEventListener('graphChanged', changed)
     api.addEventListener('reconnecting', connectionChanged)
     api.addEventListener('reconnected', connectionChanged)
@@ -150,9 +121,8 @@ export function useCanvasDataSession() {
   })
   onBeforeUnmount(() => {
     generation++
-    clearControl()
+    state = null
     api.sendCanvasEvent({ action: 'state', state: null })
-    toggleControl = undefined
     api.removeEventListener('graphChanged', changed)
     api.removeEventListener('reconnecting', connectionChanged)
     api.removeEventListener('reconnected', connectionChanged)

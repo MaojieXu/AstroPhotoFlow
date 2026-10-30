@@ -91,6 +91,14 @@ uv run --locked --no-sync apf status --workspace .artifacts/workspaces/feature
 
 CLI、浏览器和 MCP 分别核对目标；设置 Shell 环境不会重定向已连接的 MCP。MCP 验证使用明确绑定该 workspace 的独立 stdio 进程，不修改全局注册。
 
+源码开发时，在已就绪的独立实例上运行以下命令，并打开 Vite 输出的地址。入口通过 core 状态查询选定 workspace 的实际网页地址，代理原生 API／WebSocket；Vue、TypeScript 和 CSS 修改由 Vite 自动更新，无需重新构建和同步静态网页。
+
+```powershell
+pnpm build:watch --workspace .artifacts/workspaces/feature --port 32589 --strictPort
+```
+
+`--workspace` 省略时沿用当前配置选择。Vite 是开发工具，发布与正常运行仍使用构建网页和两个产品服务。平台后端 Python 源码变化仍需显式重启；已安装 Bundle 的 SDK Python 适配器、清单、操作及节点 JSON 变化由原生进程检测并重新加载，安装／更新／卸载也直接刷新当前页面的节点目录。维护行为以[软件和节点需求](../requirements/README.md#fr-03-软件适配与能力目录)为准。
+
 浏览器验收由 Manager 在集成阶段按需执行，使用 `status` 的实际地址：
 
 ```powershell

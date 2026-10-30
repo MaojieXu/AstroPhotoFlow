@@ -9,7 +9,6 @@ import LibrarySidebarTab from './LibrarySidebarTab.vue'
 
 const {showIssue}=vi.hoisted(()=>({showIssue:vi.fn()}))
 vi.mock('./canvasDataBridge',()=>({addLibraryDataToCanvas:vi.fn()}))
-vi.mock('./useCanvasDataSession',()=>({canvasDataAgentAllowed:false,toggleCanvasDataControl:vi.fn()}))
 
 vi.mock('@/platform/settings/composables/useSettingsDialog',()=>({useSettingsDialog:()=>({show:vi.fn()})}))
 

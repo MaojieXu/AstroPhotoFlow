@@ -140,7 +140,16 @@
     "noMatchingCommands": "没有符合条件的命令。",
     "install": "安装",
     "uninstall": "卸载",
+    "update": "更新",
+    "confirmUpdate": "更新软件包",
     "installing": "正在安装",
+    "installPhase": {
+      "cloning": "准备下载",
+      "downloading": "正在下载",
+      "resolving": "整理对象",
+      "checking_out": "检出文件",
+      "verifying": "校验版本"
+    },
     "uninstalling": "正在卸载",
     "confirmUninstall": "卸载 Siril",
     "cancel": "取消",
@@ -149,6 +158,9 @@
     "loadError": "无法读取软件状态。"
   },
   "astrophotoflow": {
+    "imagePath": "图像文件绝对路径",
+    "importImage": "导入",
+    "importingImage": "正在导入…",
     "media": {
       "open": "打开图像查看器",
       "fit": "适应窗口",

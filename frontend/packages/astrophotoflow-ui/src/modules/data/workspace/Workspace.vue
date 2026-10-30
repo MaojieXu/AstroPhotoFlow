@@ -43,9 +43,9 @@ type WorkspaceArea = 'library' | 'nodes' | 'software' | 'agent' | 'settings'
 type SetupSortField = 'created_at' | 'name' | 'camera' | 'telescope' | 'mount' | 'filter' | 'accessory'
 
 const store = useWorkspaceStore()
-const props = defineProps<{ native?: boolean; sidebar?: boolean; controls?: LibraryControls; canvasAgentAllowed?: boolean }>()
+const props = defineProps<{ native?: boolean; sidebar?: boolean; controls?: LibraryControls }>()
 provide(libraryControlsKey, props.controls)
-const emit = defineEmits<{ 'manage-equipment': []; 'back-to-library': []; 'notify-success': [message: string]; 'notify-import': [notice: ImportNotice]; 'open-workbench-settings': []; 'canvas-control': [] }>()
+const emit = defineEmits<{ 'manage-equipment': []; 'back-to-library': []; 'notify-success': [message: string]; 'notify-import': [notice: ImportNotice]; 'open-workbench-settings': [] }>()
 
 function canvasSource(row: RecordData): CanvasDataRequest | undefined {
   if (row.project_id || bulkSelectMode.value || savingInline.value || inlineSaveFailure.value) return
@@ -211,7 +211,6 @@ const isLibraryTableView = computed(() => activeArea.value === 'library' && !vie
 const isDatasetMembersView = computed(() => activeArea.value === 'library' && store.section === 'library' && Boolean(activeDataset.value) && !viewingProjectAssets.value && !viewingProjectDatasets.value)
 const libraryToolbarBlocked = computed(() => bulkDeleteBusy.value || savingInline.value > 0 || Boolean(inlineSaveFailure.value) || setupDirty.value)
 const libraryMenuItems = computed<LibraryMenuItem[]>(() => [
-  ...(props.controls?.canvasSource ? [{ label: props.canvasAgentAllowed ? '收回 Agent 控制' : '交给 Agent（加入素材）', disabled: libraryToolbarBlocked.value, command: () => emit('canvas-control') }] : []),
   { label: '刷新', disabled: libraryToolbarBlocked.value || loading.value, command: refreshLibrary },
   ...(isLibraryItemsView.value ? [
     { label: '批量管理', disabled: libraryToolbarBlocked.value || loading.value, command: enterBulkSelectMode },

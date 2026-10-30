@@ -55,8 +55,6 @@ async def edit_canvas(body: CanvasGraphRequest, request: Request):
         if request.app.state.maintenance or request.app.state.shutdown_started:
             raise ApiError(409, 'WORKBENCH_MAINTENANCE', '工作台正在维护。')
         definition = None
-        if body.edit.action != 'inspect' and not body.control_token:
-            raise ApiError(409, 'CANVAS_NOT_AUTHORIZED', '请在目标网页明确交给 Agent。')
         if body.edit.action == 'add_node':
             capability = describe_node(request.app.state.settings, body.edit.definition_id)
             if not capability.available:
