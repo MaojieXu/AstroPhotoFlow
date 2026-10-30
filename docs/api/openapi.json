@@ -20255,10 +20255,6 @@
             "type": "string",
             "title": "Content Token"
           },
-          "control_token": {
-            "type": "string",
-            "title": "Control Token"
-          },
           "source": {
             "$ref": "#/components/schemas/CanvasDataRequest"
           }
@@ -20271,7 +20267,6 @@
           "workflow_id",
           "graph_id",
           "content_token",
-          "control_token",
           "source"
         ],
         "title": "CanvasAddRequest"
@@ -20549,6 +20544,33 @@
         ],
         "title": "CanvasDataRequest"
       },
+      "CanvasDeleteNode": {
+        "properties": {
+          "action": {
+            "type": "string",
+            "const": "delete_node",
+            "title": "Action"
+          },
+          "node_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Node Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "action",
+          "node_id"
+        ],
+        "title": "CanvasDeleteNode"
+      },
       "CanvasGraphRequest": {
         "properties": {
           "operation_id": {
@@ -20575,17 +20597,6 @@
             "type": "string",
             "title": "Content Token"
           },
-          "control_token": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Control Token"
-          },
           "edit": {
             "oneOf": [
               {
@@ -20598,6 +20609,9 @@
                 "$ref": "#/components/schemas/CanvasSetParameter"
               },
               {
+                "$ref": "#/components/schemas/CanvasDeleteNode"
+              },
+              {
                 "$ref": "#/components/schemas/CanvasConnect"
               }
             ],
@@ -20607,6 +20621,7 @@
               "mapping": {
                 "add_node": "#/components/schemas/CanvasCreateNode",
                 "connect": "#/components/schemas/CanvasConnect",
+                "delete_node": "#/components/schemas/CanvasDeleteNode",
                 "inspect": "#/components/schemas/CanvasInspect",
                 "set_parameter": "#/components/schemas/CanvasSetParameter"
               }
@@ -20621,7 +20636,6 @@
           "workflow_id",
           "graph_id",
           "content_token",
-          "control_token",
           "edit"
         ],
         "title": "CanvasGraphRequest"
@@ -20887,17 +20901,6 @@
             "type": "string",
             "title": "Content Token"
           },
-          "control_token": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Control Token"
-          },
           "page_id": {
             "type": "string",
             "format": "uuid",
@@ -20911,7 +20914,6 @@
           "graph_id",
           "title",
           "content_token",
-          "control_token",
           "page_id"
         ],
         "title": "CanvasPageOut"
@@ -25136,7 +25138,14 @@
             "$ref": "#/components/schemas/SavedDefinition"
           },
           "operation": {
-            "$ref": "#/components/schemas/SoftwareOperation"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SoftwareOperation"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "available": {
             "type": "boolean",
@@ -27328,6 +27337,11 @@
               }
             ],
             "title": "Bundle Commit"
+          },
+          "update_available": {
+            "type": "boolean",
+            "title": "Update Available",
+            "default": false
           },
           "restart_required": {
             "type": "boolean",

@@ -29,9 +29,13 @@ const action = computed(() => details.value?.current_action)
 const busy = computed(() => state.value.phase === 'requesting' || state.value.phase === 'confirming' || action.value?.state === 'running')
 const installed = computed(() => !software.value?.migration_required && (software.value?.installed_version != null || software.value?.install_path != null))
 const uninstallAction = computed(() => action.value?.state === 'running' ? action.value.plan.action === 'uninstall' : installed.value)
-const ready = computed(() => software.value?.availability === 'ready' && !busy.value)
+const stateSaveFailed = computed(() => action.value?.error?.code === 'SOFTWARE_STATE_SAVE_FAILED' || software.value?.last_error?.code === 'SOFTWARE_STATE_SAVE_FAILED')
+const ready = computed(() => software.value?.availability === 'ready' && !busy.value && !stateSaveFailed.value)
+const progressLabel = computed(() => props.translate(software.value?.phase ? 'apfSoftware.installPhase.' + software.value.phase : 'apfSoftware.installing'))
 const statusText = computed(() => {
   if (busy.value) return props.translate(action.value?.plan.action === 'uninstall' ? 'apfSoftware.uninstalling' : 'apfSoftware.installing')
+  const actionError = action.value?.error
+  if (actionError?.code === 'SOFTWARE_STATE_SAVE_FAILED') return actionError.message
   return software.value?.last_error?.message ?? software.value?.reason ?? props.translate(`apfSoftware.availability.${software.value?.availability ?? 'unknown'}`)
 })
 let disposed = false
@@ -74,7 +78,7 @@ async function load() {
       result = await props.client.getPackage(id)
     }
     if (disposed || current !== generation) return
-    state.value = { phase: 'ready', details: result, error: null }
+    state.value = { phase: 'ready', details: result, error: result.current_action?.error?.message ?? result.package.last_error?.message ?? null }
     planOpen.value = result.current_action?.state === 'awaiting_confirmation'
     if (result.current_action?.state === 'running') schedulePoll(result.current_action)
   } catch (cause) {
@@ -82,7 +86,7 @@ async function load() {
   }
 }
 
-async function requestAction() {
+async function requestAction(kind: 'install' | 'update' | 'uninstall') {
   const current = details.value
   if (!current || busy.value) return
   if (action.value?.state === 'awaiting_confirmation') {
@@ -91,7 +95,7 @@ async function requestAction() {
   }
   state.value = { phase: 'requesting', details: current, error: null }
   try {
-    const result = installed.value
+    const result = kind === 'uninstall'
       ? await props.client.requestUninstall(current.package.package_id, { package_token: current.package.package_token })
       : await props.client.requestInstall(current.package.package_id, {
           version: current.package.available_versions[0], package_token: current.package.package_token
@@ -149,11 +153,27 @@ onBeforeUnmount(() => {
         />
         <span class="min-w-0 flex-1 truncate font-medium">{{ software.name }}</span>
         <component
+          :is="controls?.button ?? 'button'" v-if="software.update_available"
+          type="button" size="sm" variant="primary" class="h-8 shrink-0"
+          :disabled="busy || software.operation_state === 'unknown'"
+          data-testid="request-update" @click="requestAction('update')"
+        >{{ translate('apfSoftware.update') }}</component>
+        <component
           :is="controls?.button ?? 'button'"
           type="button" size="sm" :variant="uninstallAction ? 'secondary' : 'primary'"
           class="h-8 shrink-0" :disabled="busy || software.operation_state === 'unknown'"
-          :loading="busy" :data-testid="uninstallAction ? 'request-uninstall' : 'request-install'" @click="requestAction"
+          :loading="busy" :data-testid="uninstallAction ? 'request-uninstall' : 'request-install'" @click="requestAction(uninstallAction ? 'uninstall' : 'install')"
         >{{ translate(uninstallAction ? 'apfSoftware.uninstall' : 'apfSoftware.install') }}</component>
+      </div>
+      <div
+        v-if="action?.state === 'running' && action.plan.action !== 'uninstall'"
+        class="flex flex-col gap-1 px-2"
+      >
+        <div class="flex justify-between text-xs text-muted-foreground">
+          <span>{{ progressLabel }}</span>
+          <span v-if="software?.progress != null">{{ Math.round(software.progress * 100) }}%</span>
+        </div>
+        <progress class="block h-1 w-full" :value="software?.progress ?? undefined" :max="1" :aria-label="progressLabel" />
       </div>
       <div v-if="'error' in state && state.error" role="alert" class="px-2 text-sm text-error">
         {{ state.error }}
@@ -164,7 +184,7 @@ onBeforeUnmount(() => {
       :is="controls?.dialog ?? 'div'"
       v-if="planOpen && action"
       :open="planOpen" :busy="state.phase === 'confirming'" role="dialog"
-      :title="translate(action.plan.action === 'uninstall' ? 'apfSoftware.confirmUninstall' : 'apfSoftware.confirmInstall')"
+      :title="translate(action.plan.action === 'uninstall' ? 'apfSoftware.confirmUninstall' : action.plan.action === 'update' ? 'apfSoftware.confirmUpdate' : 'apfSoftware.confirmInstall')"
       data-testid="software-plan" @close="planOpen = false"
     >
       <div class="flex min-h-0 flex-col gap-3 overflow-y-auto p-4 text-sm">
@@ -181,7 +201,7 @@ onBeforeUnmount(() => {
       </div>
       <div class="flex shrink-0 justify-end gap-2 border-t border-interface-stroke p-3">
         <component :is="controls?.button ?? 'button'" type="button" size="sm" variant="secondary" :disabled="state.phase === 'confirming'" @click="planOpen = false">{{ translate('apfSoftware.cancel') }}</component>
-        <component :is="controls?.button ?? 'button'" type="button" size="sm" variant="primary" :disabled="busy || !confirmationAvailable" data-testid="confirm-software" @click="confirmAction">{{ translate(action.plan.action === 'uninstall' ? 'apfSoftware.uninstall' : 'apfSoftware.install') }}</component>
+        <component :is="controls?.button ?? 'button'" type="button" size="sm" variant="primary" :disabled="busy || !confirmationAvailable" data-testid="confirm-software" @click="confirmAction">{{ translate(action.plan.action === 'uninstall' ? 'apfSoftware.uninstall' : action.plan.action === 'update' ? 'apfSoftware.update' : 'apfSoftware.install') }}</component>
       </div>
     </component>
   </section>

@@ -22,7 +22,6 @@ import TabsTrigger from '@/components/ui/tabs/TabsTrigger.vue'
 import LibraryFormDialog from './LibraryFormDialog.vue'
 import LibraryCanvasSource from './LibraryCanvasSource.vue'
 import MediaViewer from './MediaViewer.vue'
-import { canvasDataAgentAllowed, toggleCanvasDataControl } from './useCanvasDataSession'
 
 const toast = useToast()
 const settingsDialog = useSettingsDialog()
@@ -54,8 +53,6 @@ onBeforeUnmount(() => {
         native
         sidebar
         :controls="controls"
-        :canvas-agent-allowed="canvasDataAgentAllowed"
-        @canvas-control="toggleCanvasDataControl"
         @notify-success="message => importToasts.add(toast.success(message, { duration: 4000 }))"
         @notify-import="notice => importToasts.add(toast[notice.kind](notice.title, { description: notice.description, duration: notice.kind==='success'?4000:Infinity, action: notice.kind==='success'?undefined:{label:'查看原因',onClick:()=>workspace?.showImportIssue(notice.taskId,notice.category)} }))"
         @open-workbench-settings="settingsDialog.show('workbench')"

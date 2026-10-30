@@ -28,6 +28,7 @@ function setup() {
   source.addWidget('text', 'reference', JSON.stringify({ kind: 'asset_version', asset_version_id: '00000000-0000-4000-8000-000000000001', selection: { kind: 'whole_file' } }), () => {})
   source.addOutput('science', 'APF_SCIENCE')
   bundleCapabilities.set('APF_169de0837f814cdea3295541ecacf463', fromPartial<NodeCapability>({
+      available: true,
       node: { native_type: 'APF_169de0837f814cdea3295541ecacf463', definition: { parameters: [
         { name: 'linked', default: false }, { name: 'shadowsclip', default: -2.8 }, { name: 'targetbg', default: 0.25 }
       ] } }, operation: { package_id: 'siril', operation_id: 'autostretch' }, preview: { kind: 'science-image', input: 'image', max_edge: 1024 }
@@ -87,6 +88,26 @@ describe('Siril live preview', () => {
     await vi.advanceTimersByTimeAsync(0)
     expect(create).toHaveBeenCalledTimes(1)
     expect(screen.getByTestId('preview').textContent).toContain('blob:latest')
+    wrapper.unmount()
+    vi.useRealTimers()
+  })
+
+  it('shows a removed bundle and resumes after it becomes available again', async () => {
+    vi.useFakeTimers()
+    service.render.mockResolvedValue(new Blob(['png']))
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:reinstalled')
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})
+    const { wrapper } = setup()
+    const type = 'APF_169de0837f814cdea3295541ecacf463'
+    const capability = bundleCapabilities.get(type)!
+    bundleCapabilities.set(type, { ...capability, available: false, reason: 'Bundle removed' })
+    await nextTick()
+    expect(screen.getByRole('alert').textContent).toContain('Bundle removed')
+    expect(service.render).not.toHaveBeenCalled()
+    bundleCapabilities.set(type, { ...capability, available: true })
+    await nextTick()
+    await vi.advanceTimersByTimeAsync(350)
+    expect(screen.getByTestId('preview').textContent).toContain('blob:reinstalled')
     wrapper.unmount()
     vi.useRealTimers()
   })

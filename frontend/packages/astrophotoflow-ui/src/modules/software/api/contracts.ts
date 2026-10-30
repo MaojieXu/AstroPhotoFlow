@@ -34,6 +34,7 @@ export const softwarePackageSchema = z
     node_definition_ids: z.array(z.uuid()),
     bundle_version: z.string().nullable().optional(),
     bundle_commit: z.string().nullable().optional(),
+    update_available: z.boolean().optional(),
     restart_required: z.boolean().optional(),
     migration_required: z.boolean().optional()
   })

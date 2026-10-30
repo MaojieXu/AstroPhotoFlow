@@ -98,14 +98,12 @@ def register_canvas_routes(routes):
             if operation["command"] != command:
                 return _error(409, "CANVAS_REQUEST_CONFLICT", "operation_id 已用于其他请求。")
         else:
-            if isinstance(command, NativeCanvasGraphCommand) and body.edit.action != 'inspect' and not body.control_token:
-                return _error(409, 'CANVAS_NOT_AUTHORIZED', '用户尚未交给 Agent。')
             target = next(((client_id, page) for client_id, page in native.apf_canvas_pages.items() if page.page_id == body.page_id), None)
             if target is None or target[0] not in native.sockets:
                 return _error(409, "CANVAS_OFFLINE", "目标画布不在线。")
             client_id, page = target
-            if (page.workflow_id, page.graph_id, page.content_token, page.control_token) != (body.workflow_id, body.graph_id, body.content_token, body.control_token):
-                return _error(409, "CANVAS_TARGET_CHANGED", "画布内容或控制已变化，请重新读取并由用户交回控制。")
+            if (page.workflow_id, page.graph_id, page.content_token) != (body.workflow_id, body.graph_id, body.content_token):
+                return _error(409, "CANVAS_TARGET_CHANGED", "目标画布或内容已变化，未应用修改。")
             future = asyncio.get_running_loop().create_future()
             operation = {"command": command, "client_id": client_id, "socket": native.sockets[client_id], "future": future}
             native.apf_canvas_operations[key] = operation

@@ -188,8 +188,11 @@ def test_apf_mcp_stdio_tools_and_parameter_patch_protocol(service, tmp_path):
                 listed_tools = await session.list_tools()
                 assert {tool.name for tool in listed_tools.tools} >= {
                     "import_photo", "get_import_task", "list_assets", "get_asset", "update_asset_parameters",
-                    "prepare_canvas_data", "list_canvas_pages", "add_canvas_data", "get_canvas_request",
+                    "prepare_canvas_data", "list_canvas_pages", "add_canvas_data", "get_canvas_request", "get_canvas", "edit_canvas",
                 }
+                canvas_tool = next(tool for tool in listed_tools.tools if tool.name == 'edit_canvas')
+                assert 'control_token' not in json.dumps(canvas_tool.model_dump(mode='json', by_alias=True))
+                assert 'delete_node' in json.dumps(canvas_tool.model_dump(mode='json', by_alias=True))
 
                 photo = tmp_path / "mcp-synthetic.png"
                 _write_png(photo)

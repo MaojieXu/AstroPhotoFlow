@@ -1,8 +1,8 @@
 import { z } from 'zod'
 
-import { createApiClient } from '../../../core/client'
+import { ApiClientError, createApiClient } from '../../../core/client'
 import type { FetchApi } from '../../../core/client'
-import { displayPreviewSchema } from './contracts'
+import { displayPreviewSchema, importAcceptedSchema, taskSchema } from './contracts'
 
 export const canvasDataRequestSchema = z.object({
   entry_type: z.enum(['asset', 'dataset']),
@@ -59,6 +59,25 @@ export type ScienceReference = z.infer<typeof scienceReferenceSchema>
 export function createCanvasDataClient(fetchApi: FetchApi) {
   const client = createApiClient(fetchApi)
   return {
+    async importPath(path: string): Promise<CanvasData> {
+      const accepted = await client.send('/astrophotoflow/api/v1/imports', importAcceptedSchema, 'POST', {
+        sources: [{ path }], storage_mode: 'managed'
+      })
+      while (true) {
+        const task = await client.get('/astrophotoflow/api/v1/asset-tasks/' + accepted.task_id, taskSchema)
+        const item = task.items[0]
+        if (task.items_total === 1 && item?.content_status === 'available' && item.asset_id && item.asset_version_id) {
+          return client.send('/astrophotoflow/api/v1/library/canvas-data', canvasDataSchema, 'POST', {
+            entry_type: 'asset', id: item.asset_id, version_id: item.asset_version_id
+          })
+        }
+        if (!['queued', 'running'].includes(task.status)) {
+          const detail = item?.error ?? task.error
+          throw new ApiClientError(typeof detail?.message === 'string' ? detail.message : '图像文件导入未完成，请查看素材导入记录。', 'service')
+        }
+        await new Promise<void>(resolve => setTimeout(resolve, 1000))
+      }
+    },
     inspect: (reference: ScienceReference, memberIndex: number) => client.send(
       '/astrophotoflow/api/v1/library/canvas-data/inspect', canvasInspectSchema, 'POST', { reference, member_index: memberIndex }
     ),

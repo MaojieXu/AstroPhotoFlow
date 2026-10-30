@@ -707,3 +707,52 @@
 - 编译交付：前端build包含原生类型编译；最终编译结果及隔离网页资源更新记录进入 `.artifacts/implementation/equipment-compact-20261028/`。
 - 浏览器预览及最终验收交由用户自行完成；本轮早期截图和166项测试记录仅属于较早候选，不作为最终候选通过证明。不再由Agent操作浏览器、补充截图或执行验收场景。
 - 待用户查看：1280×720常见组合能看到五类选择及保存按钮；长名称、多选和窄窗口不撑宽；设备参数较长时仅正文滚动；返回草稿、Gain 0、逐项保存及删除确认保持原有行为。
+
+<a id="direct-canvas-editing"></a>
+## 本地画布直接编辑候选（2026-10-30）
+
+分支 `codex/hot-reload` 未提交候选；用户明确取消画布接管／交回，按对话指令直接使用 MCP／CLI。移除前后端 `control_token` 和素材库交接入口，保留平台认证、明确目标、内容校验、原生撤销及操作回执。
+
+- 自动检查：主前端与 UI 包类型检查、定向生产代码 ESLint、Python 语法、OpenAPI 生成及 diff 检查通过。新增／更新回归测试涵盖直接编辑、只读不变、错误目标、过期内容、离线、切图、重复请求与 CLI／MCP schema；未运行测试套件。
+- 实际运行：只更新本任务 `hot-reload` 预览，重启操作 `5d5c8336-6101-4b1c-922e-a3d6de123814` 完成。通过当前源码新启动的 stdio MCP 会话确认66个工具、`edit_canvas` schema 与页面状态不含控制标记。
+- 用户指定画布：Test1 `0867fc1c-a5d3-4ccf-962d-f34414fe40c0`，单张 M45 节点10 `science` 连接现有 Auto Stretch 节点11 `image`，连线5。操作 `14b5a668-bc81-4fa9-9d84-2727b76521bd` 回执成功，重新读取实际图确认端口两侧引用同一连线且节点数量不变。未使用 Computer Use，未提交工作流执行，不代表完整图像处理或用户视觉验收通过。
+- 证据位于 `.artifacts/implementation/hot-reload/` 的 `direct-canvas-mcp-schema.json`、`direct-canvas-mcp-result.json`、`direct-canvas-connected-graph.json` 及对应类型／lint／重启日志。当前聊天已缓存的旧 MCP 描述仍需宿主重连后更新；本次实际连线使用的是上述新会话。
+
+<a id="canvas-delete-node"></a>
+## 内部 MCP 删除单个节点候选（2026-10-30）
+
+分支 `codex/hot-reload` 未提交候选。`edit_canvas` 增加 `delete_node` 与节点ID，前后端契约及 OpenAPI 同步；调用原生 `graph.remove`，沿用现有原生变更／撤销事务，不直接改文件、不删除素材、不新增工具或兼容层。
+
+- 自动检查：主前端类型检查、定向生产代码 ESLint、Python语法、OpenAPI生成及 diff 检查通过。补充原生删除关联连线、保留来源节点、缺失／受保护节点拒绝、CLI传输和MCP schema用例；未运行测试套件。
+- 真实 MCP：新版 schema 包含 `delete_node`；随机离线目标被 `CANVAS_OFFLINE` 拒绝。独立预览后端重启 `b57cbf1d-63ab-40aa-9cf7-a1d8a05bde0b` 完成；前端热更新曾触发 Vue 组件错误，用户刷新后恢复在线，不据此认定完整热更新可靠性验收通过。
+- 用户明确选择仅操作后打开、最近编辑的 Test1 页面。刷新后的页面 `38b01ad9-1833-444c-86e6-e749162070d2` 内容标记与该页面此前一致。通过新 stdio MCP 会话删除 Siril Auto Stretch 节点11，操作 `43340fe5-3003-4915-bc7d-f19e2a568e79` 回执成功；重新读取实际图仅剩 M45 节点10，固定素材版本 `7009caca-13a9-4ef8-af97-4266c89d543b`、标题和位置不变，相关连线已清理。
+- 回执节点ID为字符串 `"11"`，图序列化ID为数字11，均符合既有联合类型；验收脚本修正比较方式后只查询原回执和实际图，没有重发删除。保留原生撤销机制，未执行撤销恢复节点；未使用 Computer Use、未提交工作流运行、未改动另一页面或素材原件。
+- 证据位于 `.artifacts/implementation/hot-reload/` 的 `delete-node-mcp-schema.json`、`delete-node-request.json`、`delete-node-mcp-result.json`、`delete-node-after-graph.json`、`delete-node-verification.json` 及对应日志。
+
+<a id="hot-reload-review-candidate"></a>
+## 热更新与本地画布编辑 Feature 集成交接（2026-10-30）
+
+用户确认进入集成阶段，分支 `codex/hot-reload`，完整基点 `2a6053eb3e8351156d7fb2b4b1ed208e6e628bc0`。准确待审提交及最终预览对应版本以交接 Brief 和 `.artifacts/implementation/hot-reload/review-handoff.json` 为准；交接后冻结，不推送或自行合并。
+
+- 最终范围：workspace 感知的前端 Vite 开发更新；已安装 Bundle 声明的 SDK Python 适配器及清单／操作／节点 JSON 热加载，安装／更新／卸载后刷新能力；保留网页安装计划确认，按用户要求取消实际调用繁忙拒绝和在途旧实现保护。平台任意后端 Python 不自动重载；当前未提供 Node.js 适配器加载器。
+- 开发中追加：本地新工作流不自动打开模板；修正严格 JSON UUID 回执校验；隔离 Windows Bundle 子进程程序搜索路径，实际 Siril `--version` 返回1.4.4；Git上报的分阶段真实百分比；Windows状态替换短暂占用最多5次／50ms重试，进度耗尽只记日志，最终结果保存失败明确需核对。
+- 节点与画布：隐藏原生 Comfy 节点入口，保留 Data 与按 Bundle 名分类的扩展；Data 支持绝对路径导入为托管固定引用；内部 MCP／CLI 直接按用户指令编辑，不设接管标记，保留认证、目标／内容检查、原生撤销及操作回执，新增 `delete_node`。原生节点仍注册以便旧图加载，不承诺端口／参数自动迁移或正式运行闭环。
+- 已执行：主前端、UI包与Vite构建类型检查，定向生产代码lint、Python语法、OpenAPI生成、文档链接及diff检查；其中构建类早期记录须按源码指纹区分。独立临时文件6项状态写入检查通过。真实新MCP会话已确认无接管schema、离线拒绝、连线、删除并保留M45固定引用；随后按用户指令给当前 Markarian's Chain 数据节点12添加自动拉伸节点13并连接连线6，`targetbg`由0.25调至0.40，实际图均已核对，未执行完整工作流。
+- 未验证／已知问题：测试套件、完整Bundle更新版本切换、自动热加载可靠性、路径导入真实文件、原生撤销实际恢复和完整科学处理仍交Manager按范围验证；Vue热更新曾出现组件错误，刷新后恢复。当前聊天旧MCP工具schema需宿主重连；实际验收使用绑定本workspace的新stdio会话。预览多页面可有不同草稿，不自动同步；平台目录固定发布版本，不自动发现GitHub最新版本。
+- 跨仓库依赖：`MaojieXu/AstroPhotoFlow-Siril`，Bundle `0.1.2-dev.1`，tag `v0.1.2-dev.1`，commit `12fd2d1d55daeadf7acb3972385d5c2bfcb52d4d`，软件Siril `1.4.4`。平台目录、安装锁及实际checkout一致且checkout干净，本轮未提交Bundle仓库。
+- 本机配置：本轮经用户明确授权将全局 `astrophotoflow` MCP 注册切到本Feature源码和 `hot-reload` workspace；原注册备份在 `.artifacts/implementation/hot-reload/mcp-registration-before-20261030-024945.toml`。这是本机配置变化，不属于Git提交；集成／清理时由Manager决定保留或恢复，不据此修改正常dev或默认workspace。
+
+
+<a id="hot-reload-integration"></a>
+## 热更新与本地画布编辑本地集成验证（2026-10-30）
+
+用户授权独立审查、必要验证、最小修复及本地合并dev；不推送、不清理Feature空间。原候选`ef56e0cef8a66f86f9d8331b41e330f8238aedf3`，基点`2a6053eb3e8351156d7fb2b4b1ed208e6e628bc0`；Manager源码修复提交`52da83199a86e09ce38354503e25f99e4c2ca18a`。最终范围以上方Feature交接及用户本轮Brief为准，保留已明确取消的占用／接管限制，不恢复旧要求。
+
+- 独立审查：Reviewer不继承开发聊天历史，只读审查全部变更；发现并修复三项P2：重载后采用未经加载的新哈希会漏掉连续编辑；卸载后仅注销LiteGraph而搜索目录残留；开发入口裸Python未采用uv项目环境。修复增量复审未发现阻塞合并问题，Reviewer未修改代码或运行测试。
+- 后端回归：软件、节点、工作流、interfaces、CLI／MCP协议／客户端、原生Bundle热加载及Python架构检查首轮113项通过；修复后相关14项复测通过，包含新增的受控Bundle版本替换用例。按唯一用例汇总114项，未执行全仓测试套件。连续编辑与失效目录回归均先在原实现复现失败，再在修复后通过。
+- 前端回归：UI包35文件273项通过；受影响原生前端8文件101项经修复复测全部通过，另有1项Vite同源代理测试通过。修正新增测试与共享清理顺序冲突，并使用仓库既有本地HTTP代理集成测试模式，避免真实外网请求；没有关闭网络保护。前端回归按唯一用例汇总375项。
+- 受控版本切换：fixture从Bundle `0.1.2-dev.1`切至`0.1.2-dev.2`，覆盖安装目录及锁记录替换、Python适配器切换、操作默认值与原生目录刷新、无需重启、卸载保留原件和工作流。checkout及程序版本检测使用受控替身；不等同跨两个真实发布版本升级。Siril实际依赖仍为`0.1.2-dev.1`／`12fd2d1d55daeadf7acb3972385d5c2bfcb52d4d`，未修改Bundle仓库或发布标签。
+- 合成数据浏览器运行：在独立验收workspace、独立32788／32790服务和32789 Vite中，用Chrome无界面浏览器真实从绝对路径导入合成PNG，得到托管固定素材引用，核对原件字节不变；原生键盘撤销／重做恢复科学引用；通过画布编辑桥删除节点后原生撤销恢复节点和引用。4项检查通过，页面错误0。未操作Feature既有图或真实素材，未提交完整科学处理工作流。
+- 静态与构建：修复源码定向ESLint无错误；测试文件不在该ESLint配置范围，另由Vitest及所属类型项目验证。Vite build类型检查通过；前端依赖边界0错误、13条data/workspace循环警告。完整原生类型检查及前端生产构建通过，`build-manifest.json`记录源码`52da83199a86e09ce38354503e25f99e4c2ca18a`。首次构建因类型编译桥`C malloc failed`失败；停止本轮临时验收实例后，以进程级`GOMAXPROCS=2`、`GOMEMLIMIT=2GiB`、`NODE_OPTIONS=--max-old-space-size=4096`串行重试通过，未改项目依赖或编译检查。构建仍有非阻塞资源／动态导入／插件耗时警告。
+- 证据：完整日志、浏览器脚本／结果／截图位于Feature Worktree `C:/Users/Administrator/.codex/worktrees/dbc5/AstroPhotoFlow/.artifacts/manager-integration/hot-reload/`，主要为`python-tests.log`、`python-fixes.log`、`ui-tests.log`、`native-frontend-tests.log`、`frontend-fixes-final.log`、`browser-smoke.json`、`final-frontend-build-retry.log`、`build-typecheck.log`、`frontend-boundaries.log`。初始失败日志一并保留。临时验收实例已准确停止，证据和数据保留。
+- 交付边界：仅本地Git集成；正常dev运行实例、默认workspace、Feature原预览及全局MCP注册未迁移或重启。旧MCP schema仍需宿主重连；全局注册仍指Feature的本机状态及原配置备份继续保留。长期热加载可靠性、完整科学处理／输出保存及用户视觉验收未因此认定完成。

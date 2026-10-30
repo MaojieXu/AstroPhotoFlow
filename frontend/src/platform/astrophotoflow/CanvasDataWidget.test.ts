@@ -5,13 +5,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { CanvasInspect } from '@astrophotoflow/ui'
 import { mediaStateSchema } from '@astrophotoflow/ui'
-import { LGraphNode } from '@/lib/litegraph/src/litegraph'
+import { LGraph, LGraphNode } from '@/lib/litegraph/src/litegraph'
 import { api as nativeApi } from '@/scripts/api'
 import type { ComponentWidget } from '@/scripts/domWidget'
 
 import CanvasDataWidget from './CanvasDataWidget.vue'
 
-const api = vi.hoisted(() => ({ prepare: vi.fn(), inspect: vi.fn(), getBlob: vi.fn(), display: vi.fn(), displayStatus: vi.fn(), mediaPrepare: vi.fn(), mediaStatus: vi.fn() }))
+const api = vi.hoisted(() => ({ importPath: vi.fn(), prepare: vi.fn(), inspect: vi.fn(), getBlob: vi.fn(), display: vi.fn(), displayStatus: vi.fn(), mediaPrepare: vi.fn(), mediaStatus: vi.fn() }))
+vi.mock('@/scripts/appInstance', () => ({ useApp: () => ({ canvas: { emitBeforeChange: vi.fn(), emitAfterChange: vi.fn(), setDirty: vi.fn() } }) }))
 vi.mock(import('@astrophotoflow/ui'), async original => ({ ...await original(), createCanvasDataClient: () => api, createMediaClient: () => ({ prepare: api.mediaPrepare, status: api.mediaStatus }) }))
 vi.mock('vue-i18n', async original => ({ ...await original<typeof import('vue-i18n')>(), useI18n: () => ({ t: (key: string) => key }) }))
 vi.mock('@/renderer/extensions/vueNodes/components/ImagePreview.vue', async () => {
@@ -62,6 +63,20 @@ beforeEach(() => {
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals() })
 
 describe('scientific image component widget', () => {
+  it('imports an image path into the current node as a fixed reference', async () => {
+    const prepared = { native_type: 'APF_DATA_REFERENCE', title: 'Imported image', reference: {
+      kind: 'asset_version', asset_version_id: id(50), selection: { kind: 'whole_file' }
+    } }
+    api.importPath.mockResolvedValue(prepared)
+    const { node, control } = mountWidget()
+    new LGraph().add(node)
+    await fireEvent.update(screen.getByRole('textbox', { name: 'astrophotoflow.imagePath' }), 'C:/Images/source.fit')
+    await fireEvent.click(screen.getByRole('button', { name: 'astrophotoflow.importImage' }))
+    await waitFor(() => expect(control.value).toBe(JSON.stringify(prepared.reference)))
+    expect(api.importPath).toHaveBeenCalledWith('C:/Images/source.fit')
+    expect(node.title).toBe('Imported image')
+  })
+
   it('loads only the current member, shows zero and updates metadata while leaving the reference untouched', async () => {
     const user = userEvent.setup()
     const { node, value } = mountWidget()

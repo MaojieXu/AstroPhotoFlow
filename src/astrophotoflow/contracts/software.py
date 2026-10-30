@@ -127,6 +127,7 @@ class SoftwarePackage(StrictModel):
     node_definition_ids: list[UUID]
     bundle_version: str | None = None
     bundle_commit: str | None = None
+    update_available: bool = False
     restart_required: bool = False
     migration_required: bool = False
 

@@ -51,6 +51,7 @@ const sharedComposable = vi.hoisted(() => {
 const OWNER_ID = 'account-a'
 
 vi.mock(import('@/platform/distribution/types'), () => ({
+  isDesktop: false,
   get isCloud() {
     return mocks.isCloud
   }
@@ -265,20 +266,21 @@ describe('useFirstRunEntry', () => {
     })
 
     it.for([...permanentDisqualifiers, ...transientDisqualifiers])(
-      'opens the template browser instead, with %s',
+      'opens the template browser only on cloud, with %s',
       async ([, disqualify]) => {
         disqualify()
         const entry = useFirstRunEntry()
 
         await entry.handleStartupOutcome('fresh')
 
-        expect(
-          entry.gettingStartedVisible.value,
-          'A non-candidate must keep the existing template-browser flow'
-        ).toBe(false)
-        expect(useCommandStore().execute).toHaveBeenCalledWith(
-          'Comfy.BrowseTemplates'
-        )
+        expect(entry.gettingStartedVisible.value).toBe(false)
+        if (mocks.isCloud) {
+          expect(useCommandStore().execute).toHaveBeenCalledWith(
+            'Comfy.BrowseTemplates'
+          )
+        } else {
+          expect(useCommandStore().execute).not.toHaveBeenCalled()
+        }
       }
     )
 

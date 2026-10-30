@@ -8,7 +8,7 @@ import { computed, ref, watch } from 'vue'
 
 import { useFeatureFlags } from '@/composables/useFeatureFlags'
 import { useSubscription } from '@/platform/cloud/subscription/composables/useSubscription'
-import { isCloud } from '@/platform/distribution/types'
+import { isCloud, isDesktop } from '@/platform/distribution/types'
 import {
   consumeFirstRunReplayRequest,
   isFirstRunReplayRequested
@@ -168,7 +168,7 @@ export const useFirstRunEntry = createSharedComposable(() => {
     }
 
     if (decision === 'complete') await markTutorialCompleted()
-    await useCommandStore().execute('Comfy.BrowseTemplates')
+    if (isCloud || isDesktop) await useCommandStore().execute('Comfy.BrowseTemplates')
   }
 
   async function handleUrlWorkflow(

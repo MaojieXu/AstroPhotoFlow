@@ -18,7 +18,6 @@ class CanvasPageState(StrictModel):
     graph_id: UuidInput
     title: str
     content_token: str
-    control_token: str | None
 
 
 class CanvasPageOut(CanvasPageState):
@@ -31,7 +30,6 @@ class CanvasAddRequest(StrictModel):
     workflow_id: UuidInput
     graph_id: UuidInput
     content_token: str
-    control_token: str
     source: CanvasDataRequest
 
 
@@ -70,6 +68,11 @@ class CanvasSetParameter(StrictModel):
     value: JsonValue
 
 
+class CanvasDeleteNode(StrictModel):
+    action: Literal['delete_node']
+    node_id: str | int
+
+
 class CanvasConnect(StrictModel):
     action: Literal['connect']
     source_node_id: str | int
@@ -78,7 +81,7 @@ class CanvasConnect(StrictModel):
     target_port: str
 
 
-CanvasEdit = Annotated[CanvasInspect | CanvasCreateNode | CanvasSetParameter | CanvasConnect, Field(discriminator='action')]
+CanvasEdit = Annotated[CanvasInspect | CanvasCreateNode | CanvasSetParameter | CanvasDeleteNode | CanvasConnect, Field(discriminator='action')]
 
 
 class CanvasGraphRequest(StrictModel):
@@ -87,7 +90,6 @@ class CanvasGraphRequest(StrictModel):
     workflow_id: UuidInput
     graph_id: UuidInput
     content_token: str
-    control_token: str | None
     edit: CanvasEdit
 
 

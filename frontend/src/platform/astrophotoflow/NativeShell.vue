@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, watch } from 'vue'
+import { onBeforeUnmount, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
 import { setActiveLocale } from '@/i18n'
@@ -15,7 +15,8 @@ import { registerSirilPreviewDisplay } from './sirilPreviewDisplay'
 import { registerBundleResultDisplay } from './bundleResultDisplay'
 
 registerDataReferenceDisplay(useApp())
-registerSirilPreviewDisplay(useApp())
+const disposeBundleDisplay = registerSirilPreviewDisplay(useApp())
+if (disposeBundleDisplay) onBeforeUnmount(disposeBundleDisplay)
 registerBundleResultDisplay(useApp())
 useCanvasDataSession()
 

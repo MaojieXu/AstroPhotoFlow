@@ -1,10 +1,12 @@
 import hashlib
 import json
+import logging
 import os
 import subprocess
 import tempfile
 import asyncio
 import codecs
+import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from contextlib import asynccontextmanager
@@ -26,9 +28,11 @@ from astrophotoflow.contracts.bundles import NamedProcessPlan, ProcessPlan
 from astrophotoflow.core.config import Settings
 from astrophotoflow.core.errors import ApiError
 from astrophotoflow.modules.software import bundles
+from astrophotoflow.modules.software.environment import bundle_environment
 
 
 _PACKAGE_LOCKS: dict[str, asyncio.Lock] = {}
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -61,12 +65,27 @@ def _state_path(settings, package_id):
     return settings.workspace / "software" / package_id / "state.json"
 
 
-def _write_package_state(settings, package_id, state):
+def _write_package_state(settings, package_id, state, *, progress_only=False):
     path = _state_path(settings, package_id)
     path.parent.mkdir(parents=True, exist_ok=True)
     part = path.with_suffix(".part")
     part.write_text(state.model_dump_json(indent=2) + "\n", encoding="utf-8")
-    os.replace(part, path)
+    for attempt in range(5):
+        try:
+            os.replace(part, path)
+            return
+        except PermissionError as exc:
+            if os.name != "nt" or getattr(exc, "winerror", None) != 5:
+                raise
+            if attempt < 4:
+                time.sleep(0.05)
+                continue
+            if progress_only:
+                logger.warning("安装进度状态暂未写入，保留上次进度 package=%s phase=%s progress=%s path=%s",
+                               package_id, state.phase, state.progress, path, exc_info=True)
+                return
+            logger.error("安装结果状态保存失败 package=%s path=%s", package_id, path, exc_info=True)
+            raise ApiError(503, "SOFTWARE_STATE_SAVE_FAILED", "安装结果未能保存，需核对软件状态；请勿直接重复安装。") from exc
 
 
 def _state(package):
@@ -77,8 +96,8 @@ def _state(package):
 async def maintain_package(package_id: str):
     bundles.release(package_id)
     lock = _PACKAGE_LOCKS.setdefault(package_id, asyncio.Lock())
-    if lock.locked() or get_usage(package_id) or get_preview_usage(package_id):
-        raise ApiError(409, "SOFTWARE_BUSY", "软件包当前正在维护、运行或预览。")
+    if lock.locked():
+        raise ApiError(409, "SOFTWARE_BUSY", "软件包当前正在维护。")
     await lock.acquire()
     try:
         yield
@@ -117,21 +136,14 @@ def get_package(settings: Settings, package_id: str) -> SoftwarePackage:
             except (KeyError, psutil.Error):
                 native_alive = False
             if loaded.get("commit") != lock.get("commit") or not loaded.get("ready") or not native_alive:
-                restart_required = True
-                state = state.model_copy(update={"availability": "not_ready", "reason": loaded.get("reason") or "Bundle 已安装，等待工作台重启加载节点。"})
-                restart_path = path.parent / 'bundle-restart.json'
-                if restart_path.is_file():
-                    from astrophotoflow.core.workbench import restart_result
-                    restart_id = UUID(json.loads(restart_path.read_text(encoding='utf-8'))['operation_id'])
-                    result = restart_result(settings.workspace / 'config.toml', restart_id)
-                    if result is not None and result.state in {'failed', 'unknown', 'rejected'}:
-                        state = state.model_copy(update={'reason': 'Bundle 已安装，但重启未完成：' + (result.detail or '、'.join(result.blockers)) + '；请在工作台设置中重启。'})
+                state = state.model_copy(update={"availability": "not_ready", "reason": loaded.get("reason") or "Bundle 已安装，等待节点热加载。"})
             elif state.operation_state not in {"unknown", "running"}:
                 state = state.model_copy(update={"availability": "ready", "reason": None})
     token = hashlib.sha256(json.dumps({"release": release, "state": state.model_dump(mode="json")}, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
     return SoftwarePackage(package_id=package_id, name=manifest.name,
         available_versions=[release["manifest"]["software_version"]], package_token=token,
         bundle_version=lock.get("bundle_version"), bundle_commit=lock.get("commit"), restart_required=restart_required,
+        update_available=state.installed_version is not None and root.is_dir() and lock.get("commit") != release["commit"],
         migration_required=state.installed_version is not None and not root.is_dir(), **state.model_dump())
 
 
@@ -177,18 +189,20 @@ async def install_package(settings, package_id, version, expected_package_token)
         raise ApiError(409, "SOFTWARE_CONTENT_CONFLICT", "软件状态或发布版本发生变化。")
     if os.name != "nt":
         raise ApiError(503, "SOFTWARE_NOT_READY", "当前 Bundle 只支持 Windows。")
-    if get_usage(package_id) or get_preview_usage(package_id):
-        raise ApiError(409, "SOFTWARE_BUSY", "软件仍在运行。")
     directory = settings.workspace / "software" / package_id
     directory.mkdir(parents=True, exist_ok=True)
     stage = Path(tempfile.mkdtemp(prefix=".bundle-install-", dir=directory))
     state = _state(package)
-    _write_package_state(settings, package_id, state.model_copy(update={"operation": "install", "operation_state": "running", "phase": "cloning", "last_error": None}))
+    def report_progress(phase, progress):
+        _write_package_state(settings, package_id, state.model_copy(update={
+            "operation": "install", "operation_state": "running", "phase": phase, "progress": progress, "last_error": None}), progress_only=True)
+
     activated = False
     old_lock = (directory / 'bundle-lock.json').read_bytes() if (directory / 'bundle-lock.json').is_file() else None
     old_load = (directory / 'native-load.json').read_bytes() if (directory / 'native-load.json').is_file() else None
     try:
-        manifest, commit = await asyncio.to_thread(bundles.checkout, package_id, stage / "bundle", tool_root=settings.workspace / "software/.tools")
+        report_progress("cloning", 0.0)
+        manifest, commit = await asyncio.to_thread(bundles.checkout, package_id, stage / "bundle", tool_root=settings.workspace / "software/.tools", on_progress=report_progress)
         destination = directory / "bundle"
         previous = directory / "previous-bundle"
         if previous.exists():
@@ -207,8 +221,8 @@ async def install_package(settings, package_id, version, expected_package_token)
         (directory / "native-load.json").unlink(missing_ok=True)
         _write_package_state(settings, package_id, state.model_copy(update={
             "installed_version": manifest.software_version, "install_path": destination / "app",
-            "availability": "ready", "reason": None, "operation": "install", "operation_state": "completed", "phase": None, "last_error": None}))
-        return get_package(settings, package_id)
+            "availability": "ready", "reason": None, "operation": "install", "operation_state": "completed", "phase": None, "progress": None, "last_error": None}))
+        installed = get_package(settings, package_id)
     except (ApiError, OSError, ValueError, httpx.HTTPError, subprocess.SubprocessError) as exc:
         if activated:
             (directory / 'bundle').rename(stage / 'failed-bundle')
@@ -221,19 +235,23 @@ async def install_package(settings, package_id, version, expected_package_token)
                     (directory / name).write_bytes(content)
         _write_package_state(settings, package_id, state.model_copy(update={
             "availability": state.availability,
-            "operation": "install", "operation_state": "failed", "phase": None,
-            "last_error": ErrorDetail(code="INSTALL_FAILED", message=str(exc), fields=[])}))
+            "operation": "install", "operation_state": "failed", "phase": None, "progress": None,
+            "last_error": ErrorDetail(code="SOFTWARE_STATE_SAVE_FAILED" if isinstance(exc, ApiError) and exc.code == "SOFTWARE_STATE_SAVE_FAILED" else "INSTALL_FAILED",
+                                      message=str(exc), fields=[])}))
+        if isinstance(exc, ApiError) and exc.code == "SOFTWARE_STATE_SAVE_FAILED":
+            raise
         raise ApiError(503, "SOFTWARE_NOT_READY", f"Bundle 安装失败：{exc}") from exc
     finally:
         bundles.remove_checkout(stage, directory)
+    if previous.exists():
+        await asyncio.to_thread(bundles.remove_checkout, previous, directory)
+    return installed
 
 
 async def uninstall_package(settings, package_id, expected_package_token):
     package = get_package(settings, package_id)
     if package.package_token != expected_package_token:
         raise ApiError(409, "SOFTWARE_CONTENT_CONFLICT", "软件状态变化，请重新确认。")
-    if get_usage(package_id) or get_preview_usage(package_id):
-        raise ApiError(409, "SOFTWARE_BUSY", "软件仍在运行或预览。")
     directory = settings.workspace.resolve() / "software" / package_id
     previous = _state(package)
     _write_package_state(settings, package_id, previous.model_copy(update={"operation": "uninstall", "operation_state": "running", "phase": "removing"}))
@@ -362,10 +380,11 @@ async def preview_operation(settings: Settings, source: Path, directory: Path, p
                 environment.update(OPENBLAS_NUM_THREADS=str(plan.thread_limit), OMP_NUM_THREADS=str(plan.thread_limit))
         source_stamp = source.stat()
         log = directory / "preview.log"
+        executable = bundles.contained(settings.workspace / "software" / package_id / "bundle", bundles.metadata(settings.workspace, package_id)[0].executable)
         with log.open("wb") as stream:
             spawn = asyncio.create_task(asyncio.create_subprocess_exec(
-                str(bundles.contained(settings.workspace / "software" / package_id / "bundle", bundles.metadata(settings.workspace, package_id)[0].executable)), *plan.arguments, cwd=directory,
-                stdout=stream, stderr=asyncio.subprocess.STDOUT, env=environment,
+                str(executable), *plan.arguments, cwd=directory,
+                stdout=stream, stderr=asyncio.subprocess.STDOUT, env={**bundle_environment(executable), **{key: value for key, value in (environment or {}).items() if key.upper() != "PATH"}},
                 creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
             ))
             try:
@@ -603,7 +622,7 @@ async def invoke_operation(settings: Settings, invocation: SoftwareInvocation,
             with log.open("wb") as stream:
                 call.process = await asyncio.create_subprocess_exec(
                     str(executable), *plan.arguments,
-                    cwd=work, stdout=stream, stderr=asyncio.subprocess.STDOUT, env=environment,
+                    cwd=work, stdout=stream, stderr=asyncio.subprocess.STDOUT, env={**bundle_environment(executable), **{key: value for key, value in (environment or {}).items() if key.upper() != "PATH"}},
                     creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
                 )
                 try:

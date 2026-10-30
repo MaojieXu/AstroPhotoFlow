@@ -1,4 +1,5 @@
 import asyncio
+import hmac
 import logging
 import os
 from pathlib import Path
@@ -16,17 +17,33 @@ if TYPE_CHECKING:
 logger = logging.getLogger("astrophotoflow.comfyui")
 
 
+def register_bundle_routes(routes):
+    from aiohttp import web
+    from astrophotoflow.comfyui.proxy import _configuration
+
+    @routes.post("/astrophotoflow/internal/bundles/reload")
+    async def reload(request):
+        _, _, token = _configuration()
+        if not hmac.compare_digest(request.headers.get("Authorization", ""), f"Bearer {token}"):
+            return web.json_response({"error": {"code": "AUTHENTICATION_REQUIRED", "message": "需要平台服务令牌。", "fields": []}}, status=401)
+        from server import PromptServer
+        from astrophotoflow.interfaces.bundle_nodes import reload_bundle_nodes
+        await reload_bundle_nodes(PromptServer.instance)
+        return web.json_response({"status": "loaded"})
+
+
 def register_native(server: Any) -> None:
     from astrophotoflow.interfaces.canvas_native import initialize_canvas
     from astrophotoflow.interfaces.data_reference_node import DataReferenceNode, FileReferenceNode
     import nodes
 
     nodes.NODE_CLASS_MAPPINGS["APF_DATA_REFERENCE"] = DataReferenceNode
-    nodes.NODE_DISPLAY_NAME_MAPPINGS["APF_DATA_REFERENCE"] = "AstroPhotoFlow Data"
+    nodes.NODE_DISPLAY_NAME_MAPPINGS["APF_DATA_REFERENCE"] = "Data"
     nodes.NODE_CLASS_MAPPINGS['APF_FILE_REFERENCE'] = FileReferenceNode
-    nodes.NODE_DISPLAY_NAME_MAPPINGS['APF_FILE_REFERENCE'] = 'AstroPhotoFlow File'
-    from astrophotoflow.interfaces.bundle_nodes import register_bundle_nodes
+    nodes.NODE_DISPLAY_NAME_MAPPINGS['APF_FILE_REFERENCE'] = 'File'
+    from astrophotoflow.interfaces.bundle_nodes import register_bundle_nodes, watch_bundle_nodes
     register_bundle_nodes(server, nodes.NODE_CLASS_MAPPINGS, nodes.NODE_DISPLAY_NAME_MAPPINGS)
+    watch_bundle_nodes(server)
     initialize_canvas(server)
     server.apf_page_tasks = {}
     server.apf_page_locks = {}
@@ -93,7 +110,7 @@ async def forward_page_event(server: Any, socket: Any, client_id: str, data: dic
             timeout=5,
         ) as response:
             if response.status == 200:
-                reply = NativePageReply.model_validate(await response.json())
+                reply = NativePageReply.model_validate_json(await response.text())
             else:
                 body = await response.json()
                 message_text = body.get("error", {}).get("message", "页面操作已被领域服务拒绝。")

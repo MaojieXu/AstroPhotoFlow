@@ -125,7 +125,7 @@ def test_partial_nonzero_exit_is_not_reported_as_success(configured, monkeypatch
     assert result.error.code == "SOFTWARE_EXECUTION_FAILED"
 
 
-def test_cancel_only_target_call_and_reject_maintenance_while_running(configured, monkeypatch):
+def test_cancel_only_target_call_and_allow_maintenance_while_running(configured, monkeypatch):
     bodies = [invocation(configured, 1), invocation(configured, 1)]
     created = process_factory(monkeypatch, gated=True)
 
@@ -138,9 +138,8 @@ def test_cancel_only_target_call_and_reject_maintenance_while_running(configured
             if any(task.done() for task in tasks):
                 await asyncio.gather(*tasks)
             await asyncio.sleep(0)
-        with pytest.raises(ApiError, match="运行"):
-            async with public.maintain_package("siril"):
-                pytest.fail("maintenance must not enter")
+        async with public.maintain_package("siril"):
+            assert all(process.returncode is None for process in created)
         result = await public.cancel_operation(bodies[1].call_id)
         assert result.request_state == "sent" and result.stop_state == "stopped"
         assert created[0].returncode is None

@@ -4,7 +4,7 @@ from astrophotoflow.contracts.inputs import InputReference
 
 
 class DataReferenceNode:
-    CATEGORY = "AstroPhotoFlow"
+    CATEGORY = "Data"
     RETURN_TYPES = ("APF_SCIENCE",)
     RETURN_NAMES = ("science",)
     FUNCTION = "reference"

@@ -3,6 +3,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import re
 import shutil
 import stat
 import subprocess
@@ -10,26 +11,17 @@ import tempfile
 import zipfile
 import httpx
 from functools import lru_cache
+from concurrent.futures import ThreadPoolExecutor
 from importlib.resources import files
 from pathlib import Path
 
 from astrophotoflow.contracts.bundles import (
     BundleCollectedResult, BundleFile, BundleManifest, BundleProgress, NamedProcessPlan, ProcessPlan,
 )
-from astrophotoflow.contracts.nodes import NodeDefinition
 from astrophotoflow.contracts.software import SoftwareOperation
 from astrophotoflow.core.errors import ApiError
-
-
-@lru_cache(maxsize=4)
-def _catalog(source: str | None):
-    raw = Path(source).read_bytes() if source is not None else files('astrophotoflow').joinpath('vendor/bundle-catalog.json').read_bytes()
-    return json.loads(raw)
-
-
-def catalog():
-    source = os.environ.get('ASTROPHOTOFLOW_BUNDLE_CATALOG')
-    return _catalog(str(Path(source).resolve()) if source is not None else None)
+from astrophotoflow.modules.software.metadata import catalog, contained, read_bundle
+from astrophotoflow.modules.software.environment import bundle_environment
 
 
 def release(package_id):
@@ -40,13 +32,6 @@ def release(package_id):
     if value['tag'] != 'v' + manifest.bundle_version:
         raise ValueError('Catalog tag does not match its version and release channel.')
     return value
-
-
-def contained(root: Path, name: str) -> Path:
-    path = (root / name).resolve()
-    if not path.is_relative_to(root.resolve()):
-        raise ValueError('Bundle path escapes its checkout.')
-    return path
 
 
 def remove_checkout(path: Path, parent: Path):
@@ -62,43 +47,10 @@ def remove_checkout(path: Path, parent: Path):
     shutil.rmtree(path, onexc=writable)
 
 
-def read_bundle(root: Path):
-    manifest = BundleManifest.model_validate_json((root / 'bundle.json').read_text(encoding='utf-8'))
-    operations = [json.loads(contained(root, name).read_text(encoding='utf-8')) for name in manifest.operations]
-    for entry in operations:
-        operation = SoftwareOperation.model_validate(dict(entry['operation'], content_token='', ready=False, reason=None))
-        if operation.package_id != manifest.package_id or operation.version != manifest.software_version:
-            raise ValueError('Bundle operation identity mismatch.')
-    nodes = []
-    for name in manifest.nodes:
-        value = json.loads(contained(root, name).read_text(encoding='utf-8'))
-        operation = next(entry['operation'] for entry in operations if entry['operation']['operation_id'] == value['execution']['operation_id'])
-        # Parameters in the operation are authoritative; node bindings only name them.
-        value['parameters'] = operation['parameters']
-        node = NodeDefinition.model_validate(value)
-        if node.execution.package_id != manifest.package_id:
-            raise ValueError('Bundle node ownership mismatch.')
-        nodes.append(node.model_dump(mode='json'))
-    if not set(manifest.output_nodes).issubset({node['definition_id'] for node in nodes}):
-        raise ValueError('Bundle output_nodes must name declared node definitions.')
-    contained(root, manifest.executable)
-    contained(root, manifest.adapter)
-    for name in [manifest.commands, manifest.assessments]:
-        if name is not None:
-            contained(root, name)
-    return manifest, operations, nodes
-
-
-@lru_cache(maxsize=16)
-def _installed_metadata(root: Path, commit: str):
-    return read_bundle(root)
-
-
 def metadata(workspace: Path, package_id: str):
     root = workspace / 'software' / package_id / 'bundle'
     if root.is_dir():
-        lock = json.loads((root.parent / 'bundle-lock.json').read_text(encoding='utf-8'))
-        return _installed_metadata(root, lock['commit'])
+        return read_bundle(root)
     item = release(package_id)
     return BundleManifest.model_validate(item['manifest']), item['operations'], item['nodes']
 
@@ -140,24 +92,52 @@ def ensure_git(tool_root: Path | None):
     return str(executable)
 
 
-def git(arguments, *, cwd=None, tool_root=None):
+def git(arguments, *, cwd=None, tool_root=None, on_progress=None):
     executable = ensure_git(tool_root)
     if executable is None:
         raise ApiError(503, 'GIT_NOT_READY', '未找到 Git；请安装 Git for Windows 并登录私有仓库。')
-    result = subprocess.run([executable, *arguments], cwd=cwd, capture_output=True, text=True,
-                            encoding='utf-8', errors='replace', timeout=600,
-                            env={**os.environ, 'GIT_TERMINAL_PROMPT': '0'},
-                            creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
+    options = dict(cwd=cwd, text=True, encoding='utf-8', errors='replace',
+                   env={**os.environ, 'GIT_TERMINAL_PROMPT': '0', 'LC_ALL': 'C'},
+                   creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
+    if on_progress is not None:
+        with subprocess.Popen([executable, *arguments], stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, **options) as process:
+            with ThreadPoolExecutor(max_workers=1) as reader:
+                reading = reader.submit(_read_clone_progress, process.stderr, on_progress)
+                try:
+                    process.wait(timeout=600)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait()
+                    raise
+                reading.result()
+            if process.returncode:
+                raise ApiError(503, 'BUNDLE_FETCH_FAILED', 'Git 获取失败。请检查网络及系统 Git 凭据中的私有仓库访问权限。')
+        return ''
+    result = subprocess.run([executable, *arguments], capture_output=True, timeout=600, **options)
     if result.returncode:
         raise ApiError(503, 'BUNDLE_FETCH_FAILED', 'Git 获取失败。请检查网络及系统 Git 凭据中的私有仓库访问权限。')
     return result.stdout.strip()
 
 
-def checkout(package_id: str, destination: Path, *, tool_root=None):
+def _read_clone_progress(stream, on_progress):
+    phases = {'Receiving objects': 'downloading', 'Resolving deltas': 'resolving', 'Updating files': 'checking_out'}
+    previous = None
+    for line in stream:
+        match = re.search(r'(Receiving objects|Resolving deltas|Updating files):\s+(\d+)%', line)
+        if match:
+            current = (phases[match[1]], int(match[2]) / 100)
+            if current != previous:
+                on_progress(*current)
+                previous = current
+
+
+def checkout(package_id: str, destination: Path, *, tool_root=None, on_progress=None):
     item = release(package_id)
     if not item['commit']:
         raise ApiError(503, 'BUNDLE_NOT_RELEASED', '该 Bundle 尚未发布固定提交。')
-    git(['clone', '--depth', '1', '--branch', item['tag'], '--', item['repository'], str(destination)], tool_root=tool_root)
+    git(['clone', '--depth', '1', '--branch', item['tag'], '--progress', '--', item['repository'], str(destination)], tool_root=tool_root, on_progress=on_progress)
+    if on_progress is not None:
+        on_progress('verifying', None)
     actual = git(['rev-parse', 'HEAD'], cwd=destination, tool_root=tool_root)
     if actual != item['commit']:
         raise ApiError(409, 'BUNDLE_VERSION_CHANGED', '远端 tag 与已确认的提交不一致，未安装。')
@@ -169,13 +149,16 @@ def checkout(package_id: str, destination: Path, *, tool_root=None):
         for name in [manifest.commands, manifest.assessments] if name is not None
     } != item['reference_files']:
         raise ApiError(409, 'BUNDLE_VERSION_CHANGED', 'Bundle 参考目录与已确认快照不一致，未安装。')
-    result = subprocess.run([str(contained(destination, manifest.executable)), *manifest.version_args],
-                            cwd=contained(destination, manifest.executable).parent,
+    executable = contained(destination, manifest.executable)
+    result = subprocess.run([str(executable), *manifest.version_args],
+                            cwd=executable.parent, env=bundle_environment(executable),
                             capture_output=True, text=True, timeout=30,
                             creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
     if result.returncode or result.stdout.strip().casefold() != manifest.version_output.casefold():
-        raise ApiError(503, 'SOFTWARE_NOT_READY', 'Bundle 程序未报告发布版本。')
-    adapter = _adapter(str(contained(destination, manifest.adapter)), actual)
+        detail = (result.stderr.strip() or result.stdout.strip() or '程序没有输出。')[-2000:]
+        raise ApiError(503, 'SOFTWARE_NOT_READY', f'Bundle 程序版本检查失败（退出码 {result.returncode}，预期 {manifest.version_output}）：{detail}')
+    adapter_path = contained(destination, manifest.adapter)
+    adapter = _adapter(str(adapter_path), actual, adapter_path.read_bytes())
     if not callable(getattr(adapter, 'build_plan', None)):
         raise ValueError('Bundle adapter does not implement SDK v1 build_plan.')
     if manifest.host_api == 2 and any(not callable(getattr(adapter, name, None)) for name in ('parse_result', 'parse_progress', 'parse_failure')):
@@ -184,10 +167,10 @@ def checkout(package_id: str, destination: Path, *, tool_root=None):
 
 
 @lru_cache(maxsize=16)
-def _adapter(path: str, commit: str):
+def _adapter(path: str, commit: str, source: bytes):
     spec = importlib.util.spec_from_file_location('apf_bundle_' + hashlib.sha256(path.encode()).hexdigest(), path)
     module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    exec(compile(source, path, 'exec'), module.__dict__)
     return module
 
 
@@ -195,7 +178,8 @@ def adapter_plan(workspace: Path, package_id: str, operation_id: str, sources, p
     root = workspace / 'software' / package_id / 'bundle'
     manifest, _, _ = metadata(workspace, package_id)
     lock = json.loads((root.parent / 'bundle-lock.json').read_text(encoding='utf-8'))
-    adapter = _adapter(str(contained(root, manifest.adapter)), lock['commit'])
+    adapter_path = contained(root, manifest.adapter)
+    adapter = _adapter(str(adapter_path), lock['commit'], adapter_path.read_bytes())
     if manifest.host_api == 2:
         plan = NamedProcessPlan.model_validate(adapter.build_plan(operation_id, sources, parameters, directory, **options))
         paths = [plan.temporary_directory]
@@ -228,7 +212,8 @@ def collect_result(workspace: Path, package_id: str, operation_id: str, plan, di
     root = workspace / 'software' / package_id / 'bundle'
     manifest, _, _ = metadata(workspace, package_id)
     lock = json.loads((root.parent / 'bundle-lock.json').read_text(encoding='utf-8'))
-    adapter = _adapter(str(contained(root, manifest.adapter)), lock['commit'])
+    adapter_path = contained(root, manifest.adapter)
+    adapter = _adapter(str(adapter_path), lock['commit'], adapter_path.read_bytes())
     adapter.parse_result(operation_id, directory, plan, log_path)
     outputs, supporting = {}, {}
 
@@ -260,7 +245,8 @@ def progress_reader(workspace: Path, package_id: str):
     if manifest.host_api == 1:
         return None
     lock = json.loads((root.parent / 'bundle-lock.json').read_text(encoding='utf-8'))
-    adapter = _adapter(str(contained(root, manifest.adapter)), lock['commit'])
+    adapter_path = contained(root, manifest.adapter)
+    adapter = _adapter(str(adapter_path), lock['commit'], adapter_path.read_bytes())
     return lambda text: BundleProgress.model_validate(adapter.parse_progress(text))
 
 
@@ -270,7 +256,8 @@ def failure_reason(workspace: Path, package_id: str, log_path: Path):
     if manifest.host_api == 1:
         return '程序没有完整完成操作，请查看本次调用日志。'
     lock = json.loads((root.parent / 'bundle-lock.json').read_text(encoding='utf-8'))
-    adapter = _adapter(str(contained(root, manifest.adapter)), lock['commit'])
+    adapter_path = contained(root, manifest.adapter)
+    adapter = _adapter(str(adapter_path), lock['commit'], adapter_path.read_bytes())
     return str(adapter.parse_failure(log_path))
 
 

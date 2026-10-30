@@ -22,7 +22,7 @@ export const nodeCapabilitySchema = z.object({
   node: savedNodeSchema, available: z.boolean(), reason: z.string().nullable(),
   preview: z.object({ kind: z.literal('science-image'), input: z.string(), max_edge: z.literal(1024) }).nullable(),
   help: z.string(), examples: z.array(z.record(z.string(), z.json())),
-  operation: z.object({ package_id: z.string(), operation_id: z.string(), parameters: z.array(nodeParameterSchema) }).passthrough()
+  operation: z.object({ package_id: z.string(), operation_id: z.string(), parameters: z.array(nodeParameterSchema) }).passthrough().nullable()
 })
 export type NodeCapability = z.infer<typeof nodeCapabilitySchema>
 export type SavedNode = z.infer<typeof savedNodeSchema>
