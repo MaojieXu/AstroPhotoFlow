@@ -104,7 +104,7 @@ pnpm build:watch --workspace .artifacts/workspaces/feature --port 32589 --strict
 Bundle须先按根规则取得本地提交／新开发tag授权；不移动旧tag，不把脏源码标成已有SHA。授权后可从干净且HEAD等于tag的独立checkout导出本地预览目录：
 
 ```powershell
-python scripts/export_bundle_catalog.py .artifacts/bundles/AstroPhotoFlow-Siril --repository "$PWD/.artifacts/bundles/AstroPhotoFlow-Siril" --tag v0.2.0-dev.1 --output .artifacts/siril-preview-catalog.json
+uv run --locked --no-sync python scripts/export_bundle_catalog.py .artifacts/bundles/AstroPhotoFlow-Siril --repository "$PWD/.artifacts/bundles/AstroPhotoFlow-Siril" --tag v0.2.0-dev.1 --output .artifacts/siril-preview-catalog.json
 $env:ASTROPHOTOFLOW_BUNDLE_CATALOG = "$PWD/.artifacts/siril-preview-catalog.json"
 ```
 
