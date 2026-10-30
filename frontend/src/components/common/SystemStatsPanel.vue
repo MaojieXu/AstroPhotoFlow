@@ -10,12 +10,21 @@
           {{ $t('g.copySystemInfo') }}
         </Button>
       </div>
-      <div class="grid grid-cols-2 gap-2">
+      <div
+        class="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]"
+      >
         <template v-for="col in systemStatsColumns" :key="col.field">
           <div :class="cn('font-medium', isOutdated(col) && 'text-danger-100')">
             {{ $t(col.headerKey) }}
           </div>
-          <div :class="cn(isOutdated(col) && 'text-danger-100')">
+          <div
+            :class="
+              cn(
+                'min-w-0 whitespace-pre-wrap [overflow-wrap:anywhere]',
+                isOutdated(col) && 'text-danger-100'
+              )
+            "
+          >
             {{ getColumnDisplayValue(stats, col) }}
           </div>
         </template>

@@ -1,5 +1,10 @@
 <template>
-  <div class="about-container flex flex-col gap-2" data-testid="about-panel">
+  <AstroPhotoFlowAboutPanel v-if="!isCloud && !isDesktop" />
+  <div
+    v-else
+    class="about-container flex flex-col gap-2"
+    data-testid="about-panel"
+  >
     <h2 class="mb-2 text-2xl font-bold">
       {{ $t('g.about') }}
     </h2>
@@ -37,6 +42,8 @@
 <script setup lang="ts">
 import { cn } from '@comfyorg/tailwind-utils'
 
+import AstroPhotoFlowAboutPanel from '@/platform/astrophotoflow/AstroPhotoFlowAboutPanel.vue'
+import { isCloud, isDesktop } from '@/platform/distribution/types'
 import SystemStatsPanel from '@/components/common/SystemStatsPanel.vue'
 import Badge from '@/components/ui/badge/Badge.vue'
 import { useAboutPanelStore } from '@/stores/aboutPanelStore'

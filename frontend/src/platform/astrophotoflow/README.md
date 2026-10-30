@@ -1,5 +1,7 @@
 # AstroPhotoFlow 原生应用桥接
 
+2026-10-29 设置精简候选：settingsPresentation统一本地分类标签、隐藏项、快捷键和高级项策略；分类、搜索及定位入口复用该策略。工作台默认打开，关于页使用AstroPhotoFlowAboutPanel并折叠组件／诊断，平台版本由Vite从pyproject.toml注入。固定Nodes 2.0和上游通知的值策略在原生coreSettings注册迁移中处理；此处呈现层不另建设置存储。实际验证和视觉限制见当前上下文及验证矩阵。
+
 2026-10-29 SirilPreviewWidget／sirilPreviewDisplay：通过原生ComponentWidget生命周期挂载非序列化的实时预览区，读取当前素材连线与三个参数；350ms防抖、当前成员切换、AbortController、代次隔离和释放均不写工作流或触发Agent接管。UI包仅公开固定预览API消费函数；组件复用原生ImagePreview displayOnly及Button。正式执行仍由原生队列处理原件，结果预览关闭二次自动拉伸。组件和桥接用例仅编写不运行。
 
 

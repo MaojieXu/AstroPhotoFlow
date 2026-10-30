@@ -1,7 +1,10 @@
 import { computed, ref, watch } from 'vue'
 
 import { st } from '@/i18n'
-import { isSettingVisible } from '@/platform/astrophotoflow/settingsPresentation'
+import {
+  isSettingVisible,
+  settingCategoryLabelKey
+} from '@/platform/astrophotoflow/settingsPresentation'
 import {
   getSettingInfo,
   useSettingStore
@@ -84,7 +87,7 @@ export function useSettingSearch() {
       ).toLocaleLowerCase()
       const info = getSettingInfo(setting)
       const translatedCategory = st(
-        `settingsCategories.${normalizeI18nKey(info.category)}`,
+        settingCategoryLabelKey(info.category),
         info.category
       ).toLocaleLowerCase()
       const translatedSubCategory = st(

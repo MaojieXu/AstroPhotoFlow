@@ -13,6 +13,7 @@ declare module '~icons/*' {
 }
 
 declare global {
+  const __ASTROPHOTOFLOW_VERSION__: string
   interface Window {
     __COMFYUI_FRONTEND_VERSION__: string
   }

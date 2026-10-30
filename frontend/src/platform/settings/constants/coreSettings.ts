@@ -474,7 +474,8 @@ export const CORE_SETTINGS: SettingParams[] = [
     name: 'Show version updates',
     tooltip: 'Show updates for new models, and major new features.',
     type: 'boolean',
-    defaultValue: true
+    defaultValue: isCloud || isDesktop,
+    migrateDeprecatedValue: value => isCloud || isDesktop ? value : false
   },
   {
     id: 'Comfy.ConfirmClear',
@@ -1096,7 +1097,7 @@ export const CORE_SETTINGS: SettingParams[] = [
     name: 'Auto Save',
     type: 'combo',
     options: ['off', 'after delay'], // Room for other options like on focus change, tab change, window change
-    defaultValue: 'off', // Popular request by users (https://github.com/Comfy-Org/ComfyUI_frontend/issues/1584#issuecomment-2536610154)
+    defaultValue: isCloud || isDesktop ? 'off' : 'after delay',
     versionAdded: '1.16.0'
   },
   {
@@ -1184,8 +1185,9 @@ export const CORE_SETTINGS: SettingParams[] = [
     type: 'boolean',
     tooltip:
       'Modern: DOM-based rendering with enhanced interactivity, native browser features, and updated visual design. Classic: Traditional canvas rendering.',
-    defaultValue: false,
-    defaultsByInstallVersion: { '1.41.0': isCloud || isDesktop },
+    defaultValue: !isCloud && !isDesktop,
+    defaultsByInstallVersion: { '1.41.0': true },
+    migrateDeprecatedValue: value => isCloud || isDesktop ? value : true,
     sortOrder: 100,
     experimental: true,
     versionAdded: '1.27.1'

@@ -1,4 +1,19 @@
 {
+  "apfSettings": {
+    "general": "常规",
+    "canvas": "画布",
+    "about": "关于 AstroPhotoFlow",
+    "advanced": "高级",
+    "precisionHelp": "数值精度会影响实际节点参数值；通常沿用节点定义的精度，仅在确有需要时调整。",
+    "description": "本地天文素材管理与可视化工作流平台。",
+    "version": "版本",
+    "documentation": "使用文档",
+    "feedback": "问题反馈",
+    "license": "许可证",
+    "components": "技术组件与来源",
+    "componentsHelp": "上游项目的源代码、许可证及贡献者信息可在对应仓库查看。",
+    "diagnostics": "诊断详情"
+  },
   "apfWorkbench": {
     "configurationHelp": "工作台配置说明",
     "configurationPath": "当前配置文件路径",
