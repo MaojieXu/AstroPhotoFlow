@@ -174,3 +174,46 @@ def test_remove_checkout_handles_git_readonly_pack_files_and_keeps_siblings(tmp_
     assert not root.exists() and protected.read_bytes()==b'original'
     with pytest.raises(ValueError):
         bundles.remove_checkout(tmp_path,tmp_path)
+
+
+def test_update_switches_installed_metadata_and_adapter_without_touching_user_files(tmp_path, monkeypatch, bundle_install):
+    settings = Settings('127.0.0.1', 8190, tmp_path/'workspace/data', (), workspace=tmp_path/'workspace')
+    root = bundle_install(settings)
+    adapter = root/'adapter/siril.py'
+    implementation = "from astrophotoflow.contracts.bundles import ProcessPlan\ndef build_plan(operation_id,sources,parameters,directory,**options):\n return ProcessPlan(arguments=['before'],outputs=[directory/'result.fit'],output_format='fits')\n"
+    adapter.write_text(implementation, encoding='utf-8')
+    first = bundles.adapter_plan(settings.workspace, 'siril', 'autostretch', [], {}, tmp_path/'runs/before')
+    upstream = tmp_path/'updated-bundle'
+    shutil.copytree(root, upstream)
+    manifest_path = upstream/'bundle.json'
+    manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
+    manifest['bundle_version'] = '0.1.2-dev.2'
+    manifest_path.write_text(json.dumps(manifest), encoding='utf-8')
+    operation_path = upstream/manifest['operations'][0]
+    operation = json.loads(operation_path.read_text(encoding='utf-8'))
+    operation['operation']['parameters'][2]['default'] = 0.4
+    operation_path.write_text(json.dumps(operation), encoding='utf-8')
+    (upstream/'adapter/siril.py').write_text(implementation.replace("['before']", "['after']"), encoding='utf-8')
+    release = json.loads(json.dumps(bundles.release('siril')))
+    release.update(manifest=manifest, tag='v0.1.2-dev.2', commit='updated-fixture', operations=[operation])
+    monkeypatch.setattr(bundles, 'catalog', lambda: {'siril': release})
+    def checkout(package_id, destination, **kwargs):
+        shutil.copytree(upstream, destination)
+        return bundles.read_bundle(destination)[0], release['commit']
+    monkeypatch.setattr(bundles, 'checkout', checkout)
+    original = settings.workspace/'science.fit'
+    workflow = settings.workspace/'workflow.json'
+    original.write_bytes(b'protected original')
+    workflow.write_text('{}', encoding='utf-8')
+    before = public.get_package(settings, 'siril')
+    assert before.update_available
+    after = asyncio.run(public.install_package(settings, 'siril', '1.4.4', before.package_token))
+    second = bundles.adapter_plan(settings.workspace, 'siril', 'autostretch', [], {}, tmp_path/'runs/after')
+    assert first.arguments == ['before'] and second.arguments == ['after']
+    assert after.bundle_version == '0.1.2-dev.2' and after.bundle_commit == 'updated-fixture'
+    assert after.availability == 'not_ready' and not after.update_available and not after.restart_required
+    assert bundles.metadata(settings.workspace, 'siril')[1][0]['operation']['parameters'][2]['default'] == 0.4
+    assert not (root.parent/'previous-bundle').exists() and not list(root.parent.glob('.bundle-install-*'))
+    removed = asyncio.run(public.uninstall_package(settings, 'siril', after.package_token))
+    assert removed.availability == 'not_installed' and not root.exists()
+    assert original.read_bytes() == b'protected original' and workflow.read_text(encoding='utf-8') == '{}'

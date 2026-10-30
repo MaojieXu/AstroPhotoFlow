@@ -1,4 +1,4 @@
-import { createServer as createHttpServer } from 'node:http'
+import { createServer as createHttpServer, request } from 'node:http'
 
 import { expect, it, onTestFinished } from 'vitest'
 import { createServer } from 'vite'
@@ -18,6 +18,7 @@ it('forwards the local development origin and rejects a foreign origin', async (
   const target = `http://127.0.0.1:${address.port}`
   const vite = await createServer({
     configFile: false,
+    optimizeDeps: { noDiscovery: true, include: [] },
     server: { host: '127.0.0.1', port: 0, proxy: {
       '/astrophotoflow': { target, ...createWorkbenchDevProxy(target) }
     } }
@@ -28,10 +29,18 @@ it('forwards the local development origin and rejects a foreign origin', async (
   expect(frontend && typeof frontend !== 'string').toBe(true)
   if (!frontend || typeof frontend === 'string') return
   const origin = `http://127.0.0.1:${frontend.port}`
-  expect((await fetch(origin + '/astrophotoflow/api/v1/health', {
-    method: 'POST', headers: { Origin: origin }
-  })).status).toBe(200)
-  expect((await fetch(origin + '/astrophotoflow/api/v1/health', {
-    method: 'POST', headers: { Origin: 'https://unrelated.example' }
-  })).status).toBe(403)
+  function statusThroughProxy(requestOrigin: string): Promise<number> {
+    return new Promise((resolve, reject) => {
+      const pending = request(origin + '/astrophotoflow/api/v1/health', {
+        method: 'POST', headers: { Origin: requestOrigin }
+      }, response => {
+        response.resume()
+        response.on('end', () => resolve(response.statusCode ?? 0))
+      })
+      pending.on('error', reject)
+      pending.end()
+    })
+  }
+  expect(await statusThroughProxy(origin)).toBe(200)
+  expect(await statusThroughProxy('https://unrelated.example')).toBe(403)
 })

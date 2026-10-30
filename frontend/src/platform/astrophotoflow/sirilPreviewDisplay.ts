@@ -54,7 +54,10 @@ export function registerSirilPreviewDisplay(app: ComfyApp) {
     bundleCapabilities.clear()
     for (const capability of capabilities) bundleCapabilities.set(capability.node.native_type, capability)
     for (const type of new Set([...previous, ...bundleCapabilities.keys()])) {
-      if (!bundleCapabilities.get(type)?.available && LiteGraph.registered_node_types[type]) LiteGraph.unregisterNodeType(type)
+      if (!bundleCapabilities.get(type)?.available) {
+        if (LiteGraph.registered_node_types[type]) LiteGraph.unregisterNodeType(type)
+        nodeDefs.removeNodeDef(type)
+      }
     }
     for (const [name, type] of Object.entries(LiteGraph.registered_node_types)) type.skip_list = !name.startsWith('APF_')
     hydrate()

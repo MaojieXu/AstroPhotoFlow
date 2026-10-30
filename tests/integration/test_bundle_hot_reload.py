@@ -31,8 +31,12 @@ native.subprocess.run=lambda *a,**kw:SimpleNamespace(returncode=0,stdout=release
 root=workspace/'software/siril/bundle'
 events=[]
 notifications=asyncio.Queue()
+pending_edits=[]
 async def send(name,value):
  events.append(name)
+ if pending_edits:
+  path,content=pending_edits.pop()
+  path.write_text(json.dumps(content),encoding="utf-8")
  notifications.put_nowait(name)
 async def scenario():
  server=SimpleNamespace(apf_bundle_lock=asyncio.Lock(),send_json=send,loop=asyncio.get_running_loop(),app=web.Application())
@@ -64,14 +68,26 @@ async def scenario():
  operation=root/release['manifest']['operations'][0]
  changed=json.loads(operation.read_text(encoding='utf-8'))
  changed['operation']['parameters'][2]['default']=0.3
+ followup=json.loads(json.dumps(changed))
+ followup['operation']['parameters'][2]['default']=0.4
+ pending_edits.append((operation,followup))
  operation.write_text(json.dumps(changed),encoding='utf-8')
  await asyncio.wait_for(notifications.get(),timeout=10)
  assert nodes.NODE_CLASS_MAPPINGS[key] is not original
  assert nodes.NODE_CLASS_MAPPINGS[key].definition.parameters[2].default==0.3
  assert list_definitions(workspace)[0].definition.parameters[2].default==0.3
+ await asyncio.wait_for(notifications.get(),timeout=10)
+ assert nodes.NODE_CLASS_MAPPINGS[key].definition.parameters[2].default==0.4
+ assert list_definitions(workspace)[0].definition.parameters[2].default==0.4
  server.app.freeze()
  await server.app.cleanup()
- manifest=dict(release['manifest'],operations=[],nodes=[],output_nodes=[])
+ updated_manifest=dict(release['manifest'],bundle_version='0.1.2-dev.2')
+ write('bundle.json',updated_manifest)
+ (root.parent/'bundle-lock.json').write_text(json.dumps({'commit':'updated-fixture','bundle_version':'0.1.2-dev.2'}))
+ await native.reload_bundle_nodes(server)
+ assert json.loads((root.parent/'native-load.json').read_text())['commit']=='updated-fixture'
+ assert nodes.NODE_CLASS_MAPPINGS[key].definition.parameters[2].default==0.4
+ manifest=dict(updated_manifest,operations=[],nodes=[],output_nodes=[])
  write('bundle.json',manifest)
  await native.reload_bundle_nodes(server)
  assert key not in nodes.NODE_CLASS_MAPPINGS and list_definitions(workspace)
@@ -84,7 +100,7 @@ async def scenario():
  await native.reload_bundle_nodes(server)
  assert key not in nodes.NODE_CLASS_MAPPINGS
  assert list_definitions(workspace) and science.read_bytes()==b'original' and workflow.exists()
- assert events==['apf.bundles_changed']*5
+ assert events==['apf.bundles_changed']*7
  print('BUNDLE_HOT_RELOAD_OK')
 asyncio.run(scenario())
 '''

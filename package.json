@@ -11,7 +11,7 @@
     "docs:api": "uv run --locked --no-sync python scripts/export_openapi.py",
     "typecheck": "pnpm --dir frontend --filter @astrophotoflow/ui typecheck",
     "build": "python scripts/build_engine.py && pnpm typecheck && pnpm --dir frontend build",
-    "build:watch": "python scripts/dev_frontend.py",
+    "build:watch": "uv run --locked --no-sync python scripts/dev_frontend.py",
     "test": "pnpm --dir frontend --filter @astrophotoflow/ui test",
     "test:browser": "node tests/browser/native-web.mjs",
     "test:watch": "pnpm --dir frontend --filter @astrophotoflow/ui test:watch",

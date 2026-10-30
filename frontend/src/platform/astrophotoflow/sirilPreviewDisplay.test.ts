@@ -46,8 +46,6 @@ describe('Siril preview display', () => {
     onTestFinished(() => {
       dispose?.()
       bundleCapabilities.clear()
-      if (LiteGraph.registered_node_types[type]) LiteGraph.unregisterNodeType(type)
-      LiteGraph.unregisterNodeType('NativeFixtureNode')
     })
     await waitFor(() => expect(bundleCapabilities.get(type)?.available).toBe(true))
     expect(definitions.visibleNodeDefs.map(definition => definition.name)).toEqual([type])
@@ -56,6 +54,7 @@ describe('Siril preview display', () => {
     api.dispatchCustomEvent('apf.bundles_changed', {})
     await waitFor(() => expect(bundleCapabilities.get(type)?.available).toBe(false))
     expect(LiteGraph.registered_node_types[type]).toBeUndefined()
+    expect(definitions.visibleNodeDefs).toEqual([])
     expect(graph.nodes).toContain(node)
   })
 

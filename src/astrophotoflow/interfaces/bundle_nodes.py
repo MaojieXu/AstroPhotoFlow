@@ -231,7 +231,7 @@ def watch_bundle_nodes(server):
                 current = await asyncio.to_thread(_bundle_files, Path(workspace))
                 if current != previous:
                     await reload_bundle_nodes(server)
-                    previous = await asyncio.to_thread(_bundle_files, Path(workspace))
+                    previous = current
             except (OSError, ValueError, ApiError):
                 logger.exception("Bundle hot reload failed")
 
