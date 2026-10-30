@@ -12,10 +12,12 @@ import { useCanvasDataSession } from './useCanvasDataSession'
 import { useApp } from '@/scripts/appInstance'
 import { registerDataReferenceDisplay } from './dataReferenceDisplay'
 import { registerSirilPreviewDisplay } from './sirilPreviewDisplay'
+import { registerBundleResultDisplay } from './bundleResultDisplay'
 
 registerDataReferenceDisplay(useApp())
 const disposeBundleDisplay = registerSirilPreviewDisplay(useApp())
 if (disposeBundleDisplay) onBeforeUnmount(disposeBundleDisplay)
+registerBundleResultDisplay(useApp())
 useCanvasDataSession()
 
 const settings = useSettingStore()

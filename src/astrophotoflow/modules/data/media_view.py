@@ -11,15 +11,17 @@ import hashlib
 import json
 import math
 import mimetypes
+import re
 import time
 
 import numpy as np
+from astropy.io import fits
 from fastapi import APIRouter, Depends, Request, Response
 from fastapi.responses import FileResponse
 from PIL import Image
 from sqlalchemy import select
 
-from astrophotoflow.contracts.media import MediaSelection, MediaState
+from astrophotoflow.contracts.media import MediaHdu, MediaSelection, MediaState
 from astrophotoflow.contracts.previews import PreviewIssue
 from astrophotoflow.core import http as deps
 from astrophotoflow.core.errors import ApiError, not_found
@@ -33,7 +35,7 @@ from astrophotoflow.modules.data.science_inputs import _asset_path
 
 
 router = APIRouter(prefix="/api/v1", responses=deps.ERROR_RESPONSES, dependencies=[Depends(deps.authenticate)])
-ALGORITHM = "media-view-1"
+ALGORITHM = "media-view-2"
 
 
 class LeasedFileResponse(FileResponse):
@@ -58,6 +60,7 @@ class MediaViews:
         self.consumers = {}
         self.interests = {}
         self.preparing = {}
+        self.output_jobs = {}
         with database.write_session() as session:
             for row in session.scalars(select(Preview).where(Preview.size.in_({"viewer", "playback", "siril-live"}), Preview.status == "generating")).all():
                 row.status, row.error = "failed", "查看准备被中断，请显式重试。"
@@ -140,7 +143,8 @@ class MediaViews:
                 row.status, row.error = "generating", None
                 row.display_parameters = {"state": state.model_dump(mode="json"), "source_stamp": [stamp.st_size, stamp.st_mtime_ns]}
             job = dict(id=row.id, key=key, version_id=version_id, path=path, folder=folder, category=category,
-                selection=selection, recipe=recipe, parameters=dict(asset.parameters or {}), stamp=(stamp.st_size, stamp.st_mtime_ns), playback=playback)
+                selection=selection, recipe=recipe, parameters={**dict(asset.parameters or {}),
+                'colour_layout': (version.scientific_metadata or {}).get('colour_layout')}, stamp=(stamp.st_size, stamp.st_mtime_ns), playback=playback)
             self.interests[key] = {interest}
         with self.lock:
             try:
@@ -197,6 +201,13 @@ class MediaViews:
                 raise CancelledError("无人继续查看，已取消高清准备。")
 
     def _fail(self, job, message, state=None):
+        if job.get('output_source'):
+            with self.lock:
+                state = state or MediaState.model_validate(job['state'])
+                state.status, state.phase = 'failed', None
+                state.error = PreviewIssue(code='MEDIA_FAILED', message=message)
+                job['state'] = state.model_dump(mode='json')
+            return
         with self.database.write_session() as session:
             row = session.get(Preview, job["id"])
             if row:
@@ -210,15 +221,33 @@ class MediaViews:
         state = None
         try:
             self._checkpoint(job["key"])
-            with self.database.write_session() as session:
-                row = session.get(Preview, job["id"])
-                state = MediaState.model_validate(row.display_parameters["state"])
-                state.phase = "preparing"
-                row.display_parameters = {**row.display_parameters, "state": state.model_dump(mode="json")}
+            if job.get('output_source'):
+                with self.lock:
+                    state = MediaState.model_validate(job['state'])
+                    state.phase = 'preparing'
+                    job['state'] = state.model_dump(mode='json')
+            else:
+                with self.database.write_session() as session:
+                    row = session.get(Preview, job["id"])
+                    state = MediaState.model_validate(row.display_parameters["state"])
+                    state.phase = "preparing"
+                    row.display_parameters = {**row.display_parameters, "state": state.model_dump(mode="json")}
             with self.cache.hold(folder):
                 folder.mkdir(parents=True, exist_ok=True)
                 state = MediaState(key=job["key"], status="available", selection=job["selection"])
                 path, category = job["path"], job["category"]
+                if job['selection'].display_range is not None:
+                    if job['playback']:
+                        raise ValueError('请先暂停并检查原始帧，再调整该帧的显示阈值。')
+                    low, high = job['selection'].display_range
+                    job['recipe'] = {'stretch_low': low, 'stretch_high': high}
+                if category == 'fits':
+                    from astrophotoflow.modules.data.fits_preview import _image_kind, apply_colour_layout
+                    with fits.open(path, memmap=False, lazy_load_hdus=True) as file:
+                        for index, hdu in enumerate(file):
+                            apply_colour_layout(hdu, job['parameters'].get('colour_layout'))
+                            state.hdus.append(MediaHdu(index=index, name=hdu.header.get('EXTNAME'), shape=list(getattr(hdu, 'shape', None) or []),
+                                                       kind=_image_kind(hdu, job['parameters'].get('cfa_pattern'))))
                 if category == "numpy":
                     state.arrays = numpy_arrays(path)
                     if not state.arrays:
@@ -256,9 +285,12 @@ class MediaViews:
                         state.media_time = timestamp
                     source = self._pixels(job, lambda: self._checkpoint(job["key"]))
                     state.width, state.height = source.dimensions()
-                    if source.linear and not ("auto_stretch" in job["recipe"] or "stretch_low" in job["recipe"]):
-                        context = backfill_context(self.database, job["version_id"])
-                        job["recipe"] = describe_recipe(context, {"auto_stretch": context["auto_stretch"] or self._stretch(job, source, context)})
+                    if source.linear and not ("auto_stretch" in job["recipe"] or "stretch_low" in job["recipe"] or job['recipe'].get('direct')):
+                        if job.get('output_source'):
+                            job['recipe'] = {'auto_stretch': source.stretch()}
+                        else:
+                            context = backfill_context(self.database, job["version_id"])
+                            job["recipe"] = describe_recipe(context, {"auto_stretch": context["auto_stretch"] or self._stretch(job, source, context)})
                     if source.cfa and source.cfa not in {"MONO", "RGGB", "BGGR", "GRBG", "GBRG"}:
                         state.note = "此CFA排列以原尺寸传感器灰度马赛克查看。"
                     step = max(1, math.ceil(max(state.width, state.height) / 4096))
@@ -282,13 +314,14 @@ class MediaViews:
                 job["state"] = state.model_dump(mode="json")
                 saved = {key: str(value) if isinstance(value, Path) else value.model_dump(mode="json") if isinstance(value, MediaSelection) else value for key, value in job.items()}
                 self.cache.write(folder / "manifest.json", json.dumps(saved, ensure_ascii=False).encode())
-                with self.database.write_session() as session:
-                    self._source(session, job["version_id"])
-                    row = session.get(Preview, job["id"])
-                    if row is None or row.status != "generating":
-                        raise ValueError("查看缓存已失去生成所有权。")
-                    row.width, row.height, row.status = state.width, state.height, "available"
-                    row.display_parameters = {**job["recipe"], "source_stamp": list(job["stamp"]), "state": state.model_dump(mode="json")}
+                if not job.get('output_source'):
+                    with self.database.write_session() as session:
+                        self._source(session, job["version_id"])
+                        row = session.get(Preview, job["id"])
+                        if row is None or row.status != "generating":
+                            raise ValueError("查看缓存已失去生成所有权。")
+                        row.width, row.height, row.status = state.width, state.height, "available"
+                        row.display_parameters = {**job["recipe"], "source_stamp": list(job["stamp"]), "state": state.model_dump(mode="json")}
         except Exception as exc:
             self._fail(job, str(exc), state)
 
@@ -306,7 +339,8 @@ class MediaViews:
                 version = session.get(AssetVersion, version_id)
                 if version.availability != "available":
                     continue
-                parameters = dict(session.get(Asset, version.asset_id).parameters or {})
+                parameters = {**dict(session.get(Asset, version.asset_id).parameters or {}),
+                              'colour_layout': (version.scientific_metadata or {}).get('colour_layout')}
                 hdu = session.scalar(select(FitsHduMetadata).where(FitsHduMetadata.asset_version_id == version_id, FitsHduMetadata.is_selected.is_(True)))
                 path = _asset_path(self.settings, version)
                 category = (version.scientific_metadata or {}).get("format")
@@ -359,10 +393,119 @@ class MediaViews:
             self.using[job["key"]] -= 1
             if not self.using[job["key"]]:
                 del self.using[job["key"]]
-                with self.database.write_session() as session:
-                    row = session.get(Preview, job["id"])
-                    if row and row.status == "generating":
-                        row.status = "available"
+                if not job.get('output_source'):
+                    with self.database.write_session() as session:
+                        row = session.get(Preview, job["id"])
+                        if row and row.status == "generating":
+                            row.status = "available"
+
+    def prepare_output(self, checked, selection, *, direct):
+        path = checked.path
+        stamp = path.stat()
+        if checked.format not in {'fits', 'xisf', 'image', 'raw', 'numpy', 'video'}:
+            raise ApiError(422, 'MEDIA_UNSUPPORTED', '该输出不是可查看的科学图像或视频。')
+        if selection.hdu_index is None:
+            selection = selection.model_copy(update={'hdu_index': (checked.scientific_metadata or {}).get('selected_hdu')})
+        if checked.format == 'video' and selection.media_time is not None and selection.playback_key:
+            playback_key = selection.playback_key
+            if not re.fullmatch('[a-f0-9]{40}', playback_key):
+                raise not_found()
+            previous = self.settings.data_dir / 'previews' / 'run-outputs' / 'media' / playback_key
+            job = json.loads((previous / 'manifest.json').read_text(encoding='utf-8'))
+            if Path(job['path']).resolve() != path.resolve() or job['stamp'] != [stamp.st_size, stamp.st_mtime_ns]:
+                raise ApiError(409, 'SOURCE_CHANGED', '视频播放缓存不属于当前完整结果。')
+            mapping = json.loads((previous / 'frames.json').read_text(encoding='utf-8'))
+            match = min(mapping, key=lambda frame: abs(frame['time'] - selection.media_time))
+            if abs(match['time'] - selection.media_time) > 0.003:
+                raise ApiError(422, 'FRAME_NOT_MATCHED', '暂停帧时间戳没有对应的原始帧。')
+            selection = selection.model_copy(update={'media_time': None, 'frame_index': match['index']})
+        interest = selection.consumer_id, selection.generation
+        identity_selection = selection.model_dump(mode='json', exclude={'consumer_id', 'generation'})
+        key = hashlib.sha256(json.dumps([ALGORITHM, 'checked-output', checked.content_hash, str(path),
+                                        (checked.scientific_metadata or {}).get('colour_layout'), identity_selection, direct], sort_keys=True).encode()).hexdigest()[:40]
+        folder = self.settings.data_dir / 'previews' / 'run-outputs' / 'media' / key
+        with self.lock:
+            if selection.consumer_id:
+                old = self.consumers.get(selection.consumer_id, (-1, 0))
+                if selection.generation < old[0]:
+                    raise ApiError(409, 'STALE_VIEW', '已切换到更新的查看请求。')
+                self.consumers[selection.consumer_id] = selection.generation, time.monotonic()
+                self._cancel_unused()
+            self.interests.setdefault(key, set()).add(interest)
+            previous = self.output_jobs.get(key)
+            if previous and previous['state']['status'] == 'generating':
+                return MediaState.model_validate(previous['state'])
+            manifest = folder / 'manifest.json'
+            if manifest.is_file():
+                previous = json.loads(manifest.read_text(encoding='utf-8'))
+                if previous['stamp'] != [stamp.st_size, stamp.st_mtime_ns]:
+                    raise ApiError(409, 'SOURCE_CHANGED', '完整结果在查看准备后发生变化。')
+                self.output_jobs[key] = previous
+                return MediaState.model_validate(previous['state'])
+            state = MediaState(key=key, status='generating', phase='queued', selection=selection)
+            playback = checked.format == 'video' and selection.frame_index is None and selection.media_time is None
+            job = dict(key=key, path=path, folder=folder, category=checked.format, selection=selection.model_copy(update={'consumer_id': None, 'generation': 0}),
+                       recipe={'direct': True} if direct else {}, parameters={'colour_layout': (checked.scientific_metadata or {}).get('colour_layout')}, stamp=(stamp.st_size, stamp.st_mtime_ns),
+                       playback=playback, output_source=True, state=state.model_dump(mode='json'))
+            self.output_jobs[key] = job
+            future = self.executor.submit(self._prepare, job)
+            self.preparing[key] = future
+            def complete(completed):
+                with self.lock:
+                    if completed.cancelled():
+                        self._fail(job, '无人继续查看，已取消高清准备。')
+                    self.preparing.pop(key, None)
+                    self.interests.pop(key, None)
+            future.add_done_callback(complete)
+        return state
+
+    def output_status(self, checked, key):
+        with self.lock:
+            job = self.output_jobs.get(key)
+            if job is None:
+                raise ApiError(409, 'MEDIA_NOT_READY', '显示缓存已失效，请重新打开查看器。')
+            stamp = checked.path.stat()
+            if Path(job['path']).resolve() != checked.path.resolve() or tuple(job['stamp']) != (stamp.st_size, stamp.st_mtime_ns):
+                raise ApiError(409, 'SOURCE_CHANGED', '显示状态不属于该完整结果。')
+            return MediaState.model_validate(job['state'])
+
+    def thumbnail_output(self, checked, *, direct):
+        metadata = checked.scientific_metadata or {}
+        identity = json.dumps([ALGORITHM, 'output-thumbnail', checked.content_hash, metadata.get('selected_hdu'), metadata.get('colour_layout'), direct], sort_keys=True)
+        key = hashlib.sha256(identity.encode()).hexdigest()[:40]
+        folder = self.settings.data_dir / 'previews' / 'run-outputs' / 'media' / key
+        hold = self.cache.hold(folder)
+        hold.__enter__()
+        try:
+            path = folder / 'thumbnail.jpg'
+            if not path.is_file():
+                from astrophotoflow.modules.data.science_inputs import render_output_preview
+                self.cache.reserve(1024 * 1024 * 3)
+                folder.mkdir(parents=True, exist_ok=True)
+                render_output_preview(checked, path, max_edge=1024, auto_stretch=not direct)
+            return path, lambda: hold.__exit__(None, None, None)
+        except Exception:
+            hold.__exit__(None, None, None)
+            raise
+
+    def acquire_output(self, checked, key):
+        if not re.fullmatch('[a-f0-9]{40}', key):
+            raise not_found()
+        folder = self.settings.data_dir / 'previews' / 'run-outputs' / 'media' / key
+        with self.lock:
+            manifest = folder / 'manifest.json'
+            if not manifest.is_file():
+                raise ApiError(409, 'MEDIA_NOT_READY', '显示缓存已被回收，请重新打开查看器。')
+            job = json.loads(manifest.read_text(encoding='utf-8'))
+            stamp = checked.path.stat()
+            if Path(job['path']).resolve() != checked.path.resolve() or job['stamp'] != [stamp.st_size, stamp.st_mtime_ns]:
+                raise ApiError(409, 'SOURCE_CHANGED', '显示缓存与当前完整结果不匹配。')
+            job['path'], job['folder'], job['selection'] = checked.path, folder, MediaSelection.model_validate(job['selection'])
+            self.using[key] = self.using.get(key, 0) + 1
+            hold = self.cache.hold(folder)
+            hold.__enter__()
+            folder.touch()
+            return job, lambda: self.release(job, hold)
 
     def tile(self, job, level, x, y):
         future = self.tile_future(job, level, x, y)

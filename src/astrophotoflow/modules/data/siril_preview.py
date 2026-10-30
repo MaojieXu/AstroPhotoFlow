@@ -19,8 +19,8 @@ from astrophotoflow.modules.data.previews import _library_version
 from astrophotoflow.modules.data.science_inputs import _asset_path
 
 
-def fits_sample(path: Path, hdu_index: int, max_edge: int, checkpoint=lambda: None, *, siril_output=False):
-    source = PixelSource(path, "fits", MediaSelection(hdu_index=hdu_index), {}, path.parent,
+def fits_sample(path: Path, hdu_index: int, max_edge: int, checkpoint=lambda: None, *, siril_output=False, colour_layout=None):
+    source = PixelSource(path, "fits", MediaSelection(hdu_index=hdu_index), {'colour_layout': colour_layout}, path.parent,
                          lambda _size: None, checkpoint)
     with source.pixels() as hdu:
         if siril_output and len(hdu.shape) == 3 and hdu.shape[0] == 3:
@@ -35,8 +35,13 @@ def fits_sample(path: Path, hdu_index: int, max_edge: int, checkpoint=lambda: No
     return pixels
 
 
-def direct_fits_image(path: Path, hdu_index: int, max_edge: int) -> Image.Image:
-    pixels = fits_sample(path, hdu_index, max_edge, siril_output=True)
+def direct_fits_image(path: Path, hdu_index: int | None, max_edge: int, *, colour_layout='planar') -> Image.Image:
+    if hdu_index is None:
+        from astrophotoflow.modules.data.fits_preview import inspect_fits
+        hdu_index = inspect_fits(path, colour_layout=colour_layout)['selected_hdu']
+        if hdu_index is None:
+            raise ValueError('输出没有可显示的图像HDU。')
+    pixels = fits_sample(path, hdu_index, max_edge, siril_output=colour_layout == 'planar', colour_layout=colour_layout)
     if np.issubdtype(pixels.dtype, np.integer):
         values = pixels.astype(np.float32) / np.iinfo(pixels.dtype).max
     else:
@@ -59,7 +64,7 @@ class SirilSample:
             self.guard.__exit__(None, None, None)
 
 
-def prepare_siril_sample(database, settings, cache, body, check_cancel) -> SirilSample:
+def prepare_siril_sample(database, settings, cache, body, check_cancel, decoder_key='', colour_layout=None) -> SirilSample:
     item = inspect_canvas_data(database, CanvasInspectRequest(reference=body.reference, member_index=body.member_index))
     with database.write_session() as session:
         version = session.get(AssetVersion, _library_version(session, str(item.asset_id), str(item.asset_version_id)))
@@ -69,15 +74,15 @@ def prepare_siril_sample(database, settings, cache, body, check_cancel) -> Siril
             raise ApiError(409, "SOURCE_UNAVAILABLE", "原件尚未就绪或已经变化。")
         category = (version.scientific_metadata or {}).get("format")
         if category not in {"fits", "xisf", "image", "raw"}:
-            raise ApiError(422, "UNSUPPORTED_SELECTION", "Auto Stretch 需要静态图像，视频和数值数组尚未接入。")
+            raise ApiError(422, "UNSUPPORTED_SELECTION", "实时显示样本需要固定静态图像；视频和数值数组不能作为该预览输入。")
         if body.reference.kind == "asset_version":
             selection = body.reference.selection
         else:
             selection = body.reference.members[body.member_index].selection
         hdu = selection.hdu_index or 0
         if hdu != 0 or selection.kind != "whole_file":
-            raise ApiError(422, "UNSUPPORTED_SELECTION", "Auto Stretch 首版不支持指定 HDU。")
-        identity = json.dumps([str(item.asset_version_id), version.content_hash, stamp.st_size, stamp.st_mtime_ns, str(body.consumer_id), hdu])
+            raise ApiError(422, "UNSUPPORTED_SELECTION", "该实时样本预览使用默认图像HDU，不支持任意HDU选择。")
+        identity = json.dumps([str(item.asset_version_id), version.content_hash, stamp.st_size, stamp.st_mtime_ns, str(body.consumer_id), hdu, decoder_key])
         key = hashlib.sha256(identity.encode()).hexdigest()[:40]
         algorithm = "siril-live-1:" + key
         folder = settings.data_dir / "previews" / str(item.asset_version_id) / "media" / key
@@ -105,7 +110,7 @@ def prepare_siril_sample(database, settings, cache, body, check_cancel) -> Siril
                 sample.path = path
                 (folder / "manifest.json").write_text(json.dumps({"input": "linear.fit", "output": "result.png"}), encoding="utf-8")
                 return sample
-            pixels = fits_sample(path, hdu, 1024, check_cancel)
+            pixels = fits_sample(path, hdu, 1024, check_cancel, colour_layout=colour_layout)
             header = fits.Header()
             if pixels.ndim == 3:
                 pixels = np.moveaxis(pixels, -1, 0)

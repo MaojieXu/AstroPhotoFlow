@@ -1,4 +1,5 @@
 import asyncio
+import json
 from concurrent.futures import CancelledError
 from io import BytesIO
 from pathlib import Path
@@ -12,7 +13,7 @@ from astrophotoflow.contracts.software import SirilPreviewRequest, BundlePreview
 from astrophotoflow.core.http import authenticate, ERROR_RESPONSES
 from astrophotoflow.core.errors import ApiError
 from astrophotoflow.modules.data.public import prepare_siril_sample, direct_fits_image
-from astrophotoflow.modules.software.public import preview_operation, get_package, validate_parameters
+from astrophotoflow.modules.software.public import preview_operation, get_package, get_operation, validate_parameters
 
 
 router = APIRouter(prefix="/api/v1/software", dependencies=[Depends(authenticate)], responses=ERROR_RESPONSES)
@@ -65,7 +66,11 @@ class SirilPreviews:
                 if cancelled.is_set():
                     raise CancelledError("实时预览已取消。")
 
-            work = self.executor.submit(prepare_siril_sample, self.database, self.settings, self.cache, body, checkpoint)
+            package = get_package(self.settings, body.package_id)
+            operation = get_operation(self.settings, body.package_id, package.installed_version, body.operation_id)
+            layout = next(item.colour_layout for item in operation.inputs if item.name == 'image')
+            decoder_key = json.dumps([body.package_id, package.installed_version, package.bundle_commit, body.parameters.get('runtime', '{}')], sort_keys=True)
+            work = self.executor.submit(prepare_siril_sample, self.database, self.settings, self.cache, body, checkpoint, decoder_key, layout)
             sample = None
             directory = None
             future = None
@@ -77,7 +82,7 @@ class SirilPreviews:
                     result = await preview_operation(self.settings, sample.path, directory, body.parameters, package_id=body.package_id, operation_id=body.operation_id, prepare_sample=True)
                 else:
                     result = await preview_operation(self.settings, sample.path, directory, body.parameters, package_id=body.package_id, operation_id=body.operation_id)
-                future = self.executor.submit(direct_fits_image, result, 0, 1024)
+                future = self.executor.submit(direct_fits_image, result, None, 1024)
                 image = await asyncio.shield(asyncio.wrap_future(future))
                 stream = BytesIO()
                 image.save(stream, format="PNG")

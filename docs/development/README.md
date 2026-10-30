@@ -99,6 +99,17 @@ pnpm build:watch --workspace .artifacts/workspaces/feature --port 32589 --strict
 
 `--workspace` 省略时沿用当前配置选择。Vite 是开发工具，发布与正常运行仍使用构建网页和两个产品服务。平台后端 Python 源码变化仍需显式重启；已安装 Bundle 的 SDK Python 适配器、清单、操作及节点 JSON 变化由原生进程检测并重新加载，安装／更新／卸载也直接刷新当前页面的节点目录。维护行为以[软件和节点需求](../requirements/README.md#fr-03-软件适配与能力目录)为准。
 
+### 独立Bundle候选预览
+
+Bundle须先按根规则取得本地提交／新开发tag授权；不移动旧tag，不把脏源码标成已有SHA。授权后可从干净且HEAD等于tag的独立checkout导出本地预览目录：
+
+```powershell
+uv run --locked --no-sync python scripts/export_bundle_catalog.py .artifacts/bundles/AstroPhotoFlow-Siril --repository "$PWD/.artifacts/bundles/AstroPhotoFlow-Siril" --tag v0.2.0-dev.1 --output .artifacts/siril-preview-catalog.json
+$env:ASTROPHOTOFLOW_BUNDLE_CATALOG = "$PWD/.artifacts/siril-preview-catalog.json"
+```
+
+该变量仅属于启动终端及其独立子进程；停止／启动时仍明确自己的workspace。随后走软件安装计划与当前网页确认，安装结束后核对程序版本、节点加载与Bundle SHA。目录覆盖只选择固定候选，不绕过安装确认，也不发布GitHub tag。源码未提交、未安装或仅静态资源就绪时须如实标注；不要据此声明节点功能通过。
+
 浏览器验收由 Manager 在集成阶段按需执行，使用 `status` 的实际地址：
 
 ```powershell

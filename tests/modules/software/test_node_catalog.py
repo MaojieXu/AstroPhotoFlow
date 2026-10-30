@@ -85,3 +85,25 @@ def test_canvas_graph_write_and_inspect_use_current_target_without_handoff(tmp_p
         asyncio.run(scenario())
     finally:
         app.state.database.close()
+
+
+def test_full_node_catalogue_reads_bundle_metadata_per_package(tmp_path, monkeypatch, bundle_install):
+    from uuid import uuid4
+    from astrophotoflow.modules.nodes.catalog import list_nodes
+    settings = Settings('127.0.0.1', 8190, tmp_path/'data', (), workspace=tmp_path)
+    root = bundle_install(settings)
+    template = bundles.metadata(tmp_path, 'siril')[2][0]
+    directory = tmp_path/'nodes'; directory.mkdir()
+    for index in range(160):
+        definition = json.loads(json.dumps(template))
+        definition.update(definition_id=str(uuid4()), name=f'Operation {index}', source='custom')
+        (directory/(definition['definition_id']+'.json')).write_text(json.dumps(definition), encoding='utf-8')
+    reads = []
+    original = bundles.read_bundle
+    def read(path):
+        reads.append(path)
+        return original(path)
+    monkeypatch.setattr(bundles, 'read_bundle', read)
+    values = list_nodes(settings)
+    assert len(values) == 160 and all(value.available for value in values)
+    assert len(reads) <= 8

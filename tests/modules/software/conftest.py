@@ -2,6 +2,7 @@ import json
 import os
 import psutil
 import pytest
+from importlib.resources import files
 from astrophotoflow.modules.software import bundles, public
 from astrophotoflow.contracts.software import SoftwarePackageState
 
@@ -21,6 +22,14 @@ def bundle_install():
             write(name, entry)
         for name, entry in zip(release['manifest']['nodes'], release['nodes'], strict=True):
             write(name, entry)
+        vendor = files('astrophotoflow').joinpath('vendor')
+        for field, vendor_name in [('commands', 'siril-1.4.4-commands.json'), ('assessments', 'siril-1.4.4-command-assessments.json')]:
+            name = release['manifest'].get(field)
+            if name is not None:
+                destination = root / name
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                content = release.get('reference_files', {}).get(name)
+                destination.write_bytes(content.encode('utf-8') if content is not None else vendor.joinpath(vendor_name).read_bytes())
         executable = root / release['manifest']['executable']
         executable.parent.mkdir(parents=True)
         executable.write_bytes(b'fixture executable')

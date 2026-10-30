@@ -98,7 +98,7 @@ def ser_info(path):
         if count > 1 and stamps[-1] > stamps[0] and np.all(stamps[1:] > stamps[:-1]):
             times = np.asarray((stamps - stamps[0]) / 10_000_000, dtype=np.float64)
     return dict(color=color, width=width, height=height, channels=channels, dtype=dtype,
-                count=count, frame_bytes=frame_bytes, times=times)
+                count=count, pixel_depth=bits, frame_bytes=frame_bytes, times=times)
 
 
 class PixelSource:
@@ -156,6 +156,8 @@ class PixelSource:
         if self.category == "fits":
             with fits.open(self.path, memmap=False, lazy_load_hdus=True) as file:
                 hdu = file[self.selection.hdu_index or 0]
+                from astrophotoflow.modules.data.fits_preview import apply_colour_layout
+                apply_colour_layout(hdu, self.parameters.get('colour_layout'))
                 shape = hdu.shape
                 if shape is None or len(shape) < 2:
                     raise ValueError("所选HDU不是二维图像。")
@@ -247,6 +249,7 @@ class PixelSource:
                 array = np.asarray(data[y0:y1:step, x0:x1:step])
                 ox = oy = 0
             self.checkpoint()
+            self.direct_max = np.iinfo(array.dtype).max if np.issubdtype(array.dtype, np.integer) else 1.0
             if pattern in {"RGGB", "BGGR", "GRBG", "GBRG"} and array.ndim == 2:
                 array = _bayer_demosaic(array, pattern, x0 + ox, y0 + oy, step)
             return array
@@ -255,6 +258,8 @@ class PixelSource:
         if self.category == "fits":
             with fits.open(self.path, memmap=False, lazy_load_hdus=True) as file:
                 hdu = file[self.selection.hdu_index or 0]
+                from astrophotoflow.modules.data.fits_preview import apply_colour_layout
+                apply_colour_layout(hdu, self.parameters.get('colour_layout'))
                 kind = "rgb" if len(hdu.shape) == 3 else "bayer" if str(self.parameters.get("cfa_pattern") or hdu.header.get("BAYERPAT", "")).upper() in {"RGGB", "BGGR", "GRBG", "GBRG"} else "mono"
             return calculate_stretch(read_stretch_pixels(self.path, self.selection.hdu_index or 0, kind, self.parameters, self.check_cancel))
         with self.pixels() as data:
@@ -264,6 +269,9 @@ class PixelSource:
             return calculate_stretch(data)
 
     def render(self, pixels, recipe):
+        if recipe.get('direct'):
+            from astrophotoflow.modules.data.fits_preview import _display
+            return _display(pixels, (0, self.direct_max))
         if recipe.get("auto_stretch"):
             return render_stretch(pixels, recipe["auto_stretch"])
         if "stretch_low" in recipe:

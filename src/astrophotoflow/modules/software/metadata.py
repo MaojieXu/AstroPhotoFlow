@@ -1,9 +1,17 @@
 import json
+import os
+from importlib.resources import files
 from pathlib import Path
 
 from astrophotoflow.contracts.bundles import BundleManifest
 from astrophotoflow.contracts.nodes import NodeDefinition
 from astrophotoflow.contracts.software import SoftwareOperation
+
+
+def catalog():
+    source = os.environ.get('ASTROPHOTOFLOW_BUNDLE_CATALOG')
+    raw = Path(source).read_bytes() if source is not None else files('astrophotoflow').joinpath('vendor/bundle-catalog.json').read_bytes()
+    return json.loads(raw)
 
 
 def contained(root: Path, name: str) -> Path:
@@ -35,4 +43,7 @@ def read_bundle(root: Path):
         raise ValueError('Bundle output_nodes must name declared node definitions.')
     contained(root, manifest.executable)
     contained(root, manifest.adapter)
+    for name in [manifest.commands, manifest.assessments]:
+        if name is not None:
+            contained(root, name)
     return manifest, operations, nodes

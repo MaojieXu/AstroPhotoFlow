@@ -27,6 +27,7 @@ onBeforeUnmount(() => api.removeEventListener('graphChanged', graphChanged))
 const referenceText = computed(() => { void revision.value; return widget.node.widgets?.find(item => item.name === 'reference')?.value })
 const index = ref(0)
 const data = ref<CanvasInspect>()
+const fileReference = computed(() => widget.node.comfyClass === 'APF_FILE_REFERENCE' || data.value?.format === 'other')
 const image = ref('')
 const loading = ref(false)
 const phase = ref<MediaState['phase']>()
@@ -77,6 +78,7 @@ function text(value: unknown) {
 const summary = computed(() => {
   const item = data.value
   if (!item) return []
+  if (fileReference.value) return [[t('astrophotoflow.results.fileSize'), item.byte_size == null ? text(null) : `${item.byte_size} B`]]
   const parameters = item.parameters
   const mode = parameters.parameter_mode
   return [
@@ -91,6 +93,7 @@ const summary = computed(() => {
 const extra = computed(() => {
   const item = data.value
   if (!item) return []
+  if (fileReference.value) return [[t('astrophotoflow.results.contentHash'), text(item.content_hash)]]
   return [
     [t('astrophotoflow.camera'), text(item.equipment.camera)],
     ['Offset', text(item.parameters.offset)],
@@ -145,6 +148,7 @@ async function load() {
     const item = await client.inspect(reference, index.value)
     if (current !== generation) return
     data.value = item
+    if (item.format === 'other') return
     if (item.availability === 'available') {
       const base = `/astrophotoflow/api/v1/library/assets/${item.asset_id}/versions/${item.asset_version_id}/previews`
       consumerBase = base
@@ -202,6 +206,7 @@ async function load() {
 }
 
 function openViewer() {
+  if (fileReference.value) return
   let value: unknown
   try { value = typeof referenceText.value === 'string' ? JSON.parse(referenceText.value) : undefined }
   catch (cause) { failure.value = cause instanceof Error ? cause.message : String(cause); return }
@@ -239,7 +244,8 @@ onBeforeUnmount(() => {
     </div>
     <span v-if="importFailure" role="alert" class="text-error">{{ importFailure }}</span>
     <strong class="shrink-0 truncate text-base-foreground" :title="data?.name">{{ data?.name ?? t('astrophotoflow.libraryImage') }}</strong>
-    <div class="group relative h-56 min-h-56 w-full overflow-hidden rounded-sm bg-component-node-widget-background" role="button" tabindex="0" :aria-label="t('astrophotoflow.media.open')" @click="openViewer" @keydown.enter.prevent="openViewer" @keydown.space.prevent="openViewer">
+    <div v-if="fileReference" class="flex min-h-20 items-center gap-2 rounded-sm bg-component-node-widget-background p-3"><i class="icon-[lucide--file-text] size-6" aria-hidden="true" /><span class="break-words">{{ failure || t('astrophotoflow.results.fixedFile') }}</span></div>
+    <div v-else class="group relative h-56 min-h-56 w-full overflow-hidden rounded-sm bg-component-node-widget-background" role="button" tabindex="0" :aria-label="t('astrophotoflow.media.open')" @click="openViewer" @keydown.enter.prevent="openViewer" @keydown.space.prevent="openViewer">
       <ImagePreview v-if="image" :image-urls="[image]" display-only @load-error="imageFailed" />
       <div v-else class="flex h-full min-w-0 flex-col items-center justify-center gap-2 px-3 text-muted-foreground" role="status">
         <i :class="loading ? 'icon-[lucide--loader-circle] size-5 animate-spin' : 'icon-[lucide--image-off] size-5'" aria-hidden="true" />
@@ -267,7 +273,7 @@ onBeforeUnmount(() => {
     <Dialog :open="details" @update:open="details = $event">
       <DialogPortal><DialogOverlay /><DialogContent size="md" class="max-h-[85vh] overflow-y-auto" :aria-describedby="undefined">
         <DialogHeader><DialogTitle>{{ data?.name }}</DialogTitle><Button variant="textonly" size="icon" :aria-label="t('g.close')" @click="details = false"><i class="icon-[lucide--x] size-4" /></Button></DialogHeader>
-        <p class="text-muted-foreground">{{ t('astrophotoflow.currentImageMetadata') }}</p>
+        <p class="text-muted-foreground">{{ t(fileReference ? 'astrophotoflow.results.fixedFile' : 'astrophotoflow.currentImageMetadata') }}</p>
         <dl class="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-2"><template v-for="[label, value] in [...summary, ...extra]" :key="label"><dt class="text-muted-foreground">{{ label }}</dt><dd class="m-0 break-words">{{ value }}</dd></template></dl>
       </DialogContent></DialogPortal>
     </Dialog>

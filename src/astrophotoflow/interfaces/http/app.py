@@ -344,7 +344,7 @@ def create_app(settings: Settings, token: str) -> FastAPI:
             state = BusyState(busy=False, unknown=False, blockers=[])
             try:
                 set_maintenance(body.operation_id)
-                state = data_busy(app.state.database)
+                state = data_busy(app.state.database, app.state.media_views)
                 active_software = [package_id for package_id, task in app.state.software_tasks.items() if not task.done()]
                 active_software.extend(f"{package.package_id}调用 {use.call_id}" for package in list_packages(settings) for use in get_usage(package.package_id))
                 active_software.extend(f"Siril准备 {call_id}" for call_id, task in app.state.siril_calls.items() if not task.done())

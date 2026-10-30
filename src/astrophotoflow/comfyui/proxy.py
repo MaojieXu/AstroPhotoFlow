@@ -27,6 +27,9 @@ ROUTES = [
     ("GET", "/software/packages", "/software/packages"),
     ("GET", "/nodes", "/nodes"),
     ("GET", "/nodes/{definition_id}", "/nodes/{definition_id}"),
+    ('GET', '/runs/{prompt_id}/calls', '/runs/{prompt_id}/calls'),
+    ('GET', '/runs/{prompt_id}/calls/{call_id}', '/runs/{prompt_id}/calls/{call_id}'),
+    ('GET', '/runs/{prompt_id}/calls/{call_id}/log', '/runs/{prompt_id}/calls/{call_id}/log'),
     ("POST", "/software/preview", "/software/preview"),
     ("DELETE", "/software/preview/{consumer_id}", "/software/preview/{consumer_id}"),
     (
@@ -134,6 +137,13 @@ class ProxyError(Exception):
 for _scope in ("/library/assets/{asset_id}/versions/{version_id}/previews", "/projects/{project_id}/asset-references/{reference_id}/previews"):
     for _method, _suffix in (("POST", "/viewer"), ("DELETE", "/viewer/consumer/{consumer_id}"), ("GET", "/viewer/{key}/status"), ("GET", "/viewer/{key}/tiles/{level}/{x}/{y}"), ("GET", "/viewer/{key}/{file}")):
         ROUTES.append((_method, _scope + _suffix, _scope + _suffix))
+
+_output_scope = '/runs/{prompt_id}/calls/{call_id}/outputs/{output_index}/members/{member_index}'
+for _method, _suffix in [('GET', '/analysis'), ('GET', '/file'), ('GET', '/thumbnail'),
+                         ('POST', '/viewer'), ('DELETE', '/viewer/consumer/{consumer_id}'),
+                         ('GET', '/viewer/{key}/status'), ('GET', '/viewer/{key}/tiles/{level}/{x}/{y}'),
+                         ('GET', '/viewer/{key}/{file}')]:
+    ROUTES.append((_method, _output_scope + _suffix, _output_scope + _suffix))
 
 
 def _configuration(*, allow_missing_token: bool = False):

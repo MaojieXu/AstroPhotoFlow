@@ -1,7 +1,10 @@
 # ③ 外部软件接入与环境
 
-拥有固定软件包、安装／就绪及实际调用观察。`public.py`提供共享能力，`metadata.py`是领域服务与原生引擎共用的轻量 Bundle 元数据读取入口，`bundles.py`处理独立Bundle，`routes.py`由应用装配。Siril Auto Stretch程序与适配器来自独立私有仓库；节点定义归④、图与运行归⑤。
+拥有固定软件包、安装／就绪及实际调用观察。`public.py`提供共享能力，`bundles.py`处理独立Bundle，`routes.py`由应用装配。Siril程序、操作和适配器来自独立私有仓库；节点定义归④、图与运行归⑤。
 
+Bundle SDK v1保留已发布单图输入／输出契约；v2消费真实具名图像／序列／文件输入、多输出与分析文件。契约见`contracts/bundles.py`、`contracts/software.py`，具体命令和参数声明仍在独立Bundle，不在平台生成空节点。宿主负责进程、实际观察、取消、输出范围检查；分析与科学输出分别交⑤／②检查，进程退出不等于节点结果已就绪。
+
+开发预览可用进程级`ASTROPHOTOFLOW_BUNDLE_CATALOG`读取独立目录快照，默认仍使用包内固定发布目录。覆盖不会更新默认workspace、全局MCP或正常dev；同样必须固定新tag与SHA、走现有安装计划／网页确认及实际原生加载。快照导出要求干净已提交checkout且HEAD与tag一致，不能把脏工作区冒充旧SHA。操作见[开发流程](../../../../docs/development/README.md)。
 `environment.py`提供两侧共用的 Bundle 子进程环境；Windows 的程序搜索路径只使用 Bundle 程序目录和系统目录，其他环境值保留，不修改宿主环境。
 
 安装状态原子替换遇到 Windows `WinError 5` 时最多尝试5次，间隔50毫秒。进度写入耗尽尝试只记日志、保留上次进度，下一次直接写最新值；最终状态写入失败必须返回“安装结果未能保存，需核对”，不报告成功或自动重装。其他错误正常返回。

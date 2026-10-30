@@ -9,7 +9,7 @@ import CanvasDataWidget from './CanvasDataWidget.vue'
 const registered = new WeakSet<ComfyApp>()
 
 export function attachDataReferenceDisplay(node: LGraphNode) {
-  if (node.comfyClass !== 'APF_DATA_REFERENCE') return
+  if (node.comfyClass !== 'APF_DATA_REFERENCE' && node.comfyClass !== 'APF_FILE_REFERENCE') return
   const reference = node.widgets?.find(widget => widget.name === 'reference')
   if (!reference) return
   reference.options = {
@@ -25,8 +25,8 @@ export function attachDataReferenceDisplay(node: LGraphNode) {
     options: {
       serialize: false,
       surfaces: { canvas: 'shown', vueNode: 'shown', panel: 'never' },
-      getMinHeight: () => 480,
-      getMaxHeight: () => 480
+      getMinHeight: () => node.comfyClass === 'APF_FILE_REFERENCE' ? 240 : 480,
+      getMaxHeight: () => node.comfyClass === 'APF_FILE_REFERENCE' ? 240 : 480
     }
   })
   widget.serialize = false

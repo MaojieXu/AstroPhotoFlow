@@ -12,8 +12,10 @@ from sqlalchemy import select
 
 from astrophotoflow.core.config import ImportRoot, Settings
 from astrophotoflow.core.database.schema import database_lock, upgrade_database
+from astrophotoflow.contracts.media import MediaSelection
 from astrophotoflow.interfaces.http.app import create_app
-from astrophotoflow.modules.data.models import Preview
+from astrophotoflow.modules.data.models import Asset, Preview
+from astrophotoflow.modules.data.public import check_output
 from astrophotoflow.modules.data.previews import owned_preview_locations
 
 
@@ -59,6 +61,38 @@ def prepare(client, base, body=None):
 
 def native_url(url):
     return url.removeprefix("/astrophotoflow")
+
+
+def test_checked_output_view_uses_thresholds_and_hdu_without_registering_assets(media_service, tmp_path):
+    settings, app, _, _ = media_service
+    source = tmp_path / 'output.fit'
+    pixels = np.array([[0, .5, 1], [1, .5, 0]], dtype=np.float32)
+    fits.HDUList([fits.PrimaryHDU(np.zeros((4, 5), dtype=np.float32)),
+                  fits.ImageHDU(pixels, name='SCI')]).writeto(source)
+    original = source.read_bytes()
+    checked = check_output(settings, run_directory=tmp_path, path=source, expected_format='fits', expected_frames=2)
+    with app.state.database.read_session() as session:
+        before = session.scalars(select(Asset.id)).all()
+    views = app.state.media_views
+    prepared = views.prepare_output(checked, MediaSelection(hdu_index=1, display_range=(0, 1)), direct=False)
+    future = views.preparing.get(prepared.key)
+    if future is not None:
+        future.result(timeout=30)
+    state = views.output_status(checked, prepared.key)
+    assert state.status == 'available'
+    assert (state.width, state.height) == (3, 2)
+    assert [(hdu.index, hdu.name) for hdu in state.hdus] == [(0, None), (1, 'SCI')]
+    job, release = views.acquire_output(checked, state.key)
+    try:
+        tile = np.asarray(Image.open(BytesIO(views.tile(job, state.max_level, 0, 0))))
+        assert np.all(tile[0, 0] == 0) and np.all(tile[0, 2] == 255)
+        assert np.all(np.abs(tile[0, 1].astype(int) - 127) <= 1)
+    finally:
+        release()
+    with app.state.database.read_session() as session:
+        assert session.scalars(select(Asset.id)).all() == before
+        assert session.scalars(select(Preview)).all() == []
+    assert source.read_bytes() == original
 
 
 def test_http_original_resolution_tiles_auth_scope_and_cleanup_ownership(media_service):

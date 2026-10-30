@@ -71,6 +71,9 @@ class SoftwareInputDefinition(StrictModel):
     required: bool
     supports_hdu: bool | None
     supports_slice: bool | None
+    multiple_connections: bool = False
+    data_kind: Literal['image', 'sequence', 'file'] = 'image'
+    colour_layout: Literal['planar', 'interleaved'] | None = None
 
 
 class SoftwareOutputDefinition(StrictModel):
@@ -78,6 +81,8 @@ class SoftwareOutputDefinition(StrictModel):
     type: str
     formats: list[ScienceFormat]
     cardinality: Literal["one", "many"]
+    required: bool = True
+    colour_layout: Literal['planar', 'interleaved'] | None = None
 
 
 class SoftwareOperation(StrictModel):
@@ -91,10 +96,18 @@ class SoftwareOperation(StrictModel):
     inputs: list[SoftwareInputDefinition]
     outputs: list[SoftwareOutputDefinition]
     parameters: list[ParameterDefinition]
+    parameter_widgets: dict[str, Literal['multiline']] = Field(default_factory=dict)
     content_token: str
     ready: bool
     reason: str | None = None
     cancel_supported: bool | None
+
+    @model_validator(mode='after')
+    def valid_parameter_widgets(self):
+        strings = {parameter.name for parameter in self.parameters if parameter.kind == 'string'}
+        if not set(self.parameter_widgets).issubset(strings):
+            raise ValueError('多行控件必须绑定已声明的字符串参数。')
+        return self
 
 
 class SoftwarePackage(StrictModel):
@@ -156,7 +169,9 @@ class SoftwareInvocation(StrictModel):
     version: str
     operation_id: str
     operation_content_token: str
+    bundle_commit: str | None = None
     inputs: dict[str, list[ResolvedInput]]
+    supporting_inputs: dict[str, list[ResolvedInput]] = Field(default_factory=dict)
     parameters: dict[str, JsonValue]
     work_directory: Path
 
@@ -164,6 +179,8 @@ class SoftwareInvocation(StrictModel):
 class ProducedFile(StrictModel):
     path: Path
     format: ScienceFormat
+    allow_empty: bool = False
+    frame_count: int | None = Field(default=None, ge=1)
 
 
 class SoftwareObservation(StrictModel):
@@ -188,6 +205,7 @@ class SoftwareResult(StrictModel):
     ended_at: datetime | None
     exit_code: int | None
     outputs: dict[str, list[ProducedFile]]
+    supporting_outputs: dict[str, list[ProducedFile]] = Field(default_factory=dict)
     log_path: Path | None
     error: ErrorDetail | None
 
@@ -240,8 +258,18 @@ class NativeBundleCall(StrictModel):
     node_id: str
     definition_id: UuidInput
     definition_token: str
-    reference: InputReference | OutputLocator
+    workflow_id: UuidInput | None = None
+    reference: InputReference | OutputLocator | None = None
+    inputs: dict[str, InputReference | OutputLocator | list[InputReference | OutputLocator]] = Field(default_factory=dict)
     parameters: dict[str, JsonValue]
+
+    @model_validator(mode="after")
+    def one_input_form(self):
+        if self.reference is not None and "inputs" in self.model_fields_set:
+            raise ValueError("单输入引用与具名输入不能同时提供。")
+        if self.reference is None and "inputs" not in self.model_fields_set:
+            raise ValueError("必须明确提供具名输入；无输入操作使用空字典。")
+        return self
 
 
 class BundlePreviewRequest(StrictModel):
@@ -252,6 +280,32 @@ class BundlePreviewRequest(StrictModel):
     package_id: str
     operation_id: str
     parameters: dict[str, JsonValue]
+
+
+class RunOutputPort(StrictModel):
+    name: str
+    type: str
+    members: int = Field(ge=0)
+    formats: list[ScienceFormat] = Field(default_factory=list)
+    names: list[str] = Field(default_factory=list)
+
+
+class RunCallResult(StrictModel):
+    prompt_id: UUID
+    call_id: UUID
+    node_id: str
+    workflow_id: UUID | None = None
+    package_id: str | None = None
+    software_version: str | None = None
+    bundle_version: str | None = None
+    bundle_commit: str | None = None
+    operation_id: str | None = None
+    definition_token: str | None = None
+    state: Literal['starting', 'running', 'completed', 'failed', 'cancelled', 'unknown']
+    ports: list[RunOutputPort]
+    preview_error: str | None = None
+    observation: SoftwareObservation | None = None
+    error: ErrorDetail | None = None
 
 
 class ConfirmSoftwareEvent(StrictModel):

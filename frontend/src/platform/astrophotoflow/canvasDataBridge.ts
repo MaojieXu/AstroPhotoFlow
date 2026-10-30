@@ -19,8 +19,6 @@ export async function addLibraryDataToCanvas(source: CanvasDataRequest, pos?: Po
     if (!app.isGraphReady || !graph || isSelectOnly(canvas)) {
       throw new Error(t('astrophotoflow.canvasUnavailable'))
     }
-    const definition = useNodeDefStore().nodeDefsByName.APF_DATA_REFERENCE
-    if (!definition) throw new Error(t('astrophotoflow.dataNodeUnavailable'))
     const prepared = await createCanvasDataClient(fetch).prepare(source)
     if (app.canvas !== canvas || canvas.graph !== graph || useWorkflowStore().activeWorkflow !== workflow || isSelectOnly(canvas)) {
       throw new Error(t('astrophotoflow.canvasChanged'))
@@ -38,7 +36,7 @@ export function insertPreparedCanvasData(prepared: CanvasData, pos?: Point) {
   const app = useApp()
   const canvas = app.canvas
   const graph = canvas.graph
-  const definition = useNodeDefStore().nodeDefsByName.APF_DATA_REFERENCE
+  const definition = useNodeDefStore().nodeDefsByName[prepared.native_type]
   if (!app.isGraphReady || !graph || isSelectOnly(canvas)) throw new Error(t('astrophotoflow.canvasUnavailable'))
   if ((useWorkflowStore().activeSubgraph ?? app.graph) !== graph) throw new Error(t('astrophotoflow.canvasChanged'))
   if (!definition) throw new Error(t('astrophotoflow.dataNodeUnavailable'))

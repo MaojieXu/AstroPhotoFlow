@@ -33,7 +33,7 @@ def prepare_canvas_data(database: Database, body: CanvasDataRequest) -> CanvasDa
             asset, version = _available_asset(session, str(body.version_id))
             if asset.id != str(body.id):
                 raise not_found()
-            return CanvasDataOut(title=asset.name, reference=AssetInputReference(
+            return CanvasDataOut(title=asset.name, native_type='APF_FILE_REFERENCE' if (version.scientific_metadata or {}).get('format') == 'other' else 'APF_DATA_REFERENCE', reference=AssetInputReference(
                 kind="asset_version", asset_version_id=version.id,
                 selection=ScienceSelection(kind="whole_file"),
             ))
@@ -51,9 +51,12 @@ def prepare_canvas_data(database: Database, body: CanvasDataRequest) -> CanvasDa
             members = [member for member in members if member.position in indexes]
         if not members:
             raise ApiError(422, "INVALID_REFERENCE", "空图像组不能加入画布。")
-        for member in members:
-            _available_asset(session, member.asset_version_id)
-        return CanvasDataOut(title=f"{dataset.name} · {len(members)} 张", reference=DatasetInputReference(
+        kinds = {(_available_asset(session, member.asset_version_id)[1].scientific_metadata or {}).get('format') == 'other' for member in members}
+        if len(kinds) != 1:
+            raise ApiError(422, 'INVALID_REFERENCE', '文件与科学图像需要通过各自类型的输入端口加入。')
+        file_group = True in kinds
+        return CanvasDataOut(title=f"{dataset.name} · {len(members)} {'个文件' if file_group else '张'}",
+            native_type='APF_FILE_REFERENCE' if file_group else 'APF_DATA_REFERENCE', reference=DatasetInputReference(
             kind="dataset_version", dataset_version_id=version.id,
             members=[DatasetInputMember(
                 member_index=member.position, asset_version_id=member.asset_version_id,
@@ -137,6 +140,7 @@ def inspect_canvas_data(database: Database, body: CanvasInspectRequest) -> Canva
             format=metadata.get("format"), width=width, height=height,
             bitpix=hdu.bitpix if hdu else None, pixel_type=hdu.pixel_type if hdu else None,
             preview_status=status, preview_error=error,
+            byte_size=version.byte_size, content_hash=version.content_hash,
             preview_url=f"/astrophotoflow/api/v1/library/assets/{asset.id}/versions/{version.id}/previews/thumbnail" if status == "available" else None,
         )
 

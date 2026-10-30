@@ -108,7 +108,7 @@ class DisplayPreviews:
             path = resolve_relative(root, relative)
         job = {"version_id": version_id, "hdu_index": index, "kind": hdu.supported_kind if hdu else None,
                "category": category, "path": path, "recipe": recipe,
-               "parameters": dict(version.capture_snapshot or {})}
+               "parameters": {**dict(version.capture_snapshot or {}), 'colour_layout': (version.scientific_metadata or {}).get('colour_layout')}}
         if display is not None:
             return display, job, _issue("failed", "PREVIEW_FAILED", display.error or "大图缓存不可用，请重试。")
         return None, job, _issue("not_ready", "DISPLAY_NOT_GENERATED", "点击生成大图预览。")

@@ -2,6 +2,19 @@
 
 本页保留各日期、候选和范围的历史证据；段落中的“当前／尚未实现／未合并”只指当时，最新状态见 [当前上下文](current-context.md)。按具体条目查询，不作为每次任务的必读清单。
 
+## 2026-10-30 Siril完整Bundle候选：Feature静态验证
+
+候选分支`codex/siril-full-bundle`，平台基线`2a6053eb3e8351156d7fb2b4b1ed208e6e628bc0`；独立私有Bundle基线`12fd2d1d55daeadf7acb3972385d5c2bfcb52d4d`，候选`0.2.0-dev.1`／Siril 1.4.4／SDK v2。以下是未提交源码的Feature记录，不表示已发布、原生加载或用户验收。
+
+按用户确认，199条参考索引逐条保留覆盖依据；181条可脚本能力落实为160个真实具名操作、会话／输入输出／运行设置及共享别名。固定Windows程序实际提供198条，非脚本17条，另有仅Unix的`ls`；非脚本项不生成执行节点。`visu`的显示阈值复用通用查看器，`inspector`提供原尺寸平移缩放的人工检查，九宫格及其余GUI交互仍待后续方案。平台只增加通用SDK、文件引用、多输出／分析及同源查看／查询能力，Siril程序和命令适配保留在私有Bundle。
+
+- 静态构建：39份受影响Python源码／测试完成语法编译；私有Bundle清单、160份操作／节点契约验证通过，160个调用计划完成静态构造，43个明确执行端点。RAW构造样本仅验证路径与计划，未伪称真实RAW解码。OpenAPI已重新生成。记录在`.artifacts/siril-audit/final-static.json`和`plan-compilation-v3.json`。
+- 类型／网页：UI包类型检查通过；原生应用类型检查排除已知基线`WorkbenchSettingsPanel.test.ts`的TS2769后通过，未重复执行已知失败的根完整构建。Vite网页构建通过并保留已有资源／动态导入警告，产物位于`.artifacts/build/frontend`；未提交候选以基线加`dirty-siril-full-bundle`标记，不能冒充已提交SHA。日志为`.artifacts/siril-audit/ui-typecheck.log`、`native-typecheck.log`、`frontend-build.log`。
+- 定向原生资料探查：保留固定程序的`help`／格式输出和固定1.4.4源代码依据；三张合成64×64单色FITS的序列布局、`getref`、`seqstat`和直接编号文件探查完成。首次进程启动在OpenBLAS分配阶段失败；显式BLAS／OMP单线程后探查成功。日志为`sequence-layout/layout.log`、`layout-threads1.log`和`direct-stage.log`。这些探查不等于160个节点执行验证。
+- 回归用例已编写但按Feature约定未运行测试套件或综合验收。待Git Manager独立审查／验证：具名／可选／增长端口原生加载、原件与容器帧数、颜色布局及精度、校准／配准／叠加、序列旁文件、多输出、分析实际解析、依赖缺失、进程树取消／unknown查询和查看器视觉交互。
+
+本轮未修改正常dev、默认workspace、全局MCP或真实素材。现有32688／32690独立实例仍为准备阶段版本；完整候选安装须先取得本地提交／新开发tag授权，生成固定目录快照并走现有安装确认。包内默认发布目录仍指向先前Bundle，不用旧SHA承载当前源码。用户确认可以集成前不合并、推送或发布。
+
 <a id="docs-minimization"></a>
 
 ## 2026-10-29 文档最小化
@@ -743,3 +756,20 @@
 - 静态与构建：修复源码定向ESLint无错误；测试文件不在该ESLint配置范围，另由Vitest及所属类型项目验证。Vite build类型检查通过；前端依赖边界0错误、13条data/workspace循环警告。完整原生类型检查及前端生产构建通过，`build-manifest.json`记录源码`52da83199a86e09ce38354503e25f99e4c2ca18a`。首次构建因类型编译桥`C malloc failed`失败；停止本轮临时验收实例后，以进程级`GOMAXPROCS=2`、`GOMEMLIMIT=2GiB`、`NODE_OPTIONS=--max-old-space-size=4096`串行重试通过，未改项目依赖或编译检查。构建仍有非阻塞资源／动态导入／插件耗时警告。
 - 证据：完整日志、浏览器脚本／结果／截图位于Feature Worktree `C:/Users/Administrator/.codex/worktrees/dbc5/AstroPhotoFlow/.artifacts/manager-integration/hot-reload/`，主要为`python-tests.log`、`python-fixes.log`、`ui-tests.log`、`native-frontend-tests.log`、`frontend-fixes-final.log`、`browser-smoke.json`、`final-frontend-build-retry.log`、`build-typecheck.log`、`frontend-boundaries.log`。初始失败日志一并保留。临时验收实例已准确停止，证据和数据保留。
 - 交付边界：仅本地Git集成；正常dev运行实例、默认workspace、Feature原预览及全局MCP注册未迁移或重启。旧MCP schema仍需宿主重连；全局注册仍指Feature的本机状态及原配置备份继续保留。长期热加载可靠性、完整科学处理／输出保存及用户视觉验收未因此认定完成。
+
+
+<a id="siril-sdk-v2-integration"></a>
+## Siril全量候选与SDK v2本地集成（2026-10-30）
+
+用户授权整理待审提交、独立审查、必要验证、最小修复及本地合并。原平台候选`0f53b719584ec68a8dd277c27713fde84e084a7c`基于`2a6053eb`，在Feature分支整合当前dev `4d17208c`并保留热加载、直接画布编辑及已取消的占用限制。平台最终功能源码`e322d0744db82d26fb1b138e0818b75d1fdcbbe1`；后续仅补本记录及现行文档。私有Bundle原候选`68509bdf`，最终源码／本地开发tag `v0.2.0-dev.1`固定到`3f0f2a64c8b24cc8ca940d945139304cf871efed`，Bundle管理checkout本地dev合并为`ff6f63fe9d866cf34e3aa612157511ee81d9e89c`，合并树与待审源码一致；未推送或发布远端tag。
+
+- 范围：固定Siril 1.4.4，199索引项保留完整覆盖依据；160操作／节点，会话、IO及重复命令按已确认的映射处理，非脚本／GUI限制明确说明。SDK v2提供具名输入、多输出、分析、进度及取消，保留SDK v1。构造计划与原生加载不替代全部节点真实运行验收。
+- 独立审查：两名不继承开发聊天历史的只读Reviewer分别审查Bundle命令／科学语义和平台SDK／结果接入，均不修改文件或运行测试。Bundle六项P2已修复：ICC intent枚举、limit参数、profile通道、register畸变文件语法、seqstat TSV解析和stat CFA／main组合误报。修复时误改的REGISTER通道已恢复整数0..2并补回归；最终复审无阻塞。平台及后续增量复审无阻塞。
+- Manager验证修复：去掉可变目录对象共享缓存；显示阈值支持严格JSON往返；明确排除一维字节ICCProfile附属HDU的科学帧数误判；结果扩展复用已有同名扩展以支持TS热替换；160节点目录改为请求内按包批量描述，读取从回归中的960次降至每包有界读取，保留跨请求读取现状；持久化调用／输出JSON以JSON模型边界恢复UUID、时间及路径，未知状态只查询而不重放。结果组件两处样式lint同步修正。上述行为均补充定向回归，关键缺陷先复现失败后通过。
+- 自动回归：平台软件／节点／工作流／数据／interfaces、CLI／MCP、客户端、原生热加载及架构首轮547项中539通过、8失败；修复后相关29、7、139、45、24项分批复测通过，新增目录隔离、阈值往返、ICC、批量目录及持久记录／恢复共6项用例。按唯一用例汇总553项，未运行全仓测试。独立Bundle39项通过；UI包36文件276项通过；原生桥接14文件68项通过。完整原生类型检查未排除任何错误文件，生产构建通过；测试扩展签名问题修复后重试通过。定向生产代码ESLint无错误；前端依赖边界0错误、13条循环警告。
+- 原生及真实CLI：使用实际Siril程序版本检测及固定ComfyUI 0.42.0 API注册160节点，全部节点信息可序列化。CLI矩阵41组正常处理通过，随后ICC赋值→转换、固定有序组、序列／单图校准、FFT两输出→逆变换共7组通过；FFT像素往返容差`2e-5`，原件hash不变。矩阵覆盖图像运算、序列、注册、叠加、多输出和分析，不等于160节点逐一通过。最初ICC脚本夹具使用不存在设置项，已改用真实ICC前置链；由真实ICC输出发现的附属HDU问题已修复。
+- 明确保留的失败／依赖：当前Windows `seqprofile`生成DAT后进入Siril自身Python／plot准备并以`0xC0000005`退出，未计为运行通过；StarNet未配置程序时返回真实缺依赖错误。未自动补装外部依赖、未宣称联网目录、星表／SPCC、视频编码器或任意Python脚本组合已验收。Bundle使用说明单列当前限制。
+- 实际取消：独立父子进程探查确认仅停止观测到的所属进程树，保留另建的无关进程；丢失句柄维持unknown。该探查不是160种Siril计算的逐项取消验收。
+- 独立网页／端到端：通过当前网页确认安装本地固定tag／SHA，160节点实际加载。真实原生队列完成统计、512桶直方图、RGB拆分及三路下游统计共6次节点调用，结果归属同一工作流。通用分析查看器显示直方图，计数之和与128×128像素数一致，页面错误0。重启后6条已完成调用仍可查询，完整输出查看器可用，素材库仅含合成输入。节点目录本机单次观测811ms（160节点），没有把超时调大作为修复。
+- 最终预览：`http://127.0.0.1:32888`，服务32890；workspace为Feature内`.artifacts/manager-integration/siril/preview`，由进程级`ASTROPHOTOFLOW_BUNDLE_CATALOG`采用干净tag快照，默认目录／默认workspace／全局MCP／正常dev未改变。已同步最终资源，`build-manifest.json`对应`e322d0744db82d26fb1b138e0818b75d1fdcbbe1`；仅本地可用的合成图保存为`workflows/Manager-Siril-SDK2.json`。包内默认发布目录仍为旧版0.1.2-dev.1，未指向尚未推送的GitHub tag。
+- 证据：Feature Worktree `C:/Users/Administrator/.codex/worktrees/bfe6/AstroPhotoFlow/.artifacts/manager-integration/siril/`保留完整日志、脚本、失败记录、原生记录和截图，主要为`platform-tests.log`、`platform-final.log`、`records-after.log`、`catalog-after.log`、`bundle-final.log`、`ui-tests.log`、`native-frontend-tests.log`、`native-probe.log`、`runtime-matrix/report.json`、`runtime-matrix/focused-report.json`、`cancellation-probe.json`、`browser-acceptance.json`、`completed-native-history.json`、`final-preview-verification.json`、`final-frontend-build-retry.log`和`final-assets.log`。Feature空间及必要运行数据保留。

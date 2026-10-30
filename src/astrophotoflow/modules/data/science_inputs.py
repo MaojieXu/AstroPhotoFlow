@@ -175,7 +175,7 @@ def validate_input_references(database: Database, project_id: UUID, references: 
         _reference_rows(session, request)
 
 
-def _resolved_asset(settings: Settings, row, input_mode: str, run_directory: Path):
+def _resolved_asset(settings: Settings, row, input_mode: str, run_directory: Path, *, colour_layout=None):
     reference_index, asset, version, member_index, dataset_version_id, calibration, selection = row
     if not version.content_hash or version.byte_size is None:
         raise ApiError(422, "SOURCE_UNAVAILABLE", "固定素材版本尚未完成内容登记。")
@@ -203,7 +203,17 @@ def _resolved_asset(settings: Settings, row, input_mode: str, run_directory: Pat
             os.replace(part, read_path)
         preparation = "materialized"
         mtime_ns = read_path.stat().st_mtime_ns
-    metadata = version.scientific_metadata or {}
+    metadata = dict(version.scientific_metadata or {})
+    if metadata.get('format') == 'fits':
+        if colour_layout is not None and metadata.get('colour_layout') not in (None, colour_layout):
+            raise ApiError(422, 'UNSUPPORTED_SELECTION', '固定输入的颜色布局与操作要求不一致。')
+        if colour_layout is not None and metadata.get('colour_layout') is None:
+            metadata.update(colour_layout=colour_layout, colour_layout_source='operation_input')
+        try:
+            inspected = inspect_fits(read_path, (asset.parameters or {}).get('cfa_pattern'), colour_layout=metadata.get('colour_layout'))
+        except Exception as exc:
+            raise ApiError(422, 'UNSUPPORTED_SELECTION', '无法确定固定FITS输入的图像布局；未启动软件处理。') from exc
+        metadata.update(selected_hdu=inspected['selected_hdu'], hdu_count=len(inspected['hdus']), frame_count=_fits_frame_count(inspected))
     return ResolvedAssetInput(
         kind="asset_version", reference_index=reference_index, asset_id=UUID(asset.id),
         asset_version_id=UUID(version.id), dataset_version_id=UUID(dataset_version_id) if dataset_version_id else None,
@@ -234,7 +244,7 @@ def resolve_inputs(database: Database, settings: Settings, request: ResolveInput
 
 
 def resolve_canvas_inputs(database: Database, settings: Settings, reference: InputReference,
-                          *, run_directory: Path) -> ResolvedInputs:
+                          *, run_directory: Path, colour_layout=None) -> ResolvedInputs:
     with database.read_session() as session:
         calibrations = {}
         if reference.kind == "asset_version":
@@ -269,7 +279,7 @@ def resolve_canvas_inputs(database: Database, settings: Settings, reference: Inp
     run_directory.mkdir(parents=True, exist_ok=True)
     if required and shutil.disk_usage(run_directory).free < required:
         raise ApiError(422, "INSUFFICIENT_STORAGE", "空间不足，无法固定本次科学输入。")
-    items = [_resolved_asset(settings, row, "reproducible", run_directory) for row in rows]
+    items = [_resolved_asset(settings, row, "reproducible", run_directory, colour_layout=colour_layout) for row in rows]
     return ResolvedInputs(input_mode="reproducible", items=items, required_copy_bytes=required,
                           copied_bytes=sum(item.byte_size for item in items if item.preparation == "materialized"))
 
@@ -387,7 +397,7 @@ def accept_asset_content(database: Database, settings: Settings, asset_id: UUID,
     if observed_hash != body.expected_observed_hash:
         raise ApiError(409, "SOURCE_CHANGED", "文件在确认后再次变化，请重新检查。")
     new_version_id = str(uuid4())
-    suffix = "".join(source.suffixes[-2:]) if source.name.lower().endswith((".fits.fz", ".fit.fz")) else source.suffix
+    suffix = "".join(source.suffixes[-2:]) if source.name.lower().endswith((".fits.fz", ".fit.fz", '.fts.fz')) else source.suffix
     object_location = (Path("objects") / new_version_id / f"source{suffix.lower()}").as_posix()
     target = settings.data_dir / object_location if mode == "managed" else None
     part = settings.data_dir / "staging" / f"content-{new_version_id}.part" if target is not None else None
@@ -465,7 +475,14 @@ def accept_asset_content(database: Database, settings: Settings, asset_id: UUID,
         raise
 
 
-def check_output(settings: Settings, *, run_directory: Path, path: Path, expected_format: ScienceFormat) -> CheckedOutput:
+def _fits_frame_count(inspected):
+    images = [row for row in inspected['hdus'] if row['shape'] and row['hdu_type'] in {'PrimaryHDU', 'ImageHDU', 'CompImageHDU'}
+              and not ((row.get('name') or '').casefold() == 'iccprofile' and row['bitpix'] == 8 and len(row['shape']) == 1)]
+    return len(images) if images and all(row['supported_kind'] is not None for row in images) else None
+
+
+def check_output(settings: Settings, *, run_directory: Path, path: Path, expected_format: ScienceFormat, allow_empty: bool = False,
+                 colour_layout: str | None = None, expected_frames: int | None = None) -> CheckedOutput:
     try:
         root = run_directory.resolve(strict=True)
         resolved = path.resolve(strict=True)
@@ -478,13 +495,23 @@ def check_output(settings: Settings, *, run_directory: Path, path: Path, expecte
     if actual_format != expected_format:
         raise ApiError(422, "VALIDATION_ERROR", "输出格式与本次运行记录不一致。")
     content_hash, byte_size, mtime_ns = _hash(resolved)
-    if byte_size == 0:
+    if allow_empty and actual_format != 'other':
+        raise ApiError(422, 'VALIDATION_ERROR', '科学输出不能声明为空文件。')
+    if byte_size == 0 and not allow_empty:
         raise ApiError(422, "OUTPUT_UNAVAILABLE", "输出文件为空。")
     scientific_metadata = {"format": actual_format}
+    if colour_layout not in {None, 'planar', 'interleaved'}:
+        raise ApiError(422, 'VALIDATION_ERROR', '未知的图像颜色布局。')
     if actual_format == "fits":
         try:
-            inspected = inspect_fits(resolved)
+            inspected = inspect_fits(resolved, colour_layout=colour_layout, verify_span=True)
             scientific_metadata.update(selected_hdu=inspected["selected_hdu"], hdu_count=len(inspected["hdus"]))
+            scientific_metadata['frame_count'] = _fits_frame_count(inspected)
+            selected = next((row for row in inspected['hdus'] if row['is_selected']), None)
+            if selected is not None:
+                scientific_metadata.update({key: selected[key] for key in ('shape', 'bitpix', 'pixel_type', 'bunit')})
+            if colour_layout is not None:
+                scientific_metadata['colour_layout'] = colour_layout
         except Exception as exc:
             raise ApiError(422, "OUTPUT_UNAVAILABLE", "FITS 输出无法完整解析。") from exc
     elif actual_format == "xisf":
@@ -492,9 +519,16 @@ def check_output(settings: Settings, *, run_directory: Path, path: Path, expecte
             scientific_metadata.update(_inspect_xisf(resolved))
         except Exception as exc:
             raise ApiError(422, "OUTPUT_UNAVAILABLE", "XISF 输出无法完整解析。") from exc
+    elif actual_format == 'video' and resolved.suffix.lower() == '.ser':
+        from astrophotoflow.modules.data.media_sources import ser_info
+        info = ser_info(resolved)
+        scientific_metadata.update(frame_count=info['count'], width=info['width'], height=info['height'],
+                                   channels=info['channels'], pixel_depth=info['pixel_depth'], pixel_type=str(info['dtype']))
+    if expected_frames is not None and scientific_metadata.get('frame_count') != expected_frames:
+        raise ApiError(422, 'OUTPUT_UNAVAILABLE', '完整输出的实际帧数与软件结果不一致。')
     checked = CheckedOutput(run_directory=root, path=resolved, format=actual_format, byte_size=byte_size,
                            content_hash=content_hash, checked_at=datetime.now(timezone.utc),
-                           scientific_metadata=scientific_metadata)
+                           scientific_metadata=scientific_metadata, mtime_ns=mtime_ns)
     # Catch a replacement made while any format metadata was being read.
     current_hash, current_size, current_mtime = _hash(resolved)
     if (current_hash, current_size, current_mtime) != (content_hash, byte_size, mtime_ns):
@@ -518,7 +552,8 @@ def render_output_preview(checked: CheckedOutput, destination: Path, *, selectio
         raise ApiError(422, "VALIDATION_ERROR", "预览不能覆盖科学输出文件。")
     try:
         if checked.format == "fits":
-            inspected = inspect_fits(source, cfa_pattern)
+            layout = (checked.scientific_metadata or {}).get('colour_layout')
+            inspected = inspect_fits(source, cfa_pattern, colour_layout=layout)
             if selection is None or selection.kind == "whole_file":
                 hdu_index = inspected["selected_hdu"]
             elif selection.kind == "fits_hdu":
@@ -529,10 +564,10 @@ def render_output_preview(checked: CheckedOutput, destination: Path, *, selectio
             if row is None or row["supported_kind"] is None:
                 raise ApiError(422, "PREVIEW_UNSUPPORTED", "FITS 输出没有可预览的受支持 HDU。")
             if auto_stretch:
-                image, _ = create_preview(source, hdu_index, row["supported_kind"], {"cfa_pattern": cfa_pattern}, max_edge)
+                image, _ = create_preview(source, hdu_index, row["supported_kind"], {"cfa_pattern": cfa_pattern, 'colour_layout': layout}, max_edge)
             else:
                 from astrophotoflow.modules.data.siril_preview import direct_fits_image
-                image = direct_fits_image(source, hdu_index, max_edge)
+                image = direct_fits_image(source, hdu_index, max_edge, colour_layout=layout)
         elif checked.format == "image":
             image, _ = _ordinary_image(source, max_edge=max_edge)
         elif checked.format == "raw":
@@ -552,7 +587,7 @@ def render_output_preview(checked: CheckedOutput, destination: Path, *, selectio
     except Exception as exc:
         raise ApiError(422, "PREVIEW_FAILED", f"输出预览生成失败：{exc}") from exc
     image.thumbnail((max_edge, max_edge))
-    part = target.with_name(target.name + ".part")
+    part = target.with_name(target.name + '.' + str(uuid4()) + '.part')
     try:
         target.parent.mkdir(parents=True, exist_ok=True)
         image.save(part, format="JPEG")
@@ -605,10 +640,11 @@ def register_output(database: Database, settings: Settings, *, task_id: UUID, ou
             if not report.get("output_registration") or report.get("output_identity") != identity or report.get("output_name") != effective_name:
                 raise ApiError(409, "TASK_STATE_CONFLICT", "task_id 已用于不同的素材登记操作。")
             return _output_registration(session, existing, False)
-    current = check_output(settings, run_directory=output.run_directory, path=output.path, expected_format=output.format)
+    current = check_output(settings, run_directory=output.run_directory, path=output.path, expected_format=output.format,
+                           colour_layout=(output.scientific_metadata or {}).get('colour_layout'))
     if (current.content_hash, current.byte_size) != (output.content_hash, output.byte_size):
         raise ApiError(409, "SOURCE_CHANGED", "所选输出在检查后发生变化。")
-    suffix = "".join(current.path.suffixes[-2:]).lower() if current.path.name.lower().endswith((".fits.fz", ".fit.fz")) else current.path.suffix.lower()
+    suffix = "".join(current.path.suffixes[-2:]).lower() if current.path.name.lower().endswith((".fits.fz", ".fit.fz", '.fts.fz')) else current.path.suffix.lower()
     stored_name = f"0-{uuid4().hex}{suffix}"
     upload_root = settings.data_dir / "upload-staging" / task_id_text
     source_copy = upload_root / stored_name
@@ -620,6 +656,7 @@ def register_output(database: Database, settings: Settings, *, task_id: UUID, ou
         now = datetime.now(timezone.utc)
         report = {
             "output_registration": True, "output_identity": identity, "output_name": effective_name,
+            'output_colour_layout': (current.scientific_metadata or {}).get('colour_layout'),
             "upload_source_task_id": task_id_text,
             "upload_files": [{"name": effective_name, "size": current.byte_size, "received": current.byte_size,
                               "stored_name": stored_name}],
