@@ -25,6 +25,7 @@ def isolated_default(tmp_path, monkeypatch):
     monkeypatch.setattr(workbench.app_config, "CONFIG_PATH", tmp_path / "user/config.toml")
     monkeypatch.delenv("APF_WORKSPACE", raising=False)
     monkeypatch.delenv("ASTROPHOTOFLOW_CONFIG", raising=False)
+    monkeypatch.setenv("UV_CACHE_DIR", str(tmp_path / "cache"))
 
 
 def test_initialize_copies_native_web_and_start_uses_builtin_gateway(tmp_path, monkeypatch):
@@ -32,6 +33,7 @@ def test_initialize_copies_native_web_and_start_uses_builtin_gateway(tmp_path, m
     vendor = package / "vendor"
     web = package / "web"
     vendor.mkdir(parents=True)
+    (vendor / "comfyui-0.42.0-windows-py312.lock").write_text("numpy==2.4.6\n", encoding="utf-8")
     (web / "assets").mkdir(parents=True)
     (web / "index.html").write_text("AstroPhotoFlow", encoding="utf-8")
     (web / "assets/app.js").write_text("native", encoding="utf-8")
@@ -99,6 +101,64 @@ def test_initialize_copies_native_web_and_start_uses_builtin_gateway(tmp_path, m
     assert commands[1][commands[1].index("--base-directory") + 1] == str(workspace / "comfyui-data")
     assert commands[1][commands[1].index("--front-end-root") + 1] == str(workspace / "web")
     assert "--disable-all-custom-nodes" in commands[1]
+
+
+def test_create_workspace_needs_no_runtime_or_frontend_and_keeps_default(tmp_path, monkeypatch):
+    monkeypatch.setattr(workbench, "prepare_runtime", lambda **kwargs: pytest.fail("workspace creation must not install software"))
+    workspace = tmp_path / "empty"
+    config = workbench.create_workspace(workspace, service_port=18190, comfyui_port=18188)
+    assert config == workspace / "config.toml"
+    assert workbench.app_config.load_settings(config).workspace == workspace
+    assert (workspace / "comfyui-user/default/workflows").is_dir()
+    assert not (workspace / "data/service.token").exists()
+    assert not (workspace / "data/astrophotoflow.sqlite3").exists()
+    assert not workbench.app_config.CONFIG_PATH.exists()
+
+
+def test_runtime_receipt_skips_install_and_failed_update_cannot_be_reused(tmp_path, monkeypatch):
+    vendor = tmp_path / "package/vendor"
+    vendor.mkdir(parents=True)
+    archive = vendor / "comfyui-0.42.0.zip"
+    with zipfile.ZipFile(archive, "w") as bundle:
+        bundle.writestr("ComfyUI/main.py", "")
+        bundle.writestr("ComfyUI/requirements.txt", "numpy\n")
+    manifest = {"commit": workbench.COMFY_COMMIT, "sha256": hashlib.sha256(archive.read_bytes()).hexdigest()}
+    (vendor / "comfyui-source.json").write_text(json.dumps(manifest), encoding="utf-8")
+    lock = vendor / "comfyui-0.42.0-windows-py312.lock"
+    lock.write_text("numpy==2.4.6\n", encoding="utf-8")
+    runtime = tmp_path / "runtime"
+    monkeypatch.setattr(workbench, "__file__", str(vendor.parent / "core/workbench.py"))
+    monkeypatch.setattr(workbench, "_runtime_dir", lambda: runtime)
+    monkeypatch.setattr(workbench, "_uv", lambda: "uv")
+    commands = []
+
+    def install(command, env=None):
+        commands.append(command)
+        python = runtime / "comfyui-env" / ("Scripts/python.exe" if workbench.os.name == "nt" else "bin/python")
+        python.parent.mkdir(parents=True, exist_ok=True)
+        python.touch()
+
+    monkeypatch.setattr(workbench, "_run", install)
+    assert workbench.prepare_runtime()["reused"] is False
+    if workbench.os.name == "nt":
+        assert any(command[1:3] == ["python", "install"] and "--no-registry" in command for command in commands)
+    count = len(commands)
+    assert workbench.prepare_runtime()["reused"] is True
+    assert len(commands) == count
+    receipt = runtime / ".apf-runtime.json"
+    saved = json.loads(receipt.read_text(encoding="utf-8"))
+    saved["archive_sha256"] = "outdated"
+    receipt.write_text(json.dumps(saved), encoding="utf-8")
+
+    def fail(command, env=None):
+        raise workbench.WorkbenchError("installation interrupted")
+
+    monkeypatch.setattr(workbench, "_run", fail)
+    with pytest.raises(workbench.WorkbenchError, match="interrupted"):
+        workbench.prepare_runtime()
+    assert not receipt.exists()
+    with pytest.raises(workbench.WorkbenchError, match="未准备完成"):
+        workbench.prepare_runtime(reuse_only=True)
 
 
 def test_workspace_native_web_assets_are_complete_and_isolated(tmp_path, monkeypatch):

@@ -773,3 +773,15 @@
 - 独立网页／端到端：通过当前网页确认安装本地固定tag／SHA，160节点实际加载。真实原生队列完成统计、512桶直方图、RGB拆分及三路下游统计共6次节点调用，结果归属同一工作流。通用分析查看器显示直方图，计数之和与128×128像素数一致，页面错误0。重启后6条已完成调用仍可查询，完整输出查看器可用，素材库仅含合成输入。节点目录本机单次观测811ms（160节点），没有把超时调大作为修复。
 - 最终预览：`http://127.0.0.1:32888`，服务32890；workspace为Feature内`.artifacts/manager-integration/siril/preview`，由进程级`ASTROPHOTOFLOW_BUNDLE_CATALOG`采用干净tag快照，默认目录／默认workspace／全局MCP／正常dev未改变。已同步最终资源，`build-manifest.json`对应`e322d0744db82d26fb1b138e0818b75d1fdcbbe1`；仅本地可用的合成图保存为`workflows/Manager-Siril-SDK2.json`。包内默认发布目录仍为旧版0.1.2-dev.1，未指向尚未推送的GitHub tag。
 - 证据：Feature Worktree `C:/Users/Administrator/.codex/worktrees/bfe6/AstroPhotoFlow/.artifacts/manager-integration/siril/`保留完整日志、脚本、失败记录、原生记录和截图，主要为`platform-tests.log`、`platform-final.log`、`records-after.log`、`catalog-after.log`、`bundle-final.log`、`ui-tests.log`、`native-frontend-tests.log`、`native-probe.log`、`runtime-matrix/report.json`、`runtime-matrix/focused-report.json`、`cancellation-probe.json`、`browser-acceptance.json`、`completed-native-history.json`、`final-preview-verification.json`、`final-frontend-build-retry.log`和`final-assets.log`。Feature空间及必要运行数据保留。
+
+<a id="environment-bootstrap-feature"></a>
+## 环境与workspace准备拆分（2026-10-30，Feature未集成）
+
+- 实现：core拆分runtime准备与空workspace创建；固定开发入口默认只准备本地依赖／目录，显式构建、启停，输出阶段回执。保留私有runtime，包缓存及同基点本地网页可复用。
+- 静态：8个修改Python文件语法与文档链接检查通过；引擎归档生成成功，前端源码未变。实现验证使用基点`b625045c388953ac9dc4b28ec5d1a318385ac239`网页及该基点上的工作区改动；最终交接提交与预览版本见Feature Brief。
+- 实际准备：本机依赖已经存在时，空workspace首次准备1.511秒、再次准备1.378秒；重复调用跳过依赖安装，无构建／CPU安装／服务启动。这不是冷缓存首装耗时。runtime及已运行实例复用、仅本Feature重启通过；5项HTTP就绪与代理workspace身份核对通过。
+- 预览：网页33088、Vite33089、服务33090；workspace为本Feature的`.artifacts/workspaces/environment-bootstrap`。默认配置哈希不变，正常dev、其他Feature与全局MCP未修改。
+- 边界：已编写workspace无安装、准备幂等／中断、依赖失效、错误产物、运行中保护及CRLF回归用例，未执行测试套件或综合验收。冷缓存首装、多Worktree共享缓存及Linux／WSL尚待验证。更新Vite时短时限首屏探测曾超时，现有进程完成编译后HTTP核对通过，未用重启掩盖。
+- 证据：本Feature`.artifacts/logs/environment-bootstrap/`中的`implementation-verification.json`、`dev-prepare-first.json`、`dev-prepare-final-repeat.json`、`dev-preview-repeat.json`、`readiness-current.json`，完整阶段日志由`.artifacts/dev-prepare.json`指向。
+
+- Quickstart补充：根README提供clone dev后的无Agent命令；Windows PowerShell 5.1入口复用或在项目内准备工具，固定Node／uv归档校验，Python安装显式禁止注册。已有工具复用、本地Node解压及pnpm准备路径通过；完整构建／启动命令在已有Python与依赖缓存条件下66.985秒完成，热更新入口转发核对通过。全新无缓存机器首装尚未验收；新增离线缺失／校验失败及兼容工具复用回归用例未执行。检查实例已停止，原Feature预览保留。证据为同目录的quickstart-verification.json、quickstart-build.log、bootstrap-existing.log、bootstrap-managed-tools.log、quickstart-watch.log。

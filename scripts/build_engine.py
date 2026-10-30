@@ -32,8 +32,10 @@ def main():
         vendor / "comfyui-frontend-LICENSE": (ROOT / "frontend/LICENSE").read_bytes(),
     }
     for destination, content in resources.items():
-        if destination.is_file() and destination.read_bytes() == content:
-            continue
+        if destination.is_file():
+            previous = destination.read_bytes()
+            if previous == content or (destination.suffix != ".zip" and previous.replace(b"\r\n", b"\n") == content.replace(b"\r\n", b"\n")):
+                continue
         pending = staging / (destination.name + ".pending")
         pending.write_bytes(content)
         pending.replace(destination)

@@ -3,7 +3,7 @@
 ## 开始任务
 
 1. 核对分支与工作区，保留用户未提交内容。集成分支是 `dev`；不修改或合并到 `main`，提交、推送按用户授权。
-2. 只先读 [当前上下文](docs/development/current-context.md) 和 [当前计划](docs/development/implementation-plan.md)。产品任务再读 [需求](docs/requirements/README.md)，跨模块任务再读 [架构](docs/architecture/overview.md)。
+2. 纯空间／环境准备只读 [开发流程](docs/development/README.md) 并执行固定入口；开发任务先读 [当前上下文](docs/development/current-context.md) 和 [当前计划](docs/development/implementation-plan.md)，产品任务再读 [需求](docs/requirements/README.md)，跨模块再读 [架构](docs/architecture/overview.md)。
 3. 用 [源码导航](docs/architecture/module-map.md) 定位，再读修改范围内适用的 AGENTS.md、代码和相关测试。无需通读所有模块、历史设计或验收日志。
 4. 未定的产品选择询问用户；常规实现选择自行完成。用户后续明确要求优先于初始需求，不要从历史文档恢复已取消任务。
 
@@ -14,6 +14,7 @@
 - 不创建空服务、假接口、预注册能力或第二套原生机制。只在真实复用需求出现时提取公共能力。
 - Feature 可实现、编写必要测试、构建和类型编译并提供独立预览，默认不执行测试套件或综合验收；用户确认可以集成后，由 Git Manager 组织审查和必要验证。文档链接检查与接口快照生成可随对应文档任务执行；已通过的检查不无故重复。
 - 不擅自启停共享 runtime、更新正常 dev、修改默认 workspace、全局 MCP、令牌或真实素材。
+- 环境准备读取阶段回执；成功路径不临时重写准备脚本、反复读取日志或重复已通过的检查，失败才定向排错。
 
 ## 并行开发与集成
 
