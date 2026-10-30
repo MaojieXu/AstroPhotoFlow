@@ -53,5 +53,5 @@ command/acknowledgement ledger. Existing 58 MCP tools and Skills remain unchange
 until the separately planned complete migration.
 
 The future shared contracts are documented in
-[platform contracts](../../../docs/api/platform-contracts.md). No API, model,
+[platform contracts](../../../docs/archive/2026-10-29-planning/api/platform-contracts.md). No API, model,
 runtime, dependency or business data change is part of this documentation task.

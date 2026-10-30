@@ -1,6 +1,8 @@
+> 历史设计参考（2026-10-29退出现行计划）。签名、状态和任务顺序可能过时；不能直接据此实施。当前任务见 [当前计划](../../../../development/implementation-plan.md)。
+
 # ④节点构建数据设计
 
-**设计方向已确认；节点制作、更新和运行交接均待实现。** 本文依据[现行需求](../../requirements/README.md)及[④概要](../../../src/astrophotoflow/modules/nodes/README.md)。2026-10-27确认节点定义按workspace内JSON文件保存，不新增节点定义表或版本库；具体字段、公开签名和文件职责集中见[④详细契约](../../api/platform-contracts.md#nodes-design)。
+**设计方向已确认；节点制作、更新和运行交接均待实现。** 本文依据[现行需求](../../../../requirements/README.md)及[④概要](../../../../../src/astrophotoflow/modules/nodes/README.md)。2026-10-27确认节点定义按workspace内JSON文件保存，不新增节点定义表或版本库；具体字段、公开签名和文件职责集中见[④详细契约](../../api/platform-contracts.md#nodes-design)。
 
 ## 节点需要哪些信息
 
@@ -50,4 +52,4 @@ Python节点保存用户可查看的实际代码；执行环境随实施任务�
 
 未来验收覆盖保存后直接使用、测试失败、旧测试提示、跨项目复用、更新确认、参数重置、端口增删改及重排、复合节点局部修改、加载失败和执行中内容保护。原生注册、输出按位置保存及子图机制可复用，准确连线更新和端到端加载仍需实现与验证，不能由定义刷新推定已经支持。
 
-源码与现有测试见[模块导航](../module-map.md#module-4)；本次取舍见[节点简化ADR](../../../frontend/docs/adr/WORKBENCH-NODES-0057-shared-editable-node-definitions.md)。节点库、可选测试和确认更新按现行规则执行。仅修改文档，不表示新增功能已完成。
+源码与现有测试见[模块导航](../../../../architecture/module-map.md)；本次取舍见[节点简化ADR](../../../../../frontend/docs/adr/WORKBENCH-NODES-0057-shared-editable-node-definitions.md)。节点库、可选测试和确认更新按现行规则执行。仅修改文档，不表示新增功能已完成。

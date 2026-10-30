@@ -1,6 +1,8 @@
+> 历史设计参考（2026-10-29退出现行计划）。签名、状态和任务顺序可能过时；不能直接据此实施。当前任务见 [当前计划](../../../../development/implementation-plan.md)。
+
 # ①公共基础设施数据结构初稿
 
-**按2026-10-27用户决策精简；M1配置／控制／网页候选已实施，用户人工批准仍待完成。** 依据[现行需求](../../requirements/README.md)、[①概要](../../../src/astrophotoflow/core/README.md)及源码。本文确定需要保存什么；实际配置契约见[①详设](../../api/platform-contracts.md#foundation-design)，实现证据见[验证矩阵](../../development/test-matrix.md#b11-implementation)。
+**按2026-10-27用户决策精简；M1配置／控制／网页候选已实施，用户人工批准仍待完成。** 依据[现行需求](../../../../requirements/README.md)、[①概要](../../../../../src/astrophotoflow/core/README.md)及源码。本文确定需要保存什么；实际配置契约见[①详设](../../api/platform-contracts.md#foundation-design)，实现证据见[验证矩阵](../../../../development/test-matrix.md#b11-implementation)。
 
 ## 1. 用途与边界
 
@@ -141,7 +143,7 @@ flowchart TB
 
 ## 7. 事实源与完成边界
 
-源码：[配置](../../../src/astrophotoflow/core/config.py)、[工作台](../../../src/astrophotoflow/core/workbench.py)、[数据库升级](../../../src/astrophotoflow/core/database/schema.py)、[健康接口](../../../src/astrophotoflow/interfaces/http/system.py)。已有验证入口：[配置测试](../../../tests/core/test_config.py)、[工作台测试](../../../tests/core/test_workbench.py)。这些测试只覆盖现有行为。
+源码：[配置](../../../../../src/astrophotoflow/core/config.py)、[工作台](../../../../../src/astrophotoflow/core/workbench.py)、[数据库升级](../../../../../src/astrophotoflow/core/database/schema.py)、[健康接口](../../../../../src/astrophotoflow/interfaces/http/system.py)。已有验证入口：[配置测试](../../../../../tests/core/test_config.py)、[工作台测试](../../../../../tests/core/test_workbench.py)。这些测试只覆盖现有行为。
 
 M1候选已实现默认workspace、配置保存／冲突、实际采用记录、端口自动选择／回写、结构化启停／重启、维护准入和网页配置。当前维护操作ID可空，保存在已有processes.json中，更新与进程登记共用短文件锁；没有新增维护对象。MCP启停留到B57，③⑤占用随各自模块补齐。技术验证与用户批准分开，不能提前签M1通过。
 

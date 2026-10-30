@@ -1,3 +1,5 @@
+> 历史设计参考（2026-10-29退出现行计划）。签名、状态和任务顺序可能过时；不能直接据此实施。当前任务见 [当前计划](../../../../development/implementation-plan.md)。
+
 # M6任务卡：综合验收与交付核对
 
 本文件落实[近期总计划M6](../implementation-plan.md#m6)，所有结果均待实际候选执行。文件路径相对仓库根，N＝计划新增，M＝修改既有，R＝只复用；前置卡创建的文件在本卡按M/R处理，不表示今天已存在。环境/工具与可恢复的共享runtime维护窗口唯一按[验证环境](../implementation-plan.md#validation-environment)；各M用户操作/反馈/批准唯一按[人工验收门](../implementation-plan.md#acceptance-gates)。本轮不运行构建、服务、软件或业务测试。
@@ -10,7 +12,7 @@
 
 1. **目标与分支**：`codex/first-loop-acceptance`。对同一五模块候选取得网页与真实外部Agent两种入口的科学闭环证据，关闭M2～M4后置联调项；不重做各模块实现。覆盖A61-1～4、V01～V18近期组合，真实软件/网页/MCP与单元证据分列。
 
-2. **必须读**：[范围](../../requirements/README.md#2-范围与交付边界)、[真实处理](../../requirements/README.md#scenario-processing)、[结束与接续](../../requirements/README.md#scenario-continuity)、[五模块数据权威](../../architecture/data-models/README.md#authority)、[⑤运行事实](../../architecture/data-models/05-workflows.md#execution-projection)、[④验证设计](../../api/platform-contracts.md#verification-design)的V01～18及F-WORKSPACE/F-SCIENCE/F-RUN/F-CONTROL。具体数据/运行/取消/原生/协议行为按④第12～16节及本卡复用的前置任务卡，不另定义失败码或签名。
+2. **必须读**：[范围](../../../../requirements/README.md#2-范围与交付边界)、[真实处理](../../../../requirements/README.md#scenario-processing)、[结束与接续](../../../../requirements/README.md#scenario-continuity)、[五模块数据权威](../../architecture/data-models/README.md#authority)、[⑤运行事实](../../architecture/data-models/05-workflows.md#execution-projection)、[④验证设计](../../api/platform-contracts.md#verification-design)的V01～18及F-WORKSPACE/F-SCIENCE/F-RUN/F-CONTROL。具体数据/运行/取消/原生/协议行为按④第12～16节及本卡复用的前置任务卡，不另定义失败码或签名。
 
 3. **前置与Ready阻塞**：B57已集成；B11～B57相关自动验证、独立审查和G01～G10证据齐备；M1～M4自身能力分别批准（M3/M4同轮分别记录），M5已获用户人工批准。B31准确软件/版本/来源/操作/许可/输入与科学预期、B56模型/后端/固定查询规模已锁定。验证环境已获准且原dev可按原版本入口恢复；未知占用、原型失败、关键选择未定不得以mock/skip/空回调代替。B62依本卡技术集成，不要求M6先作最终批准。
 
@@ -70,11 +72,11 @@ uv run --locked --no-sync pytest tests/modules/data/test_ingestion.py tests/modu
 
 ## B62：构建资源、仓库外安装与交付状态核对
 
-状态：B62正式卡未Ready，B61尚未通过。独立预检包含准确Node 26根构建及v18当前GHT SP/LP assessment/文档wheel/sdist：隔离主构建通过（setuptools 84.2.1），仓库外wheel安装和Node-free sdist重建／再安装通过；重建阶段使用现有setuptools 78.1且未隔离。v18 sidecar／manifest散列一致，包内GHT说明和文档在build时核对通过；OpenAPI snapshot仍与app.openapi()语义一致。v17b Sol Low审查无发现；Sol Low v18独立审查无artifact正确性发现。详见[验证矩阵](../test-matrix.md#demo-b62-packaging-preflight)；上述预检不代替B61真实集成或B61通过后的同候选完整B62验收。
+状态：B62正式卡未Ready，B61尚未通过。独立预检包含准确Node 26根构建及v18当前GHT SP/LP assessment/文档wheel/sdist：隔离主构建通过（setuptools 84.2.1），仓库外wheel安装和Node-free sdist重建／再安装通过；重建阶段使用现有setuptools 78.1且未隔离。v18 sidecar／manifest散列一致，包内GHT说明和文档在build时核对通过；OpenAPI snapshot仍与app.openapi()语义一致。v17b Sol Low审查无发现；Sol Low v18独立审查无artifact正确性发现。详见[验证矩阵](../../../../development/test-matrix.md#demo-b62-packaging-preflight)；上述预检不代替B61真实集成或B61通过后的同候选完整B62验收。
 
 1. **目标与分支**：`codex/first-loop-delivery-check`。使B61真实业务候选进入既有构建/发行资源链，验证仓库外wheel安装与无Node的sdist重建，回写同候选真实状态。覆盖A62-1～3、E-BOUNDARY/E-DELIVERY；完整Windows升级恢复、其他软件及Linux/WSL不前移。
 
-2. **必须读**：[FR-14](../../requirements/README.md#fr-14-本地安全权限与隐私)、[FR-15](../../requirements/README.md#fr-15-可重复交付与维护)、[①资源数据](../../architecture/data-models/01-foundation.md#resources)、[④文件规划](../../api/platform-contracts.md#file-design)、[原生资源与双解释器](../../api/platform-contracts.md#native-design)、[验证设计](../../api/platform-contracts.md#verification-design)、[开发/构建流程](../README.md)。源码限定下表现有脚本/测试；按实际新增资源修缺口，不重建发行机制。
+2. **必须读**：[FR-14](../../../../requirements/README.md#fr-14-本地安全权限与隐私)、[FR-15](../../../../requirements/README.md#fr-15-可重复交付与维护)、[①资源数据](../../architecture/data-models/01-foundation.md#resources)、[④文件规划](../../api/platform-contracts.md#file-design)、[原生资源与双解释器](../../api/platform-contracts.md#native-design)、[验证设计](../../api/platform-contracts.md#verification-design)、[开发/构建流程](../../../../development/README.md)。源码限定下表现有脚本/测试；按实际新增资源修缺口，不重建发行机制。
 
 3. **前置与Ready阻塞**：B61技术集成/独立审查通过；B57及M5批准对本候选仍有效，所需文件和工具真实可用。B62不以尚未完成的M6最终批准阻塞自身；B62通过后才呈M6完整候选给用户。构建/安装验证及恢复环境按总计划，原dev不能用候选源码/0010入口勉强恢复。
 
@@ -124,7 +126,7 @@ uv run --locked --no-sync python scripts/verify_distribution.py
 
 ## M1～M6人工操作清单
 
-2026-10-28：M1已由用户在当前聊天确认通过并授权合入dev；最终网页、配置与重启证据见[验证矩阵](../test-matrix.md#m1-foundation)。下表M1操作保留核对用途，M2～M6仍待执行与批准；③⑤后置繁忙联调不因此提前通过。
+2026-10-28：M1已由用户在当前聊天确认通过并授权合入dev；最终网页、配置与重启证据见[验证矩阵](../../../../development/test-matrix.md#m1-foundation)。下表M1操作保留核对用途，M2～M6仍待执行与批准；③⑤后置繁忙联调不因此提前通过。
 
 环境按[总计划验证流程](../implementation-plan.md#validation-environment)，放行按[双状态与批准门](../implementation-plan.md#acceptance-gates)。这是未来操作表，全部实际结果／批准均待填写。模块自身能力与后置联调分别核对；验证人员执行用例的证据不能代替用户实际查看和批准，也不能冒充尚未存在的操作界面。
 

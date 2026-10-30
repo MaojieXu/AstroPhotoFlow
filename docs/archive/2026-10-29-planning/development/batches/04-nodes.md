@@ -1,3 +1,5 @@
+> 历史设计参考（2026-10-29退出现行计划）。签名、状态和任务顺序可能过时；不能直接据此实施。当前任务见 [当前计划](../../../../development/implementation-plan.md)。
+
 # M4任务卡：节点构建与原生加载
 
 2026-10-29：本轮 M3 按用户要求提前接通一个固定 Siril Auto Stretch V3 节点，控件读取包／workspace JSON，使用原生节点注册与队列；新增测试未执行。该窄接入不等于 B42 通用定义加载／确认更新或 B43 编辑器已完成，详见[本轮 M3](03-software.md)。
@@ -11,7 +13,7 @@
 
 ## B41：唯一JSON节点定义与六个public函数
 
-状态：通过（本地`demo`候选）；④定义契约、JSON文件CRUD／token／替换及定向测试已实现，9项节点测试与6项架构测试通过，GPT-6.1 Sol Low独立审查无剩余问题。未集成dev；M4 Milestone人工验收待B42／B43同轮完成后进行。证据见[验证矩阵](../test-matrix.md#demo-b31-probe)。
+状态：通过（本地`demo`候选）；④定义契约、JSON文件CRUD／token／替换及定向测试已实现，9项节点测试与6项架构测试通过，GPT-6.1 Sol Low独立审查无剩余问题。未集成dev；M4 Milestone人工验收待B42／B43同轮完成后进行。证据见[验证矩阵](../../../../development/test-matrix.md#demo-b31-probe)。
 
 ### 1. 目标与可观察结果
 
@@ -19,7 +21,7 @@
 
 ### 2. 必读依据
 
-[FR-16](../../requirements/README.md#fr-16-节点构建测试保存与更新)、AT-03/29、[④节点信息](../../architecture/data-models/04-nodes.md#节点需要哪些信息)、[④使用](../../architecture/data-models/04-nodes.md#从制作到使用)、[④概要](../../../src/astrophotoflow/modules/nodes/README.md)、[④精确类型／六函数／副作用](../../api/platform-contracts.md#nodes-design)。读contracts、nodes及software局部AGENTS。差异规则严格使用④，不能另发明端口兼容策略。
+[FR-16](../../../../requirements/README.md#fr-16-节点构建测试保存与更新)、AT-03/29、[④节点信息](../../architecture/data-models/04-nodes.md#节点需要哪些信息)、[④使用](../../architecture/data-models/04-nodes.md#从制作到使用)、[④概要](../../../../../src/astrophotoflow/modules/nodes/README.md)、[④精确类型／六函数／副作用](../../api/platform-contracts.md#nodes-design)。读contracts、nodes及software局部AGENTS。差异规则严格使用④，不能另发明端口兼容策略。
 
 ### 3. 前置与运行依赖
 
@@ -94,7 +96,7 @@ A41-1～3的定义保存部分，V07/V08的④纯定义部分；P-NODES/E-BOUNDA
 
 ### 2. 必读依据
 
-[④节点HTTP／组合字段](../../api/platform-contracts.md#nodes-design)、[原生文件落点、白名单、实际registry生产者](../../api/platform-contracts.md#native-design)、[④制作到使用](../../architecture/data-models/04-nodes.md#从制作到使用)、[FR-16](../../requirements/README.md#fr-16-节点构建测试保存与更新)、[FR-13](../../requirements/README.md#fr-13-环境检测安装与恢复)、AT-02／AT-11／AT-29／AT-33；读core、interfaces、nodes、原生engine与宿主AGENTS。
+[④节点HTTP／组合字段](../../api/platform-contracts.md#nodes-design)、[原生文件落点、白名单、实际registry生产者](../../api/platform-contracts.md#native-design)、[④制作到使用](../../architecture/data-models/04-nodes.md#从制作到使用)、[FR-16](../../../../requirements/README.md#fr-16-节点构建测试保存与更新)、[FR-13](../../../../requirements/README.md#fr-13-环境检测安装与恢复)、AT-02／AT-11／AT-29／AT-33；读core、interfaces、nodes、原生engine与宿主AGENTS。
 
 ### 3. 前置与运行依赖
 
@@ -200,7 +202,7 @@ A42-1～3，V07/V13的加载部分，G04；P-NODES/P-HOST/P-INTEGRATION/E-NATIVE
 
 ### 2. 必读依据
 
-[④前端/完整NodesClient契约](../../api/platform-contracts.md#file-design)、[④节点字段与更新规则](../../api/platform-contracts.md#nodes-design)、[真实注册及类型](../../api/platform-contracts.md#native-design)、[④制作到使用](../../architecture/data-models/04-nodes.md#从制作到使用)、[④修改规则](../../architecture/data-models/04-nodes.md#修改已有自定义节点)、[FR-16](../../requirements/README.md#fr-16-节点构建测试保存与更新)、AT-29。读UI包、nodes和原生桥接局部AGENTS；UI只能经公开导出消费宿主，不能反向import原生单例。
+[④前端/完整NodesClient契约](../../api/platform-contracts.md#file-design)、[④节点字段与更新规则](../../api/platform-contracts.md#nodes-design)、[真实注册及类型](../../api/platform-contracts.md#native-design)、[④制作到使用](../../architecture/data-models/04-nodes.md#从制作到使用)、[④修改规则](../../architecture/data-models/04-nodes.md#修改已有自定义节点)、[FR-16](../../../../requirements/README.md#fr-16-节点构建测试保存与更新)、AT-29。读UI包、nodes和原生桥接局部AGENTS；UI只能经公开导出消费宿主，不能反向import原生单例。
 
 ### 3. 前置与运行依赖
 

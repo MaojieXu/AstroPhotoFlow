@@ -1,5 +1,7 @@
 # ADR-WORKBENCH-PLAN-0061: Executable Batches and Shared HTTP Client
 
+> 2026-10-29：本文的22 Batch及固定前置文档流程已被 [ADR-0001](../../../docs/decisions/0001-minimal-documentation.md)取代，只保留历史参考。共用HTTP客户端的已实现边界仍以当前代码及架构为准。
+
 Date: 2026-10-27
 
 ## Status
@@ -55,9 +57,9 @@ protocol or restricted path; the user chose one final switch instead.
 
 ## Consequences
 
-The [implementation plan](../../../docs/development/implementation-plan.md)
+The [implementation plan](../../../docs/archive/2026-10-29-planning/development/implementation-plan.md)
 owns batches, gates and future verification procedures. The
-[interface design](../../../docs/api/platform-contracts.md) remains the sole
+[interface design](../../../docs/archive/2026-10-29-planning/api/platform-contracts.md) remains the sole
 protocol and signature authority. Task cards map it to files and tests.
 
 Batch integration and user milestone acceptance are separate facts. Real

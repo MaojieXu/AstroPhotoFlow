@@ -1,3 +1,5 @@
+> 历史设计参考（2026-10-29退出现行计划）。签名、状态和任务顺序可能过时；不能直接据此实施。当前任务见 [当前计划](../../../../development/implementation-plan.md)。
+
 # M3任务卡：外部软件接入与环境
 
 ## 2026-10-29 M3 本地实现候选（未执行测试、未获用户验收）
@@ -22,9 +24,9 @@
 
 ## B31：锁定首软件、目录与准确操作
 
-状态：进行中；`demo` 上开展 G02 隔离原型，实际证据和未完成项见[验证矩阵](../test-matrix.md#demo-b31-probe)。本卡尚未通过。
+状态：进行中；`demo` 上开展 G02 隔离原型，实际证据和未完成项见[验证矩阵](../../../../development/test-matrix.md#demo-b31-probe)。本卡尚未通过。
 
-用户决定待答：首个Siril操作；同滤镜序列选用官方样例、用户提供素材还是记录缺口。候选参数实验与当前CLI/图像门槛见[验证矩阵](../test-matrix.md#demo-b31-probe)。
+用户决定待答：首个Siril操作；同滤镜序列选用官方样例、用户提供素材还是记录缺口。候选参数实验与当前CLI/图像门槛见[验证矩阵](../../../../development/test-matrix.md#demo-b31-probe)。
 
 ### 1. 目标与可观察结果
 
@@ -32,7 +34,7 @@
 
 ### 2. 必读依据
 
-- [FR-03](../../requirements/README.md#fr-03-软件适配与能力目录)、[FR-13](../../requirements/README.md#fr-13-环境检测安装与恢复)、AT-02/25/33、[③软件信息](../../architecture/data-models/03-software.md#软件包与必要信息)、[③概要](../../../src/astrophotoflow/modules/software/README.md)。
+- [FR-03](../../../../requirements/README.md#fr-03-软件适配与能力目录)、[FR-13](../../../../requirements/README.md#fr-13-环境检测安装与恢复)、AT-02/25/33、[③软件信息](../../architecture/data-models/03-software.md#软件包与必要信息)、[③概要](../../../../../src/astrophotoflow/modules/software/README.md)。
 - [④契约③行为](../../api/platform-contracts.md#software)、[③字段／public／HTTP与状态位置](../../api/platform-contracts.md#software-design)、[固定运行调用边界](../../api/platform-contracts.md#native-design)。
 - `src/astrophotoflow/AGENTS.md`、`src/astrophotoflow/contracts/AGENTS.md`、`src/astrophotoflow/modules/software/AGENTS.md`、`src/astrophotoflow/interfaces/AGENTS.md`。
 
@@ -259,7 +261,7 @@ A32-1～4的安装/准备/确认部分；V05及V06包自身部分，G03；P-SOFT
 
 ### 2. 必读依据
 
-[③完整调用DTO／public](../../api/platform-contracts.md#software-design)、[inspect_operation及实际停止](../../api/platform-contracts.md#native-design)、[科学输入](../../api/platform-contracts.md#data-design)、[③实际使用](../../architecture/data-models/03-software.md#实际使用)、[FR-03](../../requirements/README.md#fr-03-软件适配与能力目录)、[FR-09](../../requirements/README.md#fr-09-原生引擎执行与运行记录)、[FR-14](../../requirements/README.md#fr-14-本地安全权限与隐私)、AT-13／AT-17／AT-18／AT-26。复读software局部AGENTS及B31已锁定的软件支持记录。
+[③完整调用DTO／public](../../api/platform-contracts.md#software-design)、[inspect_operation及实际停止](../../api/platform-contracts.md#native-design)、[科学输入](../../api/platform-contracts.md#data-design)、[③实际使用](../../architecture/data-models/03-software.md#实际使用)、[FR-03](../../../../requirements/README.md#fr-03-软件适配与能力目录)、[FR-09](../../../../requirements/README.md#fr-09-原生引擎执行与运行记录)、[FR-14](../../../../requirements/README.md#fr-14-本地安全权限与隐私)、AT-13／AT-17／AT-18／AT-26。复读software局部AGENTS及B31已锁定的软件支持记录。
 
 ### 3. 前置与运行依赖
 

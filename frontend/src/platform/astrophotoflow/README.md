@@ -1,26 +1,17 @@
-# AstroPhotoFlow 原生应用桥接
+# 原生应用桥接
 
-2026-10-29 整行素材拖拽：LibraryCanvasSource支持span／tr宿主及显式clickTarget，拖拽共用整行原生事件，避免名称／缩略图嵌套各自注册。根元素显式接收属性，点击放置仅命中名称，其余click交回UI包原行为；编辑输入起拖不调用原生素材拖拽。原生数据节点、预览、固定引用及撤销链路不变。验证见library-row-drag。
+本目录可使用原生Store、组件、画布及生命周期，通过`@astrophotoflow/ui`公开入口消费业务UI；UI包不得反向依赖这里。领域数据和业务规则留所属模块，不直接操作数据库。
 
-2026-10-29 素材预览保留修复：dataReferenceDisplay使用原生addWidget注册／释放同一个CanvasDataWidget，声明旧版canvas与vueNode均显示；reference通过options整体赋值同步真实可见性，继续隐藏且唯一序列化。WidgetDOM按显式vueNode显示声明挂载组件，未声明的旧组件路径保留。原生节点按内容扩展、预览区480px、成员名称不收缩及参数表清除默认外边距，避免旧版字体将名称挤至零高度。未修改预览解析、固定引用、执行、全局Nodes 2.0开关或新增Vue应用。验证见library-preview-preservation，覆盖下文仅Nodes 2.0显示的旧限制。
+| 集成点 | 入口与责任 |
+|---|---|
+| 工作台挂载 | `NativeShell`、`LibrarySidebarTab`保留原生画布、侧栏与主题，注入业务控件 |
+| 素材放置 | `LibraryCanvasSource`复用原生点击放置／拖拽／预览；`canvasDataBridge`写固定引用，使用一次原生撤销事务 |
+| 素材节点显示 | `dataReferenceDisplay`、`CanvasDataWidget`通过原生widget生命周期显示图片、成员与资料；reference仍是科学引用，显示状态不序列化 |
+| 在线图与控制 | `useCanvasDataSession`及`canvasNodeBridge`承接实际页面、局部图操作、内容／控制标记与当前回执；实际写入核对明确目标，不复制服务端当前图 |
+| 软件目录／预览 | `bundleCatalog`连接同一节点目录；`sirilPreviewDisplay`／`SirilPreviewWidget`只做显示样本预览，不提交科学运行或接管Agent |
+| 共用查看器 | `MediaViewer`／`mediaViewport`处理概览、瓦片、视频与暂停源帧；通过公开Media客户端消费，不把查看状态写图 |
+| 设置与关于 | `settingsPresentation`维护本地可见性，工作台配置在原生设置内；真实平台版本从构建读取 |
 
-2026-10-29 素材放置交互：LibraryCanvasSource复用useNodeDragToCanvas／useNodePreviewAndDrag，名称点击后选择画布落点，名称及缩略图原生拖拽时共用NodeDragPreview。原生放置支持一个可选onPlace回调，②固定引用在落点经现有canvasDataBridge准备与写入，仍为一次原生撤销；取消不调用准备。已移除素材专用pragmatic载荷及“+”事件，既有Agent插入函数保持。验证见library-native-node-placement，此条覆盖下文原pragmatic描述。
+保留节点库→素材库→工作流→软件包顺序、常驻画布、侧栏关闭保护和设备入口。手动内容变化接管，查看／缩放不接管；切图暂停后续写／提交，迟到结果不抢视图。
 
-2026-10-29 设置精简候选：settingsPresentation统一本地分类标签、隐藏项、快捷键和高级项策略；分类、搜索及定位入口复用该策略。工作台默认打开，关于页使用AstroPhotoFlowAboutPanel并折叠组件／诊断，平台版本由Vite从pyproject.toml注入。固定Nodes 2.0和上游通知的值策略在原生coreSettings注册迁移中处理；此处呈现层不另建设置存储。实际验证和视觉限制见当前上下文及验证矩阵。
-
-2026-10-29 SirilPreviewWidget／sirilPreviewDisplay：通过原生ComponentWidget生命周期挂载非序列化的实时预览区，读取当前素材连线与三个参数；350ms防抖、当前成员切换、AbortController、代次隔离和释放均不写工作流或触发Agent接管。UI包仅公开固定预览API消费函数；组件复用原生ImagePreview displayOnly及Button。正式执行仍由原生队列处理原件，结果预览关闭二次自动拉伸。组件和桥接用例仅编写不运行。
-
-
-2026-10-29 MediaViewer通过原生Dialog／Button／Input与OpenSeadragon6.1.1实现共用查看器；mediaViewport隔离缩放、DPI、瓦片来源和视口快照。CanvasDataWidget取2048px概览并打开当前固定引用；LibrarySidebarTab注入mediaViewer给Workspace／FixedDatasetMembers。公开请求与HTTP消费类型归UI包api/media.ts；不写图、不序列化查看状态、不操作Agent控制。视频复用HTML video控制和实际呈现帧回调，源帧放大走相同查看器。组件测试仅编写，真实视觉与运行验收由用户进行。
-
-Nodes 2.0 展示候选：dataReferenceDisplay通过原生扩展nodeCreated／afterConfigureGraph挂载ComponentWidgetImpl，reference控件只隐藏呈现，不改变保存或执行字段；展示控件不写widgets_values或prompt。WidgetDOM支持直接挂载ComponentWidget，避免为APF创建第二个Vue应用或旧Canvas绘图路径。CanvasDataWidget复用ImagePreview displayOnly模式、Button与Dialog，按当前固定成员查询inspect并取预览，使用原生临时测量布局；切图／卸载撤销网络请求并释放URL。原生Agent控制与应用回执保持，查看行为不发graphChanged。
-
-素材入画布候选：LibraryCanvasSource复用原生pragmatic拖放；canvasDataBridge复用addNodeOnGraph和一次beforeChange／afterChange事务，把②准备的固定引用写入APF_DATA_REFERENCE的reference控件。useCanvasDataSession仅管理当前在线加数据控制、内容标记和真实应用回执，NativeShell随页面注册／清理；手动变化、切图／子图、断线撤销，视口不入内容标记。无第二份图或运行系统。测试仅编写，见验证矩阵的library-canvas；完整Agent图编辑及运行仍待后续批次。
-
-NativeShell 保留原生 GraphView；LibrarySidebarTab 挂载私有 UI 包并提供侧栏关闭保护，注入FormItem／Button／Input／搜索多选及单选／Textarea；LibraryFormDialog复用原生Reka Dialog的焦点、Escape和限宽结构，提供受控关闭及同窗内容切换，不保存业务草稿；useLibrarySidebarTab 注册现有素材库标签。WorkbenchSettingsPanel 经UI包公开导出挂载工作台配置，作为原生设置窗口中的独立“工作台”页面；FormItem／Button／Input由宿主传入，保留整组保存与显式重启。settingsPresentation集中控制APF本地设置的分类、搜索及面板定位可见性，不修改底层设置值；原生云版／桌面版保持原有呈现。
-
-本区域可以依赖原生应用的 Store 和组件，但只通过 @astrophotoflow/ui 包公开入口使用业务界面。业务实现不得反向依赖这里。
-
-保持节点库 → 素材库 → 工作流 → 软件包顺序；工作台配置统一从底部设置入口进入，旧工作台侧栏已移除。保留原生分栏、设备按钮位置及草稿保护。未来画布同步协议需要单独实现，不能由现有挂载代码推断已支持 Agent 编辑。
-
-验证：原生 GraphView、侧栏状态测试和隔离浏览器验收。
+完整保存后运行、项目图关联及运行持久记录仍须后续实现／联调；实际状态只维护在 [当前上下文](../../../../docs/development/current-context.md)，规则见 [需求](../../../../docs/requirements/README.md)。不从某个桥接文件存在推定完整闭环。

@@ -1,6 +1,8 @@
+> 历史设计参考（2026-10-29退出现行计划）。签名、状态和任务顺序可能过时；不能直接据此实施。当前任务见 [当前计划](../../../../development/implementation-plan.md)。
+
 # ⑤工作流、执行与 Agent 交互数据设计
 
-**工作流、执行与Agent交互统一归⑤；新增能力尚未实现。** 依据[现行需求](../../requirements/README.md)、[总架构](../overview.md)与[⑤唯一概要](../../../src/astrophotoflow/modules/workflows/README.md)。2026-10-27确认项目关联、运行和预览关联沿用同workspace的SQLite，当前图及图片仍为文件；必要字段、公开签名和文件职责见[⑤详细契约](../../api/platform-contracts.md#workflows-design)。本文不提前设计代码执行环境或热加载方案。
+**工作流、执行与Agent交互统一归⑤；新增能力尚未实现。** 依据[现行需求](../../../../requirements/README.md)、[总架构](../../../../architecture/overview.md)与[⑤唯一概要](../../../../../src/astrophotoflow/modules/workflows/README.md)。2026-10-27确认项目关联、运行和预览关联沿用同workspace的SQLite，当前图及图片仍为文件；必要字段、公开签名和文件职责见[⑤详细契约](../../api/platform-contracts.md#workflows-design)。本文不提前设计代码执行环境或热加载方案。
 
 ## 1. 从实际使用出发
 
@@ -92,7 +94,7 @@ flowchart TD
 
 ## 7. 原生依据及验收
 
-[原生保存](../../../frontend/src/platform/workflow/management/stores/comfyWorkflow.ts)、[自动保存](../../../frontend/src/platform/workflow/persistence/composables/useWorkflowAutoSave.ts)、[本地草稿](../../../frontend/src/platform/workflow/persistence/composables/useWorkflowPersistenceV2.ts)、[撤销](../../../frontend/src/scripts/changeTracker.ts)、[转换](../../../frontend/src/utils/executionUtil.ts)、[引擎](../../../engine/ComfyUI/execution.py)与[文件存储](../../../engine/ComfyUI/app/user_manager.py)是复用依据。原生工作流已在workspace内保存；原生history是可清除的内存记录，不能代替必要运行历史。当前MCP仍为58个数据工具，没有画布桥接和新运行能力。
+[原生保存](../../../../../frontend/src/platform/workflow/management/stores/comfyWorkflow.ts)、[自动保存](../../../../../frontend/src/platform/workflow/persistence/composables/useWorkflowAutoSave.ts)、[本地草稿](../../../../../frontend/src/platform/workflow/persistence/composables/useWorkflowPersistenceV2.ts)、[撤销](../../../../../frontend/src/scripts/changeTracker.ts)、[转换](../../../../../frontend/src/utils/executionUtil.ts)、[引擎](../../../../../engine/ComfyUI/execution.py)与[文件存储](../../../../../engine/ComfyUI/app/user_manager.py)是复用依据。原生工作流已在workspace内保存；原生history是可清除的内存记录，不能代替必要运行历史。当前MCP仍为58个数据工具，没有画布桥接和新运行能力。
 
 覆盖FR-01／02／07～11／14／16及相关NFR，沿用AT-06～11／14～18／20／24／29～31／34。检查重开图、另存、多轮预览、切图后结果归属、接管与交回、节点更新、失败及选择保存结果。S2入口和检索，S3项目图／节点测试／最小接管，S4真实运行及自动预览，S5完整双入口，S6跨软件、比较、显式续跑及复杂节点；具体接口与实现任务随后细化。
 

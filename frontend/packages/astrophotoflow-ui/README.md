@@ -1,11 +1,7 @@
 # @astrophotoflow/ui
 
-AstroPhotoFlow 私有 workspace 组件包，通过源码导出由原生网页应用编译，不独立运行或对外发布。
+私有workspace业务UI包，通过 [src/index.ts](src/index.ts) 公开导出，由原生网页编译；不独立运行或发布。实际导出包括素材Workspace、工作台配置、软件面板及节点／预览客户端，完整清单以代码为准。
 
-公开入口为 src/index.ts，目前导出 Workspace；其既有 props、事件和已暴露方法保持。实现位于 src/modules/data，其他模块与 core 目前仅有文档。
+`src/core`保存实际共用HTTP／错误和工作台配置；业务在`src/modules/data`、`software`、`nodes`、`workflows`。原生组件通过宿主注入，本包不导入原生Store、画布单例或`frontend/src`。
 
-本包使用原生 workspace 锁定的 Vue、Pinia 和 Zod；测试独立使用 jsdom，不加载原生画布的全局 setup。tests/modules/data 保存 19 份既有组件测试，tests/fixtures 保存真实 API 样例。
-
-命令：仓库根 `pnpm test`、`pnpm typecheck`；单项测试可使用 `pnpm --dir frontend --filter @astrophotoflow/ui test tests/modules/data/...`。
-
-本轮仅迁移已有逻辑，保留原有组件、样式和业务断言；未进行大组件拆分或整体国际化改写。
+测试在`tests`，使用独立jsdom环境；测试、类型检查等命令见 [开发流程](../../../docs/development/README.md)，运行按用户当前要求。模块职责见 [架构](../../../docs/architecture/overview.md)，实现及验收见 [当前上下文](../../../docs/development/current-context.md)。

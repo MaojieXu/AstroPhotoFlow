@@ -1,5 +1,19 @@
 # 需求、实现与验证矩阵
 
+本页保留各日期、候选和范围的历史证据；段落中的“当前／尚未实现／未合并”只指当时，最新状态见 [当前上下文](current-context.md)。按具体条目查询，不作为每次任务的必读清单。
+
+<a id="docs-minimization"></a>
+
+## 2026-10-29 文档最小化
+
+基线：dev `51046067`，开始时工作区干净。用户确认旧22 Batch仅作参考，后续按当前目标重新排序。精简根规则、需求、架构、现状与模块入口，旧计划和数据／接口草案退出默认阅读路径；需求继续保留原件、固定范围、人工接管、保存后运行及结果登记等未完成目标。
+
+接口复用已有OpenAPI导出脚本，增加根`pnpm docs:api`入口；既有CI中的schema／快照／代理一致性测试保持。导出已执行成功，生成快照与基线一致。本轮只做文档与静态检查，没有运行应用测试、类型检查、构建、浏览器验收或启停实例，不表示业务闭环通过。
+
+静态链接与锚点检查覆盖92份当前文档、局部规则和相关历史参考，0个失效本地链接／锚点；`git diff --check`通过。根AGENTS从113行减至35行，当前上下文从468行减至44行；默认起读从16份约758KB改为2份约6.7KB，其余按任务读取，不代表全部需求只剩这些内容。
+
+范围、缩减统计及链接结果见`.artifacts/docs-minimization-20261029/summary.json`与`links.json`。旧15份计划／草案保留正文及修正后的引用；必要用户规则已归并现行需求，原文仍可按Git基线追溯。本次未提交或推送。
+
 ## 2026-10-29 三个独立 chat 的 dev 集成
 
 本次按用户要求合并 ComfyUI 展示精简、素材库 UI 优化与 Workspace 内容跳转三个 chat 的当前实现。原分支均起于 `366a3112`；ComfyUI 未提交实现先保存为 `e7e6e4f6`，素材库保存为 `cbfb8914`。Workspace 分支无新增提交或未提交源码，原有内容已在 dev；本轮不将其写成新增实现。Siril 集成 `e56a4ee5` 保留。
@@ -377,7 +391,7 @@
 
 ## 2026-10-28 demo：源码与文档颗粒度对齐
 
-基线为 `demo`／`741f6f1d` 加当前未提交实现，用户指定以当前代码为准，只改文档。补齐[源码文件／公开函数／消费者映射](../architecture/module-map.md#31-当前文件与公开函数映射)，纠正M1／M2、B31／B32／B41与⑤剩余能力的状态，以及详细设计中的已有文件／测试标记。保留原有未提交源码和历史证据，不提交、推送或合并。
+基线为 `demo`／`741f6f1d` 加当前未提交实现，用户指定以当前代码为准，只改文档。补齐[源码文件／公开函数／消费者映射](../architecture/module-map.md)，纠正M1／M2、B31／B32／B41与⑤剩余能力的状态，以及详细设计中的已有文件／测试标记。保留原有未提交源码和历史证据，不提交、推送或合并。
 
 本轮静态检查：Python AST核对60个具名函数／方法均存在；OpenAPI快照统计89项公共HTTP操作，其中软件5项；所改文档相对原稿没有新增失效文件链接。结果为 `.artifacts/docs-code-alignment/static-checks.json`，修改前快照位于同目录 `before/`。未重跑业务测试、构建或真实网页／软件运行，不新增Milestone批准、安装、节点加载或工作流闭环通过结论。
 
@@ -544,7 +558,7 @@
 
 ## 2026-10-27 第⑤阶段计划联合审查与任务卡
 
-候选为dev `75aab88714095d77f2d576c14712a31c2b987bf6`上的本轮文档增量，非业务实现。[总计划](implementation-plan.md)保留M1～M6、22 Batch／建议分支、79项验收、G01～G10及V01～V18；六份任务卡把需求／数据／接口映射到准确文件、关键函数、实施顺序、测试输入／命令／预期及人工操作。
+候选为dev `75aab88714095d77f2d576c14712a31c2b987bf6`上的本轮文档增量，非业务实现。[总计划](../archive/2026-10-29-planning/development/implementation-plan.md)保留M1～M6、22 Batch／建议分支、79项验收、G01～G10及V01～V18；六份任务卡把需求／数据／接口映射到准确文件、关键函数、实施顺序、测试输入／命令／预期及人工操作。
 
 - 使用Context Researcher、Software Architect、Senior Developer、QA Engineer、Git／DevOps Reviewer并行审查，由Document Editor装配，Independent Verifier另行逐卡复验。审查报告、基线、静态检查和独立结论进入`.artifacts/implementation-plan-review`，最终状态以该候选报告为准。
 - 用户确认五项取舍，见[ADR-0061](../../frontend/docs/adr/WORKBENCH-PLAN-0061-executable-batches-and-shared-client.md)。原④契约只补真实调用缺口及冲突，未另建协议体系；计划区分Batch技术集成与用户Milestone批准，不把尚未锁定的首包／模型或未过原型写成Ready。
@@ -554,7 +568,7 @@
 
 ## 2026-10-27 第⑤阶段近期实施计划编制
 
-候选为dev当前文档工作区。[近期计划](implementation-plan.md)对接现行接口与文件级详细设计，按M1～M6列出22个建议分支、分项验收及V01～V18责任；M2完成②自身近期范围，跨模块项分别由B53／B54／B55／B57联调，最终在M6验收。
+候选为dev当前文档工作区。[近期计划](../archive/2026-10-29-planning/development/implementation-plan.md)对接现行接口与文件级详细设计，按M1～M6列出22个建议分支、分项验收及V01～V18责任；M2完成②自身近期范围，跨模块项分别由B53／B54／B55／B57联调，最终在M6验收。
 
 - 本轮只检查计划结构、分支依赖、验收编号、接口断言覆盖、本地链接／锚点和Git增量；报告进入`.artifacts/implementation-plan`。检查结果以报告为准，不把计划中的测试名称视为已经执行。
 - 所有建议分支、新增原型和功能验收均未实施；首软件准确版本／操作、实际素材和本地检索模型仍按计划门槛确认。保留第④阶段独立证据及下列历史状态，不将当时“近期计划尚未开展”解释为当前状态。
@@ -562,7 +576,7 @@
 
 ## 2026-10-27 第④阶段接口与文件级详细设计
 
-候选为dev当前文档工作区，非新增功能实现。主文[接口与文件级详细设计](../api/platform-contracts.md)通过Context Researcher、Software Architect、Senior Developer、QA Engineer、Document Editor及Independent Verifier复核；报告与本轮增量在`.artifacts/fourth-stage-design`。独立候选主文SHA-256为`1c59ace39a76603e91e261f655444e2dc6b6a3f474c7f4dc7082354c29815738`，R1–R8/I1–I7已逐项关闭。
+候选为dev当前文档工作区，非新增功能实现。主文[接口与文件级详细设计](../archive/2026-10-29-planning/api/platform-contracts.md)通过Context Researcher、Software Architect、Senior Developer、QA Engineer、Document Editor及Independent Verifier复核；报告与本轮增量在`.artifacts/fourth-stage-design`。独立候选主文SHA-256为`1c59ace39a76603e91e261f655444e2dc6b6a3f474c7f4dc7082354c29815738`，R1–R8/I1–I7已逐项关闭。
 
 - 验证范围：五模块文件职责、公开签名及类型、调用/异常/副作用、数据一致性、原生复用、具体测试文件和FR/NFR/AT追踪；已有/拟新增/待原型/后续目标分开。
 - 文档静态检查：Python签名块可解析、类型引用闭合、表格/JSON/本地链接锚点、当前78个HTTP/代理/OpenAPI集合及58数据工具迁移映射、既存ADR和本轮Git范围。具体数量与最终文件散列以报告checks.json为准。
@@ -581,7 +595,7 @@
 
 ## 2026-10-27 接口契约静态检查
 
-[五模块接口契约](../api/platform-contracts.md)覆盖①本机控制、②科学数据／所选结果、③软件包、④可编辑节点及⑤原生画布／运行／MCP交接；局部改图、保存成功后运行、网页按钮绑定目标已按用户选择同步需求。新增路径和工具名均为未来设计，尚未实现或运行验收。
+[五模块接口契约](../archive/2026-10-29-planning/api/platform-contracts.md)覆盖①本机控制、②科学数据／所选结果、③软件包、④可编辑节点及⑤原生画布／运行／MCP交接；局部改图、保存成功后运行、网页按钮绑定目标已按用户选择同步需求。新增路径和工具名均为未来设计，尚未实现或运行验收。
 
 本轮逐项核对领域路由、OpenAPI和同源代理的78个操作，以及58个MCP工具的迁移覆盖；检查任务增量链接、锚点、ADR格式、Git范围及保留文件散列。报告见[接口设计检查](../../.artifacts/interface-design/report.md)，详细清单见 `.artifacts/interface-design/checks.json` 和 `inventory.json`。未运行构建、业务回归、原型或服务，未修改OpenAPI、当前MCP或Skill。历史需求包在任务开始前已删除，本轮不恢复，也不声称通过不存在的冻结清单校验。
 
@@ -590,21 +604,21 @@
 | 需求范围 | 已有行为及边界 | 验证入口 |
 |---|---|---|
 | FR-01 项目 | 资料、回收站、资产与集合固定引用；项目托管工作流未实现 | `tests/modules/data/test_service.py`；UI Workspace／Settings |
-| FR-02 工作流目标 | ⑤复用唯一原生当前图、自动保存、本地草稿和会话撤销，项目关联／另存和在线桥接待实现；无永久逐编辑历史 | 按[⑤概要](../../src/astrophotoflow/modules/workflows/README.md#verification)、AT-06～11验证保存重开、另存、活动目标及断连，不以原生测试代替新增业务 |
-| FR-09 运行目标 | ⑤记录当次图／输入／参数及原生任务关联，两类输入保证、真实调用／停止核对和所选结果保存待实现；复用ComfyUI队列 | 按[⑤阶段](../../src/astrophotoflow/modules/workflows/README.md#phases)、AT-14～18／28／29补真实软件及运行证据 |
-| FR-03/13 软件包 | ③软件专用副本及配套节点、安装版本位置和可用状态仍待实现；Agent只连接平台MCP | 按[③概要](../../src/astrophotoflow/modules/software/README.md#phases)、AT-02／03／25／33验证安装、许可引导、节点发现及确认更新 |
+| FR-02 工作流目标 | ⑤复用唯一原生当前图、自动保存、本地草稿和会话撤销，项目关联／另存和在线桥接待实现；无永久逐编辑历史 | 按[⑤概要](../../src/astrophotoflow/modules/workflows/README.md)、AT-06～11验证保存重开、另存、活动目标及断连，不以原生测试代替新增业务 |
+| FR-09 运行目标 | ⑤记录当次图／输入／参数及原生任务关联，两类输入保证、真实调用／停止核对和所选结果保存待实现；复用ComfyUI队列 | 按[⑤阶段](../../src/astrophotoflow/modules/workflows/README.md)、AT-14～18／28／29补真实软件及运行证据 |
+| FR-03/13 软件包 | ③软件专用副本及配套节点、安装版本位置和可用状态仍待实现；Agent只连接平台MCP | 按[③概要](../../src/astrophotoflow/modules/software/README.md)、AT-02／03／25／33验证安装、许可引导、节点发现及确认更新 |
 | FR-04 导入 | 登记与托管分离、并发、Header 分类、预设快照、编辑与排序 | `tests/modules/data/test_import_pipeline.py`、`test_ingestion.py`、`test_library_sort.py`、`tests/integration/test_import_presets.py`；UI 导入／任务测试 |
 | FR-04/11 删除 | 确认范围、部分清理、固定身份、共享路径与外部原件保护 | `tests/modules/data/test_service.py`、`test_calibration.py`；UI LibraryTrashDialog |
 | FR-05 预览 | 100 px 缩略图、1080 px 大图、单图自动拉伸与 RGB 白平衡；完整比较未实现 | `tests/modules/data/test_auto_stretch.py`、`test_fits_preview.py`、`test_display_previews.py`、`test_video_preview.py`；UI PhotoPreviewDialog |
 | 设备与预设 | 接受时冻结快照、删除后恢复／重试、历史名称和草稿保护 | `tests/modules/data/test_equipment_snapshots.py`、`test_setups.py`；UI SettingsOrganization／Workspace |
 | 校准引用 | 默认、继承／null／覆盖、跨组隔离、历史清理保护；不执行校准 | `tests/modules/data/test_calibration.py`、`test_domain_foundation.py`；UI CalibrationLibrary |
 | FR-07 数据 MCP | 58 工具与 CLI 共用服务；图编辑和软件运行工具未实现 | `tests/integration/test_client_operations.py`、`test_cli_mcp_protocol.py` |
-| FR-07 统一检索目标 | ⑤派生目录、Skill直达、按需混合Top10及明确关键词降级待实现，当前58数据工具保持 | 按[⑤阶段](../../src/astrophotoflow/modules/workflows/README.md#phases)、AT-33／34验证精简MCP整体迁移、Skill及真实客户端，不遗漏已有数据业务 |
+| FR-07 统一检索目标 | ⑤派生目录、Skill直达、按需混合Top10及明确关键词降级待实现，当前58数据工具保持 | 按[⑤阶段](../../src/astrophotoflow/modules/workflows/README.md)、AT-33／34验证精简MCP整体迁移、Skill及真实客户端，不遗漏已有数据业务 |
 | FR-08 并发 | 数据revision已有；⑤活动目标核对、简单当前控制、手改接管／明确交回及在线结果返回尚未实现 | 按AT-07～10／24验证旧写拒绝、切图暂停、不抢视图、已有运行继续；A后台完成预览归A，不串B |
-| FR-10/11 来源与恢复 | 数据固定版本及既有保护保留；⑤当次运行内容、多次自动图像预览、另存方案、所选完整结果和S6显式固定结果续跑待实现 | 按[⑤概要](../../src/astrophotoflow/modules/workflows/README.md#phases)、AT-06／09／18／20／21补证据；预览不代表完整文件仍在，核对／补登记不重跑 |
+| FR-10/11 来源与恢复 | 数据固定版本及既有保护保留；⑤当次运行内容、多次自动图像预览、另存方案、所选完整结果和S6显式固定结果续跑待实现 | 按[⑤概要](../../src/astrophotoflow/modules/workflows/README.md)、AT-06／09／18／20／21补证据；预览不代表完整文件仍在，核对／补登记不重跑 |
 | FR-12 本地上下文 | 偏好、项目背景、工作流经验与交接摘要均待实施；个人偏好历史可查看／恢复为当前，删除包括历史正文；不包含完整聊天或模型会话 | 后续按 AT-22、AT-30、AT-31 验证，暂无完成证据 |
-| FR-16 节点制作 | ④设计已收敛为workspace可编辑节点库、可选测试、最近测试查询及确认更新，均待实现；Python／复合S6，导出另行规划 | 按[④概要](../../src/astrophotoflow/modules/nodes/README.md#phases)、AT-03／29验证参数重置、变化端口、加载及执行中保护，暂无产品节点测试命令 |
-| FR-13/15 交付 | 固定引擎、现有init/start/status/stop、完整网页、源码外安装和无Node重建；MCP启动、端口冲突自动选择及实际地址交接、网页公共配置、CLI／MCP重启、日志轮转与确认清理待补 | `tests/core`、`tests/packaging`、`scripts/verify_distribution.py`；新增验收见[公共概要](../../src/astrophotoflow/core/README.md#verification) |
+| FR-16 节点制作 | ④设计已收敛为workspace可编辑节点库、可选测试、最近测试查询及确认更新，均待实现；Python／复合S6，导出另行规划 | 按[④概要](../../src/astrophotoflow/modules/nodes/README.md)、AT-03／29验证参数重置、变化端口、加载及执行中保护，暂无产品节点测试命令 |
+| FR-13/15 交付 | 固定引擎、现有init/start/status/stop、完整网页、源码外安装和无Node重建；MCP启动、端口冲突自动选择及实际地址交接、网页公共配置、CLI／MCP重启、日志轮转与确认清理待补 | `tests/core`、`tests/packaging`、`scripts/verify_distribution.py`；新增验收见[公共概要](../../src/astrophotoflow/core/README.md) |
 | FR-14 服务边界 | 认证、代理来源／路径、原件和共享文件保护 | `tests/interfaces/comfyui/test_proxy.py`；数据服务／导入回归 |
 | FR-15 契约 | OpenAPI、Pydantic、前端 Zod 与 MCP 结构 | OpenAPI 快照、UI 契约和真实 stdio 测试 |
 
@@ -648,7 +662,7 @@
 
 ## 仍需后续验收
 
-- FR-02、FR-03、FR-07～FR-12、FR-16及其他有效FR的未完成部分，按[现行需求](../requirements/README.md)与[当前路线](platform-roadmap.md)推进；使用现行AT及覆盖解释，旧需求包已删除，不对不存在的冻结清单宣称散列校验通过。
+- FR-02、FR-03、FR-07～FR-12、FR-16及其他有效FR的未完成部分，按[现行需求](../requirements/README.md)与[当前路线](../archive/2026-10-29-planning/development/platform-roadmap.md)推进；使用现行AT及覆盖解释，旧需求包已删除，不对不存在的冻结清单宣称散列校验通过。
 - S0 固定性能基准机器、数据规模与测量指标，相关功能可测后补齐数值门槛。标准节点热发布须有单独原型证据，不由现有定义刷新入口推定支持。
 - ①的默认／自选目录、待应用配置及旧连接保持、并发控制／繁忙拒绝／重启核对、原生领域状态桥接、日志轮转／确认清理和完整升级恢复，按公共概要及其阶段表补实际证据；不能以本次文档覆盖代替功能通过。
 - ②的固定科学输入、用户选择结果保存、比较、标签／文件治理及本地记忆，按数据概要DATA-F01～F08和阶段出口补实际证据；完整中间文件不作为长期保存内容，现有58个数据工具和数据回收站测试不代替新增闭环验收。

@@ -54,6 +54,6 @@ cleanup instruction.
 ## Consequences
 
 No API, schema, storage migration, UI component or runtime behavior is added by
-this ADR. The [data module outline](../../../src/astrophotoflow/modules/data/README.md#flows)
+this ADR. The [data module outline](../../../src/astrophotoflow/modules/data/README.md)
 owns the detailed responsibilities and acceptance scenarios. Existing project
 scope fields are not evidence of a completed result lifecycle.

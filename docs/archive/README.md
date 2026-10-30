@@ -1,7 +1,6 @@
-# 历史附件
+# 历史参考
 
-本目录保留早期 [CPU 工作台验收 JSON](acceptance/cpu-workbench-2026-10-23.json) 和[侧栏截图](acceptance/sidebar-2026-10-22/astrophotoflow-sidebar.jpg)。它们描述当时的候选，不是当前架构、命令或运行状态。
+- [旧22 Batch及设计草案](2026-10-29-planning/README.md)：已退出现行计划，只按需查阅。
+- [早期CPU验收](acceptance/cpu-workbench-2026-10-23.json)及 [侧栏截图](acceptance/sidebar-2026-10-22/astrophotoflow-sidebar.jpg)：只描述当时版本。
 
-旧阶段计划、执行 Prompt、快照和重复验收 Markdown 已从当前文件树清理，可通过 Git 历史查询。必要结论集中在[验证矩阵](../development/test-matrix.md)，当前操作从[文档索引](../README.md)进入。
-
-历史附件中的旧路径、数据数量、schema 和功能状态不构成新的执行要求。
+当前入口是 [产品需求](../requirements/README.md)、[上下文](../development/current-context.md) 与 [计划](2026-10-29-planning/development/implementation-plan.md)。历史路径、数量、状态、签名及计划不构成新的执行要求；当前证据按 [验证记录](../development/test-matrix.md) 具体条目查询。

@@ -106,13 +106,17 @@ Guardrails: agents must use `comfyPage` fixture (not bare `page`), never add `wa
 
 ## Development Workflow
 
+For AstroPhotoFlow, work stages, validation scope, and documentation updates follow
+the [root AGENTS.md](../AGENTS.md) and [development workflow](../docs/development/README.md).
+These project rules take precedence over the generic execution timing below.
+
 1. Make code changes
-2. Run the tests for what you changed: `pnpm test:unit path/to/file`
+2. Write necessary tests; execute them in the phase defined by the project workflow
 3. Lint what you changed: `pnpm lint:unstaged:fix`
 4. Check if README updates are needed
 5. Suggest docs.comfy.org updates for user-facing changes
 
-Do not run repo-wide checks to verify your work: `pnpm lint`, `pnpm typecheck`,
+Outside the project's preview and integration steps, do not run repo-wide checks: `pnpm lint`, `pnpm typecheck`,
 `pnpm knip`, `pnpm build`, or `pnpm test:unit` without a path. They load every
 core, and chained together they take minutes. The pre-commit hook already
 formats, lints, and typechecks what you stage, the pre-push hook runs knip, and
@@ -183,7 +187,7 @@ CI runs everything.
   - `pnpm lint`
   - `pnpm typecheck`
   - `pnpm knip`
-  - Relevant tests must pass
+  - Relevant tests must pass before integration, as defined by the project workflow
 - Never use `--no-verify` to bypass failing tests
   - Identify the issue and present root cause analysis and possible solutions if you are unable to solve quickly yourself
 - Keep PRs focused and small

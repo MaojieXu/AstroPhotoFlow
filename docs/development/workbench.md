@@ -1,43 +1,39 @@
-# 原生网页工作台使用
+# 使用本地网页工作台
 
-网页导入直接选择本机文件／文件夹，无需配置授权根目录。工作台设置已隐藏“授权导入目录”区域；既有import_roots配置及旧接口保留，修改其他设置不会清空这些值。此项仅改前端呈现，实际编译／隔离更新及未执行验证见当前上下文。
+当前仅开发构建，Windows x64／Python3.12／CPU有既有证据，完整交付和其他平台见 [当前上下文](current-context.md)。安装平台wheel不要求Node；Siril独立Bundle需要Git访问，缺少Git时按平台计划准备受管MinGit，私有凭据由用户在系统Git中提供。
 
-首轮运行验收面向 Windows x64/Python 3.12/CPU。最终用户安装发行 wheel 无需 Node 或 Git；首次初始化准备固定 CPU 依赖，工作流不要求生成式图像模型。
+## 安装并打开
+
+使用实际取得的开发wheel路径替换示例，不把文件名示例当作正式发布：
 
 ```powershell
 py -3.12 -m venv .apf-env
-.\.apf-env\Scripts\python.exe -m pip install .\.artifacts\dist\astrophotoflow-0.1.0-py3-none-any.whl
-.\.apf-env\Scripts\apf.exe init --workspace D:\AstroPhotoFlow\workspace --service-port 18190 --comfyui-port 18188
-.\.apf-env\Scripts\apf.exe start --workspace D:\AstroPhotoFlow\workspace
-.\.apf-env\Scripts\apf.exe status --workspace D:\AstroPhotoFlow\workspace
+.\.apf-env\Scripts\python.exe -m pip install <开发wheel路径>
+.\.apf-env\Scriptspf.exe init --workspace D:\AstroPhotoFlow\workspace --service-port 18190 --comfyui-port 18188
+.\.apf-env\Scriptspf.exe start --workspace D:\AstroPhotoFlow\workspace
+.\.apf-env\Scriptspf.exe status --workspace D:\AstroPhotoFlow\workspace
 ```
 
-打开start返回的实际网页地址；示例端口空闲时为 `http://127.0.0.1:18188/#/workflows`。节点库下方依次是素材库、工作流，两者与节点库共用原生侧栏，画布始终可见。设备管理在素材库“导入”旁，默认设备组合，可切换我的设备；拍摄预设在所属组合内维护。该模块不提供项目页面或设备回收站，项目数据及公开接口保留。关闭浏览器保留后台任务，使用 `apf stop --workspace ...` 显式退出。
+打开start返回的实际网页地址，端口冲突时会自动选择；不要固定猜测地址。首次初始化准备固定CPU运行依赖，手动处理不需要生成式模型。
 
-## 运行目录与数据
+## 日常操作
 
-固定原生引擎位于 LocalAppData/AstroPhotoFlow/runtime/native-web-0.1.0，与旧 0.1.0 runtime 分离。业务数据仍在指定 workspace；网页资源在 workspace/web，ComfyUI 用户工作流在 workspace/comfyui-user，科学原件和预览仍在 data。
+- 画布常驻，节点库下有素材库、工作流及软件包；侧栏可调宽／收起。设备管理在素材库“导入”旁，预设在所属组合内。
+- 导入直接选择本机文件或一个文件夹，文件夹只取当前层支持文件，无需先配置授权根。原件就绪与后台预览分开。
+- 素材名称点击后选画布落点，或整行拖入；缩略图点击查看。固定组可切成员，图片、名称和参数保留。
+- 软件页查看实际就绪与原因；安装／卸载在原生弹窗确认准确计划。Siril当前可执行操作是Auto Stretch，命令资料不等于全部可执行节点。
+- 从设置进入工作台配置。保存不自动重启，显式重启采用保存值；未保存内容不能用于重启。繁忙或无法确认空闲时拒绝。
 
-原生服务直接注册业务网关，默认禁用外部 Custom Nodes；不需要链接 custom_nodes，不再安装 AstroPhotoFlow 插件。领域服务仍为内部 FastAPI 进程，由工作台先启动并检查健康，再启动网页引擎。
+修改端口后当前页面不能跨端口自动重连，按界面或`apf status`返回的新地址打开。断连先查询已有请求，不自动再提交一次。关闭浏览器不停止已受理任务。
 
-## CLI、MCP 与维护
-
-CLI 命令与58个 MCP 工具保持。使用 ASTROPHOTOFLOW_CONFIG 指定目标 workspace 的 config.toml；读取当前 revision 后再编辑。接口与例子见[操作参考](library-agent-tools.md)。
-
-B11起，默认位置由用户`~/.config/astrophotoflow/config.toml`的`[workspace] default`指定workspace目录，`apf init`激活时写入；显式workspace和`ASTROPHOTOFLOW_CONFIG`优先。旧active-workspace不再读取，没有默认设置时请明确指定目标。本轮未迁移或修改本机原默认指针，可继续使用显式路径。M1候选提供自动端口、真实启动采用记录及左侧“工作台配置”侧栏。start／status／stop／restart返回结构化结果；定向控制不修改默认位置。保存不重启，可在侧栏保存后点击“重启工作台”，或使用`apf restart --workspace <目标>`显式应用；繁忙或无法确认时拒绝。原dev旧版本保留，本轮人工验收请用M1隔离地址，不能把文档成文当作用户验收通过。
+## 停止、诊断和数据保护
 
 ```powershell
-.\.apf-env\Scripts\apf.exe stop --workspace D:\AstroPhotoFlow\workspace
-.\.apf-env\Scripts\apf-service.exe db status
-.\.apf-env\Scripts\apf-service.exe db upgrade
+.\.apf-env\Scriptspf.exe stop --workspace D:\AstroPhotoFlow\workspace
 ```
 
-服务不会自动升级已有数据库；当前 schema 为 `0009_remove_legacy_capture_profiles`。workspace 搬迁前停止所有服务，复制整份 workspace 后以新路径启动，更新客户端配置路径。不要只复制 SQLite 主文件。
+停止等待任务排空；超时或身份未知会保留记录，不表示已停止，先查询状态及日志。日志位于workspace的`logs`，不要输出service.token。
 
-停止时工作台请求领域服务退出并等待导入／预览排空。超过等待时限会明确报错并保留进程记录，稍后再次运行 stop；不会将仍在排空的任务假报完成。
+业务数据在指定workspace，网页在`web`，原生工作流在`comfyui-user`，素材／预览在`data`；程序runtime与之分离。默认workspace由用户TOML的`[workspace] default`选择，显式workspace／配置环境优先，控制命令不改变默认位置。
 
-启动失败也沿用同一排空流程。尚未完成登记的进程保留在当前控制记录中，身份暂不可读时后续stop重新核对；若启动中断在PID记录之前，状态保持未知并要求人工核对，不报告已停止。启动、清理和控制结果保存错误会一起说明；不要在状态未知时直接重复启动。
-
-诊断查看 workspace/logs/service.log、comfyui.log、健康检查及 apf status。不要输出 service.token。软件适配、节点制作、工作流级MCP、结果比较与本地上下文尚待实施；产品使用外部Agent，不提供内置聊天或Agent推理／生成式模型后端。目标中的软件MCP和本地检索embedding按[③概要](../../src/astrophotoflow/modules/software/README.md)及⑤后续设计管理，目前没有相应安装或查询命令，不改变现有平台CPU runtime和58个数据工具。完整范围与阶段以[现行需求](../requirements/README.md)为准，桌面安装包不是网页交付前置条件。
-
-网页重启先保存配置，未保存时按钮禁用并提示。重启采用已保存值；当前生效值在服务重启前保持。断连只查询既有请求，不自动重发。网页地址可点击新页打开。修改网页端口后当前页面不支持跨端口自动重连，使用界面展示的配置入口重新打开；若实际端口因占用改变，执行`apf status --workspace <目标>`获取真实地址，未知不能视为成功。
+已有数据库不自动升级，升级前保护数据并按明确计划执行；平台不提供workspace搬迁服务。不要只复制运行中的SQLite主文件。CLI／MCP选定目标及schema查询见 [API入口](../api/README.md)，源码开发见 [开发命令](README.md)。

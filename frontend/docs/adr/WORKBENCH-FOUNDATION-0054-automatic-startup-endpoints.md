@@ -58,6 +58,6 @@ design. The user selected file-based public control records; existing business
 data continues to use SQLite. Existing configuration, MCP registration and
 runtime behavior are unchanged by this ADR.
 
-The [foundation design](../../../src/astrophotoflow/core/README.md#behavior)
-and [data draft](../../../docs/architecture/data-models/01-foundation.md#processes)
+The [foundation design](../../../src/astrophotoflow/core/README.md)
+and [data draft](../../../docs/archive/2026-10-29-planning/architecture/data-models/01-foundation.md#processes)
 track the behavior and its future acceptance conditions.

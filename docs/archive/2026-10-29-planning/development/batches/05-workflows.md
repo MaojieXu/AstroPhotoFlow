@@ -1,3 +1,5 @@
+> 历史设计参考（2026-10-29退出现行计划）。签名、状态和任务顺序可能过时；不能直接据此实施。当前任务见 [当前计划](../../../../development/implementation-plan.md)。
+
 # M5任务卡：工作流、执行与Agent交互
 
 本文件落实[近期总计划M5](../implementation-plan.md#m5)。N＝本卡新增，M＝修改既有或前置卡创建的文件，R＝只复用，D＝删除旧注册；路径均相对仓库根。当前新增功能均未实施，先读根与所改作用域AGENTS；公开DTO/错误/协议唯一按④，不复制字段表。共享HTTP复用B13同一实现，业务只经公开入口，原生单例只在宿主。
@@ -12,7 +14,7 @@
 
 **1. 目标与可观察结果。** 分支`codex/workflow-native-files`。项目图列表/读取指向唯一原生JSON；新图选项目并实际保存后关联，save/rename/saveas/delete均经过最终userdata guard；另存独立ID，删除只清关联和专属预览，运行/已存素材保留。覆盖A51-1～4 / V09 / G05。
 
-**2. 必读依据。** [FR-01/02、场景3.2](../../requirements/README.md#scenario-canvas)、[⑤数据设计](../../architecture/data-models/05-workflows.md)、[模型与public](../../api/platform-contracts.md#workflows-design)、[实际文件钩子/首次关联](../../api/platform-contracts.md#native-design)。重点读④“models.py与保存事实”“public.py完整签名”“托管图实际文件guard”“首次保存、项目关联与交给Agent”。R：[原生保存](../../../frontend/src/platform/workflow/core/services/workflowService.ts)、[Store另存](../../../frontend/src/platform/workflow/management/stores/workflowStore.ts)、[ComfyWorkflow](../../../frontend/src/platform/workflow/management/stores/comfyWorkflow.ts)、[UserFile](../../../frontend/src/stores/userFileStore.ts)。
+**2. 必读依据。** [FR-01/02、场景3.2](../../../../requirements/README.md#scenario-canvas)、[⑤数据设计](../../architecture/data-models/05-workflows.md)、[模型与public](../../api/platform-contracts.md#workflows-design)、[实际文件钩子/首次关联](../../api/platform-contracts.md#native-design)。重点读④“models.py与保存事实”“public.py完整签名”“托管图实际文件guard”“首次保存、项目关联与交给Agent”。R：[原生保存](../../../../../frontend/src/platform/workflow/core/services/workflowService.ts)、[Store另存](../../../../../frontend/src/platform/workflow/management/stores/workflowStore.ts)、[ComfyWorkflow](../../../../../frontend/src/platform/workflow/management/stores/comfyWorkflow.ts)、[UserFile](../../../../../frontend/src/stores/userFileStore.ts)。
 
 **3. 前置。** B13/B21/B42集成，复用B32已验证的同socket定向回包；M3/M4交叉能力同轮分别验收。运行期依赖只为现有两个服务/SQLite/本机原生文件；此卡不要求③科学处理。新图首次未托管保存不得先要求不存在的SQL控制token。
 
@@ -103,7 +105,7 @@ pnpm test:browser
 
 **1. 目标。** `codex/workflow-online-editing`。用户明确目标页“交给Agent”后，Agent可读取真实当前画布、按原生ID局部编辑/保存/明确替换；手动编辑即接管，切图暂停旧目标新写，多页同ID不串；拖入/显式set_data使用固定科学引用。A52-1～4 / V04/10/11 / G06。
 
-**2. 必读。** [需求FR-02/07/08、场景3.2](../../requirements/README.md#scenario-canvas)、[⑤数据](../../architecture/data-models/05-workflows.md)、[局部操作/完整签名](../../api/platform-contracts.md#workflows-design)、[页面/首次交回/共享控制](../../api/platform-contracts.md#native-design)。精确读④“局部编辑和页面交接”“宿主与UI入口”“固定消息路线”“真实交回”“共享图控制”。R：[ChangeTracker](../../../frontend/src/scripts/changeTracker.ts)、[原生API](../../../frontend/src/scripts/api.ts)、[素材Workspace](../../../frontend/packages/astrophotoflow-ui/src/modules/data/workspace/Workspace.vue)。
+**2. 必读。** [需求FR-02/07/08、场景3.2](../../../../requirements/README.md#scenario-canvas)、[⑤数据](../../architecture/data-models/05-workflows.md)、[局部操作/完整签名](../../api/platform-contracts.md#workflows-design)、[页面/首次交回/共享控制](../../api/platform-contracts.md#native-design)。精确读④“局部编辑和页面交接”“宿主与UI入口”“固定消息路线”“真实交回”“共享图控制”。R：[ChangeTracker](../../../../../frontend/src/scripts/changeTracker.ts)、[原生API](../../../../../frontend/src/scripts/api.ts)、[素材Workspace](../../../../../frontend/packages/astrophotoflow-ui/src/modules/data/workspace/Workspace.vue)。
 
 **3. 前置。** B23/B43/B51；B22已定`validate_input_references`真实落位；B32原生WS薄桥接；真实页面在线。没有页面时读取保存图/控制事实，不伪造actual current_graph。
 
@@ -182,7 +184,7 @@ G06须真实同socket命令/结果/确认来源和迟到；B53再补嵌套prepar
 
 **1. 目标。** `codex/workflow-controlled-runs`。人工按钮/快捷键/自动队列/Agent进入同一run受理；每轮控件准备、graphToPrompt、原生保存各一次，保存成功/长准备后重核才唯一原生提交；真实科学文件/资料/软件/定义固定；完整get/list和显式节点测试可查询。首次运行即保护忙闲/清理/固定实现。A53-1～5 / V02/07/12/13/14/17 / G06/G07，真实调用沿G02/G04。
 
-**2. 必读。** [FR-09/10/16及科学规则](../../requirements/README.md#4-功能需求)、[⑤数据](../../architecture/data-models/05-workflows.md)、[运行顺序](../../api/platform-contracts.md#workflows-design)、[入队guard/token/长准备/科学端口](../../api/platform-contracts.md#native-design)、[②活动输入边界](../../api/platform-contracts.md#data-design)。精确读④“单次运行固定顺序”“最终范围guard”“私有执行token”“显式节点测试”“长准备生命周期”“科学端口实际封装”“活动输入与永久清理”。R：[原生队列调用](../../../frontend/src/scripts/app.ts)、[转换](../../../frontend/src/utils/executionUtil.ts)、[原生最终入队](../../../engine/ComfyUI/server.py)、[原生执行](../../../engine/ComfyUI/execution.py)、[CurrentNodeContext](../../../engine/ComfyUI/comfy_execution/utils.py)、[真实unlink](../../../src/astrophotoflow/modules/data/trash.py)。
+**2. 必读。** [FR-09/10/16及科学规则](../../../../requirements/README.md#4-功能需求)、[⑤数据](../../architecture/data-models/05-workflows.md)、[运行顺序](../../api/platform-contracts.md#workflows-design)、[入队guard/token/长准备/科学端口](../../api/platform-contracts.md#native-design)、[②活动输入边界](../../api/platform-contracts.md#data-design)。精确读④“单次运行固定顺序”“最终范围guard”“私有执行token”“显式节点测试”“长准备生命周期”“科学端口实际封装”“活动输入与永久清理”。R：[原生队列调用](../../../../../frontend/src/scripts/app.ts)、[转换](../../../../../frontend/src/utils/executionUtil.ts)、[原生最终入队](../../../../../engine/ComfyUI/server.py)、[原生执行](../../../../../engine/ComfyUI/execution.py)、[CurrentNodeContext](../../../../../engine/ComfyUI/comfy_execution/utils.py)、[真实unlink](../../../../../src/astrophotoflow/modules/data/trash.py)。
 
 **3. 前置。** B24/B33/B42/B52集成；G02真实首软件/格式/有序集合/停止定位、G04真实当前registry通过。只对已关联的明确在线目标创建新run；已受理Task不因页面关闭停止。原生单引擎队列仍唯一调度器。G06嵌套准备与G07动态控件/范围/缓存原型失败即阻塞入口集成。
 
@@ -283,7 +285,7 @@ G06须在真实同socket提交处理中仍能接嵌套prepare结果、无自锁�
 
 **1. 目标。** `codex/workflow-results-and-cancel`。无网页仍更新真实运行/调用/产物；定向取消不误伤、送达与实际停止分开；每个实际完成图像输出压缩预览归原图；用户所选完整成员固定同task登记/反查；提供内部真实find_input_usage供公共移除发布时使用，永久清理保持B53保护。A54-1～6 / V02/14/15/16/17的内部部分；A54-5公共移除链由B57关闭 / G08；普通移除公共HTTP/client/MCP按用户确认在B57一次切换，不在本卡提前改变现有行为。
 
-**2. 必读。** [FR-09/10、结果选择](../../requirements/README.md#scenario-continuity)、[⑤数据](../../architecture/data-models/05-workflows.md)、[run/输出/预览public](../../api/platform-contracts.md#workflows-design)、[无网页事件及取消专节](../../api/platform-contracts.md#native-design)、[②登记/移除闭合](../../api/platform-contracts.md#data-design)。精确读④“所选结果登记/查询”“从所选完整结果反查运行”“无浏览器运行观察”“定向取消与实际停止”。R：[取消helper](../../../engine/ComfyUI/comfy_execution/jobs.py)、[原生目标中断](../../../engine/ComfyUI/execution.py)、[原生预览消费](../../../frontend/src/stores/nodeOutputStore.ts)、[现有归图ChangeTracker](../../../frontend/src/scripts/changeTracker.ts)、[任务序列化](../../../src/astrophotoflow/modules/data/imports.py)。
+**2. 必读。** [FR-09/10、结果选择](../../../../requirements/README.md#scenario-continuity)、[⑤数据](../../architecture/data-models/05-workflows.md)、[run/输出/预览public](../../api/platform-contracts.md#workflows-design)、[无网页事件及取消专节](../../api/platform-contracts.md#native-design)、[②登记/移除闭合](../../api/platform-contracts.md#data-design)。精确读④“所选结果登记/查询”“从所选完整结果反查运行”“无浏览器运行观察”“定向取消与实际停止”。R：[取消helper](../../../../../engine/ComfyUI/comfy_execution/jobs.py)、[原生目标中断](../../../../../engine/ComfyUI/execution.py)、[原生预览消费](../../../../../frontend/src/stores/nodeOutputStore.ts)、[现有归图ChangeTracker](../../../../../frontend/src/scripts/changeTracker.ts)、[任务序列化](../../../../../src/astrophotoflow/modules/data/imports.py)。
 
 **3. 前置。** B24+B53；首软件G02已证明真实停止/恢复定位。完整模型和来源事实仍归⑤/②/③各自；B53已经接好永久unlink/固定实现与忙闲，此卡增量回归，不重新做一套保护。原生事件失败不得阻塞引擎；关闭页面仅失去新画布操作，不停已受理任务。
 
@@ -381,7 +383,7 @@ uv run --locked --no-sync pytest -c pyproject.toml --noconftest -o pythonpath=en
 
 **1. 目标。** `codex/workflow-package-node-updates`。软件更新/卸载和自制节点更新先列准确影响，再真实确认；已固定preparing/queued/running/unknown实现阻止替换；变化参数/端口按既定规则，未打开图也沿原生最终文件guard写，逐图报告实际部分结果。A55-1～4 / V06/08 / G09。
 
-**2. 必读。** [FR-03/16](../../requirements/README.md#scenario-nodes)、[③更新/卸载数据](../../architecture/data-models/03-software.md#更新与卸载)、[④修改数据](../../architecture/data-models/04-nodes.md#修改已有自定义节点)、[③④公开面](../../api/platform-contracts.md#software-design)、[⑤影响/更新](../../api/platform-contracts.md#workflows-design)、[已批准维护文件入口](../../api/platform-contracts.md#native-design)。重点读④“③必要public”“确认更新及在途保护”“public.py完整签名”“受控保存入口”“共享图控制”。R：[原生文件最终写](../../../engine/ComfyUI/app/user_manager.py)；运行实际事实复用 `src/astrophotoflow/modules/workflows/public.py`（B51起创建，B53接运行），原生Store/画布实际操作复用 `frontend/src/platform/astrophotoflow/workflowBridge.ts`（B32起创建）。
+**2. 必读。** [FR-03/16](../../../../requirements/README.md#scenario-nodes)、[③更新/卸载数据](../../architecture/data-models/03-software.md#更新与卸载)、[④修改数据](../../architecture/data-models/04-nodes.md#修改已有自定义节点)、[③④公开面](../../api/platform-contracts.md#software-design)、[⑤影响/更新](../../api/platform-contracts.md#workflows-design)、[已批准维护文件入口](../../api/platform-contracts.md#native-design)。重点读④“③必要public”“确认更新及在途保护”“public.py完整签名”“受控保存入口”“共享图控制”。R：[原生文件最终写](../../../../../engine/ComfyUI/app/user_manager.py)；运行实际事实复用 `src/astrophotoflow/modules/workflows/public.py`（B51起创建，B53接运行），原生Store/画布实际操作复用 `frontend/src/platform/astrophotoflow/workflowBridge.ts`（B32起创建）。
 
 **3. 前置。** B32/B43/B51/B54；复用B53完整get_implementation_usage及现有maintain_package/①维护gate。G04已锁定实际加载/刷新/显式重启条件；G09未打开图和嵌套最终guard失败即阻塞。用户确认的是准确业务计划，普通Agent不能借维护后台改任意图。
 
@@ -479,7 +481,7 @@ G09真实证明未打开图/实际userdata最终guard/写成关联失败和部�
 
 **1. 目标。** `codex/capability-catalog-search`。目录由真实业务/④节点/③操作派生；已知能力直接get，未知才keyword+固定本地embedding检索最多10候选，完整定义按需读；模型故障显式keyword及原因，恢复据实hybrid。A56-1～3 / V18 / G10。
 
-**2. 必读。** [统一工具发现FR-07](../../requirements/README.md#tool-discovery)、[⑤数据目录边界](../../architecture/data-models/05-workflows.md)、[目录类型/公开面/Schema闭包](../../api/platform-contracts.md#mcp-design)、[①固定资源边界](../../../src/astrophotoflow/core/README.md)。重点读④“目录类型和具名入口”“可独立解释schema及最小$defs闭包”和[固定ID映射](../../api/platform-contracts.md#capability-dispatch)；[既有资源定位/固定runtime](../../../src/astrophotoflow/core/workbench.py)与项目锁文件只读核对。
+**2. 必读。** [统一工具发现FR-07](../../../../requirements/README.md#tool-discovery)、[⑤数据目录边界](../../architecture/data-models/05-workflows.md)、[目录类型/公开面/Schema闭包](../../api/platform-contracts.md#mcp-design)、[①固定资源边界](../../../../../src/astrophotoflow/core/README.md)。重点读④“目录类型和具名入口”“可独立解释schema及最小$defs闭包”和[固定ID映射](../../api/platform-contracts.md#capability-dispatch)；[既有资源定位/固定runtime](../../../../../src/astrophotoflow/core/workbench.py)与项目锁文件只读核对。
 
 **3. 前置。** B12可先起G10原型；完整目录依B43/B52/B54真实入口，数据58集合沿契约第8节，B57才更换MCP注册。**固定模型/后端/资源来源/版本/许可/实际运行组合未选定前，不编写通用embedding层或新增依赖。** 有资源/依赖取舍按原计划给用户选择；原型/选择后回填第9项明确内容再Ready。
 
@@ -520,7 +522,7 @@ uv run --locked --no-sync pytest tests/modules/workflows/test_service.py tests/i
 
 G10真实固定模型benchmark只在隔离/已确认资源环境；原型命令必须在模型/后端选定后写成准确命令并记录，当前不能编一个不存在的benchmark CLI。仅目录单元通过不等检索质量已验。
 
-**9. Ready/阻塞与证据。** G10资源预检见`.artifacts/implementation/G10/model-preflight.json`及[验证矩阵](../test-matrix.md#demo-b31-probe)：两项官方候选已有固定revision／权重SHA／许可证及本地依赖环境事实，但尚未选定或下载、未运行。**仍需用户选择唯一模型和接受资源来源／许可证；随后用授权隔离资源环境复测并记录完整后端版本、实际资源目录、必要依赖／准确入口／命令。** 不允许Agent自行决定模型、下载权重、变更依赖或发明公共resource API。B43／B52／B54真实能力未完成前，完整B56目录也不得Ready。证据须含真实硬件/候选集/中文英文查询结果、降级与恢复、时延/资源观察；不把模型索引当新业务权威。
+**9. Ready/阻塞与证据。** G10资源预检见`.artifacts/implementation/G10/model-preflight.json`及[验证矩阵](../../../../development/test-matrix.md#demo-b31-probe)：两项官方候选已有固定revision／权重SHA／许可证及本地依赖环境事实，但尚未选定或下载、未运行。**仍需用户选择唯一模型和接受资源来源／许可证；随后用授权隔离资源环境复测并记录完整后端版本、实际资源目录、必要依赖／准确入口／命令。** 不允许Agent自行决定模型、下载权重、变更依赖或发明公共resource API。B43／B52／B54真实能力未完成前，完整B56目录也不得Ready。证据须含真实硬件/候选集/中文英文查询结果、降级与恢复、时延/资源观察；不把模型索引当新业务权威。
 
 <a id="b57"></a>
 
@@ -530,7 +532,7 @@ G10真实固定模型benchmark只在隔离/已确认资源环境；原型命令�
 
 **1. 目标。** `codex/mcp-three-entry-migration`。真实stdio tools/list恰三个入口；58数据业务ID完整固定映射且现HTTP/CLI/图像/错误语义保持；①离线本机控制先于在线AssetClient；真实外部客户端在已交回目标完成读材/局部改图/保存/真实运行/预览/选择保存，手改后安静且下次读最新目标。A57-1～4 / V01/18，本卡关闭A54-5与V17公共移除迁移 / G06/G10真实客户端出口。
 
-**2. 必读。** [FR-07/08、统一发现](../../requirements/README.md#tool-discovery)、[58完整集合与三入口](../../api/platform-contracts.md#mcp)、[精确工具/客户端签名、错误与Schema](../../api/platform-contracts.md#mcp-design)、[普通移除闭合](../../api/platform-contracts.md#data-design)。R：[当前server](../../../src/astrophotoflow/interfaces/mcp/server.py)、[imports/tools](../../../src/astrophotoflow/interfaces/mcp/tools/imports.py)、[library/tools](../../../src/astrophotoflow/interfaces/mcp/tools/library.py)、[organization/tools](../../../src/astrophotoflow/interfaces/mcp/tools/organization.py)、[具名AssetClient](../../../src/astrophotoflow/client.py)、[现行Skill](../../../.agents/skills/astrophotoflow-library/SKILL.md)、[操作参考](../library-agent-tools.md)。
+**2. 必读。** [FR-07/08、统一发现](../../../../requirements/README.md#tool-discovery)、[58完整集合与三入口](../../api/platform-contracts.md#mcp)、[精确工具/客户端签名、错误与Schema](../../api/platform-contracts.md#mcp-design)、[普通移除闭合](../../api/platform-contracts.md#data-design)。R：[当前server](../../../../../src/astrophotoflow/interfaces/mcp/server.py)、[imports/tools](../../../../../src/astrophotoflow/interfaces/mcp/tools/imports.py)、[library/tools](../../../../../src/astrophotoflow/interfaces/mcp/tools/library.py)、[organization/tools](../../../../../src/astrophotoflow/interfaces/mcp/tools/organization.py)、[具名AssetClient](../../../../../src/astrophotoflow/client.py)、[现行Skill](../../../../../.agents/skills/astrophotoflow-library/SKILL.md)、[操作参考](../../../../development/library-agent-tools.md)。
 
 **3. 前置。** B55+B56，M1～M4自身验收记录通过；用户已确认M3/M4交叉同轮分别验收。原58入口保持到本卡一次切换；不能把目录内部开发提前注册第二套工具。新增业务ID已由[④固定映射](../../api/platform-contracts.md#capability-dispatch)确定；用户已确认素材移除HTTP/client/MCP与本卡一次切换，不增过渡工具或兼容分支。
 

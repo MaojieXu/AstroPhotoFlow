@@ -53,6 +53,6 @@ their own versions and execution facts; the common layer must not duplicate them
 ## Consequences
 
 No transport, API or code is added by this ADR. The
-[foundation design](../../../src/astrophotoflow/core/README.md#behavior) owns the
+[foundation design](../../../src/astrophotoflow/core/README.md) owns the
 module outline and acceptance gates. Subsequent data and interface design will
 define the actual handoff after the cross-process prototype establishes feasibility.

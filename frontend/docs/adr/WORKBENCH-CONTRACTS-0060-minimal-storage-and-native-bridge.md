@@ -63,7 +63,7 @@ The native whitelist already supports loading only the managed package.
 ## Consequences
 
 Define public operations, DTOs, file ownership and tests in the
-[platform contract](../../../docs/api/platform-contracts.md). Do not duplicate
+[platform contract](../../../docs/archive/2026-10-29-planning/api/platform-contracts.md). Do not duplicate
 the editable current graph, add a scheduler or create placeholder source files.
 Database transactions do not make file updates, queue submissions and external
 software calls atomic.

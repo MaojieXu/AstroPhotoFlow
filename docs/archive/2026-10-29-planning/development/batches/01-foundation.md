@@ -1,8 +1,10 @@
+> 历史设计参考（2026-10-29退出现行计划）。签名、状态和任务顺序可能过时；不能直接据此实施。当前任务见 [当前计划](../../../../development/implementation-plan.md)。
+
 # M1任务卡：公共基础设施
 
 本文件落实[近期总计划](../implementation-plan.md#m1)，不另定义协议；公开DTO、签名和错误以④为准。文件路径均相对仓库根；N＝计划新增，M＝修改既有，R＝只复用。每卡先读根及所改作用域AGENTS。
 
-M1三卡已组成实现候选；B11→B12→B13依次继承代码，最终候选在`codex/workbench-settings-ui`。验证见[矩阵](../test-matrix.md#m1-foundation)，用户人工批准和dev集成仍待完成，不将中间提交当作单卡最终批准。只有总计划获确认、可识别dev基点及本卡真实前置具备后才Ready；Batch自动集成与Milestone用户验收分别记录。测试只在实际文件落位后执行。工作目录/工具及共享runtime维护窗口按[验证环境](../implementation-plan.md#validation-environment)，用户操作/批准按[人工验收门](../implementation-plan.md#acceptance-gates)。维护窗口必须能用原版本入口恢复原dev；tmp_path单元测试无需停止dev。
+M1三卡已组成实现候选；B11→B12→B13依次继承代码，最终候选在`codex/workbench-settings-ui`。验证见[矩阵](../../../../development/test-matrix.md#m1-foundation)，用户人工批准和dev集成仍待完成，不将中间提交当作单卡最终批准。只有总计划获确认、可识别dev基点及本卡真实前置具备后才Ready；Batch自动集成与Milestone用户验收分别记录。测试只在实际文件落位后执行。工作目录/工具及共享runtime维护窗口按[验证环境](../implementation-plan.md#validation-environment)，用户操作/批准按[人工验收门](../implementation-plan.md#acceptance-gates)。维护窗口必须能用原版本入口恢复原dev；tmp_path单元测试无需停止dev。
 
 <a id="b11"></a>
 
@@ -12,7 +14,7 @@ M1三卡已组成实现候选；B11→B12→B13依次继承代码，最终候选
 
 1. **结果、分支和追踪**：`codex/workbench-config`。默认TOML定位唯一workspace，保存最新值，运行采用值与保存值分开；配置冲突可见。FR-13/14/15；NFR-01/04/07/08；AT-01近期部分。对接A11-1～3、V01/02、G01的配置部分。
 
-2. **必须读**：[需求FR-13](../../requirements/README.md#fr-13-环境检测安装与恢复)、[FR-14](../../requirements/README.md#fr-14-本地安全权限与隐私)、[①数据§3](../../architecture/data-models/01-foundation.md#3-关键字段与使用规则)、[①精确契约](../../api/platform-contracts.md#foundation-design)。字段只按ConfigValues/ConfigSave/ConfigState及运行信息表，不在卡中复制schema。指定源代码：`src/astrophotoflow/core/config.py`、`src/astrophotoflow/core/workbench.py`、`tests/core/test_config.py`。
+2. **必须读**：[需求FR-13](../../../../requirements/README.md#fr-13-环境检测安装与恢复)、[FR-14](../../../../requirements/README.md#fr-14-本地安全权限与隐私)、[①数据§3](../../architecture/data-models/01-foundation.md#3-关键字段与使用规则)、[①精确契约](../../api/platform-contracts.md#foundation-design)。字段只按ConfigValues/ConfigSave/ConfigState及运行信息表，不在卡中复制schema。指定源代码：`src/astrophotoflow/core/config.py`、`src/astrophotoflow/core/workbench.py`、`tests/core/test_config.py`。
 
 3. **前置及Ready**：确认后的dev设计基线。核心契约已定，无首包/模型前置。设计确认和基点未落实前不Ready；真实G01依已确认维护窗口的实际安排，不阻塞tmp_path单元实现。B12负责真实启动采用与端口写回，不由B11再造启动器。
 
@@ -65,7 +67,7 @@ def load_running_settings(workspace: Path) -> Settings: ...
 
 1. **结果、分支和追踪**：`codex/workbench-lifecycle`。本机可start/status/stop/restart，返回准确双服务地址/状态/最近结果，自动选择被占用端口；现有导入与预览繁忙拒绝重启。FR-13/14；NFR-01/04/06/08；AT-01近期；A12-1～3、V01/02、G01。
 
-2. **必须读**：[FR-13](../../requirements/README.md#fr-13-环境检测安装与恢复)、[①数据§3.2～3.3](../../architecture/data-models/01-foundation.md#32-当前运行信息)、[①详设](../../api/platform-contracts.md#foundation-design)。指定源代码：`src/astrophotoflow/core/workbench.py`的_identity/_record/start/status/stop，`src/astrophotoflow/interfaces/http/app.py`的lifespan/shutdown，`src/astrophotoflow/modules/data/ingestion.py`的import_workers/process_task，`src/astrophotoflow/modules/data/previews.py`的DisplayPreviews.schedule。
+2. **必须读**：[FR-13](../../../../requirements/README.md#fr-13-环境检测安装与恢复)、[①数据§3.2～3.3](../../architecture/data-models/01-foundation.md#32-当前运行信息)、[①详设](../../api/platform-contracts.md#foundation-design)。指定源代码：`src/astrophotoflow/core/workbench.py`的_identity/_record/start/status/stop，`src/astrophotoflow/interfaces/http/app.py`的lifespan/shutdown，`src/astrophotoflow/modules/data/ingestion.py`的import_workers/process_task，`src/astrophotoflow/modules/data/previews.py`的DisplayPreviews.schedule。
 
 3. **前置及Ready**：B11集成。未开工；B11基点未定不可Ready。真实G01按用户已确认维护窗口执行：核对并停止全部原共享runtime实例后更新候选资源，再启动隔离W1/W2；候选验完停止W1/W2并恢复原dev状态。不另备VM，不在正常dev仍使用runtime时更新。③⑤尚未实现时只接现有真实②事实，后续B53首次运行即追加，B54补全。
 
@@ -120,7 +122,7 @@ initialize保留activate含义但写唯一默认TOML；start移除旧activate参
 
 1. **结果、分支和追踪**：`codex/workbench-settings-ui`。网页显示当前workspace保存值/采用值/实际地址/需重启，允许保存，保存不自动重启或改连接。FR-13/14；NFR-03/04/07；A13-1～3、V02、G01网页部分。
 
-2. **必须读**：[FR-13](../../requirements/README.md#fr-13-环境检测安装与恢复)、[①数据配置](../../architecture/data-models/01-foundation.md#31-配置)、[①详设](../../api/platform-contracts.md#foundation-design)、[前端具名客户端](../../api/platform-contracts.md#前端具名客户端公开面)。指定源代码：`src/astrophotoflow/interfaces/http/system.py`、`src/astrophotoflow/comfyui/proxy.py`、`frontend/packages/astrophotoflow-ui/src/modules/data/api/client.ts`／`frontend/packages/astrophotoflow-ui/src/modules/data/api/contracts.ts`、`frontend/src/platform/astrophotoflow/NativeShell.vue`。
+2. **必须读**：[FR-13](../../../../requirements/README.md#fr-13-环境检测安装与恢复)、[①数据配置](../../architecture/data-models/01-foundation.md#31-配置)、[①详设](../../api/platform-contracts.md#foundation-design)、[前端具名客户端](../../api/platform-contracts.md#前端具名客户端公开面)。指定源代码：`src/astrophotoflow/interfaces/http/system.py`、`src/astrophotoflow/comfyui/proxy.py`、`frontend/packages/astrophotoflow-ui/src/modules/data/api/client.ts`／`frontend/packages/astrophotoflow-ui/src/modules/data/api/contracts.ts`、`frontend/src/platform/astrophotoflow/NativeShell.vue`。
 
 3. **前置及Ready**：B11、B12集成。用户已确认共用HTTP代码窄移至计划内core/client.ts，errorSchema至core/contracts.ts，data直接重导出/消费同一实现；B13主责，不新增文件框架。同步④后不再把此项列为Choice。本卡未开工，依确认后的基点及前置集成判Ready；真实浏览器按已确认维护窗口执行。
 

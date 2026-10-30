@@ -1,3 +1,5 @@
+> 历史设计参考（2026-10-29退出现行计划）。签名、状态和任务顺序可能过时；不能直接据此实施。当前任务见 [当前计划](../../../../development/implementation-plan.md)。
+
 # M2任务卡：数据与资产管理
 
 本文件落实[近期总计划](../implementation-plan.md#m2)，不另定义协议；公开DTO、签名和错误以④为准。文件路径均相对仓库根；N＝计划新增，M＝修改既有，R＝只复用。每卡先读根及所改作用域AGENTS。
@@ -12,7 +14,7 @@
 
 1. **结果、分支和追踪**：`codex/data-library-completion`。现有导入/任务/项目固定引用/集合/设备校准/预览/回收站保持，设备输入按已确认简化。FR-01/04/05/14；NFR-02/03/04；AT-04/32近期；A21-1～3、V03/04。不是重建整个数据模块。
 
-2. **必须读**：[FR-04](../../requirements/README.md#fr-04-数据素材与业务资料)、[②数据§2～4](../../architecture/data-models/02-data.md#2-现有模型及作用)、[API现有操作继续复用](../../api/platform-contracts.md#41-现有操作继续复用)。设备字段唯一看 `src/astrophotoflow/contracts/equipment.py`；指定UI `Workspace.vue`的specFields/editEquipment/buildPayload/performInlineFieldSave、`SettingsPage.vue`、`EquipmentSetupManager.vue`。还读实际数据 `imports.py`、`datasets.py`、`calibration.py`、`trash.py`及对应现有测试。
+2. **必须读**：[FR-04](../../../../requirements/README.md#fr-04-数据素材与业务资料)、[②数据§2～4](../../architecture/data-models/02-data.md#2-现有模型及作用)、[API现有操作继续复用](../../api/platform-contracts.md#41-现有操作继续复用)。设备字段唯一看 `src/astrophotoflow/contracts/equipment.py`；指定UI `Workspace.vue`的specFields/editEquipment/buildPayload/performInlineFieldSave、`SettingsPage.vue`、`EquipmentSetupManager.vue`。还读实际数据 `imports.py`、`datasets.py`、`calibration.py`、`trash.py`及对应现有测试。
 
 3. **前置及Ready**：B12；配置界面联调可等B13。未开工；确认基线后可先做已有回归/窄设备实现，不等首包/模型。新增运行来源、画布引用、活动输入清理仍明确交B51/B53/B54，不能提前关闭。
 
@@ -65,7 +67,7 @@ async function saveSetup(): Promise<void>
 
 1. **结果、分支和追踪**：`codex/data-scientific-inputs`。同进程解析固定资产/固定有序集合与明确HDU，交完整科学文件、当前纠正资料与有效校准；默认可复现和显式仅引用分别报告成本/结束观察。FR-01/04/09/14；NFR-02/04/07/08；AT-05/09/14～16/28/32近期；A22-1～3、V04/13。
 
-2. **必须读**：[数据规则](../../requirements/README.md#5-数据与科学处理规则)、[②数据§3/4](../../architecture/data-models/02-data.md#3-素材项目和固定范围)、[②精确契约](../../api/platform-contracts.md#data-design)的“引用与选择”“内部解析结果”“项目公开读取”“科学输入与结束观察”及SOURCE_CLEANUP_ACTIVE段。指定源代码：`src/astrophotoflow/modules/data/projects.py`、`src/astrophotoflow/modules/data/common.py` 的 _asset_version_scope、`src/astrophotoflow/modules/data/models.py`、`src/astrophotoflow/modules/data/files.py`、`src/astrophotoflow/modules/data/ingestion.py` 的 _read_hash_and_copy、`src/astrophotoflow/modules/data/fits_preview.py` 的 inspect_fits、`src/astrophotoflow/modules/data/previews.py` 的现有清理准入检查。
+2. **必须读**：[数据规则](../../../../requirements/README.md#5-数据与科学处理规则)、[②数据§3/4](../../architecture/data-models/02-data.md)、[②精确契约](../../api/platform-contracts.md#data-design)的“引用与选择”“内部解析结果”“项目公开读取”“科学输入与结束观察”及SOURCE_CLEANUP_ACTIVE段。指定源代码：`src/astrophotoflow/modules/data/projects.py`、`src/astrophotoflow/modules/data/common.py` 的 _asset_version_scope、`src/astrophotoflow/modules/data/models.py`、`src/astrophotoflow/modules/data/files.py`、`src/astrophotoflow/modules/data/ingestion.py` 的 _read_hash_and_copy、`src/astrophotoflow/modules/data/fits_preview.py` 的 inspect_fits、`src/astrophotoflow/modules/data/previews.py` 的现有清理准入检查。
 
 3. **前置及Ready**：B21集成。未开工；无首包选择前置，FITS最小科学交接可独立证明。真实③输入格式/集合采用由B31/B33/G02后锁；本卡不自行承诺任意cube/slice/视频范围。
 
@@ -111,7 +113,7 @@ def observe_reference_inputs(settings: Settings, inputs: ResolvedInputs) -> list
 
 1. **结果、分支和追踪**：`codex/data-content-acceptance`。用户先看真实变化再确认，同一Asset新增内部内容版本，旧版本/固定引用/旧run不推进；断连先GET核对。FR-04/09/10/14；AT-05；A23-1～3、V04。
 
-2. **必须读**：[FR-04](../../requirements/README.md#fr-04-数据素材与业务资料)、[②数据§3](../../architecture/data-models/02-data.md#3-素材项目和固定范围)、[②详设“确认外部内容变化”](../../api/platform-contracts.md#确认外部内容变化同素材新增内部版本)、[前端具名面](../../api/platform-contracts.md#前端具名客户端公开面)。指定源：`science_inputs.py`（B22新增）、`library.py`的get_asset/patch_asset/list_asset_versions、`ingestion.py:_refresh_fits_metadata`、`contracts/assets.py`、现有UI素材详情/错误展示。
+2. **必须读**：[FR-04](../../../../requirements/README.md#fr-04-数据素材与业务资料)、[②数据§3](../../architecture/data-models/02-data.md)、[②详设“确认外部内容变化”](../../api/platform-contracts.md)、[前端具名面](../../api/platform-contracts.md#前端具名客户端公开面)。指定源：`science_inputs.py`（B22新增）、`library.py`的get_asset/patch_asset/list_asset_versions、`ingestion.py:_refresh_fits_metadata`、`contracts/assets.py`、现有UI素材详情/错误展示。
 
 3. **前置及Ready**：B22集成；共享HTTP文件须B13先于本卡集成。未开工；消费B13已确认core公共HTTP/errorSchema同一实现，不重复发明。Python具名client按[④准确签名](../../api/platform-contracts.md#python-clients)实现，不由执行模型另定名称或返回类型。B52才实现set_data，当前接纳UI不得声称自动改图。
 
@@ -174,7 +176,7 @@ TS AssetOut沿现有assetSchema对应资产输出，不复制另一份字段。H
 
 1. **结果、分支和追踪**：`codex/data-output-and-protection`。检查完整文件、生成独立JPEG，复用既有Task登记用户选中的完整结果并续查同任务；提供只读的准确移除范围。FR-04/05/10/11/14，NFR-02/04/08，AT-17/18/20/32近期，A24-1～4、V16/17。M2只验②自身；画布/运行/来源/清理保护由B53/B54/B57实际接通。
 
-2. **必须读**：[FR-10](../../requirements/README.md#fr-10-运行事实逐节点预览与所选结果保存)、[FR-11](../../requirements/README.md#fr-11-方案保存重跑与存储边界)、[②数据§5](../../architecture/data-models/02-data.md#5-结果画布和移除)、[②详设](../../api/platform-contracts.md#data-design)的CheckedOutput、纯文件预览、所选结果登记、普通移除与活动输入清理段。指定源代码：`src/astrophotoflow/modules/data/ingestion.py` 的 process_task/_register_asset/_create_asset_content/_read_hash_and_copy，`src/astrophotoflow/modules/data/imports.py` 的 _task_out，`src/astrophotoflow/modules/data/trash.py` 的既有scope/移除/实际unlink路径，以及下表renderer。
+2. **必须读**：[FR-10](../../../../requirements/README.md#fr-10-运行事实逐节点预览与所选结果保存)、[FR-11](../../../../requirements/README.md#fr-11-方案保存重跑与存储边界)、[②数据§5](../../architecture/data-models/02-data.md)、[②详设](../../api/platform-contracts.md#data-design)的CheckedOutput、纯文件预览、所选结果登记、普通移除与活动输入清理段。指定源代码：`src/astrophotoflow/modules/data/ingestion.py` 的 process_task/_register_asset/_create_asset_content/_read_hash_and_copy，`src/astrophotoflow/modules/data/imports.py` 的 _task_out，`src/astrophotoflow/modules/data/trash.py` 的既有scope/移除/实际unlink路径，以及下表renderer。
 
 3. **前置及Ready**：B22集成；本卡以真实受控文件独立验证，不等首软件或⑤。用户已确认普通移除新公开链在B57一次切换，本卡只落实纯scope读取，不提前替换旧DELETE、不发布空工作流影响。B53在第一次受理运行前新增ActiveRunInputUse并接actual unlink guard；B57才实现remove_library_items、app两闭包、LibraryRemovalPreview/Apply及HTTP/client/MCP公开请求切换，不增过渡工具或兼容分支，不能以空回调通过。本卡不得把后续链标为已完成。
 

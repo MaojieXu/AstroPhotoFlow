@@ -1,3 +1,5 @@
+> 历史设计参考（2026-10-29退出现行计划）。签名、状态和任务顺序可能过时；不能直接据此实施。当前任务见 [当前计划](../../../development/implementation-plan.md)。
+
 # 五模块接口契约与文件级详细设计
 
 ## 2026-10-29 Bundle 增量契约（实现候选）
@@ -11,22 +13,22 @@
 2026-10-29 已实现候选覆盖：③补齐 SoftwareInvocation／Observation／Result／CancelResult／Use 及 invoke／inspect／cancel／usage；首操作为固定 Siril 1.4.4 Auto Stretch，完整 FITS 的 one-or-many 有序输入／输出使用 APF_SCIENCE，指定 HDU／切片未支持。新增 SoftwareUninstallRequest(package_token)，卸载提前交付为保留图及定义的程序移除，不改写图，不代替 B55 更新影响。NativeSirilCall 仅传固定科学引用（或同 prompt 已检查的 OutputLocator）及三个真实参数，内部按原生 prompt_id 固定工作目录；不接受路径、shell、URL 或脚本正文。窄原生适配与调用 JSON 是本轮首节点的真实消费者，不代表下文 M5 完整 NativeNodeCall／SQLite 运行契约已实现。详见[本轮任务](../development/batches/03-software.md)，测试尚未执行。
 
 
-2026-10-28 素材入画布窄候选补充：②prepare_canvas_data提供固定InputReference，⑤canvas.py与宿主canvasDataBridge／useCanvasDataSession实现按钮、拖放及已授权活动画布的MCP／CLI加数据。实际HTTP及字段见[现有接口](README.md#library-canvas)；此增量不等于下文B51／B52完整项目关联、通用改图或运行协议已完成，测试未执行。
+2026-10-28 素材入画布窄候选补充：②prepare_canvas_data提供固定InputReference，⑤canvas.py与宿主canvasDataBridge／useCanvasDataSession实现按钮、拖放及已授权活动画布的MCP／CLI加数据。实际HTTP及字段见[现有接口](../../../api/README.md)；此增量不等于下文B51／B52完整项目关联、通用改图或运行协议已完成，测试未执行。
 
-**状态：未来接口设计与当前实现分开记录；M1／M2已有实现，B31／B32／B41已有本地候选。** 当前文件／公开函数／消费者见[源码映射](../architecture/module-map.md#31-当前文件与公开函数映射)。 本文仍是五模块契约和文件级详细设计的统一入口；[接口说明](README.md)、[OpenAPI](openapi.json)及源码描述当前实现，不用本页替代已实现请求模型。B32安装／准备及同socket页面确认已有代码，真实确认与下载安装仍待验收；动态节点加载、受控运行、MCP迁移及其余原生桥接仍待对应Batch。
+**状态：未来接口设计与当前实现分开记录；M1／M2已有实现，B31／B32／B41已有本地候选。** 当前文件／公开函数／消费者见[源码映射](../../../architecture/module-map.md)。 本文仍是五模块契约和文件级详细设计的统一入口；[接口说明](../../../api/README.md)、[OpenAPI](../../../api/openapi.json)及源码描述当前实现，不用本页替代已实现请求模型。B32安装／准备及同socket页面确认已有代码，真实确认与下载安装仍待验收；动态节点加载、受控运行、MCP迁移及其余原生桥接仍待对应Batch。
 
-依据[现行需求](../requirements/README.md)、[总架构](../architecture/overview.md)、[五模块数据设计](../architecture/data-models/README.md)和模块概要。2026-10-27 用户确认：**日常局部改图；整图 JSON 用于导入或明确替换；保存当前画布成功后运行；在目标网页点击“交给 Agent”绑定该页面。** 取舍见[ADR-0059](../../frontend/docs/adr/WORKBENCH-WORKFLOWS-0059-native-editing-save-and-agent-target.md)。
+依据[现行需求](../../../requirements/README.md)、[总架构](../../../architecture/overview.md)、[五模块数据设计](../architecture/data-models/README.md)和模块概要。2026-10-27 用户确认：**日常局部改图；整图 JSON 用于导入或明确替换；保存当前画布成功后运行；在目标网页点击“交给 Agent”绑定该页面。** 取舍见[ADR-0059](../../../../frontend/docs/adr/WORKBENCH-WORKFLOWS-0059-native-editing-save-and-agent-target.md)。
 
 ## 1. 已有接口与必要增量
 
 | 事实来源 | 已有能力 | 本轮设计的增量及限制 |
 |---|---|---|
-| [领域 HTTP](../../src/astrophotoflow/modules/data/routes.py)、[软件路由](../../src/astrophotoflow/modules/software/routes.py)、[系统接口](../../src/astrophotoflow/interfaces/http/system.py)、[同源代理](../../src/astrophotoflow/comfyui/proxy.py) | 当前 89 个公共HTTP操作，与OpenAPI／固定代理路由对应；M2新增素材内容观察／确认，B31只读包列表／版本命令目录，B32详情／安装计划／准备查询 | 软件安装计划需同原生页面WS确认；真实安装、节点加载、软件执行和能力检索仍待后续Batch；工作流移除影响由B54／B57接入，M2科学输入与所选输出登记已有Python交接，⑤消费及偏好仍待实现 |
-| [客户端](../../src/astrophotoflow/client.py)、[MCP](../../src/astrophotoflow/interfaces/mcp/server.py)、[工具参考](../development/library-agent-tools.md) | HTTP 客户端、CLI、58 个数据工具；图片工具返回真实图像内容；AssetClient已有软件包列表／命令目录／详情／安装计划／准备五项调用 | 软件、节点、画布与运行 MCP 未实现；精简 MCP 是后续整体迁移 |
-| [工作台控制](../../src/astrophotoflow/core/workbench.py) | init/start/status/stop/restart、自动端口及实际地址、结构化就绪、配置／采用值、固定runtime、两个服务、进程文件 | M1已集成dev并获用户批准；MCP本机启停及后续业务占用待补，start/stop/restart已不改变默认workspace |
-| [原生文件](../../engine/ComfyUI/app/user_manager.py)、[工作流 Store](../../frontend/src/platform/workflow/management/stores/comfyWorkflow.ts) | userdata 保存／读取／改名／删除，临时文件后替换；自动保存、本地草稿、另存与会话撤销 | 项目关联与当前控制没有接入；原生文件写入不是已有 Agent 改图接口 |
-| [原生转换](../../frontend/src/utils/executionUtil.ts)、[引擎接口](../../engine/ComfyUI/server.py) | graphToPrompt、object_info、POST /prompt、/queue、/history、/api/jobs、定向取消及 /ws 事件 | 复用转换与调度，补受控提交、实际运行保存和软件调用；/api/jobs 同样来自内存队列／history，不是持久运行库 |
-| [原生事件消费](../../frontend/src/scripts/app.ts) | UI 输出、执行事件、当前画布显示 | 多次完成预览按任务归原图；当前 rootGraph 路由不能证明切页签后归属正确 |
+| [领域 HTTP](../../../../src/astrophotoflow/modules/data/routes.py)、[软件路由](../../../../src/astrophotoflow/modules/software/routes.py)、[系统接口](../../../../src/astrophotoflow/interfaces/http/system.py)、[同源代理](../../../../src/astrophotoflow/comfyui/proxy.py) | 当前 89 个公共HTTP操作，与OpenAPI／固定代理路由对应；M2新增素材内容观察／确认，B31只读包列表／版本命令目录，B32详情／安装计划／准备查询 | 软件安装计划需同原生页面WS确认；真实安装、节点加载、软件执行和能力检索仍待后续Batch；工作流移除影响由B54／B57接入，M2科学输入与所选输出登记已有Python交接，⑤消费及偏好仍待实现 |
+| [客户端](../../../../src/astrophotoflow/client.py)、[MCP](../../../../src/astrophotoflow/interfaces/mcp/server.py)、[工具参考](../../../development/library-agent-tools.md) | HTTP 客户端、CLI、58 个数据工具；图片工具返回真实图像内容；AssetClient已有软件包列表／命令目录／详情／安装计划／准备五项调用 | 软件、节点、画布与运行 MCP 未实现；精简 MCP 是后续整体迁移 |
+| [工作台控制](../../../../src/astrophotoflow/core/workbench.py) | init/start/status/stop/restart、自动端口及实际地址、结构化就绪、配置／采用值、固定runtime、两个服务、进程文件 | M1已集成dev并获用户批准；MCP本机启停及后续业务占用待补，start/stop/restart已不改变默认workspace |
+| [原生文件](../../../../engine/ComfyUI/app/user_manager.py)、[工作流 Store](../../../../frontend/src/platform/workflow/management/stores/comfyWorkflow.ts) | userdata 保存／读取／改名／删除，临时文件后替换；自动保存、本地草稿、另存与会话撤销 | 项目关联与当前控制没有接入；原生文件写入不是已有 Agent 改图接口 |
+| [原生转换](../../../../frontend/src/utils/executionUtil.ts)、[引擎接口](../../../../engine/ComfyUI/server.py) | graphToPrompt、object_info、POST /prompt、/queue、/history、/api/jobs、定向取消及 /ws 事件 | 复用转换与调度，补受控提交、实际运行保存和软件调用；/api/jobs 同样来自内存队列／history，不是持久运行库 |
+| [原生事件消费](../../../../frontend/src/scripts/app.ts) | UI 输出、执行事件、当前画布显示 | 多次完成预览按任务归原图；当前 rootGraph 路由不能证明切页签后归属正确 |
 
 原生 `/ws` 已有feature_flags等原生消息及B32的 `apf.page` 软件页面事件候选，仍没有本文的改图协议；`client_id`／socket 标识只负责路由，不证明授权。`/view` 和 `/upload/image` 也不代替科学文件交接。上述结论来自静态源码核对，不是本轮运行验收。
 
@@ -70,7 +72,7 @@ M2已在dev实现`resolve_inputs`、`observe_reference_inputs`、`check_output`�
 
 ### 4.1 现有操作继续复用
 
-导入按钮与 Agent 使用相同上传／授权目录导入能力：创建上传批次 → PUT 文件 → start；本机目录只浏览配置允许的 root → import。任务通过现有 task 查询／取消／resume／retry，登记、原件处理和预览分别报告。resume 延续中断任务，retry 按现有分阶段规则处理失败项，不能等同于重新独立导入。同批重复来源跳过，独立导入建立新素材，具体请求见[现有工具参考](../development/library-agent-tools.md)。
+导入按钮与 Agent 使用相同上传／授权目录导入能力：创建上传批次 → PUT 文件 → start；本机目录只浏览配置允许的 root → import。任务通过现有 task 查询／取消／resume／retry，登记、原件处理和预览分别报告。resume 延续中断任务，retry 按现有分阶段规则处理失败项，不能等同于重新独立导入。同批重复来源跳过，独立导入建立新素材，具体请求见[现有工具参考](../../../development/library-agent-tools.md)。
 
 项目查询和固定引用、资产／集合查询、设备快照和校准仍用现有模型及 `base_revision`。集合增加成员后项目继续引用原 `dataset_version_id`；明确更新才换版本。文件选取范围与科学处理范围不能从聊天、目录名或预览猜测。以下为新增交接，S2～S4；偏好和完整比较在 S6。
 
@@ -549,7 +551,7 @@ def render_output_preview(checked: CheckedOutput, destination: Path, *, selectio
 ```
 
 同science_inputs.py实现、data.public导出，只读checked.path并向⑤指定位置写JPEG，无Database／asset身份／Preview行；不调用素材预览HTTP或先登记产物。⑤核对destination归属，第14节规定唯一文件位置；②拒绝与科学源同路径。max_edge为⑤给出的正整数，发布沿既有临时文件完整替换，失败只清本次临时文件。
-显示算法复用[现有FITS预览](../../src/astrophotoflow/modules/data/fits_preview.py)及[导入预览helper](../../src/astrophotoflow/modules/data/ingestion.py)，不复制算法或新增版本：显式fits_hdu采用指定HDU；省略selection／whole_file沿inspect_fits.selected_hdu显示默认。默认不可用或布局未支持返回PREVIEW_UNSUPPORTED，不另猜HDU，且不改run的科学选择。常规图像、XISF、RAW沿既有whole-file支持范围；视频沿[静态首帧](../../src/astrophotoflow/modules/data/video_preview.py)，不证明整段可处理；NumPy／other及未接入布局不猜测回退。
+显示算法复用[现有FITS预览](../../../../src/astrophotoflow/modules/data/fits_preview.py)及[导入预览helper](../../../../src/astrophotoflow/modules/data/ingestion.py)，不复制算法或新增版本：显式fits_hdu采用指定HDU；省略selection／whole_file沿inspect_fits.selected_hdu显示默认。默认不可用或布局未支持返回PREVIEW_UNSUPPORTED，不另猜HDU，且不改run的科学选择。常规图像、XISF、RAW沿既有whole-file支持范围；视频沿[静态首帧](../../../../src/astrophotoflow/modules/data/video_preview.py)，不证明整段可处理；NumPy／other及未接入布局不猜测回退。
 支持组合渲染失败为PREVIEW_FAILED，可确定缺RAW／XISF／FFmpeg依赖为PREVIEW_DEPENDENCY_UNAVAILABLE。公开函数固定返回None，PIL／NumPy及私有helper差异留②内部。⑤在文件存在后更新预览索引；显示失败与完整科学结果可用性分开，不重跑／扩分支或自动登记。验收覆盖省略selection、显式HDU、不支持布局及科学字节／run科学选择不变，统一见第17节。
 ### 确认外部内容变化：同素材新增内部版本
 
@@ -1330,7 +1332,7 @@ export function registerNativeFileHooks(
 
 1. `api.ts` 在 `storeUserData/moveUserData/deleteUserData` 的实际请求处调用上述 before 钩子，传本次实际 path、destination 和正文；宿主以 `authorize_file` 页面事件向⑤申请一次 `write_token`。它绑定操作、路径、原生图 ID、当前项目、拟写正文的 UTF-8 bytes SHA-256、已有文件 bytes 校验以及页面／控制观察，不由客户端自行声明已确认。该正文摘要只比这次真实传输字节，和 opaque 画布 `content_token` 不混用，不定义新的 JSON canonicalization。
 2. 该 token 仅附于这一次 userdata HTTP 请求的 `X-APF-Write-Token`；不使用全局“当前保存 token”，避免并发自动保存、改名和其他图互串。未经平台管理的 userdata 不得到 token，保持原生行为。
-3. `user_manager.py` 的 POST userdata、move、DELETE 实际修改前调用 `interfaces/comfyui.py.guard_file`。适配调用领域 `POST /internal/native/file-check`；领域按已有关联的源路径／图 ID 和 token 判定是否托管，校验实际正文和目标，检查一次授权仍有效。已托管图不能靠省略 header 变为普通文件。未托管新图首次保存没有permit，保存后按[首次保存专节](#首次保存项目关联与交给agent)明确关联；不得先要求不存在的控制token，或由普通保存自动授Agent权。
+3. `user_manager.py` 的 POST userdata、move、DELETE 实际修改前调用 `interfaces/comfyui.py.guard_file`。适配调用领域 `POST /internal/native/file-check`；领域按已有关联的源路径／图 ID 和 token 判定是否托管，校验实际正文和目标，检查一次授权仍有效。已托管图不能靠省略 header 变为普通文件。未托管新图首次保存没有permit，保存后按[首次保存专节](#首次保存、项目关联与交给agent)明确关联；不得先要求不存在的控制token，或由普通保存自动授Agent权。
 4. 对托管操作，guard 与紧接的原生文件修改按该引擎内当前操作串行完成；不在服务端持有数据库写事务等网络或文件。原生保存仍使用临时文件和 `os.replace`；move/delete 仍用原生实现。该临界区不能被解释为跨 SQLite 和文件的分布式事务。
 5. 已托管图的原生文件成功后经 `POST /internal/native/file-finished` 回传事实，⑤才更新关联，托管图另存接受原生新 ID，删除清理专属预览。未托管首次保存沿前项专节的associate_saved_workflow，不双发file-finished建立同一关联。after 钩子据实际 native 结果展示保存与关联分别状态。文件失败不更新为已保存；文件已成功但关联回传失败时明确分开，先读文件与关系核对，不声称已回滚或自动重放。
 
@@ -1945,14 +1947,14 @@ foundation.start/status/stop/restart及其已知定义在构造在线AssetClient
 
 | 标识 | 状态与文件 | 维护范围 |
 |---|---|---|
-| E-FND | 已有：[tests/core/test_config.py](../../tests/core/test_config.py)、[tests/core/test_workbench.py](../../tests/core/test_workbench.py) | 扩充配置、端口、实际地址／身份、启停／重启；既有mock不证明新增生命周期。 |
-| E-DATA | 已有：[tests/modules/data/test_ingestion.py](../../tests/modules/data/test_ingestion.py)、[test_import_pipeline.py](../../tests/modules/data/test_import_pipeline.py)、[test_calibration.py](../../tests/modules/data/test_calibration.py)、[test_equipment_snapshots.py](../../tests/modules/data/test_equipment_snapshots.py) | 保留导入、固定组、revision、接收快照、校准、原件；已有项目固定版本不证明运行采用。 |
-| E-PROTECT | 已有：[tests/modules/data/test_service.py](../../tests/modules/data/test_service.py)、[test_display_previews.py](../../tests/modules/data/test_display_previews.py) | 认证／OpenAPI／清理／共享路径和素材显示缓存回归，不代替图引用与运行预览。 |
-| E-TRANSPORT | 已有：[tests/interfaces/comfyui/test_proxy.py](../../tests/interfaces/comfyui/test_proxy.py)、[tests/integration/test_client_operations.py](../../tests/integration/test_client_operations.py)、[test_cli_mcp_protocol.py](../../tests/integration/test_cli_mcp_protocol.py) | 代理、具名客户端、CLI／真实stdio及ImageContent；迁移tools/list断言为精确三入口。 |
-| E-BOUNDARY | 已有：[tests/architecture/test_import_boundaries.py](../../tests/architecture/test_import_boundaries.py)及[前端依赖规则](../../frontend/.dependency-cruiser.json) | 随实现补③④⑤公开入口／依赖，现规则已覆盖data公开入口及nodes不依赖workflows／接入层；其他增量随实现补齐。 |
-| E-NATIVE | 已有：[useWorkflowAutoSave.test.ts](../../frontend/src/platform/workflow/persistence/composables/useWorkflowAutoSave.test.ts)、[workflowStore.test.ts](../../frontend/src/platform/workflow/management/stores/workflowStore.test.ts)、[changeTracker.test.ts](../../frontend/src/scripts/changeTracker.test.ts)、[executionUtil.test.ts](../../frontend/src/utils/executionUtil.test.ts)、[litegraphService.lateRegistration.test.ts](../../frontend/src/services/litegraphService.lateRegistration.test.ts)、[nodeOutputStore.workflowSwitch.test.ts](../../frontend/src/stores/nodeOutputStore.workflowSwitch.test.ts)、[jobs_cancel_test.py](../../engine/ComfyUI/tests-unit/jobs_cancel_test/jobs_cancel_test.py) | 原生回归基础；现新图不自动保存、迟到注册不自动升级占位实例、切图缓存与假取消队列均不证明业务闭环。 |
-| E-BROWSER | 已有：[tests/browser/native-web.mjs](../../tests/browser/native-web.mjs) | 侧栏／画布／保存加载／CPU／素材基础；现直接queuePrompt不证明⑤统一入口或真实科学软件。 |
-| E-DELIVERY | 已有：[tests/packaging/test_layout.py](../../tests/packaging/test_layout.py)、[test_engine_build.py](../../tests/packaging/test_engine_build.py)、[scripts/verify_distribution.py](../../scripts/verify_distribution.py) | 资源及仓库外安装；历史范围不作为本次构建／Windows发行通过。 |
+| E-FND | 已有：[tests/core/test_config.py](../../../../tests/core/test_config.py)、[tests/core/test_workbench.py](../../../../tests/core/test_workbench.py) | 扩充配置、端口、实际地址／身份、启停／重启；既有mock不证明新增生命周期。 |
+| E-DATA | 已有：[tests/modules/data/test_ingestion.py](../../../../tests/modules/data/test_ingestion.py)、[test_import_pipeline.py](../../../../tests/modules/data/test_import_pipeline.py)、[test_calibration.py](../../../../tests/modules/data/test_calibration.py)、[test_equipment_snapshots.py](../../../../tests/modules/data/test_equipment_snapshots.py) | 保留导入、固定组、revision、接收快照、校准、原件；已有项目固定版本不证明运行采用。 |
+| E-PROTECT | 已有：[tests/modules/data/test_service.py](../../../../tests/modules/data/test_service.py)、[test_display_previews.py](../../../../tests/modules/data/test_display_previews.py) | 认证／OpenAPI／清理／共享路径和素材显示缓存回归，不代替图引用与运行预览。 |
+| E-TRANSPORT | 已有：[tests/interfaces/comfyui/test_proxy.py](../../../../tests/interfaces/comfyui/test_proxy.py)、[tests/integration/test_client_operations.py](../../../../tests/integration/test_client_operations.py)、[test_cli_mcp_protocol.py](../../../../tests/integration/test_cli_mcp_protocol.py) | 代理、具名客户端、CLI／真实stdio及ImageContent；迁移tools/list断言为精确三入口。 |
+| E-BOUNDARY | 已有：[tests/architecture/test_import_boundaries.py](../../../../tests/architecture/test_import_boundaries.py)及[前端依赖规则](../../../../frontend/.dependency-cruiser.json) | 随实现补③④⑤公开入口／依赖，现规则已覆盖data公开入口及nodes不依赖workflows／接入层；其他增量随实现补齐。 |
+| E-NATIVE | 已有：[useWorkflowAutoSave.test.ts](../../../../frontend/src/platform/workflow/persistence/composables/useWorkflowAutoSave.test.ts)、[workflowStore.test.ts](../../../../frontend/src/platform/workflow/management/stores/workflowStore.test.ts)、[changeTracker.test.ts](../../../../frontend/src/scripts/changeTracker.test.ts)、[executionUtil.test.ts](../../../../frontend/src/utils/executionUtil.test.ts)、[litegraphService.lateRegistration.test.ts](../../../../frontend/src/services/litegraphService.lateRegistration.test.ts)、[nodeOutputStore.workflowSwitch.test.ts](../../../../frontend/src/stores/nodeOutputStore.workflowSwitch.test.ts)、[jobs_cancel_test.py](../../../../engine/ComfyUI/tests-unit/jobs_cancel_test/jobs_cancel_test.py) | 原生回归基础；现新图不自动保存、迟到注册不自动升级占位实例、切图缓存与假取消队列均不证明业务闭环。 |
+| E-BROWSER | 已有：[tests/browser/native-web.mjs](../../../../tests/browser/native-web.mjs) | 侧栏／画布／保存加载／CPU／素材基础；现直接queuePrompt不证明⑤统一入口或真实科学软件。 |
+| E-DELIVERY | 已有：[tests/packaging/test_layout.py](../../../../tests/packaging/test_layout.py)、[test_engine_build.py](../../../../tests/packaging/test_engine_build.py)、[scripts/verify_distribution.py](../../../../scripts/verify_distribution.py) | 资源及仓库外安装；历史范围不作为本次构建／Windows发行通过。 |
 | P-DATA | 已有：`tests/modules/data/test_science_inputs.py`；后续⑤联调断言待补 | ②科学输入／当前资料／范围、移除影响、所选输出及内容接纳。 |
 | P-SOFTWARE | 已有：`tests/modules/software/test_service.py`；真实调用及后续维护断言待补 | ③包／网页计划确认／安装维护／许可／真实调用；替身仅单元，真实软件另证。 |
 | P-NODES | 已有：`tests/modules/nodes/test_service.py`；加载／测试／画布更新断言待补 | ④JSON／校验／保存与加载／显式测试关联／确认更新。 |

@@ -1,6 +1,8 @@
+> 历史设计参考（2026-10-29退出现行计划）。签名、状态和任务顺序可能过时；不能直接据此实施。当前任务见 [当前计划](../../../../development/implementation-plan.md)。
+
 # 五模块数据设计
 
-**2026-10-27按已确认审计结果更新。** ⑤统一负责工作流、执行与Agent交互。依据[现行需求](../../requirements/README.md)、[总架构](../overview.md)、模块概要及实际源码；设计与新增能力仍须区分，本文不确定物理schema或协议。
+**2026-10-27按已确认审计结果更新。** ⑤统一负责工作流、执行与Agent交互。依据[现行需求](../../../../requirements/README.md)、[总架构](../../../../architecture/overview.md)、模块概要及实际源码；设计与新增能力仍须区分，本文不确定物理schema或协议。
 
 ## 1. 阅读入口
 
@@ -76,7 +78,7 @@ flowchart LR
 
 ## 5. 场景覆盖
 
-四类详细场景和原有十条旅程以[现行需求](../../requirements/README.md#3-关键用户旅程)为准：导入与整理归②；选择或拖入科学数据、三种处理起点、Agent接续／接管和实际处理由⑤连接②③④。Python及复合仍S6，行星从原始视频开始但具体支持范围需真实适配。
+四类详细场景和原有十条旅程以[现行需求](../../../../requirements/README.md#3-关键用户旅程)为准：导入与整理归②；选择或拖入科学数据、三种处理起点、Agent接续／接管和实际处理由⑤连接②③④。Python及复合仍S6，行星从原始视频开始但具体支持范围需真实适配。
 
 核对：项目重开与另存、固定素材组与资料修正、移除素材提示、各已执行图像节点自动预览、多次效果查看、切图暂停且后台结果归原图、人工明确交回、取消／断连核对、选择完整结果及跨项目偏好。无网页对工作流只查询，不新编辑或提交运行；②导入、③安装等非画布操作按所属规则提供。读取不恢复已撤销控制，手动变化后安静等待下次交互。
 
@@ -97,6 +99,6 @@ flowchart LR
 
 ## 7. 验证和完成边界
 
-事实源、现有测试及新增缺口见[模块导航](../module-map.md)和各模块概要；现有16个模型见[models.py](../../../src/astrophotoflow/modules/data/models.py)。本轮仅文档与静态源码检查，报告进入 `.artifacts/global-data-design/workflow-execution-simplification`。不构建、不重跑业务、不操作schema0009、环境、MCP、Skill或正常dev，不提交推送。
+事实源、现有测试及新增缺口见[模块导航](../../../../architecture/module-map.md)和各模块概要；现有16个模型见[models.py](../../../../../src/astrophotoflow/modules/data/models.py)。本轮仅文档与静态源码检查，报告进入 `.artifacts/global-data-design/workflow-execution-simplification`。不构建、不重跑业务、不操作schema0009、环境、MCP、Skill或正常dev，不提交推送。
 
 本页所记录的数据阶段完成声明限定为“⑤概要与数据设计完成”；后续第④阶段详设另见接口入口，二者均不表示S0验收或新业务闭环完成。
