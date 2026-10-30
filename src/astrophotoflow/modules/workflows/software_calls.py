@@ -54,7 +54,7 @@ def _checked_file(settings, prompt_id, call_id, output_index, member_index, *, f
     if output_index < 0 or output_index >= len(ports) or member_index < 0 or member_index >= len(ports[output_index]['files']):
         raise ApiError(404, 'RESOURCE_NOT_FOUND', '没有该输出端口或固定成员。')
     port = ports[output_index]
-    checked = CheckedOutput.model_validate(port['files'][member_index])
+    checked = CheckedOutput.model_validate_json(json.dumps(port['files'][member_index]))
     work = (settings.workspace / 'runs' / str(prompt_id) / 'work' / str(call_id)).resolve()
     if checked.run_directory.resolve() != work or not checked.path.resolve().is_relative_to(work):
         raise ApiError(422, 'INVALID_REFERENCE', '输出位置不属于该调用。')
@@ -93,8 +93,8 @@ async def _observed_call(settings, active, prompt_id, call_id):
     if orphan or record['state'] == 'unknown':
         record['state'] = 'unknown'
         if record.get('invocation') and record.get('observation'):
-            observed = await inspect_operation(settings, SoftwareInvocation.model_validate(record['invocation']),
-                                               SoftwareObservation.model_validate(record['observation']))
+            observed = await inspect_operation(settings, SoftwareInvocation.model_validate_json(json.dumps(record['invocation'])),
+                                               SoftwareObservation.model_validate_json(json.dumps(record['observation'])))
             record['observation'] = observed.model_dump(mode='json')
         _save(_record_path(settings, prompt_id, call_id), record)
     return record
@@ -104,13 +104,13 @@ def _call_summary(record, prompt_id, call_id):
     operation = record.get('operation') or record.get('invocation') or {}
     bundle = record.get('bundle') or {}
     error = record.get('error') or (record.get('result') or {}).get('error')
-    return RunCallResult(prompt_id=prompt_id, call_id=call_id, node_id=record['request']['node_id'], state=record['state'],
+    return RunCallResult.model_validate_json(json.dumps(dict(prompt_id=str(prompt_id), call_id=str(call_id), node_id=record['request']['node_id'], state=record['state'],
         workflow_id=record['request'].get('workflow_id'), package_id=operation.get('package_id'), software_version=operation.get('version'),
         bundle_version=bundle.get('version'), bundle_commit=bundle.get('commit'), operation_id=operation.get('operation_id'),
         definition_token=record['request'].get('definition_token'),
         ports=[dict(name=port['name'], type=port['type'], members=len(port['files']), formats=[file['format'] for file in port['files']],
                     names=[Path(file['path']).name for file in port['files']]) for port in _record_ports(record)],
-        preview_error=record.get('preview_error'), observation=record.get('observation'), error={'fields': [], **error} if error else None)
+        preview_error=record.get('preview_error'), observation=record.get('observation'), error={'fields': [], **error} if error else None), ensure_ascii=False))
 
 
 def _resolve_previous(settings, body: NativeBundleCall, locator: OutputLocator, expected):
@@ -443,7 +443,7 @@ async def recover_siril_calls(settings):
         if record["state"] not in {"starting", "running", "unknown"}:
             continue
         if record.get("invocation") and record.get("observation"):
-            await inspect_operation(settings, SoftwareInvocation.model_validate(record["invocation"]),
-                                    SoftwareObservation.model_validate(record["observation"]))
+            await inspect_operation(settings, SoftwareInvocation.model_validate_json(json.dumps(record["invocation"])),
+                                    SoftwareObservation.model_validate_json(json.dumps(record["observation"])))
         record["state"] = "unknown"
         _save(path, record)

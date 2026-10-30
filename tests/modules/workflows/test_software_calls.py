@@ -124,3 +124,57 @@ def test_process_completion_is_not_published_before_scientific_output_checks(tmp
         asyncio.run(scenario())
     finally:
         release.set()
+
+
+def test_completed_json_record_serves_summary_analysis_and_full_file(tmp_path):
+    from datetime import datetime, timezone
+    from astrophotoflow.contracts.software import SoftwareObservation
+    from astrophotoflow.modules.data.public import check_output
+    settings = Settings('127.0.0.1', 8190, tmp_path/'data', (), workspace=tmp_path)
+    app = create_app(settings, 'token')
+    prompt, call, workflow = uuid4(), uuid4(), uuid4()
+    work = tmp_path/'runs'/str(prompt)/'work'/str(call); work.mkdir(parents=True)
+    analysis = work/'analysis.json'
+    analysis.write_text(json.dumps([{'kind':'metrics','title':'mean','source':'fixture','values':{'mean':0}}]),encoding='utf-8')
+    checked = check_output(settings, run_directory=work, path=analysis, expected_format='other')
+    observed = SoftwareObservation(run_id=prompt, node_execution_id='3', call_id=call, observed_at=datetime.now(timezone.utc),
+                                   active=False, runtime_ref=None, state='completed', log_path=work/'siril.log')
+    software_calls._save(software_calls._record_path(settings,prompt,call), {
+        'request':{'node_id':'3','workflow_id':str(workflow)}, 'state':'completed',
+        'operation':{'package_id':'siril','version':'1.4.4','operation_id':'stat'},
+        'bundle':{'version':'0.2.0-dev.1','commit':'fixture'}, 'observation':observed.model_dump(mode='json'),
+        'ports':[{'name':'analysis','type':'APF_ANALYSIS','files':[checked.model_dump(mode='json')]}],
+    })
+    async def scenario():
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),base_url='http://test',headers={'Authorization':'Bearer token'}) as client:
+            base=f'/api/v1/runs/{prompt}/calls/{call}'
+            summary=await client.get(base)
+            assert summary.status_code==200
+            assert summary.json()['workflow_id']==str(workflow) and summary.json()['observation']['run_id']==str(prompt)
+            values=await client.get(base+'/outputs/0/members/0/analysis')
+            assert values.status_code==200 and values.json()[0]['values']['mean']==0
+            download=await client.get(base+'/outputs/0/members/0/file')
+            assert download.status_code==200 and download.content==analysis.read_bytes()
+    try:asyncio.run(scenario())
+    finally:app.state.database.close()
+
+
+def test_recovery_reads_typed_invocation_from_persisted_json_without_reexecution(tmp_path,monkeypatch):
+    from datetime import datetime, timezone
+    from astrophotoflow.contracts.software import SoftwareInvocation,SoftwareObservation
+    settings=Settings('127.0.0.1',8190,tmp_path/'data',(),workspace=tmp_path)
+    prompt,call=uuid4(),uuid4()
+    invocation=SoftwareInvocation(run_id=prompt,node_execution_id='3',call_id=call,package_id='siril',version='1.4.4',
+        operation_id='stat',operation_content_token='fixture',inputs={},parameters={},work_directory=tmp_path/'work')
+    observed=SoftwareObservation(run_id=prompt,node_execution_id='3',call_id=call,observed_at=datetime.now(timezone.utc),
+        active=None,runtime_ref=None,state='unknown',log_path=tmp_path/'work/siril.log')
+    path=software_calls._record_path(settings,prompt,call)
+    software_calls._save(path,{'state':'unknown','invocation':invocation.model_dump(mode='json'),'observation':observed.model_dump(mode='json')})
+    inspected=[]
+    async def inspect(_settings,request,previous):
+        assert request==invocation and previous==observed
+        inspected.append(request.call_id)
+        return previous
+    monkeypatch.setattr(software_calls,'inspect_operation',inspect)
+    asyncio.run(software_calls.recover_siril_calls(settings))
+    assert inspected==[call] and software_calls._read(settings,prompt,call)['state']=='unknown'

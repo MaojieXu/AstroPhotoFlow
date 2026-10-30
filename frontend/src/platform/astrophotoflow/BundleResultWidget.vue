@@ -216,7 +216,7 @@ onBeforeUnmount(() => {
       <p v-if="loading" role="status" class="m-0 text-muted-foreground">
         {{ t('astrophotoflow.results.loading') }}
       </p>
-      <p v-if="failure" role="alert" class="m-0 break-words text-error">
+      <p v-if="failure" role="alert" class="m-0 wrap-break-word text-error">
         {{ failure
         }}<Button size="sm" variant="textonly" @click="loadAnalysis">{{
           t('g.retry')
@@ -230,7 +230,7 @@ onBeforeUnmount(() => {
       />
       <p
         v-if="result.preview_error"
-        class="m-0 break-words text-muted-foreground"
+        class="m-0 wrap-break-word text-muted-foreground"
       >
         {{ result.preview_error }}
       </p>
