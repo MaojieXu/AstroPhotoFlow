@@ -24,7 +24,7 @@ const { canvas } = canvasStore
 function findDOMWidget(): DOMWidget<HTMLElement, object | string> | ComponentWidget<string | object> | undefined {
   const hostNode = canvas?.graph?.getNodeById(props.nodeId) ?? undefined
   const resolved = resolveWidgetFromHostNode(hostNode, props.widget.name)
-  if (resolved && (isDOMWidget(resolved.widget) || (isComponentWidget(resolved.widget) && resolved.widget.options.surfaces?.canvas === 'never'))) return resolved.widget
+  if (resolved && (isDOMWidget(resolved.widget) || (isComponentWidget(resolved.widget) && resolved.widget.options.surfaces?.vueNode === 'shown'))) return resolved.widget
 
   return undefined
 }

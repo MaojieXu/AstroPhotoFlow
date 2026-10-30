@@ -197,7 +197,7 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="flex h-full w-full min-w-0 flex-col gap-2 px-2 py-1" @pointerdown.stop @pointermove.stop @pointerup.stop @keydown.stop @wheel.stop>
-    <strong class="truncate text-base-foreground" :title="data?.name">{{ data?.name ?? t('astrophotoflow.libraryImage') }}</strong>
+    <strong class="shrink-0 truncate text-base-foreground" :title="data?.name">{{ data?.name ?? t('astrophotoflow.libraryImage') }}</strong>
     <div class="group relative h-56 min-h-56 w-full overflow-hidden rounded-sm bg-component-node-widget-background" role="button" tabindex="0" :aria-label="t('astrophotoflow.media.open')" @click="openViewer" @keydown.enter.prevent="openViewer" @keydown.space.prevent="openViewer">
       <ImagePreview v-if="image" :image-urls="[image]" display-only @load-error="imageFailed" />
       <div v-else class="flex h-full min-w-0 flex-col items-center justify-center gap-2 px-3 text-muted-foreground" role="status">
@@ -216,7 +216,7 @@ onBeforeUnmount(() => {
       <span class="text-muted-foreground">{{ data ? `${index + 1} / ${data.total}` : t('g.loading') }}</span>
       <Button size="icon" variant="textonly" :aria-label="t('g.nextImage')" :disabled="!data || index + 1 >= data.total" @click="index++"><i class="icon-[lucide--chevron-right] size-4" /></Button>
     </div>
-    <dl class="grid min-w-0 grid-cols-2 gap-x-2 gap-y-1">
+    <dl class="m-0 grid min-w-0 grid-cols-2 gap-x-2 gap-y-1">
       <div v-for="[label, value] in summary" :key="label" class="flex min-w-0 gap-1"><dt class="shrink-0 text-muted-foreground">{{ label }}</dt><dd class="m-0 truncate" :title="value">{{ value }}</dd></div>
     </dl>
     <div class="mt-auto flex items-center justify-between gap-1">

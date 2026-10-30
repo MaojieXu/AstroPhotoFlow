@@ -61,11 +61,11 @@ describe('WidgetDOM', () => {
     })
   }
 
-  it('mounts a native Vue ComponentWidget in Nodes 2.0 without a second app', async () => {
+  it.each(['never', 'shown'] as const)('mounts a declared Vue ComponentWidget with canvas surface %s', async (canvas) => {
     const node = new LGraphNode('Data')
     vi.mocked(useCanvasStore().getCanvas().graph!.getNodeById).mockReturnValue(node)
     const widget = fromPartial<ComponentWidget<string>>({
-      node, name: 'display', value: '', options: { surfaces: { canvas: 'never', vueNode: 'shown', panel: 'never' } },
+      node, name: 'display', value: '', options: { surfaces: { canvas, vueNode: 'shown', panel: 'never' } },
       component: defineComponent({ template: '<span>Scientific image preview</span>' }),
       computeLayoutSize: () => ({ minHeight: 440 })
     })

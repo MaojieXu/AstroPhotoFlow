@@ -38,7 +38,7 @@ def test_file_and_folder_choosers_bind_owner_and_activate_only_their_own_dialog(
     assert "processId != GetCurrentProcessId()" in script
     assert "new IntPtr(-1)" in script and "new IntPtr(-2)" in script
     assert "[SelectionOwner]::RestoreFocus($owner.Handle)" in script
-    assert ("OpenFileDialog" if mode == "files" else "FolderBrowserDialog") in script
+    assert ("$dialog = New-Object Windows.Forms.OpenFileDialog" if mode == "files" else "$dialog = New-Object ModernFolderDialog") in script
     assert base64.b64encode(str(tmp_path).encode("utf-8")).decode("ascii") in script
     process.terminate.assert_not_called()
     desktop.close.assert_not_called()
@@ -50,6 +50,15 @@ def test_cancel_before_launch_does_not_create_a_native_process(tmp_path, chooser
     cancelled.set()
     assert local_selection.select_local_paths("files", tmp_path, cancelled) == []
     launch.assert_not_called()
+
+
+@pytest.mark.parametrize("mode", ["files", "folder"])
+def test_system_dialog_cancel_returns_no_paths(tmp_path, chooser, mode):
+    _, process, desktop, _ = chooser
+    process.communicate.return_value = (b"", b"")
+    assert local_selection.select_local_paths(mode, tmp_path) == []
+    process.terminate.assert_not_called()
+    desktop.close.assert_not_called()
 
 
 def test_cancel_closes_native_window_and_collects_the_child_process(tmp_path, chooser):

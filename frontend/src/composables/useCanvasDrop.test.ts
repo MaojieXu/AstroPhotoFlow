@@ -13,9 +13,6 @@ import { ComfyModelDef } from '@/stores/modelStore'
 import { useModelToNodeStore } from '@/stores/modelToNodeStore'
 import { useNodeDefStore } from '@/stores/nodeDefStore'
 import type { ComfyNodeDefImpl } from '@/stores/nodeDefStore'
-import { addLibraryDataToCanvas } from '@/platform/astrophotoflow/canvasDataBridge'
-
-vi.mock('@/platform/astrophotoflow/canvasDataBridge',()=>({addLibraryDataToCanvas:vi.fn()}))
 
 vi.mock(import('@/composables/usePragmaticDragAndDrop'), () => ({
   usePragmaticDraggable: vi.fn(),
@@ -45,15 +42,6 @@ function registerDrop() {
 }
 
 describe('useCanvasDrop', () => {
-  it('routes a fixed library group through the native data bridge at the drop position',async()=>{
-    const source={entry_type:'dataset',id:'00000000-0000-4000-8000-000000000001',version_id:'00000000-0000-4000-8000-000000000002'}
-    const onDrop=registerDrop()
-    app.canvas.selectOnly=false
-    await onDrop(fromPartial({location:{current:{input:{clientX:30,clientY:60}}},source:{data:{type:'apf-canvas-data',source}}}))
-    expect(addLibraryDataToCanvas).toHaveBeenCalledWith(source,[30,60])
-    expect(useLitegraphService().addNodeOnGraph).not.toHaveBeenCalled()
-  })
-
   it.for([
     { selector: 'model_a', description: 'exact widget name' },
     { selector: /^model_/, description: 'widget name pattern' }

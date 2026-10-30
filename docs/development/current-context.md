@@ -1,5 +1,45 @@
 # 当前开发上下文
 
+<a id="library-simple-list-width"></a>
+
+## 2026-10-29 精简素材列表与窄侧栏长名称
+
+本地代码已修改：简约列表仅预览／名称两列，隐藏分类、曝光和名称下参数／状态说明，保留组导航及批量选择。为表头／数据单元格补语义列名并取消分类100px／曝光64px占位；名称单元格和InlineField允许收缩，名称按钮改为单行省略，原生title显示完整名称，组导航按钮限制在列内。细节模式完整资料、字段编辑、整行拖拽及画布节点预览逻辑未改。
+
+遵循用户“默认只做代码实现”约定，本轮仅阅读／修改代码和维护文档，未运行测试、类型／样式检查或构建，未更新34388运行资源，未开展浏览器验收。不能将此前测试结果视为本次布局通过。待验证场景见[验证矩阵](test-matrix.md#library-simple-list-width)；未提交／推送／合并。
+
+<a id="library-row-drag"></a>
+
+## 2026-10-29 素材整行拖拽
+
+素材及固定组的整条记录通过同一个LibraryCanvasSource／原生节点拖拽入口交接，说明、状态、参数和空白都可起拖。组件支持原生tr，保留行属性及普通click事件；clickTarget仅将名称点击解释为画布放置，缩略图查看、组导航、字段双击编辑、批量选择和未就绪限制保持。编辑输入框内部拖动不发起素材放置，移除原名称／缩略图嵌套拖拽宿主，节点预览与科学引用不变。
+
+已完成45项定向测试、UI包类型、原生组件ESLint与生产构建，更新34388／34390独立实例。新页独立空白画布实测从状态说明和行内空白拖入，各生成一个29成员数据节点；说明拖入可撤销，图片、成员切换按钮和参数继续显示。证据见[验证矩阵](test-matrix.md#library-row-drag)。本轮上述检查／构建／更新完成后收到用户同步约定：后续默认只实现代码，只有用户明确要求才执行test测试及最终测试／验收构建；本次未再追加测试或构建。未提交／推送／合并。
+
+<a id="library-preview-preservation"></a>
+
+## 2026-10-29 素材节点预览保留修复
+
+用户明确本轮只改变加入画布的交互，节点内图片预览、组内切换和参数展示必须保留。修复dataReferenceDisplay：通过原生addWidget生命周期挂载同一CanvasDataWidget，canvas／vueNode双显示，reference整体options赋值同步实际隐藏；WidgetDOM按显式vueNode声明挂载，保留未声明的既有组件路径。预览高度480px、标题不收缩、参数表无默认外边距，避免旧版名称被挤成零高度。不改Nodes 2.0全局设置、科学引用、预览读取和执行。
+
+最终5文件27项定向测试通过（9.68秒），Vite构建通过（10.66秒），已更新独立34388／34390实例。真实旧版画布拖入29成员组后显示图片和名称，切至3／29显示Andrew M Weeks - L、曝光由180秒变为120秒；详情保留12238×8082、Bin1／1、fits等资料，reference隐藏，页面错误为空。Nodes 2.0挂载由组件测试覆盖，本轮未做实际切换验收。旧页面保留，最新验证页及单独测试画布用于查看结果。未提交／推送／合并；完整检查范围及既有lint限制见[验证矩阵](test-matrix.md#library-preview-preservation)。
+
+<a id="library-native-node-placement"></a>
+
+## 2026-10-29 素材复用原生节点放置
+
+`codex/library-ui-layout` 本地候选：移除素材表格“+”列；名称点击后在画布放置，名称／缩略图使用与原生节点库相同的拖拽、悬停卡片和跟随预览。复用useNodeDragToCanvas／useNodePreviewAndDrag的可选onPlace回调，落点经原有固定引用准备和原生单次撤销写入，不再维护素材专用pragmatic载荷。缩略图点击查看、名称双击／Enter编辑、固定组和组内成员版本、就绪限制及Agent入口保留。
+
+定向原生测试56项、UI组／成员测试20项通过；UI包类型、定向生产文件ESLint、Vite生产构建及diff检查通过，未运行全库回归或原生全库类型检查。独立34388／34390实例已stop→init --reuse-runtime --no-activate→start更新。新浏览器页的独立空白图实测组点击放置、组缩略图拖放、单张名称拖放和原生撤销；双击编辑后取消未改资料，未提交执行。原页面保留，新验证画布留有一张示例素材节点。详细证据及限制见[验证矩阵](test-matrix.md#library-native-node-placement)，未提交、推送或合并。
+
+<a id="library-modern-folder-picker"></a>
+
+## 2026-10-29 素材库新版文件夹选择窗口
+
+`codex/library-ui-layout` 基于 `origin/dev` 的 `366a311`：`modules/data/local_selection.py` 使用 Windows Common Item Dialog（IFileDialog／FOS_PICKFOLDERS）替换旧式 FolderBrowserDialog；沿用系统 Windows PowerShell、现有窗口归属／置前／取消及 JSON 回传，不增加依赖。默认 workspace、单目录选择、当前层支持文件枚举和导入确认保持，文件多选入口未改。
+
+13 项定向测试通过；实际 PowerShell C# 编译及 COM 创建成功。已通过平台维护机制重启本 worktree 的独立实例，网页34388／服务34390，operation `237f897e-d990-47fb-8f6e-b2748ad0cbec` 完成且 blockers 为空。用户随后确认“好的，已经完成了”，本次窗口呈现验收完成；未提交、推送或合入dev。日志与实际验证范围见[验证矩阵](test-matrix.md#library-modern-folder-picker)。
+
 ## 2026-10-29 AstroPhotoFlow 设置精简本地候选
 
 `codex/comfyui-ui-cleanup`按用户批准方案收敛本地设置：工作台置顶并默认打开，Comfy／LiteGraph改为常规／画布，隐藏遮罩、扩展及无关设置，快捷键过滤对应入口。Nodes 2.0在原生设置注册时将旧关闭值归一为启用，右侧属性面板不再提供开关；上游通知关闭。已保存图默认延迟自动保存，明确关闭值保留；未更改浮点舍入逻辑，高级精度与性能设置以及工作台目录／端口折叠展示。新增AstroPhotoFlow关于页，版本来自构建时读取pyproject.toml，组件和诊断折叠，系统信息支持长路径换行。
