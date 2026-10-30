@@ -2,6 +2,7 @@ import { markRaw } from 'vue'
 
 import type { LGraphNode } from '@/lib/litegraph/src/litegraph'
 import { ComponentWidgetImpl } from '@/scripts/domWidget'
+import { useExtensionStore } from '@/stores/extensionStore'
 import type { ComfyApp } from '@/types/comfy'
 
 import BundleResultWidget from './BundleResultWidget.vue'
@@ -39,10 +40,13 @@ export function registerBundleResultDisplay(app: ComfyApp) {
       for (const node of graph.nodes) attachBundleResult(node)
     }
   }
-  app.registerExtension({
+  const extension = {
     name: 'AstroPhotoFlow.BundleResults',
     nodeCreated: attachBundleResult,
     afterConfigureGraph: hydrate
-  })
+  }
+  const existing = useExtensionStore().extensions.find(value => value.name === extension.name)
+  if (existing) Object.assign(existing, extension)
+  else app.registerExtension(extension)
   if (app.isGraphReady) hydrate()
 }

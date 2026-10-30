@@ -476,8 +476,9 @@ def accept_asset_content(database: Database, settings: Settings, asset_id: UUID,
 
 
 def _fits_frame_count(inspected):
-    images = [row for row in inspected['hdus'] if row['shape'] and row['hdu_type'] in {'PrimaryHDU', 'ImageHDU', 'CompImageHDU'}]
-    return len(images) if all(row['supported_kind'] is not None for row in images) else None
+    images = [row for row in inspected['hdus'] if row['shape'] and row['hdu_type'] in {'PrimaryHDU', 'ImageHDU', 'CompImageHDU'}
+              and not ((row.get('name') or '').casefold() == 'iccprofile' and row['bitpix'] == 8 and len(row['shape']) == 1)]
+    return len(images) if images and all(row['supported_kind'] is not None for row in images) else None
 
 
 def check_output(settings: Settings, *, run_directory: Path, path: Path, expected_format: ScienceFormat, allow_empty: bool = False,

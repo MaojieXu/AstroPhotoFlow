@@ -68,3 +68,23 @@ def test_display_threshold_zero_is_preserved_and_invalid_ranges_are_rejected():
     for limits in [(1, 1), (1, 0), (0, float('inf')), (float('nan'), 1)]:
         with pytest.raises(ValueError):
             MediaSelection(display_range=limits)
+
+
+def test_display_thresholds_round_trip_through_json_state_without_coercing_strings():
+    selection = MediaSelection(display_range=(0, 1))
+    assert MediaSelection.model_validate(selection.model_dump(mode='json')) == selection
+    with pytest.raises(ValueError):
+        MediaSelection.model_validate({'display_range': ['0', '1']})
+
+
+def test_embedded_icc_profile_is_not_counted_as_a_scientific_frame(tmp_path):
+    source = tmp_path/'colour.fit'
+    pixels = np.full((3, 5, 7), .25, dtype=np.float32)
+    fits.HDUList([fits.PrimaryHDU(pixels, fits.Header({'CTYPE3': 'RGB'})),
+                  fits.ImageHDU(np.arange(128, dtype=np.uint8), name='ICCProfile')]).writeto(source)
+    original = source.read_bytes()
+    checked = check_output(settings(tmp_path), run_directory=tmp_path, path=source, expected_format='fits',
+                           colour_layout='planar', expected_frames=1)
+    assert checked.scientific_metadata['frame_count'] == 1
+    assert checked.scientific_metadata['hdu_count'] == 2
+    assert source.read_bytes() == original

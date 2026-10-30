@@ -1,6 +1,6 @@
 from typing import Literal
 
-from pydantic import Field, FiniteFloat, model_validator
+from pydantic import Field, FiniteFloat, field_validator, model_validator
 
 from astrophotoflow.contracts.common import StrictModel
 from astrophotoflow.contracts.previews import PreviewIssue
@@ -20,6 +20,11 @@ class MediaSelection(StrictModel):
     playback_key: str | None = None
     proxy: bool = False
     display_range: tuple[FiniteFloat, FiniteFloat] | None = None
+
+    @field_validator("display_range", mode="before")
+    @classmethod
+    def display_range_from_wire(cls, value):
+        return tuple(value) if isinstance(value, list) else value
 
     @model_validator(mode="after")
     def valid_axes(self):

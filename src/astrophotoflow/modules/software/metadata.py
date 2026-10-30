@@ -1,6 +1,5 @@
 import json
 import os
-from functools import lru_cache
 from importlib.resources import files
 from pathlib import Path
 
@@ -9,15 +8,10 @@ from astrophotoflow.contracts.nodes import NodeDefinition
 from astrophotoflow.contracts.software import SoftwareOperation
 
 
-@lru_cache(maxsize=4)
-def _catalog(source: str | None):
-    raw = Path(source).read_bytes() if source is not None else files('astrophotoflow').joinpath('vendor/bundle-catalog.json').read_bytes()
-    return json.loads(raw)
-
-
 def catalog():
     source = os.environ.get('ASTROPHOTOFLOW_BUNDLE_CATALOG')
-    return _catalog(str(Path(source).resolve()) if source is not None else None)
+    raw = Path(source).read_bytes() if source is not None else files('astrophotoflow').joinpath('vendor/bundle-catalog.json').read_bytes()
+    return json.loads(raw)
 
 
 def contained(root: Path, name: str) -> Path:

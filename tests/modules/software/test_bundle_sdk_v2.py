@@ -15,6 +15,8 @@ from astrophotoflow.modules.software import bundles, public
 def test_named_result_collection_parses_files_and_rejects_outside_paths(tmp_path, monkeypatch):
     workspace = tmp_path / 'workspace'
     root = workspace / 'software/siril/bundle'; root.mkdir(parents=True)
+    (root / 'adapter').mkdir()
+    (root / 'adapter/siril.py').write_text('fixture adapter', encoding='utf-8')
     (root.parent / 'bundle-lock.json').write_text('{"commit":"fixture-v2"}', encoding='utf-8')
     manifest = BundleManifest.model_validate({**bundles.release('siril')['manifest'], 'host_api': 2})
     monkeypatch.setattr(bundles, 'metadata', lambda *_args: (manifest, [], []))
@@ -91,3 +93,10 @@ def test_cancel_observes_only_the_owned_process_family(tmp_path, monkeypatch, re
     assert unrelated.alive and unrelated.pid not in terminated
     assert child.alive is reused_child
     assert (child.pid in terminated) is not reused_child
+
+
+def test_catalogue_callers_cannot_mutate_subsequent_reads():
+    original = bundles.release('siril')['nodes'][0]['inputs']
+    before = json.loads(json.dumps(original))
+    original.append(dict(original[0]))
+    assert bundles.release('siril')['nodes'][0]['inputs'] == before
