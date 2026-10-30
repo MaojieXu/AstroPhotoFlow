@@ -4,7 +4,8 @@ import os
 import subprocess
 import tempfile
 import asyncio
-from dataclasses import dataclass
+import codecs
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from contextlib import asynccontextmanager
 from importlib.resources import files
@@ -21,6 +22,7 @@ from astrophotoflow.contracts.software import (
     ParameterDefinition, ProducedFile, SoftwareInvocation, SoftwareObservation, SoftwareResult, SoftwareCancelResult, SoftwareUse,
 )
 from astrophotoflow.contracts.common import ErrorDetail
+from astrophotoflow.contracts.bundles import NamedProcessPlan, ProcessPlan
 from astrophotoflow.core.config import Settings
 from astrophotoflow.core.errors import ApiError
 from astrophotoflow.modules.software import bundles
@@ -35,10 +37,16 @@ class _Call:
     observation: SoftwareObservation
     process: asyncio.subprocess.Process | None = None
     cancelled: bool = False
+    descendants: dict[int, float] = field(default_factory=dict)
+    inspection_unknown: bool = False
 
 
 _CALLS: dict[UUID, _Call] = {}
 _LIVE_PREVIEWS: dict[UUID, tuple[str, asyncio.subprocess.Process | None]] = {}
+
+
+class _ObservationFailed(RuntimeError):
+    pass
 
 
 def _resource(name: str) -> str:
@@ -252,13 +260,13 @@ def prepare_package(settings, package_id):
     return SoftwarePreparation(package=get_package(settings, package_id), user_action=None, ui_kind=None, ui_target=None)
 
 
-def list_siril_commands() -> list[SirilCommand]:
-    manifest = _manifest()
-    commands = json.loads(_resource(manifest["commands_file"]))
-    assessments = json.loads(_resource(manifest["command_assessments_file"]))
+def _command_rows(command_bytes, assessment_bytes, expected_hash=None):
+    commands = json.loads(command_bytes)
+    assessments = json.loads(assessment_bytes)
     if assessments["package_id"] != "siril" or assessments["version"] != "1.4.4":
         raise ValueError("Siril command assessments are not bound to the fixed package version.")
-    if assessments["source_commands_file_sha256"].casefold() != manifest["commands_file_sha256"].casefold():
+    actual_hash = hashlib.sha256(command_bytes).hexdigest()
+    if assessments["source_commands_file_sha256"].casefold() != actual_hash or expected_hash is not None and actual_hash != expected_hash.casefold():
         raise ValueError("Siril command assessments do not match the official command catalog.")
     assessment_rows = assessments["commands"]
     assessment_by_command = {item["command"]: item["assessment"] for item in assessment_rows}
@@ -271,15 +279,35 @@ def list_siril_commands() -> list[SirilCommand]:
     ]
 
 
+def list_siril_commands() -> list[SirilCommand]:
+    manifest = _manifest()
+    vendor = files('astrophotoflow').joinpath('vendor')
+    return _command_rows(vendor.joinpath(manifest['commands_file']).read_bytes(),
+                         vendor.joinpath(manifest['command_assessments_file']).read_bytes(), manifest['commands_file_sha256'])
+
+
 def get_command_catalog(package_id: str, version: str, settings=None) -> list[SirilCommand]:
     if package_id != "siril" or version != "1.4.4":
         raise ApiError(404, "RESOURCE_NOT_FOUND", "未找到请求的软件命令目录。")
+    if settings is not None:
+        root = settings.workspace / 'software' / package_id / 'bundle'
+        if root.is_dir():
+            manifest, _, _ = bundles.metadata(settings.workspace, package_id)
+            if manifest.commands is None or manifest.assessments is None:
+                raise ApiError(404, 'RESOURCE_NOT_FOUND', '已安装 Bundle 没有提供命令参考目录。')
+            return _command_rows(bundles.contained(root, manifest.commands).read_bytes(),
+                                 bundles.contained(root, manifest.assessments).read_bytes())
+    release = bundles.release(package_id)
+    manifest = release['manifest']
+    references = release.get('reference_files')
+    if references is not None:
+        return _command_rows(references[manifest['commands']].encode('utf-8'), references[manifest['assessments']].encode('utf-8'))
     return list_siril_commands()
 
 
 def get_usage(package_id: str) -> list[SoftwareUse]:
     for call_id, call in list(_CALLS.items()):
-        if call.process is None and call.observation.runtime_ref is not None:
+        if call.observation.runtime_ref is not None and (call.process is None or call.process.returncode is not None):
             active = _runtime_active(call.observation.runtime_ref)
             call.observation = call.observation.model_copy(update={"active": active})
             if active is False:
@@ -287,7 +315,7 @@ def get_usage(package_id: str) -> list[SoftwareUse]:
     return [SoftwareUse(
         call_id=call.invocation.call_id, run_id=call.invocation.run_id,
         node_execution_id=call.invocation.node_execution_id,
-        state="unknown" if call.observation.active is None else "running",
+        state="unknown" if call.observation.active is None or call.observation.state == 'unknown' else "running",
     ) for call in _CALLS.values() if call.invocation.package_id == package_id
         and call.observation.active is not False]
 
@@ -323,15 +351,21 @@ async def preview_operation(settings: Settings, source: Path, directory: Path, p
     process = None
     try:
         directory.mkdir(parents=True, exist_ok=False)
-        plan = bundles.adapter_plan(settings.workspace, package_id, operation_id, [source], parameters,
+        plan = bundles.adapter_plan(settings.workspace, package_id, operation_id, {'image': [source]}, parameters,
                                     directory, preview=True, prepare_sample=prepare_sample)
-        target = plan.outputs[0]
+        target = plan.outputs['image'].files[0].path if isinstance(plan, NamedProcessPlan) else plan.outputs[0]
+        environment = None
+        if isinstance(plan, NamedProcessPlan):
+            plan.temporary_directory.mkdir(parents=True, exist_ok=True)
+            environment = {**os.environ, **plan.environment, **{name: str(plan.temporary_directory) for name in ('TEMP', 'TMP', 'TMPDIR')}}
+            if plan.thread_limit is not None:
+                environment.update(OPENBLAS_NUM_THREADS=str(plan.thread_limit), OMP_NUM_THREADS=str(plan.thread_limit))
         source_stamp = source.stat()
         log = directory / "preview.log"
         with log.open("wb") as stream:
             spawn = asyncio.create_task(asyncio.create_subprocess_exec(
                 str(bundles.contained(settings.workspace / "software" / package_id / "bundle", bundles.metadata(settings.workspace, package_id)[0].executable)), *plan.arguments, cwd=directory,
-                stdout=stream, stderr=asyncio.subprocess.STDOUT,
+                stdout=stream, stderr=asyncio.subprocess.STDOUT, env=environment,
                 creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
             ))
             try:
@@ -349,7 +383,7 @@ async def preview_operation(settings: Settings, source: Path, directory: Path, p
             after = source.stat()
             if (source_stamp.st_size, source_stamp.st_mtime_ns) != (after.st_size, after.st_mtime_ns):
                 raise ApiError(409, "SOURCE_CHANGED", "准备预览时原件发生变化。")
-            (directory / "linear.fit").replace(directory.parent / "linear.fit")
+            plan.linear_sample.replace(directory.parent / "linear.fit")
         return target
     except asyncio.CancelledError:
         if process is not None:
@@ -381,6 +415,10 @@ def _validate_invocation(settings: Settings, invocation: SoftwareInvocation):
         raise ApiError(503, "SOFTWARE_NOT_READY", operation.reason or "Siril 尚未就绪。")
     if invocation.operation_content_token != operation.content_token:
         raise ApiError(409, "SOFTWARE_CONTENT_CONFLICT", "软件操作定义已变化，请重新提交。")
+    package = get_package(settings, invocation.package_id)
+    manifest, _, _ = bundles.metadata(settings.workspace, invocation.package_id)
+    if invocation.bundle_commit != package.bundle_commit and (manifest.host_api == 2 or invocation.bundle_commit is not None):
+        raise ApiError(409, 'SOFTWARE_CONTENT_CONFLICT', '调用受理后 Bundle 实现已变化，请查询本次状态，不得采用新版替换在途实现。')
     if set(invocation.parameters) != {item.name for item in operation.parameters}:
         raise ApiError(422, "VALIDATION_ERROR", "Siril 参数与准确操作定义不匹配。")
     for parameter in operation.parameters:
@@ -388,30 +426,133 @@ def _validate_invocation(settings: Settings, invocation: SoftwareInvocation):
             ParameterDefinition.model_validate({**parameter.model_dump(), "default": invocation.parameters[parameter.name]})
         except ValueError as exc:
             raise ApiError(422, "VALIDATION_ERROR", f"Siril 参数无效：{parameter.name}") from exc
-    if set(invocation.inputs) != {"image"} or not invocation.inputs["image"]:
-        raise ApiError(422, "INVALID_REFERENCE", "Auto Stretch 需要非空的有序静态图像输入。")
+    definitions = {item.name: item for item in operation.inputs}
+    required = {name for name, item in definitions.items() if item.required}
+    if not set(invocation.inputs).issubset(definitions) or not required.issubset(invocation.inputs):
+        raise ApiError(422, "INVALID_REFERENCE", "具名输入与软件操作定义不匹配。")
+    if not set(invocation.supporting_inputs).issubset(invocation.inputs):
+        raise ApiError(422, "INVALID_REFERENCE", "序列附属文件没有对应的输入。")
     root = settings.workspace.resolve() / "runs" / str(invocation.run_id) / "work"
     if root.resolve() != root:
         raise ApiError(422, "INVALID_WORK_DIRECTORY", "运行目录指向了工作区以外的位置。")
     work = invocation.work_directory.resolve()
     if work != root and not work.is_relative_to(root):
         raise ApiError(422, "INVALID_WORK_DIRECTORY", "软件只能写入本次运行的工作目录。")
-    for item in invocation.inputs["image"]:
-        if item.format not in {"fits", "xisf", "image", "raw"} or item.selection.kind != "whole_file":
-            raise ApiError(422, "UNSUPPORTED_SELECTION", "Auto Stretch 需要完整静态图像，不支持视频、数组或指定切片。")
-        if (item.scientific_metadata or {}).get("selected_hdu") not in (None, 0):
-            raise ApiError(422, "UNSUPPORTED_SELECTION", "Auto Stretch 首版尚不支持扩展 HDU 图像。")
+    for name, items in invocation.inputs.items():
+        definition = definitions[name]
+        if not items or (definition.cardinality == "one" and len(items) != 1):
+            raise ApiError(422, "INVALID_REFERENCE", f"输入成员数量不符合操作定义：{name}")
+        for item in items:
+            if item.format not in definition.formats:
+                raise ApiError(422, "UNSUPPORTED_SELECTION", f"输入格式不符合操作定义：{name}")
+            metadata = item.scientific_metadata or {}
+            if definition.colour_layout is not None and metadata.get('colour_layout') not in (None, definition.colour_layout):
+                raise ApiError(422, 'UNSUPPORTED_SELECTION', f'输入颜色布局与操作要求不一致：{name}。')
+            default_hdu = definition.data_kind != 'file' and item.selection.kind == 'fits_hdu' and item.selection.hdu_index == 0 and metadata.get('selected_hdu') == 0
+            if item.selection.kind != "whole_file" and not definition.supports_hdu and not default_hdu:
+                raise ApiError(422, "UNSUPPORTED_SELECTION", f"操作不支持指定 HDU：{name}")
+            if definition.data_kind == 'image' and item.selection.kind == 'whole_file' and metadata.get('frame_count', 1) is not None and metadata.get('frame_count', 1) > 1:
+                raise ApiError(422, 'UNSUPPORTED_SELECTION', f'该单图输入不能静默读取序列容器的首帧：{name}；请使用适用的序列操作或明确选择主HDU。')
+            if manifest.host_api == 2 and definition.data_kind != 'file' and item.format == 'fits' and 'hdu_count' in metadata and (metadata.get('selected_hdu') is None or metadata.get('frame_count') is None and not default_hdu):
+                raise ApiError(422, 'UNSUPPORTED_SELECTION', f'该输入没有已确认的二维灰度或RGB图像布局：{name}。')
+            whole_container = item.selection.kind == 'whole_file' and (
+                definition.data_kind in {'sequence', 'file'} or
+                any(file.read_path.suffix.lower() == '.seq' for file in invocation.supporting_inputs.get(name, [])) or
+                item.read_path.name.lower().endswith(('.fit.fz', '.fits.fz', '.fts.fz')) and metadata.get('frame_count') == 1)
+            if metadata.get("selected_hdu") not in (None, 0) and not definition.supports_hdu and not whole_container:
+                raise ApiError(422, "UNSUPPORTED_SELECTION", f"操作不支持扩展 HDU：{name}")
+    for item in [item for group in [*invocation.inputs.values(), *invocation.supporting_inputs.values()] for item in group]:
         stat_result = item.read_path.stat()
         if (stat_result.st_size, stat_result.st_mtime_ns) != (item.byte_size, item.mtime_ns):
             raise ApiError(409, "SOURCE_CHANGED", "科学输入在准入后发生变化。")
         if item.read_path.resolve().is_relative_to(work):
             raise ApiError(422, "INVALID_REFERENCE", "科学输入不能位于即将创建的调用输出目录内。")
-    return get_package(settings, invocation.package_id), work
+    return package, work, operation
+
+
+def _capture_descendants(call):
+    runtime = call.observation.runtime_ref
+    if call.process is None or runtime is None or call.process.returncode is not None:
+        return False
+    try:
+        parent = psutil.Process(call.process.pid)
+        if parent.create_time() != runtime['create_time']:
+            return False
+        for child in parent.children(recursive=True):
+            call.descendants[child.pid] = child.create_time()
+        call.inspection_unknown = False
+    except psutil.NoSuchProcess:
+        pass
+    except psutil.AccessDenied:
+        call.inspection_unknown = True
+    children = [{'pid': pid, 'create_time': created} for pid, created in sorted(call.descendants.items())]
+    updated = {**runtime, 'children': children, 'children_unknown': call.inspection_unknown}
+    changed = updated != runtime
+    call.observation = call.observation.model_copy(update={'runtime_ref': updated})
+    return changed
+
+
+async def _watch_process(call, task, log, reader, observe):
+    decoder = codecs.getincrementaldecoder('utf-8')(errors='replace')
+    pending = ''
+    with log.open('rb') as stream:
+        while True:
+            await asyncio.wait({task}, timeout=0.25)
+            changed = _capture_descendants(call)
+            pending += decoder.decode(stream.read())
+            end = pending.rfind('\n')
+            if reader is not None and end >= 0:
+                progress = reader(pending[:end + 1])
+                if progress.phase is not None or progress.progress is not None:
+                    phase = progress.phase if progress.phase is not None else call.observation.phase
+                    changed = changed or (phase, progress.progress) != (call.observation.phase, call.observation.progress)
+                    call.observation = call.observation.model_copy(update={'phase': phase, 'progress': progress.progress})
+                pending = pending[end + 1:]
+            elif reader is None:
+                pending = ''
+            if changed:
+                call.observation = call.observation.model_copy(update={'observed_at': datetime.now(timezone.utc)})
+                try:
+                    await observe(call.observation)
+                except Exception as exc:
+                    raise _ObservationFailed(str(exc)) from exc
+            if task.done():
+                return task.result()
+
+
+async def _stop_call(call):
+    _capture_descendants(call)
+    children = []
+    for pid, created in call.descendants.items():
+        try:
+            child = psutil.Process(pid)
+            if child.create_time() == created:
+                child.terminate()
+                children.append(child)
+        except psutil.NoSuchProcess:
+            pass
+        except psutil.AccessDenied:
+            call.inspection_unknown = True
+    if call.process is not None and call.process.returncode is None:
+        try:
+            call.process.terminate()
+        except ProcessLookupError:
+            pass
+    waits = [asyncio.to_thread(psutil.wait_procs, children, timeout=5)] if children else []
+    if call.process is not None:
+        waits.append(call.process.wait())
+    try:
+        await asyncio.wait_for(asyncio.gather(*waits), timeout=5)
+    except TimeoutError:
+        return None
+    if call.inspection_unknown:
+        return None
+    return _runtime_active(call.observation.runtime_ref) if call.observation.runtime_ref else None
 
 
 async def invoke_operation(settings: Settings, invocation: SoftwareInvocation,
                            observe: Callable[[SoftwareObservation], Awaitable[None]]) -> SoftwareResult:
-    package, work = _validate_invocation(settings, invocation)
+    package, work, operation = _validate_invocation(settings, invocation)
     lock = _PACKAGE_LOCKS.setdefault(invocation.package_id, asyncio.Lock())
     if lock.locked():
         raise ApiError(409, "SOFTWARE_BUSY", "软件包正在维护。")
@@ -425,7 +566,8 @@ async def invoke_operation(settings: Settings, invocation: SoftwareInvocation,
     )
     call = _Call(invocation, observation)
     _CALLS[invocation.call_id] = call
-    outputs = []
+    outputs = {item.name: [] for item in operation.outputs}
+    supporting_outputs = {}
     code = None
     error = None
     state = "failed"
@@ -434,8 +576,25 @@ async def invoke_operation(settings: Settings, invocation: SoftwareInvocation,
         await observe(observation)
         work.mkdir(parents=True, exist_ok=False)
         plan = bundles.adapter_plan(settings.workspace, invocation.package_id, invocation.operation_id,
-                                    [item.read_path for item in invocation.inputs["image"]], invocation.parameters, work)
-        output_paths = plan.outputs
+                                    {name: [item.read_path for item in items] for name, items in invocation.inputs.items()},
+                                    invocation.parameters, work,
+                                    supporting_sources={name: [item.read_path for item in items] for name, items in invocation.supporting_inputs.items()},
+                                    source_groups={name: [[item.read_path for item in items if item.reference_index == index]
+                                                        for index in sorted({item.reference_index for item in items})]
+                                                   for name, items in invocation.inputs.items()},
+                                    supporting_groups={name: [[item.read_path for item in invocation.supporting_inputs.get(name, []) if item.reference_index == index]
+                                                             for index in sorted({item.reference_index for item in items})]
+                                                       for name, items in invocation.inputs.items()},
+                                    source_metadata={name: [item.model_dump(mode='json', include={'reference_index', 'selection', 'scientific_metadata'}) for item in items]
+                                                     for name, items in invocation.inputs.items()})
+        environment = None
+        if isinstance(plan, NamedProcessPlan):
+            if set(plan.outputs) != set(outputs):
+                raise ValueError("Bundle 输出计划与操作端口不匹配。")
+            plan.temporary_directory.mkdir(parents=True, exist_ok=True)
+            environment = {**os.environ, **plan.environment, **{name: str(plan.temporary_directory) for name in ('TEMP', 'TMP', 'TMPDIR')}}
+            if plan.thread_limit is not None:
+                environment.update(OPENBLAS_NUM_THREADS=str(plan.thread_limit), OMP_NUM_THREADS=str(plan.thread_limit))
         executable = bundles.contained(settings.workspace / "software" / invocation.package_id / "bundle",
                                        bundles.metadata(settings.workspace, invocation.package_id)[0].executable)
         if call.cancelled:
@@ -444,7 +603,7 @@ async def invoke_operation(settings: Settings, invocation: SoftwareInvocation,
             with log.open("wb") as stream:
                 call.process = await asyncio.create_subprocess_exec(
                     str(executable), *plan.arguments,
-                    cwd=work, stdout=stream, stderr=asyncio.subprocess.STDOUT,
+                    cwd=work, stdout=stream, stderr=asyncio.subprocess.STDOUT, env=environment,
                     creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
                 )
                 try:
@@ -463,33 +622,55 @@ async def invoke_operation(settings: Settings, invocation: SoftwareInvocation,
                 except Exception as exc:
                     error = ErrorDetail(code="OBSERVATION_FAILED", message=f"处理已启动，但状态记录失败：{exc}", fields=[])
                 if call.cancelled and call.process.returncode is None:
-                    call.process.terminate()
-                code = await asyncio.shield(task)
-            outputs = [ProducedFile(path=path, format=plan.output_format) for path in output_paths if path.is_file() and path.stat().st_size > 0]
+                    await _stop_call(call)
+                code = await _watch_process(call, task, log, bundles.progress_reader(settings.workspace, invocation.package_id), observe)
             if call.cancelled:
                 state = "cancelled"
-            elif code != 0 or len(outputs) != len(output_paths):
-                error = ErrorDetail(code="SOFTWARE_EXECUTION_FAILED", message="Siril 未完整完成操作，请查看本次调用日志。", fields=[])
+            elif code != 0:
+                if isinstance(plan, ProcessPlan):
+                    collected = bundles.collect_result(settings.workspace, invocation.package_id, invocation.operation_id, plan, work, log)
+                    outputs = {name: [ProducedFile.model_validate(file.model_dump()) for file in files] for name, files in collected.outputs.items()}
+                detail = bundles.failure_reason(settings.workspace, invocation.package_id, log)
+                error = ErrorDetail(code="SOFTWARE_EXECUTION_FAILED", message=f'程序退出代码 {code}：{detail}', fields=[])
             elif error is None:
+                collected = await asyncio.to_thread(bundles.collect_result, settings.workspace, invocation.package_id,
+                                                    invocation.operation_id, plan, work, log)
+                for definition in operation.outputs:
+                    files = collected.outputs[definition.name]
+                    if (definition.required and not files) or (definition.cardinality == 'one' and len(files) > 1):
+                        raise ValueError('Bundle 输出成员数量不符合定义：' + definition.name)
+                    if any(file.format not in definition.formats for file in files):
+                        raise ValueError('Bundle 输出格式不符合定义：' + definition.name)
+                if isinstance(plan, ProcessPlan) and len(collected.outputs['image']) != len(plan.outputs):
+                    raise ValueError('Bundle 没有产生完整输出。')
+                outputs = {name: [ProducedFile.model_validate(file.model_dump()) for file in files] for name, files in collected.outputs.items()}
+                supporting_outputs = {name: [ProducedFile.model_validate(file.model_dump()) for file in files] for name, files in collected.supporting_outputs.items()}
                 state = "completed"
+            elif error.code == 'OBSERVATION_FAILED':
+                state = 'unknown'
     except asyncio.CancelledError:
         call.cancelled = True
-        if call.process is not None and call.process.returncode is None:
-            call.process.terminate()
-            await asyncio.shield(call.process.wait())
+        await asyncio.shield(_stop_call(call))
         state = "cancelled"
         code = call.process.returncode if call.process else None
-    except (OSError, ValueError, psutil.Error, ApiError) as exc:
+    except _ObservationFailed as exc:
+        if call.process is not None and call.process.returncode is None:
+            code = await asyncio.shield(call.process.wait())
+        state = 'unknown'
+        error = ErrorDetail(code='OBSERVATION_FAILED', message='实际调用状态记录失败，请先查询已有结果和日志：' + str(exc), fields=[])
+    except Exception as exc:
         if call.process is not None and call.process.returncode is None:
             code = await asyncio.shield(call.process.wait())
         error = ErrorDetail(code="SOFTWARE_EXECUTION_FAILED", message=str(exc), fields=[])
     finally:
-        active = call.process is not None and call.process.returncode is None
+        active = _runtime_active(call.observation.runtime_ref) if call.observation.runtime_ref else call.process is not None and call.process.returncode is None
+        if active is not False:
+            state = 'unknown'
         call.observation = call.observation.model_copy(update={
             "observed_at": datetime.now(timezone.utc), "active": active,
             "state": "unknown" if active else state, "phase": None, "exit_code": code, "error": error,
         })
-        if not active:
+        if active is False:
             _CALLS.pop(invocation.call_id, None)
     try:
         await observe(call.observation)
@@ -498,26 +679,39 @@ async def invoke_operation(settings: Settings, invocation: SoftwareInvocation,
         error = ErrorDetail(code="OBSERVATION_FAILED", message=f"处理结果记录失败：{exc}", fields=[])
     return SoftwareResult(
         call_id=invocation.call_id, state=state, started_at=started, ended_at=datetime.now(timezone.utc),
-        exit_code=code, outputs={"image": outputs}, log_path=log, error=error,
+        exit_code=code, outputs=outputs, supporting_outputs=supporting_outputs, log_path=log, error=error,
     )
 
 
 def _runtime_active(runtime) -> bool | None:
+    unknown = runtime.get('children_unknown', False)
     try:
         process = psutil.Process(runtime["pid"])
-        return process.create_time() == runtime["create_time"] and \
-            Path(process.exe()).resolve() == Path(runtime["executable"]).resolve() and process.is_running()
+        if process.create_time() == runtime["create_time"] and \
+            Path(process.exe()).resolve() == Path(runtime["executable"]).resolve() and process.is_running():
+            return True
     except psutil.NoSuchProcess:
-        return False
+        pass
     except psutil.AccessDenied:
-        return None
+        unknown = True
+    for child in runtime.get('children', []):
+        try:
+            process = psutil.Process(child['pid'])
+            if process.create_time() == child['create_time'] and process.is_running():
+                return True
+        except psutil.NoSuchProcess:
+            pass
+        except psutil.AccessDenied:
+            unknown = True
+    return None if unknown else False
 
 
 async def inspect_operation(settings: Settings, invocation: SoftwareInvocation,
                             previous: SoftwareObservation | None) -> SoftwareObservation:
     call = _CALLS.get(invocation.call_id)
     if call is not None:
-        if call.process is None and call.observation.runtime_ref is not None:
+        if call.observation.runtime_ref is not None:
+            _capture_descendants(call)
             call.observation = call.observation.model_copy(update={"active": _runtime_active(call.observation.runtime_ref)})
         return call.observation
     if previous is None or previous.active is False:
@@ -551,14 +745,8 @@ async def cancel_operation(call_id: UUID) -> SoftwareCancelResult:
                                         observed_at=datetime.now(timezone.utc), reason="服务重启后不再持有原调用句柄，需先核对实际进程。")
         return SoftwareCancelResult(call_id=call_id, request_state="sent", stop_state="running",
                                     observed_at=datetime.now(timezone.utc), reason="已请求在实际启动前停止。")
-    if process.returncode is None:
-        try:
-            process.terminate()
-            await asyncio.wait_for(asyncio.shield(process.wait()), timeout=5)
-        except ProcessLookupError:
-            pass
-        except TimeoutError:
-            return SoftwareCancelResult(call_id=call_id, request_state="sent", stop_state="unknown",
-                                        observed_at=datetime.now(timezone.utc), reason="停止请求已发送，尚未观察到退出。")
-    return SoftwareCancelResult(call_id=call_id, request_state="sent", stop_state="stopped" if process.returncode is not None else "unknown",
-                                observed_at=datetime.now(timezone.utc))
+    active = await _stop_call(call)
+    return SoftwareCancelResult(call_id=call_id, request_state="sent",
+                                stop_state='stopped' if active is False else 'running' if active is True else 'unknown',
+                                observed_at=datetime.now(timezone.utc),
+                                reason=None if active is False else '停止请求已发送，尚未确认整个调用进程树退出。')

@@ -6,12 +6,17 @@ from astrophotoflow.core.config import ImportRoot, Settings
 
 
 SUPPORTED_EXTENSIONS = {
-    ".fits": "fits", ".fit": "fits", ".fts": "fits", ".fits.fz": "fits", ".fit.fz": "fits",
+    ".fits": "fits", ".fit": "fits", ".fts": "fits", ".fits.fz": "fits", ".fit.fz": "fits", '.fts.fz': 'fits',
     ".jpg": "image", ".jpeg": "image", ".png": "image", ".tif": "image", ".tiff": "image", ".bmp": "image", ".webp": "image",
     ".heic": "image", ".heif": "image", ".hif": "image",
+    '.pic': 'image', '.ppm': 'image', '.pgm': 'image', '.pnm': 'image', '.jxl': 'image', '.avif': 'image',
     ".cr2": "raw", ".cr3": "raw", ".nef": "raw", ".arw": "raw", ".dng": "raw", ".raf": "raw", ".orf": "raw", ".rw2": "raw", ".pef": "raw", ".srw": "raw",
+    '.mos': 'raw', '.crw': 'raw', '.bay': 'raw', '.erf': 'raw', '.3fr': 'raw', '.kdc': 'raw', '.dcr': 'raw',
+    '.mef': 'raw', '.mrw': 'raw', '.nrw': 'raw', '.raw': 'raw', '.ptx': 'raw', '.x3f': 'raw',
     ".xisf": "xisf", ".npy": "numpy", ".npz": "numpy",
     ".ser": "video", ".mp4": "video", ".mov": "video", ".avi": "video", ".mkv": "video",
+    '.mpg': 'video', '.mpeg': 'video', '.webm': 'video',
+    '.lst': 'other', '.csv': 'other', '.icc': 'other', '.icm': 'other', '.py': 'other', '.wcs': 'other',
 }
 
 def format_for_path(path: Path) -> str | None:

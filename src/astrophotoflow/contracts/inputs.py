@@ -66,7 +66,7 @@ class CanvasDataRequest(StrictModel):
 
 
 class CanvasDataOut(StrictModel):
-    native_type: Literal["APF_DATA_REFERENCE"] = "APF_DATA_REFERENCE"
+    native_type: Literal["APF_DATA_REFERENCE", 'APF_FILE_REFERENCE'] = "APF_DATA_REFERENCE"
     title: str
     reference: InputReference
 
@@ -94,6 +94,8 @@ class CanvasInspectOut(StrictModel):
     preview_status: Literal["available", "pending", "failed", "unsupported", "not_ready"]
     preview_url: str | None
     preview_error: str | None
+    byte_size: int | None = Field(default=None, ge=0)
+    content_hash: str | None = None
 
 
 class ResolveInputsRequest(StrictModel):
@@ -175,3 +177,4 @@ class CheckedOutput(StrictModel):
     content_hash: str
     checked_at: datetime
     scientific_metadata: dict | None = None
+    mtime_ns: int | None = Field(default=None, ge=0)

@@ -15,6 +15,21 @@ def register(server, call):
         return call(lambda client: client.get_node(definition_id))
 
     @server.tool()
+    def list_run_calls(prompt_id: str, node_id: str | None = None, limit: int = 50, offset: int = 0) -> list[dict[str, Any]]:
+        """Read observed software calls for an explicit native prompt. Returns checked output ports and implementation versions, not scientific pixels. An empty list is not proof that no work ran. Never replay unknown calls."""
+        return call(lambda client: client.list_run_calls(prompt_id, node_id, limit, offset))
+
+    @server.tool()
+    def get_run_call(prompt_id: str, call_id: str) -> dict[str, Any]:
+        """Query one accepted software call, checked result availability and actual process observations. Unknown remains unknown even when an old process has exited; this tool never re-executes processing."""
+        return call(lambda client: client.get_run_call(prompt_id, call_id))
+
+    @server.tool()
+    def get_run_analysis(prompt_id: str, call_id: str, output_index: int, member_index: int) -> list[dict[str, Any]]:
+        """Read one checked analysis member as metrics, a histogram/series, a table or a textual report. Units, sample limits and unavailable values are explicit; preview values are not scientific image inputs."""
+        return call(lambda client: client.get_run_analysis(prompt_id, call_id, output_index, member_index))
+
+    @server.tool()
     def get_canvas(page_id: str) -> dict[str, Any]:
         """Read the actual connected canvas through its native page. Reading never grants or restores Agent control."""
         return call(lambda client: client.get_canvas(page_id))

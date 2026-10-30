@@ -18,11 +18,13 @@ logger = logging.getLogger("astrophotoflow.comfyui")
 
 def register_native(server: Any) -> None:
     from astrophotoflow.interfaces.canvas_native import initialize_canvas
-    from astrophotoflow.interfaces.data_reference_node import DataReferenceNode
+    from astrophotoflow.interfaces.data_reference_node import DataReferenceNode, FileReferenceNode
     import nodes
 
     nodes.NODE_CLASS_MAPPINGS["APF_DATA_REFERENCE"] = DataReferenceNode
     nodes.NODE_DISPLAY_NAME_MAPPINGS["APF_DATA_REFERENCE"] = "AstroPhotoFlow Data"
+    nodes.NODE_CLASS_MAPPINGS['APF_FILE_REFERENCE'] = FileReferenceNode
+    nodes.NODE_DISPLAY_NAME_MAPPINGS['APF_FILE_REFERENCE'] = 'AstroPhotoFlow File'
     from astrophotoflow.interfaces.bundle_nodes import register_bundle_nodes
     register_bundle_nodes(server, nodes.NODE_CLASS_MAPPINGS, nodes.NODE_DISPLAY_NAME_MAPPINGS)
     initialize_canvas(server)

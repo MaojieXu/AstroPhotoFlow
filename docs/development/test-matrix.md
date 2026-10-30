@@ -2,6 +2,19 @@
 
 本页保留各日期、候选和范围的历史证据；段落中的“当前／尚未实现／未合并”只指当时，最新状态见 [当前上下文](current-context.md)。按具体条目查询，不作为每次任务的必读清单。
 
+## 2026-10-30 Siril完整Bundle候选：Feature静态验证
+
+候选分支`codex/siril-full-bundle`，平台基线`2a6053eb3e8351156d7fb2b4b1ed208e6e628bc0`；独立私有Bundle基线`12fd2d1d55daeadf7acb3972385d5c2bfcb52d4d`，候选`0.2.0-dev.1`／Siril 1.4.4／SDK v2。以下是未提交源码的Feature记录，不表示已发布、原生加载或用户验收。
+
+按用户确认，199条参考索引逐条保留覆盖依据；181条可脚本能力落实为160个真实具名操作、会话／输入输出／运行设置及共享别名。固定Windows程序实际提供198条，非脚本17条，另有仅Unix的`ls`；非脚本项不生成执行节点。`visu`的显示阈值复用通用查看器，`inspector`提供原尺寸平移缩放的人工检查，九宫格及其余GUI交互仍待后续方案。平台只增加通用SDK、文件引用、多输出／分析及同源查看／查询能力，Siril程序和命令适配保留在私有Bundle。
+
+- 静态构建：39份受影响Python源码／测试完成语法编译；私有Bundle清单、160份操作／节点契约验证通过，160个调用计划完成静态构造，43个明确执行端点。RAW构造样本仅验证路径与计划，未伪称真实RAW解码。OpenAPI已重新生成。记录在`.artifacts/siril-audit/final-static.json`和`plan-compilation-v3.json`。
+- 类型／网页：UI包类型检查通过；原生应用类型检查排除已知基线`WorkbenchSettingsPanel.test.ts`的TS2769后通过，未重复执行已知失败的根完整构建。Vite网页构建通过并保留已有资源／动态导入警告，产物位于`.artifacts/build/frontend`；未提交候选以基线加`dirty-siril-full-bundle`标记，不能冒充已提交SHA。日志为`.artifacts/siril-audit/ui-typecheck.log`、`native-typecheck.log`、`frontend-build.log`。
+- 定向原生资料探查：保留固定程序的`help`／格式输出和固定1.4.4源代码依据；三张合成64×64单色FITS的序列布局、`getref`、`seqstat`和直接编号文件探查完成。首次进程启动在OpenBLAS分配阶段失败；显式BLAS／OMP单线程后探查成功。日志为`sequence-layout/layout.log`、`layout-threads1.log`和`direct-stage.log`。这些探查不等于160个节点执行验证。
+- 回归用例已编写但按Feature约定未运行测试套件或综合验收。待Git Manager独立审查／验证：具名／可选／增长端口原生加载、原件与容器帧数、颜色布局及精度、校准／配准／叠加、序列旁文件、多输出、分析实际解析、依赖缺失、进程树取消／unknown查询和查看器视觉交互。
+
+本轮未修改正常dev、默认workspace、全局MCP或真实素材。现有32688／32690独立实例仍为准备阶段版本；完整候选安装须先取得本地提交／新开发tag授权，生成固定目录快照并走现有安装确认。包内默认发布目录仍指向先前Bundle，不用旧SHA承载当前源码。用户确认可以集成前不合并、推送或发布。
+
 <a id="docs-minimization"></a>
 
 ## 2026-10-29 文档最小化

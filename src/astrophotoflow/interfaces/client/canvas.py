@@ -20,6 +20,15 @@ class CanvasOperations:
     def get_node(self, definition_id: str):
         return self.request('GET', f'/nodes/{definition_id}')
 
+    def list_run_calls(self, prompt_id: str, node_id: str | None = None, limit: int = 50, offset: int = 0):
+        return self.request('GET', f'/runs/{prompt_id}/calls', params={'node_id': node_id, 'limit': limit, 'offset': offset})
+
+    def get_run_call(self, prompt_id: str, call_id: str):
+        return self.request('GET', f'/runs/{prompt_id}/calls/{call_id}')
+
+    def get_run_analysis(self, prompt_id: str, call_id: str, output_index: int, member_index: int):
+        return self.request('GET', f'/runs/{prompt_id}/calls/{call_id}/outputs/{output_index}/members/{member_index}/analysis')
+
     def get_canvas(self, page_id: str):
         page = next((item for item in self.list_canvas_pages() if str(item['page_id']) == str(page_id)), None)
         if page is None:

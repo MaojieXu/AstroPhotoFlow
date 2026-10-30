@@ -1,6 +1,6 @@
 from typing import Literal
 
-from pydantic import Field, model_validator
+from pydantic import Field, FiniteFloat, model_validator
 
 from astrophotoflow.contracts.common import StrictModel
 from astrophotoflow.contracts.previews import PreviewIssue
@@ -19,6 +19,7 @@ class MediaSelection(StrictModel):
     media_time: float | None = Field(default=None, ge=0, allow_inf_nan=False)
     playback_key: str | None = None
     proxy: bool = False
+    display_range: tuple[FiniteFloat, FiniteFloat] | None = None
 
     @model_validator(mode="after")
     def valid_axes(self):
@@ -27,6 +28,8 @@ class MediaSelection(StrictModel):
             raise ValueError("显示轴必须不同，切片索引不能为负。")
         if self.media_time is not None and self.frame_index is not None:
             raise ValueError("只能用帧编号或呈现时间戳定位一帧。")
+        if self.display_range is not None and not self.display_range[0] < self.display_range[1]:
+            raise ValueError("显示阈值需要有限且递增的上下限。")
         return self
 
 
@@ -35,6 +38,13 @@ class MediaArray(StrictModel):
     shape: list[int]
     dtype: str
     numeric: bool
+
+
+class MediaHdu(StrictModel):
+    index: int = Field(ge=0)
+    name: str | None = None
+    shape: list[int]
+    kind: str | None = None
 
 
 class MediaState(StrictModel):
@@ -48,6 +58,7 @@ class MediaState(StrictModel):
     tile_size: int = 512
     selection: MediaSelection = Field(default_factory=MediaSelection)
     arrays: list[MediaArray] = Field(default_factory=list)
+    hdus: list[MediaHdu] = Field(default_factory=list)
     needs_selection: bool = False
     overview_url: str | None = None
     tile_url: str | None = None

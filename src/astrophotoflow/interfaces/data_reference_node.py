@@ -17,3 +17,9 @@ class DataReferenceNode:
     def reference(self, reference: str):
         value = TypeAdapter(InputReference).validate_json(reference)
         return (value.model_dump(mode="json"),)
+
+
+class FileReferenceNode(DataReferenceNode):
+    RETURN_TYPES = ('APF_FILE',)
+    RETURN_NAMES = ('file',)
+    DESCRIPTION = 'Fixed library file or ordered file group. Content identity is pinned before software processing.'

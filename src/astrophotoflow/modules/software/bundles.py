@@ -13,14 +13,23 @@ from functools import lru_cache
 from importlib.resources import files
 from pathlib import Path
 
-from astrophotoflow.contracts.bundles import BundleManifest, ProcessPlan
+from astrophotoflow.contracts.bundles import (
+    BundleCollectedResult, BundleFile, BundleManifest, BundleProgress, NamedProcessPlan, ProcessPlan,
+)
 from astrophotoflow.contracts.nodes import NodeDefinition
 from astrophotoflow.contracts.software import SoftwareOperation
 from astrophotoflow.core.errors import ApiError
 
 
+@lru_cache(maxsize=4)
+def _catalog(source: str | None):
+    raw = Path(source).read_bytes() if source is not None else files('astrophotoflow').joinpath('vendor/bundle-catalog.json').read_bytes()
+    return json.loads(raw)
+
+
 def catalog():
-    return json.loads(files('astrophotoflow').joinpath('vendor/bundle-catalog.json').read_text(encoding='utf-8'))
+    source = os.environ.get('ASTROPHOTOFLOW_BUNDLE_CATALOG')
+    return _catalog(str(Path(source).resolve()) if source is not None else None)
 
 
 def release(package_id):
@@ -74,13 +83,22 @@ def read_bundle(root: Path):
         raise ValueError('Bundle output_nodes must name declared node definitions.')
     contained(root, manifest.executable)
     contained(root, manifest.adapter)
+    for name in [manifest.commands, manifest.assessments]:
+        if name is not None:
+            contained(root, name)
     return manifest, operations, nodes
+
+
+@lru_cache(maxsize=16)
+def _installed_metadata(root: Path, commit: str):
+    return read_bundle(root)
 
 
 def metadata(workspace: Path, package_id: str):
     root = workspace / 'software' / package_id / 'bundle'
     if root.is_dir():
-        return read_bundle(root)
+        lock = json.loads((root.parent / 'bundle-lock.json').read_text(encoding='utf-8'))
+        return _installed_metadata(root, lock['commit'])
     item = release(package_id)
     return BundleManifest.model_validate(item['manifest']), item['operations'], item['nodes']
 
@@ -146,6 +164,11 @@ def checkout(package_id: str, destination: Path, *, tool_root=None):
     manifest, operations, nodes = read_bundle(destination)
     if manifest.model_dump() != item['manifest'] or operations != item['operations'] or nodes != item['nodes']:
         raise ApiError(409, 'BUNDLE_VERSION_CHANGED', 'Bundle 内容与发布目录不一致，未安装。')
+    if 'reference_files' in item and {
+        name: contained(destination, name).read_bytes().decode('utf-8')
+        for name in [manifest.commands, manifest.assessments] if name is not None
+    } != item['reference_files']:
+        raise ApiError(409, 'BUNDLE_VERSION_CHANGED', 'Bundle 参考目录与已确认快照不一致，未安装。')
     result = subprocess.run([str(contained(destination, manifest.executable)), *manifest.version_args],
                             cwd=contained(destination, manifest.executable).parent,
                             capture_output=True, text=True, timeout=30,
@@ -155,6 +178,8 @@ def checkout(package_id: str, destination: Path, *, tool_root=None):
     adapter = _adapter(str(contained(destination, manifest.adapter)), actual)
     if not callable(getattr(adapter, 'build_plan', None)):
         raise ValueError('Bundle adapter does not implement SDK v1 build_plan.')
+    if manifest.host_api == 2 and any(not callable(getattr(adapter, name, None)) for name in ('parse_result', 'parse_progress', 'parse_failure')):
+        raise ValueError('Bundle SDK v2 requires result and progress parsers.')
     return manifest, actual
 
 
@@ -168,14 +193,85 @@ def _adapter(path: str, commit: str):
 
 def adapter_plan(workspace: Path, package_id: str, operation_id: str, sources, parameters, directory, **options):
     root = workspace / 'software' / package_id / 'bundle'
-    manifest, _, _ = read_bundle(root)
+    manifest, _, _ = metadata(workspace, package_id)
     lock = json.loads((root.parent / 'bundle-lock.json').read_text(encoding='utf-8'))
     adapter = _adapter(str(contained(root, manifest.adapter)), lock['commit'])
-    plan = ProcessPlan.model_validate(adapter.build_plan(operation_id, sources, parameters, directory, **options))
-    for output in [*plan.outputs, *([plan.linear_sample] if plan.linear_sample else [])]:
+    if manifest.host_api == 2:
+        plan = NamedProcessPlan.model_validate(adapter.build_plan(operation_id, sources, parameters, directory, **options))
+        paths = [plan.temporary_directory]
+        for output in plan.outputs.values():
+            paths.extend(file.path for file in output.files)
+            for pattern in output.patterns + output.supporting_patterns:
+                if Path(pattern.pattern).is_absolute() or '..' in Path(pattern.pattern).parts:
+                    raise ValueError('Bundle output pattern escapes the invocation directory.')
+                contained(directory, pattern.pattern)
+    else:
+        options.pop('supporting_sources', None)
+        options.pop('source_groups', None)
+        options.pop('supporting_groups', None)
+        options.pop('source_metadata', None)
+        legacy_sources = sources['image'] if isinstance(sources, dict) else sources
+        plan = ProcessPlan.model_validate(adapter.build_plan(operation_id, legacy_sources, parameters, directory, **options))
+        paths = list(plan.outputs)
+    for output in [*paths, *([plan.linear_sample] if plan.linear_sample else [])]:
         if not output.resolve().is_relative_to(directory.resolve()):
             raise ValueError('Bundle output escapes the invocation directory.')
     return plan
+
+
+def collect_result(workspace: Path, package_id: str, operation_id: str, plan, directory: Path, log_path: Path):
+    if isinstance(plan, ProcessPlan):
+        return BundleCollectedResult(outputs={'image': [
+            BundleFile(path=path, format=plan.output_format) for path in plan.outputs
+            if path.is_file() and path.stat().st_size > 0
+        ]})
+    root = workspace / 'software' / package_id / 'bundle'
+    manifest, _, _ = metadata(workspace, package_id)
+    lock = json.loads((root.parent / 'bundle-lock.json').read_text(encoding='utf-8'))
+    adapter = _adapter(str(contained(root, manifest.adapter)), lock['commit'])
+    adapter.parse_result(operation_id, directory, plan, log_path)
+    outputs, supporting = {}, {}
+
+    def matches(pattern):
+        paths = sorted(directory.glob(pattern.pattern))
+        if len(paths) < pattern.minimum_count:
+            raise ValueError('Bundle did not produce the required output: ' + pattern.pattern)
+        return [BundleFile(path=path, format=pattern.format, allow_empty=pattern.allow_empty, frame_count=pattern.frame_count) for path in paths]
+
+    for name, output in plan.outputs.items():
+        outputs[name] = list(output.files)
+        for pattern in output.patterns:
+            outputs[name].extend(matches(pattern))
+        supporting[name] = [file for pattern in output.supporting_patterns for file in matches(pattern)]
+    result = BundleCollectedResult(outputs=outputs, supporting_outputs=supporting)
+    for group in [*result.outputs.values(), *result.supporting_outputs.values()]:
+        for file in group:
+            contained(directory, str(file.path))
+            if file.allow_empty and file.format != 'other':
+                raise ValueError('Only declared non-scientific file outputs may be empty.')
+            if not file.path.is_file() or (file.path.stat().st_size == 0 and not file.allow_empty):
+                raise ValueError('Bundle output is missing or empty: ' + str(file.path))
+    return result
+
+
+def progress_reader(workspace: Path, package_id: str):
+    root = workspace / 'software' / package_id / 'bundle'
+    manifest = BundleManifest.model_validate_json((root / 'bundle.json').read_text(encoding='utf-8'))
+    if manifest.host_api == 1:
+        return None
+    lock = json.loads((root.parent / 'bundle-lock.json').read_text(encoding='utf-8'))
+    adapter = _adapter(str(contained(root, manifest.adapter)), lock['commit'])
+    return lambda text: BundleProgress.model_validate(adapter.parse_progress(text))
+
+
+def failure_reason(workspace: Path, package_id: str, log_path: Path):
+    root = workspace / 'software' / package_id / 'bundle'
+    manifest, _, _ = metadata(workspace, package_id)
+    if manifest.host_api == 1:
+        return '程序没有完整完成操作，请查看本次调用日志。'
+    lock = json.loads((root.parent / 'bundle-lock.json').read_text(encoding='utf-8'))
+    adapter = _adapter(str(contained(root, manifest.adapter)), lock['commit'])
+    return str(adapter.parse_failure(log_path))
 
 
 def operation(workspace: Path, package_id: str, operation_id: str, ready: bool, reason: str | None):

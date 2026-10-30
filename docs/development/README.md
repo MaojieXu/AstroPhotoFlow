@@ -91,6 +91,17 @@ uv run --locked --no-sync apf status --workspace .artifacts/workspaces/feature
 
 CLI、浏览器和 MCP 分别核对目标；设置 Shell 环境不会重定向已连接的 MCP。MCP 验证使用明确绑定该 workspace 的独立 stdio 进程，不修改全局注册。
 
+### 独立Bundle候选预览
+
+Bundle须先按根规则取得本地提交／新开发tag授权；不移动旧tag，不把脏源码标成已有SHA。授权后可从干净且HEAD等于tag的独立checkout导出本地预览目录：
+
+```powershell
+python scripts/export_bundle_catalog.py .artifacts/bundles/AstroPhotoFlow-Siril --repository "$PWD/.artifacts/bundles/AstroPhotoFlow-Siril" --tag v0.2.0-dev.1 --output .artifacts/siril-preview-catalog.json
+$env:ASTROPHOTOFLOW_BUNDLE_CATALOG = "$PWD/.artifacts/siril-preview-catalog.json"
+```
+
+该变量仅属于启动终端及其独立子进程；停止／启动时仍明确自己的workspace。随后走软件安装计划与当前网页确认，重启后核对程序版本、节点加载与Bundle SHA。目录覆盖只选择固定候选，不绕过安装确认，也不发布GitHub tag。源码未提交、未安装或仅静态资源就绪时须如实标注；不要据此声明节点功能通过。
+
 浏览器验收由 Manager 在集成阶段按需执行，使用 `status` 的实际地址：
 
 ```powershell

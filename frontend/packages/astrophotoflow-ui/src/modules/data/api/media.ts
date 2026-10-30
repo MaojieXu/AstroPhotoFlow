@@ -14,7 +14,8 @@ export const mediaSelectionSchema = z.object({
   frame_index: z.number().int().nonnegative().nullable().optional(),
   media_time: z.number().nonnegative().nullable().optional(),
   playback_key: z.string().nullable().optional(),
-  proxy: z.boolean().default(false)
+  proxy: z.boolean().default(false),
+  display_range: z.tuple([z.number().finite(), z.number().finite()]).nullable().optional()
 }).strict()
 
 export const mediaStateSchema = z.object({
@@ -23,6 +24,7 @@ export const mediaStateSchema = z.object({
   kind: z.enum(['image', 'video']), width: z.number().int().nonnegative(), height: z.number().int().nonnegative(),
   max_level: z.number().int().nonnegative(), tile_size: z.literal(512), selection: mediaSelectionSchema,
   arrays: z.array(z.object({ key: z.string(), shape: z.array(z.number().int().nonnegative()), dtype: z.string(), numeric: z.boolean() }).strict()),
+  hdus: z.array(z.object({ index: z.number().int().nonnegative(), name: z.string().nullable(), shape: z.array(z.number().int().nonnegative()), kind: z.string().nullable() }).strict()).default([]),
   needs_selection: z.boolean(), overview_url: z.string().nullable(), tile_url: z.string().nullable(),
   video_url: z.string().nullable(), mime_type: z.string().nullable(), proxy: z.boolean(),
   frame_index: z.number().int().nonnegative().nullable(), media_time: z.number().nullable(),

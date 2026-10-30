@@ -34,7 +34,7 @@ export const scienceReferenceSchema = z.discriminatedUnion('kind', [
 ])
 
 export const canvasDataSchema = z.object({
-  native_type: z.literal('APF_DATA_REFERENCE'),
+  native_type: z.enum(['APF_DATA_REFERENCE', 'APF_FILE_REFERENCE']),
   title: z.string(),
   reference: scienceReferenceSchema
 }).strict()
@@ -47,7 +47,8 @@ export const canvasInspectSchema = z.object({
   format: z.string().nullable(), width: z.number().int().nullable(), height: z.number().int().nullable(),
   bitpix: z.number().int().nullable(), pixel_type: z.string().nullable(),
   preview_status: z.enum(['available', 'pending', 'failed', 'unsupported', 'not_ready']),
-  preview_url: z.string().nullable(), preview_error: z.string().nullable()
+  preview_url: z.string().nullable(), preview_error: z.string().nullable(),
+  byte_size: z.number().int().nonnegative().nullable().optional(), content_hash: z.string().nullable().optional()
 }).strict()
 
 export type CanvasDataRequest = z.infer<typeof canvasDataRequestSchema>

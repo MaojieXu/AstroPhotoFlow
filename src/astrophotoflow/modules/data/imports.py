@@ -66,7 +66,7 @@ def create_upload(body: UploadImportCreate, request: Request, admission: deps.Ta
     sources = []
     now = shared._now()
     for position, file in enumerate(body.files):
-        suffix = "".join(Path(file.name).suffixes[-2:]) if file.name.lower().endswith((".fits.fz", ".fit.fz")) else Path(file.name).suffix
+        suffix = "".join(Path(file.name).suffixes[-2:]) if file.name.lower().endswith((".fits.fz", ".fit.fz", '.fts.fz')) else Path(file.name).suffix
         stored_name = f"{position}{suffix.lower()}"
         files.append({"name": file.name, "size": file.size, "received": 0, "stored_name": stored_name})
         sources.append({"root_id": "__upload__", "path": stored_name, "kind": "file", "enumeration_completed": True, "error": None})

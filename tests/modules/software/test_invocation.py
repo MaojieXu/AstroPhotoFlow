@@ -55,6 +55,7 @@ def process_factory(monkeypatch, exit_code=0, gated=False):
 
         def __init__(self, script):
             self.script = script
+            self.pid = 123 + len(created)
             self.gate = asyncio.Event()
             if not gated:
                 self.gate.set()
@@ -75,12 +76,19 @@ def process_factory(monkeypatch, exit_code=0, gated=False):
     async def start(*args, **kwargs):
         assert kwargs["stdout"] is not None and "shell" not in kwargs
         process = Process(Path(args[-1]).read_text(encoding="utf-8"))
+        process.executable = str(args[0])
         created.append(process)
         return process
 
     monkeypatch.setattr(public.asyncio, "create_subprocess_exec", start)
     original_process = public.psutil.Process
-    monkeypatch.setattr(public.psutil, "Process", lambda pid=None: SimpleNamespace(pid=123, create_time=lambda: 100.0) if pid == 123 else original_process(pid))
+    def observed(pid=None):
+        process = next((item for item in created if item.pid == pid), None)
+        if process is None:
+            return original_process(pid)
+        return SimpleNamespace(pid=pid, create_time=lambda: float(pid), exe=lambda: process.executable,
+                               children=lambda recursive=True: [], is_running=lambda: process.returncode is None)
+    monkeypatch.setattr(public.psutil, 'Process', observed)
     return created
 
 
@@ -143,7 +151,7 @@ def test_cancel_only_target_call_and_reject_maintenance_while_running(configured
     asyncio.run(scenario())
 
 
-@pytest.mark.parametrize("change", ["token", "parameter", "hdu", "changed", "workdir"])
+@pytest.mark.parametrize("change", ["token", "parameter", "hdu", "changed", "workdir", 'container'])
 def test_rejects_invalid_invocation_before_launch(configured, monkeypatch, change):
     body = invocation(configured, 1)
     launched = process_factory(monkeypatch)
@@ -155,6 +163,8 @@ def test_rejects_invalid_invocation_before_launch(configured, monkeypatch, chang
         body.inputs["image"][0].selection = ScienceSelection(kind="fits_hdu", hdu_index=1)
     elif change == "changed":
         body.inputs["image"][0].read_path.write_bytes(b"changed")
+    elif change == 'container':
+        body.inputs['image'][0].scientific_metadata = {'selected_hdu': 0, 'hdu_count': 2, 'frame_count': 2}
     else:
         body.work_directory = configured.workspace.parent
 

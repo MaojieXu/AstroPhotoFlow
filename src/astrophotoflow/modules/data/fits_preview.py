@@ -56,6 +56,8 @@ def _rgb_channel_first(header) -> bool:
     axis3 = str(header.get("CTYPE3", "")).strip().upper()
     if axis3 in {"RGB", "COLOR"}:
         return True
+    if int(header.get('NAXIS1', 0)) == 3 and str(header.get('CTYPE1', '')).strip().upper() in {'RGB', 'COLOR'}:
+        return False
     return (
         not axis3
         and (
@@ -148,11 +150,26 @@ def _parsed_parameters(header) -> dict[str, Any]:
     return parsed
 
 
-def inspect_fits(path: Path, cfa_override: str | None = None) -> dict:
+def apply_colour_layout(hdu, layout):
+    if layout is None or int(hdu.header.get('NAXIS', 0)) != 3:
+        return
+    axis = 3 if layout == 'planar' else 1
+    key = 'CTYPE' + str(axis)
+    other_axis = 1 if axis == 3 else 3
+    if int(hdu.header.get('NAXIS' + str(axis), 0)) != 3 or str(hdu.header.get(key, '')).strip().upper() not in {'', 'RGB', 'COLOR'} or str(hdu.header.get('CTYPE' + str(other_axis), '')).strip().upper() in {'RGB', 'COLOR'}:
+        raise ValueError('声明的RGB布局与FITS维度或轴含义不一致。')
+    hdu.header[key] = 'RGB'
+
+
+def inspect_fits(path: Path, cfa_override: str | None = None, *, colour_layout=None, verify_span=False) -> dict:
     hdus = []
     parsed = {}
     with fits.open(path, memmap=True, lazy_load_hdus=True) as file:
         for index, hdu in enumerate(file):
+            info = hdu.fileinfo()
+            if verify_span and info and info['datLoc'] + info['datSpan'] > path.stat().st_size:
+                raise ValueError('FITS文件的完整数据范围尚未写完。')
+            apply_colour_layout(hdu, colour_layout)
             header = hdu.header
             kind = _image_kind(hdu, cfa_override)
             shape = list(reversed([int(header.get(f"NAXIS{i}", 0)) for i in range(1, int(header.get("NAXIS", 0)) + 1)]))
@@ -235,6 +252,7 @@ def read_preview_pixels(path: Path, hdu_index: int, kind: str, parameters: dict,
         raise ValueError(f"{kind} CFA 已登记；当前暂不支持其马赛克彩色预览。")
     with fits.open(path, memmap=False, lazy_load_hdus=True) as file:
         hdu = file[hdu_index]
+        apply_colour_layout(hdu, parameters.get('colour_layout'))
         shape = tuple(int(value) for value in hdu.shape)
         if not shape or max(shape[-2:]) == 0:
             raise ValueError("所选 HDU 没有图像数据。")
@@ -271,6 +289,7 @@ def read_stretch_pixels(path: Path, hdu_index: int, kind: str, parameters: dict,
         raise ValueError(f"{kind} CFA 已登记；当前暂不支持其马赛克彩色预览。")
     with fits.open(path, memmap=False, lazy_load_hdus=True) as file:
         hdu = file[hdu_index]
+        apply_colour_layout(hdu, parameters.get('colour_layout'))
         planar = kind == "rgb" and _rgb_channel_first(hdu.header)
         height, width = hdu.shape[-2:] if planar else hdu.shape[:2]
         cell = 2 if kind == "bayer" else 1

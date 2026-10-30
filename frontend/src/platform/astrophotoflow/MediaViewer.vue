@@ -30,6 +30,10 @@ const error = ref('')
 const percent = ref(100)
 const maximized = ref(false)
 const chooseArray = ref(false)
+const showDisplayRange = ref(false)
+const displayLow = ref(0)
+const displayHigh = ref(1)
+const validDisplayRange = computed(() => Number.isFinite(displayLow.value) && Number.isFinite(displayHigh.value) && displayLow.value < displayHigh.value)
 const form = ref<MediaSelection>(mediaSelectionSchema.parse({}))
 const pausedFrame = ref(false)
 const presentedTime = ref<number>()
@@ -147,6 +151,8 @@ async function load(next: number, selection: Partial<MediaSelection> = {}) {
     settled = true
     state.value = result
     form.value = result.selection
+    displayLow.value = result.selection.display_range?.[0] ?? 0
+    displayHigh.value = result.selection.display_range?.[1] ?? 1
     chooseArray.value = result.needs_selection
     if (result.status !== 'available') {
       error.value = result.error?.message ?? t('astrophotoflow.previewUnavailable')
@@ -276,11 +282,23 @@ onBeforeUnmount(() => {
           <span class="w-16 text-center tabular-nums">{{ Math.round(percent) }}%</span>
           <Button variant="textonly" size="icon" :disabled="!viewer" :aria-label="t('astrophotoflow.media.zoomIn')" @click="changeZoom(1.2)">＋</Button>
         </template>
-        <Button v-if="state?.arrays.length" variant="textonly" @click="chooseArray = !chooseArray">{{ t('astrophotoflow.media.arraySelection') }}</Button>
+        <Button v-if="state?.arrays.length || (state?.hdus.length ?? 0) > 1" variant="textonly" @click="chooseArray = !chooseArray">{{ t('astrophotoflow.media.arraySelection') }}</Button>
+        <Button v-if="state?.kind === 'image' && !state.needs_selection" variant="textonly" :disabled="loading" @click="showDisplayRange = !showDisplayRange">{{ t('astrophotoflow.media.displayThresholds') }}</Button>
         <Button v-if="state?.kind === 'video'" variant="textonly" :disabled="presentedTime === undefined" @click="inspectFrame">{{ t('astrophotoflow.media.inspectFrame') }}</Button>
         <Button v-if="pausedFrame" variant="textonly" @click="resumeVideo">{{ t('astrophotoflow.media.backToVideo') }}</Button>
         <span class="ml-auto text-muted-foreground">{{ state?.width && state.height ? `${state.width} × ${state.height}` : '' }}</span>
         <Button variant="textonly" size="icon" :aria-label="t('astrophotoflow.media.maximize')" @click="maximized = !maximized"><i :class="maximized ? 'icon-[lucide--minimize] size-4' : 'icon-[lucide--maximize] size-4'" /></Button>
+      </div>
+      <div v-if="showDisplayRange && state?.kind === 'image' && !state.needs_selection" class="flex shrink-0 flex-wrap items-center gap-2 rounded-sm bg-component-node-widget-background p-2">
+        <label class="flex items-center gap-1">{{ t('astrophotoflow.media.displayLow') }}<Input v-model.number="displayLow" type="number" step="any" class="w-28" /></label>
+        <label class="flex items-center gap-1">{{ t('astrophotoflow.media.displayHigh') }}<Input v-model.number="displayHigh" type="number" step="any" class="w-28" /></label>
+        <Button :disabled="loading || !validDisplayRange" @click="load(index, { ...form, display_range: [displayLow, displayHigh] })">{{ t('astrophotoflow.media.showSelection') }}</Button>
+        <Button variant="textonly" :disabled="loading || !form.display_range" @click="load(index, { ...form, display_range: null })">{{ t('astrophotoflow.media.resetDisplay') }}</Button>
+        <span class="text-muted-foreground">{{ t('astrophotoflow.media.displayOnly') }}</span>
+      </div>
+      <div v-if="chooseArray && (state?.hdus.length ?? 0) > 1" class="flex shrink-0 flex-wrap items-center gap-2 rounded-sm bg-component-node-widget-background p-2">
+        <label class="flex items-center gap-1">{{ t('astrophotoflow.media.hdu') }}<select v-model.number="form.hdu_index" class="rounded-sm border border-border-default bg-base-background p-1"><option v-for="hdu in state?.hdus" :key="hdu.index" :value="hdu.index" :disabled="!hdu.kind">{{ hdu.index }} · {{ hdu.name ?? hdu.kind ?? '—' }} · {{ hdu.shape.join(' × ') }}</option></select></label>
+        <Button @click="load(index, { ...form })">{{ t('astrophotoflow.media.showSelection') }}</Button>
       </div>
       <div v-if="chooseArray && state?.arrays.length" class="flex shrink-0 flex-wrap items-center gap-2 rounded-sm bg-component-node-widget-background p-2">
         <label class="flex items-center gap-1">{{ t('astrophotoflow.media.array') }}<select v-model="form.array_key" class="rounded-sm border border-border-default bg-base-background p-1" @change="arrayChanged"><option :value="null">—</option><option v-for="array in state.arrays" :key="array.key" :value="array.key" :disabled="!array.numeric">{{ array.key }} · {{ array.shape.join(' × ') }} · {{ array.dtype }}</option></select></label>

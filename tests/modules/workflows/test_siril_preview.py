@@ -18,7 +18,7 @@ def test_live_preview_cancels_old_generation_and_releases_samples(tmp_path, monk
     released, requests = [], []
     first_started = asyncio.Event()
 
-    def sample(_database, _settings, _cache, request, checkpoint):
+    def sample(_database, _settings, _cache, request, checkpoint, _decoder_key, _layout):
         checkpoint()
         return SimpleNamespace(path=tmp_path / "linear.fit", folder=tmp_path,
                                close=lambda error: released.append((request.generation, error)))
@@ -31,6 +31,8 @@ def test_live_preview_cancels_old_generation_and_releases_samples(tmp_path, monk
         return directory / "result.fit"
 
     monkeypatch.setattr(siril_preview, "prepare_siril_sample", sample)
+    monkeypatch.setattr(siril_preview, 'get_package', lambda *_args: SimpleNamespace(installed_version='1.4.4', bundle_commit='fixture'))
+    monkeypatch.setattr(siril_preview, 'get_operation', lambda *_args: SimpleNamespace(inputs=[SimpleNamespace(name='image', colour_layout='planar')]))
     monkeypatch.setattr(siril_preview, "preview_operation", run)
     monkeypatch.setattr(siril_preview, "direct_fits_image", lambda *_args: Image.new("RGB", (12, 9), "blue"))
 

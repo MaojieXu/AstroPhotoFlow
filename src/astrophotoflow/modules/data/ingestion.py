@@ -258,6 +258,9 @@ def import_workers(settings: Settings):
 
 
 def _fit_preview_rows(database: Database, settings: Settings, version_id: str, hdu_rows: list[dict], parameters: dict, path: Path, missing_only: bool = False, context: dict | None = None) -> tuple[str, str | None, dict | None]:
+    with database.read_session() as session:
+        version = session.get(AssetVersion, version_id)
+        parameters = {**parameters, 'colour_layout': (version.scientific_metadata or {}).get('colour_layout')}
     selected = next((row for row in hdu_rows if row["is_selected"]), None)
     if selected is None:
         return "unsupported", None, None
@@ -496,7 +499,7 @@ def backfill_missing_previews(database: Database, settings: Settings) -> dict[st
                         version = session.get(AssetVersion, version_id)
                         asset = session.get(Asset, version.asset_id)
                         parameters = dict(asset.parameters or {})
-                    inspected = inspect_fits(path, parameters.get("cfa_pattern"))
+                    inspected = inspect_fits(path, parameters.get("cfa_pattern"), colour_layout=metadata.get('colour_layout'))
                     selected_data = next((row for row in inspected["hdus"] if row["is_selected"]), None)
                     if selected_data is None:
                         raise ValueError("FITS 没有已选中的图像 HDU。")
@@ -540,6 +543,7 @@ def _refresh_fits_metadata(database: Database, settings: Settings, item_id: str,
         root_id, source_path = item.root_id, item.source_path
         storage_mode, storage_location = version.storage_mode, version.storage_location
         category = (version.scientific_metadata or {}).get("format")
+        colour_layout = (version.scientific_metadata or {}).get('colour_layout')
         current_parameters, value_sources = dict(asset.parameters or {}), dict(asset.value_sources or {})
     if storage_mode == "managed":
         path = settings.data_dir / storage_location
@@ -551,10 +555,10 @@ def _refresh_fits_metadata(database: Database, settings: Settings, item_id: str,
             hdu_rows, parsed = [], _inspect_xisf(path)
         else:
             manual_cfa = current_parameters.get("cfa_pattern") if value_sources.get("cfa_pattern") == "manual" else None
-            result = inspect_fits(path, manual_cfa)
+            result = inspect_fits(path, manual_cfa, colour_layout=colour_layout)
             hdu_rows, parsed = result["hdus"], result["parsed_parameters"]
             if not parsed.get("cfa_pattern") and value_sources.get("cfa_pattern") == "preset":
-                hdu_rows = inspect_fits(path, current_parameters["cfa_pattern"])["hdus"]
+                hdu_rows = inspect_fits(path, current_parameters["cfa_pattern"], colour_layout=colour_layout)["hdus"]
         error = None
     except Exception:
         hdu_rows, parsed = [], {}
@@ -639,20 +643,20 @@ def _register_asset(database: Database, settings: Settings, task_data: dict, ite
             if category == "xisf":
                 parsed = _inspect_xisf(original)
             else:
-                inspected = inspect_fits(original, task_data["parameters"].get("cfa_pattern"))
+                inspected = inspect_fits(original, task_data["parameters"].get("cfa_pattern"), colour_layout=task_data.get('output_colour_layout'))
                 parsed, hdu_rows = inspected["parsed_parameters"], inspected["hdus"]
         except Exception:
             parse_error = f"{category.upper()} 元数据解析失败；原始文件仍将继续内容入库。"
     parameters, value_sources = _current_asset_parameters(task_data["parameters"], parsed, defaults.get("parameters"))
     if category == "fits" and not parse_error and parameters.get("cfa_pattern") and not parsed.get("cfa_pattern") and not task_data["parameters"].get("cfa_pattern"):
-        hdu_rows = inspect_fits(original, parameters["cfa_pattern"])["hdus"]
+        hdu_rows = inspect_fits(original, parameters["cfa_pattern"], colour_layout=task_data.get('output_colour_layout'))["hdus"]
     classification, classification_sources = _current_classification(
         task_data["classification"], parsed.get("classification") or {}, defaults.get("classification") or {})
     value_sources.update(classification_sources)
     role, calibration_level = _role(classification)
     version_id, asset_id = str(uuid4()), str(uuid4())
     if task_data["storage_mode"] == "managed":
-        suffix = "".join(original.suffixes[-2:]) if original.name.lower().endswith((".fits.fz", ".fit.fz")) else original.suffix
+        suffix = "".join(original.suffixes[-2:]) if original.name.lower().endswith((".fits.fz", ".fit.fz", '.fts.fz')) else original.suffix
         location = (Path("objects") / version_id / f"source{suffix.lower()}").as_posix()
     metadata_status = "failed" if parse_error else "available" if category in {"fits", "xisf"} else "unsupported"
     with database.write_session() as session:
@@ -685,6 +689,7 @@ def _register_asset(database: Database, settings: Settings, task_data: dict, ite
                 "defaults_snapshot": deepcopy(defaults),
             }},
             scientific_metadata={"format": category, "metadata_status": metadata_status,
+                                 **({'colour_layout': task_data['output_colour_layout']} if task_data.get('output_colour_layout') is not None else {}),
                                  "parse_error": parse_error, "observed_parameters": parsed,
                                  "registration_source_stamp": source_stamp},
         ))
@@ -1106,6 +1111,7 @@ def process_task(database: Database, settings: Settings, task_id: str, workers=N
                 "upload_source_task_id": (task.report or {}).get("upload_source_task_id", task.id),
                 "output_registration": bool((task.report or {}).get("output_registration")),
                 "output_name": (task.report or {}).get("output_name"),
+                'output_colour_layout': (task.report or {}).get('output_colour_layout'),
             }
         if not task_data["retry_of_task_id"]:
             _enumerate_task(database, settings, task_id, task_data)
