@@ -25,8 +25,8 @@ def discovery(tmp_path, monkeypatch):
     monkeypatch.setattr(releases.bundles, 'release', lambda package: {'repository': source})
     monkeypatch.setattr(releases, 'os', SimpleNamespace(name='nt'))
     tags, headers = {}, {}
-    monkeypatch.setattr(releases, 'remote_tags', lambda repository: tags.copy())
-    monkeypatch.setattr(releases, '_header', lambda root, repository, commit: copy.deepcopy(headers[commit]))
+    monkeypatch.setattr(releases, 'remote_tags', lambda repository, **kwargs: tags.copy())
+    monkeypatch.setattr(releases, '_header', lambda root, repository, commit, **kwargs: copy.deepcopy(headers[commit]))
     settings = SimpleNamespace(workspace=tmp_path)
 
     def add(version, **kwargs):
@@ -53,7 +53,7 @@ def test_numeric_sort_and_independent_latest_badges(discovery):
 
 
 def test_remote_tags_use_peeled_commits_and_exclude_historical_experiments(monkeypatch):
-    monkeypatch.setattr(releases.bundles, 'git', lambda args: '\n'.join([
+    monkeypatch.setattr(releases.bundles, 'git', lambda args, **kwargs: '\n'.join([
         '1' * 40 + '\trefs/tags/v0.1.0', '2' * 40 + '\trefs/tags/v0.1.1',
         '3' * 40 + '\trefs/tags/v0.2.0-dev.1', '4' * 40 + '\trefs/tags/v0.2.0-dev.1^{}',
         '5' * 40 + '\trefs/tags/unreleased-work']))
@@ -78,7 +78,7 @@ def test_network_failure_retains_last_successful_list_and_time(discovery, monkey
     add('0.2.0-dev.1')
     first = releases.list_releases(settings, 'siril')
 
-    def fail(repository):
+    def fail(repository, **kwargs):
         raise OSError('network unavailable')
 
     monkeypatch.setattr(releases, 'remote_tags', fail)
@@ -96,7 +96,7 @@ def test_selected_release_does_not_follow_new_tags_and_rejects_moved_tag(discove
     add('0.3.0-dev.1')
     seen = []
 
-    def snapshot(root, source, tag, commit, value):
+    def snapshot(root, source, tag, commit, value, **kwargs):
         seen.append((tag, commit))
         return {'tag': tag, 'commit': commit, 'manifest': value['manifest']}
 
@@ -126,8 +126,8 @@ def test_batch_metadata_fetch_requests_only_declared_blobs(tmp_path, monkeypatch
     objects = {'bundle.json': 'a' * 40, 'operations/test.json': 'b' * 40,
                'nodes/test.json': 'c' * 40, 'app/bin/siril.exe': 'd' * 40, 'adapter/siril.py': 'e' * 40}
     commands = []
-    monkeypatch.setattr(releases, '_repository', lambda root, source: root / 'repository.git')
-    monkeypatch.setattr(releases.bundles, 'git', lambda args: commands.append(args) or '')
+    monkeypatch.setattr(releases, '_repository', lambda root, source, **kwargs: root / 'repository.git')
+    monkeypatch.setattr(releases.bundles, 'git', lambda args, **kwargs: commands.append(args) or '')
     from astrophotoflow.contracts.bundles import BundleManifest
     monkeypatch.setattr(releases, 'read_bundle', lambda root: (BundleManifest.model_validate(manifest), [], []))
     monkeypatch.setattr(releases, 'read_bundle_locales', lambda *args: {})
@@ -149,3 +149,68 @@ def test_selected_version_requires_a_complete_non_null_pair(extra):
 def test_legacy_request_retains_program_version_meaning():
     value = SoftwareInstallRequest(version='1.4.4', package_token='package')
     assert value.version == '1.4.4' and value.bundle_version is None and value.release_token is None
+
+
+def test_release_discovery_and_resolution_use_workspace_managed_git(tmp_path, monkeypatch):
+    import subprocess
+    from astrophotoflow.contracts.bundles import BundleManifest
+    settings = SimpleNamespace(workspace=tmp_path)
+    source, commit = 'https://official.example/siril.git', '1' * 40
+    tool_root = tmp_path / 'software/.tools'
+    monkeypatch.setattr(releases.bundles, 'release', lambda package: {'repository': source})
+    monkeypatch.setattr(releases, 'os', SimpleNamespace(name='nt'))
+    seen = []
+    def managed_git(root):
+        assert root == tool_root
+        seen.append(root)
+        return 'workspace-git'
+    monkeypatch.setattr(releases.bundles, 'ensure_git', managed_git)
+    manifest = header('0.2.0-dev.1')['manifest']
+    paths = ['bundle.json', *header('0.2.0-dev.1')['paths']]
+    def run(command, **kwargs):
+        if 'ls-remote' in command:
+            output = commit + '\trefs/tags/v0.2.0-dev.1'
+        elif 'ls-tree' in command:
+            output = '\0'.join('a' * 40 + '\t' + name for name in paths)
+        elif 'show' in command:
+            output = json.dumps(manifest)
+        else:
+            output = ''
+        return subprocess.CompletedProcess(command, 0, stdout=output, stderr='')
+    monkeypatch.setattr(releases.bundles.subprocess, 'run', run)
+    monkeypatch.setattr(releases, 'read_bundle', lambda path: (BundleManifest.model_validate(manifest), [], []))
+    monkeypatch.setattr(releases, 'read_bundle_locales', lambda *args: {})
+    result = releases.list_releases(settings, 'siril')
+    assert not result.stale and len(result.releases) == 1
+    selected = result.releases[0]
+    resolved = releases.resolve_release(settings, 'siril', selected.bundle_version, selected.release_token)
+    assert resolved['commit'] == commit
+    assert len(seen) >= 7
+
+
+@pytest.mark.parametrize('bad_header', ['missing', 'malformed'])
+def test_invalid_tag_metadata_does_not_hide_valid_releases(tmp_path, monkeypatch, bad_header):
+    settings = SimpleNamespace(workspace=tmp_path)
+    source = 'https://official.example/siril.git'
+    good, bad = '1' * 40, '2' * 40
+    monkeypatch.setattr(releases.bundles, 'release', lambda package: {'repository': source})
+    monkeypatch.setattr(releases, 'os', SimpleNamespace(name='nt'))
+    monkeypatch.setattr(releases, 'remote_tags', lambda *args, **kwargs: {'v0.2.0-dev.1': good, 'v0.2.0-dev.2': bad})
+    monkeypatch.setattr(releases, '_repository', lambda root, source, **kwargs: root / 'repository.git')
+    monkeypatch.setattr(releases, '_fetch', lambda *args, **kwargs: None)
+    def git(args, **kwargs):
+        commit = args[-1].split(':')[0]
+        if 'ls-tree' in args:
+            paths = header('0.2.0-dev.1')['paths']
+            if commit != bad or bad_header != 'missing':
+                paths = ['bundle.json', *paths]
+            return '\0'.join('a' * 40 + '\t' + name for name in paths)
+        assert 'show' in args
+        return '{broken' if commit == bad else json.dumps(header('0.2.0-dev.1')['manifest'])
+    monkeypatch.setattr(releases.bundles, 'git', git)
+    result = releases.list_releases(settings, 'siril')
+    assert not result.stale and result.error is None
+    assert len(result.releases) == 2
+    assert result.releases[0].reason_code == 'invalid_metadata'
+    assert not result.releases[0].compatible and not result.releases[0].is_latest
+    assert result.releases[1].compatible and result.releases[1].is_latest

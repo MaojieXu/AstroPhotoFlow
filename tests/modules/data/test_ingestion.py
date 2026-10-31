@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from astrophotoflow.core.localization import error_message
+
 from pathlib import Path
 from io import BytesIO
 import struct
@@ -569,7 +571,7 @@ def test_non_bayer_cfa_stays_registered_and_reports_preview_unsupported(tmp_path
         assert task["status"]=="completed_with_errors"
         assert asset["parameters"]["cfa_pattern"]=="XTRANS"
         assert item["preview_status"]=="unsupported"
-        assert "暂不支持" in item["error"]["message"]
+        assert item["error"]["message"] == error_message("en", "", "import_cfa_preview_unsupported", {"layout": "xtrans"})
 
         video=client.patch(f"/api/v1/library/assets/{asset['id']}",headers=AUTH,json={
             "base_revision":asset["revision"],"classification":{"frame_class":"video"}
@@ -1242,8 +1244,8 @@ def test_cancel_during_enumeration_keeps_only_registered_items(tmp_path, monkeyp
 
     original = ingestion._source_item
 
-    def register_then_cancel(database, current_task_id, entry, position, known):
-        original(database, current_task_id, entry, position, known)
+    def register_then_cancel(database, current_task_id, entry, position, known, **kwargs):
+        original(database, current_task_id, entry, position, known, **kwargs)
         with database.write_session() as session:
             session.get(AssetTask, current_task_id).status = "cancelling"
 

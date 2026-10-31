@@ -171,7 +171,7 @@ def test_superseded_queued_view_does_not_decode_original(media_service, monkeypa
         if state["status"] != "generating":
             break
         time.sleep(.01)
-    assert state["status"] == "failed" and "取消" in state["error"]["message"]
+    assert state["status"] == "failed" and "cancelled" in state["error"]["message"]
     assert not list((app.state.settings.data_dir / "previews" / first_item["asset_version_id"] / "media" / one["key"]).glob("pixels.npy"))
 
 

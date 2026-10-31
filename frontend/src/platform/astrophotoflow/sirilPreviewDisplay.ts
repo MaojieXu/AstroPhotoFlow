@@ -52,6 +52,7 @@ export function registerSirilPreviewDisplay(app: ComfyApp) {
   }
   async function refreshCatalog() {
     const capabilities = await createNodeClient(fetch).list()
+    const translations: Partial<Record<'en' | 'zh', Record<string, unknown>>> = {}
     for (const locale of ['en', 'zh'] as const) {
       const definitions: Record<string, unknown> = {}
       for (const capability of capabilities) {
@@ -66,8 +67,9 @@ export function registerSirilPreviewDisplay(app: ComfyApp) {
             [String(index), { name: escapeI18nMessage(display.outputs[port.name]?.label ?? port.name), tooltip: display.outputs[port.name]?.description ?? '' }]))
         }
       }
-      mergeBundleNodeI18n({ [locale]: definitions })
+      translations[locale] = definitions
     }
+    mergeBundleNodeI18n(translations)
     const previous = [...bundleCapabilities.keys()]
     bundleCapabilities.clear()
     for (const capability of capabilities) bundleCapabilities.set(capability.node.native_type, capability)

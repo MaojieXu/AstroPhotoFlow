@@ -8,6 +8,7 @@ let resolveNodeDefText: typeof I18nModule.resolveNodeDefText
 let resolveNodeDefSlotText: typeof I18nModule.resolveNodeDefSlotText
 let setBackendNodeText: typeof I18nModule.setBackendNodeText
 let mergeCustomNodesI18n: typeof I18nModule.mergeCustomNodesI18n
+let mergeBundleNodeI18n: typeof I18nModule.mergeBundleNodeI18n
 let resolveSupportedLocale: typeof I18nModule.resolveSupportedLocale
 let setActiveLocale: typeof I18nModule.setActiveLocale
 let te: typeof I18nModule.te
@@ -20,6 +21,7 @@ async function importI18nModule() {
   resolveNodeDefSlotText = i18nModule.resolveNodeDefSlotText
   setBackendNodeText = i18nModule.setBackendNodeText
   mergeCustomNodesI18n = i18nModule.mergeCustomNodesI18n
+  mergeBundleNodeI18n = i18nModule.mergeBundleNodeI18n
   resolveSupportedLocale = i18nModule.resolveSupportedLocale
   setActiveLocale = i18nModule.setActiveLocale
   te = i18nModule.te
@@ -603,5 +605,39 @@ describe('i18n', () => {
       expect(resolveSupportedLocale([])).toBe('en')
       expect(resolveSupportedLocale(['de', 'nl'])).toBe('en')
     })
+  })
+})
+
+
+describe('Bundle translation replacement', () => {
+  beforeEach(async () => {
+    restoreEnNodeDefsMock()
+    vi.resetModules()
+    await importI18nModule()
+  })
+  it('removes withdrawn translations and fields while retaining custom nodes', async () => {
+    await setActiveLocale('zh')
+    mergeCustomNodesI18n({ zh: { nodeDefs: { OtherNode: { display_name: '其他节点' } } } })
+    mergeBundleNodeI18n({ zh: { APF_fixture: { display_name: '新版节点', description: '旧说明' } } })
+    expect(resolveNodeDefText('display_name', 'APF_fixture', 'Original')).toBe('新版节点')
+    mergeBundleNodeI18n({ zh: { APF_fixture: { display_name: '新名称' } } })
+    expect(resolveNodeDefText('description', 'APF_fixture', 'Current description')).toBe('Current description')
+    mergeBundleNodeI18n({})
+    expect(resolveNodeDefText('display_name', 'APF_fixture', 'Original')).toBe('Original')
+    expect(resolveNodeDefText('display_name', 'OtherNode', 'Other')).toBe('其他节点')
+  })
+
+  it('gives current English Bundle translations precedence over backend text', () => {
+    mergeBundleNodeI18n({ en: { APF_fixture: { display_name: 'Bundle name' } } })
+    expect(resolveNodeDefText('display_name', 'APF_fixture', 'Backend name')).toBe('Bundle name')
+    mergeBundleNodeI18n({})
+    expect(resolveNodeDefText('display_name', 'APF_fixture', 'Backend name')).toBe('Backend name')
+  })
+
+  it('replaces translations before a locale is loaded', async () => {
+    mergeBundleNodeI18n({ zh: { APF_fixture: { display_name: '旧翻译' } } })
+    mergeBundleNodeI18n({})
+    await setActiveLocale('zh')
+    expect(resolveNodeDefText('display_name', 'APF_fixture', 'Original')).toBe('Original')
   })
 })

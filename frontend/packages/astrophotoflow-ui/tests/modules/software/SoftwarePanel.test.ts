@@ -297,14 +297,18 @@ describe('SoftwarePanel', () => {
 
 
 describe('Compact package controls', () => {
-  it.each(['not_installed', 'ready', 'not_ready', 'unknown'] as const)('shows only the mutation button and status for %s', async availability => {
+  it.each(['not_installed', 'ready', 'not_ready', 'unknown'] as const)('shows version selection and explicit actions for %s', async availability => {
     const installed = availability !== 'not_installed'
     const apiClient = client({ getPackage: vi.fn().mockResolvedValue({ ...details, package: { ...packageInfo, availability, installed_version: installed ? '1.4.4' : null } }) })
     const wrapper = mount(SoftwarePanel, { props: { client: apiClient, confirmSoftware: vi.fn(), confirmationAvailable: true, translate } })
     await flushPromises()
-    expect(wrapper.findAll('button')).toHaveLength(1)
+    expect(wrapper.findAll('select')).toHaveLength(1)
+    expect(wrapper.findAll('[data-testid="refresh-versions"]')).toHaveLength(1)
+    expect(wrapper.find('[data-testid="request-install"]').exists()).toBe(!installed)
+    expect(wrapper.find('[data-testid="request-update"]').exists()).toBe(installed)
+    expect(wrapper.find('[data-testid="request-uninstall"]').exists()).toBe(installed)
+    expect(apiClient.requestInstall).not.toHaveBeenCalled()
     expect(wrapper.get('[data-testid="software-status"]').classes()).toContain(availability === 'ready' ? 'bg-success-background' : 'bg-error')
-    expect(wrapper.find('select').exists()).toBe(false)
     expect(apiClient.listCommands).not.toHaveBeenCalled()
     expect(apiClient.prepare).not.toHaveBeenCalled()
     wrapper.unmount()

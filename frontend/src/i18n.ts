@@ -39,6 +39,8 @@ const loadingLocales = new Map<string, Promise<void>>()
 
 // Store custom nodes i18n data for merging when locales are lazily loaded
 const customNodesI18nData: Record<string, unknown> = {}
+let bundleNodeDefinitions: Partial<Record<SupportedLocale, Record<string, unknown>>> = {}
+const replacedBundleNodeDefinitions: Record<string, Record<string, unknown>> = {}
 
 /**
  * Dynamically load a shipped locale's bundles (nodeDefs, commands, settings).
@@ -85,6 +87,7 @@ export async function loadLocale(locale: SupportedLocale): Promise<void> {
       if (customNodesI18nData[locale]) {
         i18n.global.mergeLocaleMessage(locale, customNodesI18nData[locale])
       }
+      applyBundleNodeI18n(locale)
     } catch (error) {
       console.error(`Failed to load locale "${locale}":`, error)
       throw error
@@ -136,15 +139,27 @@ export function mergeCustomNodesI18n(i18nData: Record<string, unknown>): void {
   }
 }
 
-export function mergeBundleNodeI18n(nodeDefinitions: Partial<Record<SupportedLocale, Record<string, unknown>>>) {
-  const merged = { ...customNodesI18nData }
-  for (const [locale, nodeDefs] of Object.entries(nodeDefinitions)) {
-    const existing = merged[locale]
-    const message = existing && typeof existing === 'object' ? existing as Record<string, unknown> : {}
-    const previous = message.nodeDefs && typeof message.nodeDefs === 'object' ? message.nodeDefs : {}
-    merged[locale] = { ...message, nodeDefs: { ...previous, ...nodeDefs } }
+function applyBundleNodeI18n(locale: SupportedLocale) {
+  const messages = i18n.global.getLocaleMessage(locale)
+  const nodeDefs = { ...(messages.nodeDefs as Record<string, unknown>) }
+  for (const [name, original] of Object.entries(replacedBundleNodeDefinitions[locale] ?? {})) {
+    if (original === undefined) delete nodeDefs[name]
+    else nodeDefs[name] = original
   }
-  mergeCustomNodesI18n(merged)
+  const originals: Record<string, unknown> = {}
+  for (const [name, definition] of Object.entries(bundleNodeDefinitions[locale] ?? {})) {
+    originals[name] = nodeDefs[name]
+    nodeDefs[name] = definition
+  }
+  replacedBundleNodeDefinitions[locale] = originals
+  i18n.global.setLocaleMessage(locale, { ...messages, nodeDefs } as LocaleMessages)
+}
+
+export function mergeBundleNodeI18n(nodeDefinitions: Partial<Record<SupportedLocale, Record<string, unknown>>>) {
+  bundleNodeDefinitions = nodeDefinitions
+  for (const locale of Object.keys(localeDefinitions) as SupportedLocale[]) {
+    if (loadedLocales.has(locale)) applyBundleNodeI18n(locale)
+  }
 }
 
 export type NodeDefTextField = 'display_name' | 'description'
@@ -182,10 +197,15 @@ export function setBackendNodeText(
 }
 
 function customNodesProvide(nodeName: string, path: string): boolean {
-  const data = customNodesI18nData[i18n.global.locale.value]
-  if (typeof data !== 'object' || data === null) return false
-  const nodeDefs = (data as Record<string, unknown>)['nodeDefs']
-  if (typeof nodeDefs !== 'object' || nodeDefs === null) return false
+  const locale = i18n.global.locale.value as SupportedLocale
+  const data = customNodesI18nData[locale]
+  const customDefinitions = typeof data === 'object' && data !== null
+    ? (data as Record<string, unknown>).nodeDefs : undefined
+  const nodeDefs = {
+    ...(typeof customDefinitions === 'object' && customDefinitions !== null
+      ? customDefinitions as Record<string, unknown> : {}),
+    ...bundleNodeDefinitions[locale]
+  }
 
   for (const candidate of nodeDefKeyCandidates(nodeName)) {
     let cursor: unknown = nodeDefs

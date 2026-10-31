@@ -39,8 +39,8 @@ def _root(settings, package_id, repository):
     return settings.workspace / 'software/.release-cache' / package_id / hashlib.sha256(repository.encode()).hexdigest()[:16]
 
 
-def remote_tags(repository):
-    raw = bundles.git(['ls-remote', '--tags', '--', repository])
+def remote_tags(repository, *, tool_root=None):
+    raw = bundles.git(['ls-remote', '--tags', '--', repository], tool_root=tool_root)
     tags, peeled = {}, {}
     for line in raw.splitlines():
         commit, ref = line.split(maxsplit=1)
@@ -54,22 +54,22 @@ def remote_tags(repository):
             if tag.startswith('v') and VERSION.fullmatch(tag[1:]) and tag not in {'v0.1.0', 'v0.1.1'}}
 
 
-def _repository(root, repository):
+def _repository(root, repository, *, tool_root=None):
     path = root / 'repository.git'
     if not path.is_dir():
-        bundles.git(['init', '--bare', str(path)])
-        bundles.git(['--git-dir', str(path), 'config', 'remote.origin.url', repository])
-        bundles.git(['--git-dir', str(path), 'config', 'remote.origin.promisor', 'true'])
-        bundles.git(['--git-dir', str(path), 'config', 'remote.origin.partialclonefilter', 'blob:none'])
+        bundles.git(['init', '--bare', str(path)], tool_root=tool_root)
+        bundles.git(['--git-dir', str(path), 'config', 'remote.origin.url', repository], tool_root=tool_root)
+        bundles.git(['--git-dir', str(path), 'config', 'remote.origin.promisor', 'true'], tool_root=tool_root)
+        bundles.git(['--git-dir', str(path), 'config', 'remote.origin.partialclonefilter', 'blob:none'], tool_root=tool_root)
     return path
 
 
-def _fetch(path, commit):
-    bundles.git(['--git-dir', str(path), 'fetch', '--no-tags', '--depth=1', '--filter=blob:none', 'origin', commit])
+def _fetch(path, commit, *, tool_root=None):
+    bundles.git(['--git-dir', str(path), 'fetch', '--no-tags', '--depth=1', '--filter=blob:none', 'origin', commit], tool_root=tool_root)
 
 
-def _tree_objects(repo, commit):
-    raw = bundles.git(['--git-dir', str(repo), 'ls-tree', '-rz', '--format=%(objectname)%x09%(path)', commit])
+def _tree_objects(repo, commit, *, tool_root=None):
+    raw = bundles.git(['--git-dir', str(repo), 'ls-tree', '-rz', '--format=%(objectname)%x09%(path)', commit], tool_root=tool_root)
     return {name: oid for record in raw.split('\0') if record for oid, name in [record.split('\t', 1)]}
 
 
@@ -83,14 +83,20 @@ def _paths(manifest):
     return names
 
 
-def _header(root, repository, commit):
+def _header(root, repository, commit, *, tool_root=None):
     path = root / commit / 'header.json'
     if path.is_file():
         return json.loads(path.read_text(encoding='utf-8'))
-    repo = _repository(root, repository)
-    _fetch(repo, commit)
-    raw = json.loads(bundles.git(['--git-dir', str(repo), 'show', commit + ':bundle.json']))
-    objects = _tree_objects(repo, commit)
+    repo = _repository(root, repository, tool_root=tool_root)
+    _fetch(repo, commit, tool_root=tool_root)
+    objects = _tree_objects(repo, commit, tool_root=tool_root)
+    raw = None
+    if 'bundle.json' in objects:
+        contents = bundles.git(['--git-dir', str(repo), 'show', commit + ':bundle.json'], tool_root=tool_root)
+        try:
+            raw = json.loads(contents)
+        except json.JSONDecodeError:
+            pass
     value = {'manifest': raw, 'paths': list(objects), 'objects': objects}
     _write(path, value)
     return value
@@ -140,11 +146,12 @@ def _failure(settings, package_id, root, exc):
 def list_releases(settings, package_id):
     source = bundles.release(package_id)['repository']
     root = _root(settings, package_id, source)
+    tool_root = settings.workspace / 'software/.tools'
     root.mkdir(parents=True, exist_ok=True)
     try:
         with FileLock(str(root / 'cache.lock'), timeout=0):
-            values = [_describe(package_id, source, tag, commit, _header(root, source, commit))
-                      for tag, commit in remote_tags(source).items()]
+            values = [_describe(package_id, source, tag, commit, _header(root, source, commit, tool_root=tool_root))
+                      for tag, commit in remote_tags(source, tool_root=tool_root).items()]
             values.sort(key=lambda value: version_key(value.bundle_version), reverse=True)
             channels = set()
             for value in values:
@@ -158,7 +165,7 @@ def list_releases(settings, package_id):
         return _failure(settings, package_id, root, exc)
 
 
-def _snapshot(root, source, tag, commit, header):
+def _snapshot(root, source, tag, commit, header, *, tool_root=None):
     path = root / commit / 'snapshot.json'
     if path.is_file():
         value = json.loads(path.read_text(encoding='utf-8'))
@@ -170,13 +177,13 @@ def _snapshot(root, source, tag, commit, header):
              *[name for name in (manifest.commands, manifest.assessments) if name is not None]]
     if manifest.executable in names or manifest.adapter in names:
         raise ValueError('Executable paths cannot be used as declaration metadata.')
-    repo = _repository(root, source)
-    objects = header.get('objects') or _tree_objects(repo, commit)
+    repo = _repository(root, source, tool_root=tool_root)
+    objects = header.get('objects') or _tree_objects(repo, commit, tool_root=tool_root)
     blobs = sorted({objects[name] for name in names})
-    bundles.git(['--git-dir', str(repo), 'fetch', '--no-tags', '--filter=blob:none', 'origin', *blobs])
+    bundles.git(['--git-dir', str(repo), 'fetch', '--no-tags', '--filter=blob:none', 'origin', *blobs], tool_root=tool_root)
     destination = root / commit / 'metadata'
     destination.mkdir(parents=True, exist_ok=True)
-    bundles.git(['--git-dir', str(repo), '--work-tree', str(destination), 'checkout', commit, '--', *names])
+    bundles.git(['--git-dir', str(repo), '--work-tree', str(destination), 'checkout', commit, '--', *names], tool_root=tool_root)
     actual, operations, nodes = read_bundle(destination)
     value = dict(repository=source, tag=tag, commit=commit, manifest=actual.model_dump(), operations=operations, nodes=nodes,
         localizations=read_bundle_locales(destination, actual, operations),
@@ -189,18 +196,19 @@ def _snapshot(root, source, tag, commit, header):
 def resolve_release(settings, package_id, bundle_version, release_token):
     source = bundles.release(package_id)['repository']
     root = _root(settings, package_id, source)
+    tool_root = settings.workspace / 'software/.tools'
     root.mkdir(parents=True, exist_ok=True)
     try:
         with FileLock(str(root / 'cache.lock'), timeout=0):
             tag = 'v' + bundle_version
-            commit = remote_tags(source).get(tag)
+            commit = remote_tags(source, tool_root=tool_root).get(tag)
             if commit is None:
                 raise ValueError('The selected official tag is no longer available.')
-            header = _header(root, source, commit)
+            header = _header(root, source, commit, tool_root=tool_root)
             selected = _describe(package_id, source, tag, commit, header)
             if not selected.compatible or selected.release_token != release_token:
                 raise ValueError('The selected release changed or is incompatible.')
-            return _snapshot(root, source, tag, commit, header)
+            return _snapshot(root, source, tag, commit, header, tool_root=tool_root)
     except Timeout as exc:
         raise ApiError(409, 'BUNDLE_RELEASE_BUSY', str(exc), message_key='release_check_busy') from exc
     except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError) as exc:

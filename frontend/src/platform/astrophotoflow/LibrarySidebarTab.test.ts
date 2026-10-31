@@ -12,9 +12,11 @@ vi.mock('./canvasDataBridge',()=>({addLibraryDataToCanvas:vi.fn()}))
 
 vi.mock('@/platform/settings/composables/useSettingsDialog',()=>({useSettingsDialog:()=>({show:vi.fn()})}))
 
-vi.mock('@astrophotoflow/ui', async () => {
+vi.mock('@astrophotoflow/ui', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@astrophotoflow/ui')>()
   const { defineComponent } = await import('vue')
   return {
+    ...actual,
     Workspace: defineComponent({
       emits: ['notify-success','notify-import'],
       setup(_props,{expose}){expose({showImportIssue:showIssue})},

@@ -183,7 +183,7 @@ function Expand-ApfTool([string]$File, [string]$Uri, [string]$Sha256, [string]$D
     & $apfPython $apfEntry @apfArguments
     $apfExitCode = $LASTEXITCODE
     if (-not $apfWatch) {
-        $apfChildReport = Get-Content -LiteralPath $apfReceipt -Raw | ConvertFrom-Json
+        $apfChildReport = Get-Content -LiteralPath $apfReceipt -Raw -Encoding UTF8 | ConvertFrom-Json
         if ($apfChildReport.run_id -ne $apfRunId -or -not $apfChildReport.finished_at) {
             throw 'Preparation did not return a receipt for this invocation'
         }

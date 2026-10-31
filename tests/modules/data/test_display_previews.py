@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from astrophotoflow.core.localization import error_message
+
 from io import BytesIO
 import json
 from pathlib import Path
@@ -570,7 +572,7 @@ def test_orphan_generating_record_is_failed_on_restart_and_does_not_block_cleanu
     try:
         with TestClient(restarted) as other:
             state = other.get(base(item) + "/display/status", headers=AUTH).json()
-            assert state["status"] == "failed" and "服务中断" in state["error"]["message"]
+            assert state["status"] == "failed" and state["error"]["message"] == error_message("en", "", "preview_interrupted")
             asset = other.get(f"/api/v1/library/assets/{item['asset_id']}", headers=AUTH).json()
             other.request("DELETE", "/api/v1/library/items", headers=AUTH, json={"items": [{
                 "entry_type": "asset", "id": asset["id"], "revision": asset["revision"], "current_version_id": asset["current_version_id"]}]})

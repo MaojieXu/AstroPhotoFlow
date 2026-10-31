@@ -350,10 +350,28 @@ def test_bootstrap_cache_argument_overrides_environment_before_tools(tmp_path, s
                              "--offline", "--workspace", ".artifacts/workspaces/feature", *cache_args],
                             cwd=tmp_path, env=env, capture_output=True, text=True)
     assert result.returncode == 1
-    assert str(chosen / "toolchains/uv-0.13.5-win-x64.zip") in result.stderr
     report = json.loads(old_receipt.read_text(encoding="utf-8"))
     assert report["run_id"] != "old"
     assert report["cache_dir"] == str(chosen)
+    assert str(chosen / "toolchains/uv-0.13.5-win-x64.zip") in report["error"]
     assert report["completed"] is False and report["ready"] is False
     assert not (tmp_path / "environment-cache").exists()
     assert not (tmp_path / ".artifacts/workspaces/feature").exists()
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows bootstrap")
+def test_bootstrap_reads_utf8_child_receipt_without_corrupting_paths(tmp_path):
+    powershell = Path(os.environ["SystemRoot"]) / "System32/WindowsPowerShell/v1.0/powershell.exe"
+    source = (Path(__file__).resolve().parents[2] / "scripts/bootstrap.ps1").read_text(encoding="utf-8")
+    read_child = next(line for line in source.splitlines() if "$apfChildReport = Get-Content" in line)
+    receipt = tmp_path / "receipt.json"
+    expected = {"workspace": "C:/工作区/开发", "error": "参数无效"}
+    receipt.write_text(json.dumps(expected, ensure_ascii=False), encoding="utf-8")
+    script = tmp_path / "read.ps1"
+    script.write_text("$apfReceipt = '" + str(receipt).replace("'", "''") + "'\n" + read_child +
+                      "\n[IO.File]::WriteAllText($apfReceipt, ($apfChildReport | ConvertTo-Json), "
+                      "(New-Object Text.UTF8Encoding($false)))", encoding="utf-8-sig")
+    env = dict(os.environ)
+    env.pop("PSMODULEPATH", None)
+    subprocess.run([str(powershell), "-NoProfile", "-File", str(script)], env=env, check=True, capture_output=True)
+    assert json.loads(receipt.read_text(encoding="utf-8")) == expected

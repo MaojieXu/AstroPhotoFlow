@@ -312,6 +312,10 @@ def test_bundle_update_plan_is_available_during_active_calls(tmp_path, monkeypat
     monkeypatch.setattr(app_module, 'get_usage', lambda _package: [object()])
     settings = Settings('127.0.0.1', 8190, tmp_path/'data', (), workspace=tmp_path)
     bundle_install(settings)
+    from astrophotoflow.modules.software import bundles
+    original = bundles.release('siril')
+    newer = {**original, 'manifest': {**original['manifest'], 'bundle_version': '0.1.2-dev.2'}}
+    monkeypatch.setattr(bundles, 'release', lambda package_id: newer)
     app = create_app(settings, TOKEN)
     try:
         package = list_packages(settings)[0]
