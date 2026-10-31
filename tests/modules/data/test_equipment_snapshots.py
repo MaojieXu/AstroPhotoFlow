@@ -223,7 +223,7 @@ def test_failed_registration_retry_uses_deleted_equipment_snapshot(service, via,
     camera = equipment(client)
     task_id, content = accept(client, root, camera, via, "root")
     def unavailable(*_args):
-        raise ingestion.IngestionError("SOURCE_UNAVAILABLE", "injected registration failure")
+        raise ingestion.IngestionError("SOURCE_UNAVAILABLE", "injected registration failure", message_key='import_source_unreadable')
     with monkeypatch.context() as patch:
         patch.setattr(ingestion, "_register_asset", unavailable)
         ingestion.process_task(app.state.database, settings, task_id, app.state.import_workers)

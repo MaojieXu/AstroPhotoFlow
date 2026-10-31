@@ -1,4 +1,5 @@
 import { z } from 'zod'
+export const workspaceLocaleSchema = z.object({ locale: z.enum(['en', 'zh']) }).strict()
 
 export const errorSchema = z
   .object({

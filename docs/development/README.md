@@ -11,7 +11,7 @@
 一个长期 Git Manager Chat、多个独立 Feature Chat；集成分支为 `dev`。默认模型 GPT-6.1 Sol High，独立 Reviewer 不继承开发聊天历史。
 
 1. Manager 核对 dev、工作区和已有 Worktree，从确认的已提交 SHA 创建 `codex/<feature>`；复用 Codex 创建的空间并核对实际分支。用户要求时才创建 Feature Chat。
-2. 交接基点、分支、路径、工具／缓存位置及准备等级：源码空间、开发依赖、空 workspace、预览分别说明；不把创建 Chat 自动扩展为构建和启动。
+2. Feature空间默认准备到可见的独立前端：源码空间、开发依赖、空workspace、前端构建、私有CPU runtime、双服务启动及页面展示连续完成。用户明确要求源码空间或依赖等较低等级时才提前结束。交接基点、分支、路径、工具／缓存位置及实际完成等级。
 3. 指定一方执行下方固定入口，另一方读取回执。Manager 使用带 cursor 的状态等待，失败、需用户处理或完成时再读详情；初始化交接不重复整套核对。
 4. Feature 按最终需求实现、编写必要测试、构建及提供独立预览，默认不执行测试套件或综合验收。用户确认可集成后，按授权整理待审提交并暂停修改准确 SHA。
 5. 用户可用下方一次交付 Prompt 一并授权审查、测试、修复、本地合并、普通推送、Feature 空间清理及 Feature Chat 归档。Manager 按此顺序串行执行，不再逐步请求相同授权；审查或验证未通过则不合并、不推送，远端 dev 未包含最终提交则不清理。清理时删除该 Feature 的 workspace、私有 runtime、已合并分支及可安全删除的 Worktree，包含其中的证据、运行数据、依赖和缓存，不额外备份或迁移保留副本；已提交到 Git 的源码和验证记录继续保留。归档对应 Feature Chat，保留 Git Manager Chat 和其他 Feature。只删除本 Feature 私有路径，不删除外部引用的原始素材或共享缓存。用户明确要求暂不推送或保留空间时，以该要求为准。main、tag 和正式发布仍须另行授权；demo 只表示验收环境。Git 忽略的运行数据删除后不能靠 Git 恢复。
@@ -43,9 +43,10 @@ Branch / Base / Commit:
 遵守 AGENTS.md 和 docs/development/README.md。
 核对当前 dev、未提交内容及已有 Worktree，优先复用对应空间。
 从确认的已提交 dev 基点准备 codex/<feature> 分支及独立 Worktree。
-准备等级：[源码空间／开发依赖与空 workspace／构建并启动独立预览]。
-使用固定准备入口，将准确基点 SHA、分支、路径、环境和回执交接给 Feature；
-启动预览时提供实际地址。如涉及独立 Bundle 仓库，分别交接准确基点。
+准备等级：默认完整准备并展示独立前端；仅在这里明确指定较低等级时提前结束。
+由指定的一方使用bootstrap固定入口，默认传入--build --start，连续完成依赖、网页构建、私有runtime和双服务启动。
+就绪后使用回执返回的web_url打开页面并确认加载，交接准确SHA、分支、路径、环境、回执和实际地址。
+分别报告服务就绪、页面打开请求及实际展示结果；queued不等于页面已展示。如涉及独立Bundle仓库，分别交接准确基点。
 不修改正常 dev 实例、默认 workspace 或全局 MCP；暂不推送、不合并。
 ```
 
@@ -98,17 +99,19 @@ Branch / Base / Commit:
 
 ## 安装与构建
 
-在当前 Worktree 根目录执行。下面创建独立开发依赖和空 workspace，不构建、不安装 CPU runtime、不启动服务：
+在当前Worktree根目录执行。Feature默认通过bootstrap选择本地工具、安装／复用依赖、构建网页、准备私有CPU runtime并启动两个服务：
 
 ```powershell
-pnpm dev:prepare --workspace .artifacts/workspaces/feature --service-port 32590 --comfyui-port 32588
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/bootstrap.ps1 --workspace .artifacts/workspaces/feature --service-port 32590 --comfyui-port 32588 --build --start
 ```
+
+启动后按下方[页面展示](#页面展示)完成交接。只有用户明确要求仅准备开发依赖和空workspace时，省略`--build --start`；底层`pnpm dev:prepare`仍保持只准备依赖和workspace的语义，且要求当前进程PATH已选好工具。
 
 入口设置进程级隔离环境，使用本 Worktree 的 `.artifacts/venvs/dev`、`frontend/node_modules`、runtime 和 workspace；不借用其他 checkout 的 venv 或 node_modules，不共用可变 runtime。数据库、令牌、图、软件副本和输入输出独立；默认 workspace 与全局 MCP 不变。
 
-包缓存通过 `--cache-dir <已约定的长期缓存目录>` 或 `ASTROPHOTOFLOW_DEV_CACHE` 复用，由包管理器维护，不复制整套缓存、不直接修改其他 Feature 的缓存。`--offline` 明确使用离线包和元数据；缺失时根据日志补齐，不反复尝试网络。工具和权限问题在实际失败步骤处理，不改产品路径解析或全局 Git 配置。
+包缓存按`--cache-dir <已约定的长期缓存目录>`、`ASTROPHOTOFLOW_DEV_CACHE`、本Worktree的`.artifacts/cache`依次选择，bootstrap工具阶段与依赖阶段共用所选位置。由包管理器维护，不复制整套缓存、不直接修改其他Feature的缓存。托管Python安装在本空间`.artifacts/managed-python`，工具在`.artifacts/toolchains`，两者不互相链接。`--offline`明确使用离线包和元数据；缺失时根据日志补齐，不反复尝试网络。工具和权限问题在实际失败步骤处理，不改产品路径解析或全局Git配置。
 
-终端输出及 `.artifacts/dev-prepare.json` 是本次回执，包含 SHA、脏状态、路径、各阶段耗时、日志和实际地址；失败不表示已准备好。相同输入和完整本地依赖再次准备会跳过安装。成功读取回执，失败读取对应阶段日志；不为等长命令不断搜索源码。
+`.artifacts/dev-prepare.json`是最新调用回执，包含调用标识、参数、起止时间、从bootstrap开始的总耗时、SHA、脏状态、路径、阶段日志及实际地址。开始即清除旧成功状态；日志按调用标识保存在`.artifacts/logs/dev-prepare/<run_id>`。终端Python结果输出后bootstrap还会补齐最终总耗时，交接以磁盘最终回执为准。`completed`表示本次请求完成，`ready`表示服务就绪，都不表示页面已经展示。相同输入和完整本地依赖再次准备会跳过安装。成功读取回执，失败读取对应阶段日志；不为等长命令不断搜索源码。
 
 需要完整构建时：
 
@@ -120,14 +123,22 @@ pnpm build
 
 ## 隔离运行与预览
 
-需要预览时显式启动。入口使用已有本地网页；也可传 `--frontend-assets <同HEAD的构建目录>`。缺少产物时明确失败，首次需要构建则显式加 `--build`：
+默认完整准备使用上述`--build --start`。已有经过确认的同SHA网页时，可省略`--build`或传`--frontend-assets <同HEAD的构建目录>`复用；缺少或版本不匹配时明确失败，不把unknown或其他提交当作当前版本：
 
 ```powershell
 pnpm dev:prepare --workspace .artifacts/workspaces/feature --start
 pnpm build:watch --workspace .artifacts/workspaces/feature --port 32589 --strictPort
 ```
 
-打开 Vite 实际输出的 URL。入口自动使用本地 Python 环境及指定 workspace 的实际网页地址，代理原生 API／WebSocket；Vue／TypeScript／CSS 由 Vite 更新。静态网页的构建 SHA 和当前源码的脏状态分别交接，不将开发预览当成已发布构建。
+默认展示静态网页。需要热更新时才运行上面的`build:watch`，并打开Vite实际输出的URL。入口自动使用本地Python环境及指定workspace的实际网页地址，代理原生API／WebSocket；Vue／TypeScript／CSS由Vite更新。静态网页的构建SHA和当前源码的脏状态分别交接，不将开发预览当成已发布构建。
+
+### 页面展示
+
+Agent读取本次调用回执，核对源码SHA、workspace、`completed`及`ready`，使用`preview.web_url`打开页面，不猜测配置端口。页面打开属于Agent交接动作，不在产品启动脚本中调用系统默认浏览器。
+
+通过浏览器工具确认实际URL、工作台已渲染且没有停在加载或错误页，再报告展示完成。仅HTTP成功或打开请求返回`queued`时，只报告服务就绪／打开请求已提交，保留可点击地址；不能声称页面已经展示。此检查只确认预览加载，不替代功能或用户验收。
+
+交接分别记录空间创建、工具／依赖、网页构建、runtime、服务启动及页面展示的耗时与结果。脚本总耗时不包含创建Worktree、Agent打开页面和用户指令之间的等待，不能混为端到端总耗时。
 
 平台后端 Python 修改后显式停止并重新启动自己的实例；需要同步新静态网页或引擎时先停止，再使用 `--build --start`：
 

@@ -123,6 +123,12 @@ def test_bootstrap_offline_rejects_missing_or_corrupt_archive(tmp_path, corrupt)
     assert result.returncode != 0
     assert ("SHA256 mismatch" if corrupt else "Offline archive missing") in result.stderr
     assert not (tmp_path / ".artifacts/workspaces/dev").exists()
+    receipt = json.loads((tmp_path / ".artifacts/dev-prepare.json").read_text(encoding="utf-8"))
+    assert receipt["completed"] is False
+    assert receipt["ready"] is False
+    assert receipt["started_at"] and receipt["finished_at"]
+    assert receipt["stages"][0]["exit_code"] == 1
+    assert Path(receipt["stages"][0]["log"]).is_file()
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="Windows bootstrap")
@@ -132,7 +138,14 @@ def test_bootstrap_reuses_compatible_tools_until_version_process_exits(tmp_path)
     scripts = tmp_path / "scripts"
     scripts.mkdir()
     (scripts / "bootstrap.ps1").write_bytes(source.read_bytes())
-    (scripts / "dev_prepare.py").write_text('from pathlib import Path; Path("prepared").touch()\n', encoding="utf-8")
+    (scripts / "dev_prepare.py").write_text(
+        'import json\nfrom pathlib import Path\n'
+        'Path("prepared").touch()\n'
+        'receipt = Path(".artifacts/dev-prepare.json")\n'
+        'report = json.loads(receipt.read_text(encoding="utf-8-sig"))\n'
+        'report.update(completed=True, finished_at="2026-10-30T23:00:00Z")\n'
+        'receipt.write_text(json.dumps(report), encoding="utf-8")\n', encoding="utf-8"
+    )
     (tmp_path / "package.json").write_text('{"packageManager":"pnpm@11.13.1"}', encoding="utf-8")
     binaries = tmp_path / "bin"
     binaries.mkdir()
@@ -154,6 +167,10 @@ def test_bootstrap_reuses_compatible_tools_until_version_process_exits(tmp_path)
     assert result.returncode == 0, result.stderr
     assert (tmp_path / "prepared").exists()
     assert not (tmp_path / ".artifacts/cache/toolchains").exists()
+    receipt = json.loads((tmp_path / ".artifacts/dev-prepare.json").read_text(encoding="utf-8"))
+    assert receipt["completed"] is True
+    assert receipt["stages"][0]["exit_code"] == 0
+    assert receipt["elapsed_seconds"] >= receipt["stages"][0]["elapsed_seconds"]
 
 
 @pytest.mark.parametrize("control_state", ["unknown", "starting", "stopping"])
@@ -228,3 +245,115 @@ def test_actual_frontend_sync_removes_obsolete_assets_and_matches(preparer, tmp_
     install_frontend(workspace, assets)
     assert not (installed / "old.js").exists()
     assert module.frontend_matches(assets, installed)
+
+
+def test_managed_python_is_separate_from_tools(preparer, tmp_path):
+    module, _, _ = preparer
+    env = module.environment(tmp_path / ".artifacts/workspaces/feature")
+    assert Path(env["UV_PYTHON_INSTALL_DIR"]) == tmp_path / ".artifacts/managed-python"
+
+
+def test_invalid_arguments_replace_previous_success_receipt(preparer, tmp_path, monkeypatch):
+    module, commands, _ = preparer
+    monkeypatch.setattr(sys, "argv", ["dev_prepare", "--workspace", str(tmp_path / ".artifacts/workspaces/feature")])
+    assert module.main() == 0
+    path = tmp_path / ".artifacts/dev-prepare.json"
+    previous = json.loads(path.read_text(encoding="utf-8"))
+    commands.clear()
+    monkeypatch.setattr(sys, "argv", ["dev_prepare", "--workspace", str(tmp_path / "outside")])
+    assert module.main() == 2
+    failed = json.loads(path.read_text(encoding="utf-8"))
+    assert failed["run_id"] != previous["run_id"]
+    assert failed["completed"] is False and failed["ready"] is False
+    assert failed["arguments"][-1] == str(tmp_path / "outside")
+    assert failed["started_at"] and failed["finished_at"]
+    assert "参数" in failed["error"]
+    assert not commands
+
+
+def test_build_failure_stops_before_runtime_and_start(preparer, tmp_path, monkeypatch):
+    module, commands, _ = preparer
+    original_run = module.subprocess.run
+
+    def fail_build(command, **kwargs):
+        if command == ["pnpm", "build"]:
+            commands.append(command)
+            return subprocess.CompletedProcess(command, 1, stdout="type check failed")
+        return original_run(command, **kwargs)
+
+    monkeypatch.setattr(module.subprocess, "run", fail_build)
+    monkeypatch.setattr(sys, "argv", ["dev_prepare", "--workspace", str(tmp_path / ".artifacts/workspaces/feature"),
+                                      "--build", "--start"])
+    assert module.main() == 1
+    assert not any("runtime" in command or "start" in command or "create" in command for command in commands)
+    report = json.loads((tmp_path / ".artifacts/dev-prepare.json").read_text(encoding="utf-8"))
+    assert not report["completed"] and not report["ready"]
+    stage = report["stages"][-1]
+    assert stage["name"] == "build" and stage["exit_code"] == 1
+    assert Path(stage["log"]).read_text(encoding="utf-8") == "type check failed"
+    assert Path(stage["log"]).parent.name == report["run_id"]
+
+
+@pytest.mark.parametrize("start_state", ["completed", "failed"])
+def test_full_prepare_builds_then_prepares_runtime_and_reports_start(preparer, tmp_path, monkeypatch, start_state):
+    module, commands, _ = preparer
+    original_run = module.subprocess.run
+
+    def full_run(command, **kwargs):
+        if command == ["pnpm", "build"]:
+            commands.append(command)
+            assets = tmp_path / ".artifacts/build/frontend"
+            assets.mkdir(parents=True)
+            (assets / "index.html").touch()
+            (assets / "build-manifest.json").write_text(
+                '{"commit":"base-sha","distribution":"localhost"}', encoding="utf-8"
+            )
+            return subprocess.CompletedProcess(command, 0, stdout="built")
+        if "runtime" in command or "start" in command:
+            commands.append(command)
+            if "runtime" in command:
+                kwargs["stderr"].write("runtime dependency preparation warning\n")
+            result = {"runtime": "private", "reused": False} if "runtime" in command else {
+                "state": start_state, "web_url": "http://127.0.0.1:32618", "service_url": "http://127.0.0.1:32620"
+            }
+            return subprocess.CompletedProcess(command, 0, stdout=json.dumps(result))
+        return original_run(command, **kwargs)
+
+    monkeypatch.setattr(module.subprocess, "run", full_run)
+    monkeypatch.setattr(sys, "argv", ["dev_prepare", "--workspace", str(tmp_path / ".artifacts/workspaces/feature"),
+                                      "--build", "--start"])
+    assert module.main() == (0 if start_state == "completed" else 1)
+    report = json.loads((tmp_path / ".artifacts/dev-prepare.json").read_text(encoding="utf-8"))
+    assert report["completed"] is (start_state == "completed")
+    assert report["ready"] is (start_state == "completed")
+    assert report["preview"]["web_url"] == "http://127.0.0.1:32618"
+    names = [stage["name"] for stage in report["stages"]]
+    assert names.index("build") < names.index("runtime") < names.index("workspace") < names.index("start")
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows bootstrap")
+@pytest.mark.parametrize("style", ["separate", "equals"])
+def test_bootstrap_cache_argument_overrides_environment_before_tools(tmp_path, style):
+    powershell = Path(os.environ["SystemRoot"]) / "System32/WindowsPowerShell/v1.0/powershell.exe"
+    source = Path(__file__).resolve().parents[2] / "scripts/bootstrap.ps1"
+    script = tmp_path / "scripts/bootstrap.ps1"
+    script.parent.mkdir()
+    script.write_bytes(source.read_bytes())
+    old_receipt = tmp_path / ".artifacts/dev-prepare.json"
+    old_receipt.parent.mkdir()
+    old_receipt.write_text('{"run_id":"old","completed":true,"ready":true}', encoding="utf-8")
+    chosen = tmp_path / "chosen cache"
+    env = {**os.environ, "PATH": "", "ASTROPHOTOFLOW_DEV_CACHE": str(tmp_path / "environment-cache")}
+    env.pop("PSMODULEPATH", None)
+    cache_args = ["--cache-dir", str(chosen)] if style == "separate" else [f"--cache-dir={chosen}"]
+    result = subprocess.run([str(powershell), "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(script),
+                             "--offline", "--workspace", ".artifacts/workspaces/feature", *cache_args],
+                            cwd=tmp_path, env=env, capture_output=True, text=True)
+    assert result.returncode == 1
+    assert str(chosen / "toolchains/uv-0.13.5-win-x64.zip") in result.stderr
+    report = json.loads(old_receipt.read_text(encoding="utf-8"))
+    assert report["run_id"] != "old"
+    assert report["cache_dir"] == str(chosen)
+    assert report["completed"] is False and report["ready"] is False
+    assert not (tmp_path / "environment-cache").exists()
+    assert not (tmp_path / ".artifacts/workspaces/feature").exists()

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { uiT } from '../../../core/i18n'
+
 import { computed, inject, onBeforeUnmount, ref, watch } from 'vue'
 import { assetApi } from '../api/index'
 import PhotoPreviewDialog, { type PreviewPhoto } from './PhotoPreviewDialog.vue'
@@ -29,7 +31,7 @@ function openMember(member: FixedMember) {
     member: async (position, signal) => {
       if (signal.aborted) throw new DOMException('Aborted', 'AbortError')
       const selected = members[position]
-      if (!selected) throw new ApiClientError('固定成员超出范围。', 'contract')
+      if (!selected) throw new ApiClientError(uiT('apfUi.fixed_member_is_out_of_range'), 'contract')
       return selected
     }
   }
@@ -44,7 +46,7 @@ async function refreshThumbnail(photo: PreviewPhoto) {
       if (urls.value[member.id]) URL.revokeObjectURL(urls.value[member.id]!)
       urls.value[member.id] = URL.createObjectURL(blob)
     }
-  } catch (cause) { if (current === generation) refreshError.value = cause instanceof Error ? cause.message : '缩略图刷新失败。' }
+  } catch (cause) { if (current === generation) refreshError.value = cause instanceof Error ? cause.message : uiT('apfUi.could_not_refresh_the_thumbnail') }
 }
 watch([open, page, () => props.members], async () => {
   const current = ++generation
@@ -63,11 +65,11 @@ onBeforeUnmount(() => { generation++; clear() })
 
 <template>
   <div class="apf-fixed-members" @click.stop>
-    <button type="button" :aria-expanded="open" @click="open=!open">查看固定版本 · {{ members.length }} 张</button>
-    <section v-if="open" aria-label="固定版本照片">
+    <button type="button" :aria-expanded="open" @click="open=!open">{{ $t('apfUi.view_fixed_version_photos_value', { p0: (members.length) }) }}</button>
+    <section v-if="open" :aria-label="$t('apfUi.fixed_version_photos')">
       <p v-if="refreshError" role="alert">{{ refreshError }}</p>
-      <ul><li v-for="member in visible" :key="member.id"><button type="button" :aria-label="'查看 ' + member.asset.name + ' 大图'" @click="openMember(member)"><img v-if="urls[member.id]" :src="urls[member.id]" alt="" /><span>{{ member.asset.name }}</span></button></li></ul>
-      <nav v-if="members.length>10" aria-label="固定版本照片分页"><button type="button" :disabled="page===0" @click="page--">上一页</button><span>{{ page+1 }} / {{ Math.ceil(members.length/10) }}</span><button type="button" :disabled="(page+1)*10>=members.length" @click="page++">下一页</button></nav>
+      <ul><li v-for="member in visible" :key="member.id"><button type="button" :aria-label="$t('apfUi.view') + member.asset.name + $t('apfUi.full_size')" @click="openMember(member)"><img v-if="urls[member.id]" :src="urls[member.id]" alt="" /><span>{{ member.asset.name }}</span></button></li></ul>
+      <nav v-if="members.length>10" :aria-label="$t('apfUi.fixed_version_photo_pagination')"><button type="button" :disabled="page===0" @click="page--">{{ $t('apfUi.previous_page') }}</button><span>{{ page+1 }} / {{ Math.ceil(members.length/10) }}</span><button type="button" :disabled="(page+1)*10>=members.length" @click="page++">{{ $t('apfUi.next_page') }}</button></nav>
     </section>
     <component :is="controls.mediaViewer" v-if="controls?.mediaViewer && mediaRequest" :request="mediaRequest" @close="mediaRequest=undefined" />
     <PhotoPreviewDialog v-else :photo="photo" @close="photo=undefined" @updated="refreshThumbnail" />

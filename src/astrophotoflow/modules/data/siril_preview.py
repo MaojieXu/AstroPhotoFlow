@@ -71,17 +71,17 @@ def prepare_siril_sample(database, settings, cache, body, check_cancel, decoder_
         path = _asset_path(settings, version)
         stamp = path.stat()
         if version.availability != "available" or version.byte_size != stamp.st_size:
-            raise ApiError(409, "SOURCE_UNAVAILABLE", "原件尚未就绪或已经变化。")
+            raise ApiError(409, "SOURCE_UNAVAILABLE", "原件尚未就绪或已经变化。", message_key='the_original_is_not_ready_or_has_changed')
         category = (version.scientific_metadata or {}).get("format")
         if category not in {"fits", "xisf", "image", "raw"}:
-            raise ApiError(422, "UNSUPPORTED_SELECTION", "实时显示样本需要固定静态图像；视频和数值数组不能作为该预览输入。")
+            raise ApiError(422, "UNSUPPORTED_SELECTION", "实时显示样本需要固定静态图像；视频和数值数组不能作为该预览输入。", message_key='live_display_samples_require_a_fixed_still_image_videos_and_numeric_arrays_')
         if body.reference.kind == "asset_version":
             selection = body.reference.selection
         else:
             selection = body.reference.members[body.member_index].selection
         hdu = selection.hdu_index or 0
         if hdu != 0 or selection.kind != "whole_file":
-            raise ApiError(422, "UNSUPPORTED_SELECTION", "该实时样本预览使用默认图像HDU，不支持任意HDU选择。")
+            raise ApiError(422, "UNSUPPORTED_SELECTION", "该实时样本预览使用默认图像HDU，不支持任意HDU选择。", message_key='this_live_sample_preview_uses_the_default_image_hdu_arbitrary_hdu_selection')
         identity = json.dumps([str(item.asset_version_id), version.content_hash, stamp.st_size, stamp.st_mtime_ns, str(body.consumer_id), hdu, decoder_key])
         key = hashlib.sha256(identity.encode()).hexdigest()[:40]
         algorithm = "siril-live-1:" + key
@@ -121,7 +121,7 @@ def prepare_siril_sample(database, settings, cache, body, check_cancel, decoder_
                 check_cancel()
                 after = path.stat()
                 if (stamp.st_size, stamp.st_mtime_ns) != (after.st_size, after.st_mtime_ns):
-                    raise ApiError(409, "SOURCE_CHANGED", "准备线性预览时原件发生变化。")
+                    raise ApiError(409, "SOURCE_CHANGED", "准备线性预览时原件发生变化。", message_key='the_original_changed_while_preparing_the_linear_preview')
                 temporary.replace(sample.path)
             finally:
                 temporary.unlink(missing_ok=True)

@@ -145,6 +145,11 @@ class SoftwarePlanSummary(StrictModel):
     restart_reason: str | None
     node_changes: list[SoftwarePlanNodeChange]
     workflow_impacts: list[WorkflowImpact]
+    current_bundle_version: str | None = None
+    target_bundle_version: str | None = None
+    target_tag: str | None = None
+    target_commit: str | None = None
+    release_token: str | None = None
 
 
 class PendingSoftwareAction(StrictModel):

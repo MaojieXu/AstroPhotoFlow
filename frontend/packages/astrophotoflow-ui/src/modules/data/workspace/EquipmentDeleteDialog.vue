@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { uiT } from '../../../core/i18n'
+
 import { ref, watch } from 'vue'
 import { z } from 'zod'
 import { assetApi } from '../api/index'
@@ -27,7 +29,7 @@ async function loadPreview() {
     const result = await assetApi.send('/astrophotoflow/api/v1/equipment-management/delete-preview',previewSchema,'POST',{items:props.items})
     if (current === generation) preview.value = result
   } catch (cause) {
-    if (current === generation) error.value = cause instanceof Error ? cause.message : '删除影响读取失败。'
+    if (current === generation) error.value = cause instanceof Error ? cause.message : uiT('apfUi.could_not_read_deletion_impact')
   } finally {if (current === generation) loading.value = false}
 }
 watch(()=>props.items,()=>{void loadPreview()},{immediate:true})
@@ -40,16 +42,16 @@ async function remove() {
     emit('deleted'); emit('close')
   } catch (cause) {
     preview.value = undefined
-    error.value = cause instanceof Error ? cause.message : '删除失败。请核对当前记录后重试。'
+    error.value = cause instanceof Error ? cause.message : uiT('apfUi.could_not_delete_check_the_current_record_before_retrying')
   } finally {busy.value = false}
 }
 </script>
 
 <template>
-  <LibraryDialog :open="!!items" title="确认删除" :busy="busy" @close="emit('close')">
+  <LibraryDialog :open="!!items" :title="$t('apfUi.confirm_deletion')" :busy="busy" @close="emit('close')">
     <div class="apf-equipment-dialog-body">
-      <p>删除后无法恢复。已有素材和已受理任务保留当时的设备资料。</p>
-      <p v-if="loading" role="status">正在读取删除影响…</p>
+      <p>{{ $t('apfUi.deletion_cannot_be_undone_existing_assets_and_accepted_tasks_retain_th') }}</p>
+      <p v-if="loading" role="status">{{ $t('apfUi.reading_deletion_impact') }}</p>
       <p v-if="error" role="alert">{{error}}</p>
       <template v-if="preview">
         <ul><li v-for="item in preview.items" :key="item.entry_type+item.id">{{item.name}}</li></ul>
@@ -60,9 +62,9 @@ async function remove() {
       </template>
     </div>
       <footer class="apf-equipment-dialog-footer">
-        <LibraryButton type="button" :disabled="busy" @click="emit('close')">取消</LibraryButton>
-        <LibraryButton v-if="error" type="button" :disabled="loading||busy" @click="loadPreview">重新读取影响</LibraryButton>
-        <LibraryButton type="button" :disabled="!preview||loading||busy" @click="remove">{{busy?'删除中…':'确认删除'}}</LibraryButton>
+        <LibraryButton type="button" :disabled="busy" @click="emit('close')">{{ $t('apfUi.cancel') }}</LibraryButton>
+        <LibraryButton v-if="error" type="button" :disabled="loading||busy" @click="loadPreview">{{ $t('apfUi.read_impact_again') }}</LibraryButton>
+        <LibraryButton type="button" :disabled="!preview||loading||busy" @click="remove">{{busy?$t('apfUi.deleting'):$t('apfUi.confirm_deletion')}}</LibraryButton>
       </footer>
   </LibraryDialog>
 </template>

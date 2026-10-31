@@ -24,7 +24,7 @@ router = APIRouter(prefix="/api/v1", responses=ERROR_RESPONSES)
 def _publish_dataset_version(session, dataset: Dataset, submitted_ids: list[str], relative_paths: dict[str, str | None] | None = None,
                              calibration_defaults: dict | None = None, member_overrides: dict[str, dict] | None = None) -> DatasetVersion:
     if len(set(submitted_ids)) != len(submitted_ids):
-        raise ApiError(422, "VALIDATION_ERROR", "数据集成员不能重复。", [{"path": "asset_version_ids", "message": "成员版本 ID 不能重复。"}])
+        raise ApiError(422, "VALIDATION_ERROR", "数据集成员不能重复。", [{"path": "asset_version_ids", "message": "成员版本 ID 不能重复。"}], message_key='dataset_members_must_not_be_duplicated', field_message_keys={'asset_version_ids': 'field_member_duplicate'})
     existing = []
     if dataset.current_version_id:
         existing = session.scalars(
@@ -35,21 +35,21 @@ def _publish_dataset_version(session, dataset: Dataset, submitted_ids: list[str]
     submitted_old = [value for value in submitted_ids if value in set(old_ids)]
     retained_old = [value for value in old_ids if value in set(submitted_ids)]
     if retained_old != submitted_old:
-        raise ApiError(422, "VALIDATION_ERROR", "已有成员必须保留原有相对顺序，新成员只能追加。", [{"path": "asset_version_ids", "message": "不得重排已有成员。"}])
+        raise ApiError(422, "VALIDATION_ERROR", "已有成员必须保留原有相对顺序，新成员只能追加。", [{"path": "asset_version_ids", "message": "不得重排已有成员。"}], message_key='retained_members_must_keep_their_relative_order_new_members_may_only_be_app', field_message_keys={'asset_version_ids': 'field_member_order'})
     additions = [value for value in submitted_ids if value not in set(old_ids)]
     if submitted_ids != retained_old + additions:
-        raise ApiError(422, "VALIDATION_ERROR", "新成员必须追加到保留成员之后。", [{"path": "asset_version_ids", "message": "新成员只能追加。"}])
+        raise ApiError(422, "VALIDATION_ERROR", "新成员必须追加到保留成员之后。", [{"path": "asset_version_ids", "message": "新成员只能追加。"}], message_key='new_members_must_follow_the_retained_members', field_message_keys={'asset_version_ids': 'field_member_append'})
     for version_id in additions:
         asset, _ = _asset_version_scope(session, None, UUID(version_id))
         if asset.scope != "shared":
-            raise invalid_reference("共享数据集只能包含共享资产。")
+            raise invalid_reference("共享数据集只能包含共享资产。", message_key='shared_datasets_may_contain_only_shared_assets')
     previous_version = session.get(DatasetVersion, dataset.current_version_id) if dataset.current_version_id else None
     previous_defaults = previous_version.calibration_defaults if previous_version else {}
     defaults = dict(previous_defaults) if calibration_defaults is None else calibration_defaults
     retained_overrides = {member.asset_version_id: dict(member.calibration_overrides) for member in existing}
     overrides = member_overrides or {}
     if set(overrides) - set(submitted_ids):
-        raise invalid_reference("成员校准覆盖必须属于本次完整成员列表。")
+        raise invalid_reference("成员校准覆盖必须属于本次完整成员列表。", message_key='member_calibration_overrides_must_belong_to_the_full_member_list_in_this_re')
     validate_bindings(session, defaults, previous_defaults)
     for version_id, bindings in overrides.items():
         validate_bindings(session, bindings, retained_overrides.get(version_id, {}))
@@ -156,7 +156,7 @@ def update_dataset_member_parameters(
     if dataset is None:
         raise not_found()
     if dataset.revision != body.base_revision or dataset.current_version_id != shared._id(body.base_version_id):
-        raise ApiError(409, "REVISION_CONFLICT", "数据集成员已变化，请重新读取后保存。")
+        raise ApiError(409, "REVISION_CONFLICT", "数据集成员已变化，请重新读取后保存。", message_key='dataset_membership_has_changed_read_it_again_before_saving')
     members = session.scalars(
         select(DatasetMember).where(DatasetMember.dataset_version_id == dataset.current_version_id)
         .order_by(DatasetMember.position)
@@ -165,14 +165,14 @@ def update_dataset_member_parameters(
     for member in members:
         version = session.get(AssetVersion, member.asset_version_id)
         if version is None:
-            raise ApiError(409, "REVISION_CONFLICT", "数据集成员版本已变化，请重新读取后保存。")
+            raise ApiError(409, "REVISION_CONFLICT", "数据集成员版本已变化，请重新读取后保存。", message_key='dataset_member_versions_have_changed_read_them_again_before_saving')
         asset_by_id[version.asset_id] = session.get(Asset, version.asset_id)
     submitted = {shared._id(item.asset_id): item.revision for item in body.members}
     if set(submitted) != set(asset_by_id):
-        raise ApiError(409, "REVISION_CONFLICT", "数据集成员已变化，请重新读取后保存。")
+        raise ApiError(409, "REVISION_CONFLICT", "数据集成员已变化，请重新读取后保存。", message_key='dataset_membership_has_changed_read_it_again_before_saving')
     for asset_id, asset in asset_by_id.items():
         if asset is None or asset.revision != submitted[asset_id]:
-            raise ApiError(409, "REVISION_CONFLICT", "素材资料已变化，请重新读取后保存。")
+            raise ApiError(409, "REVISION_CONFLICT", "素材资料已变化，请重新读取后保存。", message_key='asset_metadata_has_changed_read_it_again_before_saving')
 
     parameter_patch = body.parameters.model_dump(exclude_unset=True, mode="json") if body.parameters is not None else {}
     classification_patch = body.classification.model_dump(exclude_unset=True, mode="json") if body.classification is not None else {}
@@ -185,7 +185,7 @@ def update_dataset_member_parameters(
             try:
                 asset.parameters = AssetParameters.model_validate(values).model_dump(mode="json")
             except Exception as exc:
-                raise ApiError(422, "VALIDATION_ERROR", "拍摄参数无效。", [{"path": "parameters", "message": "请检查参数值及设备 ID。"}]) from exc
+                raise ApiError(422, "VALIDATION_ERROR", "拍摄参数无效。", [{"path": "parameters", "message": "请检查参数值及设备 ID。"}], message_key='invalid_capture_parameters', field_message_keys={'parameters': 'field_capture_parameters'}) from exc
             equipment_snapshot = dict(asset.equipment_snapshot or {})
             for key, kind in (("camera_id", "camera"), ("optical_system_id", "optical_system"), ("filter_id", "filter")):
                 if key not in parameter_patch:
@@ -208,7 +208,7 @@ def update_dataset_member_parameters(
             try:
                 asset.classification = AssetClassification.model_validate(classification).model_dump(mode="json")
             except Exception as exc:
-                raise ApiError(422, "VALIDATION_ERROR", "素材分类无效。", [{"path": "classification", "message": "请检查素材形态与帧用途。"}]) from exc
+                raise ApiError(422, "VALIDATION_ERROR", "素材分类无效。", [{"path": "classification", "message": "请检查素材形态与帧用途。"}], message_key='invalid_asset_classification', field_message_keys={'classification': 'field_asset_classification'}) from exc
             asset.role = "calibration" if asset.classification.get("frame_type") in {"bias", "dark", "flat", "dark_flat"} else "raw"
         asset.value_sources = {
             **(asset.value_sources or {}),
@@ -233,7 +233,7 @@ def create_dataset_version(
     if dataset is None:
         raise not_found()
     if dataset.revision != body.base_revision:
-        raise ApiError(409, "REVISION_CONFLICT", "数据集已在其他窗口修改，请重新读取后保存。")
+        raise ApiError(409, "REVISION_CONFLICT", "数据集已在其他窗口修改，请重新读取后保存。", message_key='another_window_changed_the_dataset_read_it_again_before_saving')
     ids = [shared._id(value) for value in body.asset_version_ids]
     relative_paths = {}
     if ids:

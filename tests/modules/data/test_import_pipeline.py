@@ -466,7 +466,7 @@ def test_cancelled_managed_copy_retries_registered_identity_and_preserves_source
         stage.write_bytes(b"partial")
         with app.state.database.write_session() as session:
             session.get(AssetTask, task_id).status = "cancelling"
-        raise ingestion.IngestionError("CANCELLED", "cancel injected")
+        raise ingestion.IngestionError("CANCELLED", "cancel injected", message_key='import_cancelled')
     monkeypatch.setattr(ingestion, "_read_hash_and_copy", cancel_copy)
     ingestion.process_task(app.state.database, settings, task_id, app.state.import_workers)
     cancelled = task(client, task_id)

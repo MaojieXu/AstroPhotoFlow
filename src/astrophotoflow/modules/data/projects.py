@@ -78,7 +78,7 @@ def patch_project(project_id: UUID, body: ProjectPatch, session: WriteSession):
     elif session.get(Project, row_id) is None:
         raise not_found()
     elif session.get(Project, row_id).revision != body.base_revision:
-        raise ApiError(409, "REVISION_CONFLICT", "配置已被其他窗口修改，请重新读取后保存。")
+        raise ApiError(409, "REVISION_CONFLICT", "配置已被其他窗口修改，请重新读取后保存。", message_key='another_window_changed_the_configuration_read_it_again_before_saving')
     else:
         _update_config(session, Project, row_id, body.base_revision, {})
     session.flush()
@@ -185,16 +185,16 @@ def add_project_dataset_reference(project_id: UUID, body: ProjectDatasetReferenc
     dataset = session.get(Dataset, shared._id(body.dataset_id))
     version = session.get(DatasetVersion, shared._id(body.dataset_version_id))
     if dataset is None or version is None or version.dataset_id != dataset.id:
-        raise invalid_reference("数据集版本不属于指定的数据集。")
+        raise invalid_reference("数据集版本不属于指定的数据集。", message_key='the_dataset_version_does_not_belong_to_the_specified_dataset')
     if dataset.status != "active":
-        raise invalid_reference("已归档数据集不能新建项目引用。")
+        raise invalid_reference("已归档数据集不能新建项目引用。", message_key='archived_datasets_cannot_be_added_to_projects')
     _update_project_revision(session, project, body.base_revision)
     existing = session.scalar(select(ProjectDatasetReference).where(
         ProjectDatasetReference.project_id == project_id_text,
         ProjectDatasetReference.dataset_version_id == version.id,
     ))
     if existing:
-        raise ApiError(409, "REVISION_CONFLICT", "项目已引用该数据集版本。")
+        raise ApiError(409, "REVISION_CONFLICT", "项目已引用该数据集版本。", message_key='the_project_already_references_this_dataset_version')
     reference = ProjectDatasetReference(
         id=str(uuid4()), project_id=project_id_text, dataset_id=dataset.id,
         dataset_version_id=version.id, base_revision=body.base_revision + 1, added_at=shared._now(),
@@ -237,12 +237,12 @@ def add_project_asset_reference(project_id: UUID, body: ProjectReferenceCreate, 
         raise not_found()
     asset, version = _asset_version_scope(session, project_id, body.asset_version_id)
     if asset.status != "active":
-        raise invalid_reference("已归档资产不能新建项目引用。")
+        raise invalid_reference("已归档资产不能新建项目引用。", message_key='archived_assets_cannot_be_added_to_projects')
     if session.scalar(select(ProjectAssetReference.id).where(
         ProjectAssetReference.project_id == project_id_text,
         ProjectAssetReference.asset_version_id == version.id,
     )):
-        raise ApiError(409, "REVISION_CONFLICT", "项目已引用该资产版本。")
+        raise ApiError(409, "REVISION_CONFLICT", "项目已引用该资产版本。", message_key='the_project_already_references_this_asset_version')
     _update_project_revision(session, project, body.base_revision)
     reference = ProjectAssetReference(
         id=str(uuid4()), project_id=project_id_text, asset_version_id=version.id, added_at=shared._now()

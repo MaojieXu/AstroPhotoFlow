@@ -1,5 +1,6 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
+import { ref } from 'vue'
 
 import SoftwarePanel from '@ui/modules/software/SoftwarePanel.vue'
 import { ApiClientError } from '@ui/core/client'
@@ -46,9 +47,15 @@ const pending: PendingSoftwareAction = {
 
 const details: SoftwarePackageDetails = { package: packageInfo, current_action: null, result: null }
 const translate = (key: string) => key
+const release = { bundle_version: '0.2.0-dev.1', software_version: '1.4.4', channel: 'dev' as const,
+  tag: 'v0.2.0-dev.1', commit: 'a'.repeat(40), is_latest: true, compatible: true,
+  reason_code: null, reason_parameters: {}, release_token: 'release-token' }
+const releaseList = { package_id: 'siril', releases: [release], checked_at: '2026-10-30T23:00:00Z', stale: false, error: null }
+const releaseValue = release.tag + '@' + release.commit
 
 function client(overrides: Partial<SoftwareClient> = {}): SoftwareClient {
   return {
+    listReleases: vi.fn().mockResolvedValue(releaseList),
     listPackages: vi.fn().mockResolvedValue([packageInfo]),
     listCommands: vi.fn().mockResolvedValue([]),
     getPackage: vi.fn().mockResolvedValue(details),
@@ -60,6 +67,75 @@ function client(overrides: Partial<SoftwareClient> = {}): SoftwareClient {
 }
 
 describe('SoftwarePanel', () => {
+  it('shows every maintained package in its own row', async () => {
+    const other = { ...packageInfo, package_id: 'other', name: 'Other Bundle' }
+    const apiClient = client({ listPackages: vi.fn().mockResolvedValue([packageInfo, other]),
+      getPackage: vi.fn().mockImplementation(id => Promise.resolve({ ...details, package: id === 'siril' ? packageInfo : other })) })
+    const wrapper = mount(SoftwarePanel, { props: { client: apiClient, confirmSoftware: vi.fn(), confirmationAvailable: true, translate } })
+    await flushPromises()
+    expect(wrapper.findAll('[data-testid="software-package-row"]')).toHaveLength(2)
+    expect(apiClient.listReleases).toHaveBeenCalledWith('siril')
+    expect(apiClient.listReleases).toHaveBeenCalledWith('other')
+    wrapper.unmount()
+  })
+
+  it('prefers a compatible stable release and disables an incompatible latest', async () => {
+    const incompatible = { ...release, bundle_version: '2.0.0', channel: 'stable' as const, tag: 'v2.0.0', commit: 'b'.repeat(40), compatible: false, reason_code: 'unsupported_sdk' as const, reason_parameters: { required: '3' }, release_token: null }
+    const stable = { ...release, bundle_version: '1.0.0', channel: 'stable' as const, tag: 'v1.0.0', commit: 'c'.repeat(40), is_latest: false }
+    const apiClient = client({ listReleases: vi.fn().mockResolvedValue({ ...releaseList, releases: [incompatible, release, stable] }) })
+    const wrapper = mount(SoftwarePanel, { props: { client: apiClient, confirmSoftware: vi.fn(), confirmationAvailable: true, translate } })
+    await flushPromises()
+    expect(wrapper.get('select').element.value).toBe(stable.tag + '@' + stable.commit)
+    expect(wrapper.findAll('option').find(option => option.attributes('value') === incompatible.tag + '@' + incompatible.commit)?.attributes('disabled')).toBeDefined()
+    expect(apiClient.requestInstall).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
+  it('retains the selected version during language changes and version refresh', async () => {
+    const language = ref('en')
+    const older = { ...release, tag: 'v0.1.2-dev.1', bundle_version: '0.1.2-dev.1', commit: 'b'.repeat(40), is_latest: false }
+    const newer = { ...release, tag: 'v0.3.0-dev.1', bundle_version: '0.3.0-dev.1', commit: 'c'.repeat(40) }
+    const apiClient = client({ listReleases: vi.fn().mockResolvedValueOnce({ ...releaseList, releases: [release, older] })
+      .mockResolvedValueOnce({ ...releaseList, releases: [newer, release, older] }) })
+    const wrapper = mount(SoftwarePanel, { props: { client: apiClient, confirmSoftware: vi.fn(), confirmationAvailable: true, translate: key => language.value + ':' + key } })
+    await flushPromises()
+    const chosen = older.tag + '@' + older.commit
+    await wrapper.get('select').setValue(chosen)
+    language.value = 'zh'
+    await flushPromises()
+    expect(wrapper.get('select').element.value).toBe(chosen)
+    expect(apiClient.listReleases).toHaveBeenCalledTimes(1)
+    expect(wrapper.text()).toContain('zh:apfSoftware.channel.dev')
+    await wrapper.get('[data-testid="refresh-versions"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('select').element.value).toBe(chosen)
+    expect(apiClient.requestInstall).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
+  it('retains installed controls when version discovery fails', async () => {
+    const apiClient = client({ getPackage: vi.fn().mockResolvedValue({ ...details, package: { ...packageInfo, installed_version: '1.4.4', bundle_version: '0.1.2-dev.1', bundle_commit: 'b'.repeat(40), availability: 'ready' } }),
+      listReleases: vi.fn().mockResolvedValue({ ...releaseList, stale: true, error: { code: 'RELEASE_CHECK_FAILED', message: 'Network', fields: [] } }) })
+    const wrapper = mount(SoftwarePanel, { props: { client: apiClient, confirmSoftware: vi.fn(), confirmationAvailable: true, translate } })
+    await flushPromises()
+    expect(wrapper.get('select').element.value).toBe('__installed__')
+    expect(wrapper.get('[data-testid="request-uninstall"]').attributes('disabled')).toBeUndefined()
+    expect(wrapper.text()).toContain('apfSoftware.releaseCheckFailed')
+    wrapper.unmount()
+  })
+
+  it('creates a new plan when selection differs from the pending target', async () => {
+    const oldPlan = { ...pending, plan: { ...pending.plan, target_bundle_version: '0.1.2-dev.1', target_commit: 'b'.repeat(40) } }
+    const apiClient = client({ getPackage: vi.fn().mockResolvedValue({ ...details, current_action: oldPlan }) })
+    const wrapper = mount(SoftwarePanel, { props: { client: apiClient, confirmSoftware: vi.fn(), confirmationAvailable: true, translate } })
+    await flushPromises()
+    await wrapper.get('[data-testid="software-plan"]').trigger('close')
+    await wrapper.get('[data-testid="request-install"]').trigger('click')
+    await flushPromises()
+    expect(apiClient.requestInstall).toHaveBeenCalledWith('siril', { version: '1.4.4', package_token: 'package-token', bundle_version: release.bundle_version, release_token: release.release_token })
+    wrapper.unmount()
+  })
+
   it('keeps an unsaved final result visible after reload without showing ready or reinstalling', async () => {
     const error = { code: 'SOFTWARE_STATE_SAVE_FAILED', message: '安装结果未能保存，需核对软件状态；请勿直接重复安装。', fields: [] }
     const apiClient = client({ getPackage: vi.fn().mockResolvedValue({ ...details,
@@ -122,9 +198,10 @@ describe('SoftwarePanel', () => {
     const confirmSoftware = vi.fn().mockResolvedValue({ ok: true, pending: { ...update, state: 'completed' } })
     const wrapper = mount(SoftwarePanel, { props: { client: apiClient, confirmSoftware, confirmationAvailable: true, translate } })
     await flushPromises()
+    await wrapper.get('select[aria-label="apfSoftware.bundleVersion"]').setValue(releaseValue)
     await wrapper.get('[data-testid="request-update"]').trigger('click')
     await flushPromises()
-    expect(wrapper.get('[data-testid="confirm-software"]').text()).toBe('apfSoftware.update')
+    expect(wrapper.get('[data-testid="confirm-software"]').text()).toBe('apfSoftware.switchVersion')
     expect(confirmSoftware).not.toHaveBeenCalled()
     await wrapper.get('[data-testid="confirm-software"]').trigger('click')
     await flushPromises()
@@ -168,7 +245,7 @@ describe('SoftwarePanel', () => {
 
     expect(apiClient.requestInstall).toHaveBeenCalledWith('siril', {
       version: '1.4.4',
-      package_token: 'package-token'
+      package_token: 'package-token', bundle_version: release.bundle_version, release_token: release.release_token
     })
     expect(confirmSoftware).not.toHaveBeenCalled()
     expect(wrapper.find('[data-testid="confirm-software"]').exists()).toBe(true)

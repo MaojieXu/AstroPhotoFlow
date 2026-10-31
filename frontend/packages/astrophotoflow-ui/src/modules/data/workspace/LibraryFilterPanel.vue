@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { uiT } from '../../../core/i18n'
+
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { assetApi } from '../api/index'
 import { libraryFilterOptionsSchema } from '../api/contracts'
@@ -14,10 +16,10 @@ const draft = ref<Filters>(JSON.parse(JSON.stringify(props.filters)))
 const error = ref('')
 const panel = ref<HTMLElement>()
 const placement = ref({left:10,top:54,width:380,height:400,maxWidth:420,maxHeight:560,minWidth:280,minHeight:240})
-const numericFields = [
-  ['exposure_seconds','单帧曝光（秒）'],['integration_seconds','累计曝光（秒）'],
-  ['sensor_temperature_c','温度（°C）'],['iso','ISO'],['gain','Gain'],['offset','Offset']
-] as const
+const numericFields = computed(() => [
+  ['exposure_seconds',uiT('apfUi.exposure_per_frame_seconds')],['integration_seconds',uiT('apfUi.total_exposure_seconds')],
+  ['sensor_temperature_c',uiT('apfUi.temperature_c')],['iso','ISO'],['gain','Gain'],['offset','Offset']
+] as const)
 const groups = ref<Group[]>([])
 const empty = computed(() => Boolean(options.value) && !groups.value.some(group => group.values.length) && !Object.keys(options.value!.numeric_ranges).length)
 let optionsRequest = 0
@@ -77,18 +79,18 @@ async function loadOptions(){
     if(request!==optionsRequest)return
     options.value=result
     groups.value=[
-      {key:'frame_classes',label:'素材形态',values:result.frame_classes},
-      {key:'frame_types',label:'帧用途',values:result.frame_types},
-      {key:'roles',label:'分类',values:result.roles},
-      {key:'camera_id',label:'相机',values:result.equipment.camera_id.map(item=>item.id),labels:result.equipment.camera_id},
-      {key:'optical_system_id',label:'成像系统',values:result.equipment.optical_system_id.map(item=>item.id),labels:result.equipment.optical_system_id},
-      {key:'filter_id',label:'滤镜',values:result.equipment.filter_id.map(item=>item.id),labels:result.equipment.filter_id},
-      {key:'parameter_mode',label:'增益模式',values:result.parameter_modes},
+      {key:'frame_classes',get label() { return uiT('apfUi.asset_form') },values:result.frame_classes},
+      {key:'frame_types',get label() { return uiT('apfUi.frame_use') },values:result.frame_types},
+      {key:'roles',get label() { return uiT('apfUi.classification') },values:result.roles},
+      {key:'camera_id',get label() { return uiT('apfUi.camera_dacf07') },values:result.equipment.camera_id.map(item=>item.id),labels:result.equipment.camera_id},
+      {key:'optical_system_id',get label() { return uiT('apfUi.imaging_system') },values:result.equipment.optical_system_id.map(item=>item.id),labels:result.equipment.optical_system_id},
+      {key:'filter_id',get label() { return uiT('apfUi.filter') },values:result.equipment.filter_id.map(item=>item.id),labels:result.equipment.filter_id},
+      {key:'parameter_mode',get label() { return uiT('apfUi.gain_mode') },values:result.parameter_modes},
       {key:'binning',label:'Bin',values:result.bin_values}
     ]
     await nextTick()
     placePanel()
-  }catch{error.value='无法读取素材库筛选选项。'}
+  }catch{error.value=uiT('apfUi.could_not_read_library_filter_options')}
 }
 watch(()=>props.filters,value=>{draft.value=copyFilters(value)},{deep:true})
 onMounted(()=>{
@@ -105,12 +107,12 @@ onBeforeUnmount(()=>{optionsRequest++;resizeObserver?.disconnect();window.remove
 </script>
 
 <template>
-  <section ref="panel" class="apf-filter-panel" aria-label="素材筛选"
+  <section ref="panel" class="apf-filter-panel" :aria-label="$t('apfUi.asset_filters')"
     :style="{left:placement.left+'px',top:placement.top+'px',width:placement.width+'px',height:(empty?150:placement.height)+'px',minWidth:placement.minWidth+'px',minHeight:(empty?0:placement.minHeight)+'px',maxWidth:placement.maxWidth+'px',maxHeight:placement.maxHeight+'px'}" @pointerdown.stop>
-    <header><strong>筛选素材</strong></header>
+    <header><strong>{{ $t('apfUi.filter_assets') }}</strong></header>
     <div class="apf-filter-content">
       <p v-if="error" class="apf-error" role="alert">{{error}}</p>
-      <p v-if="!options && !error" role="status">正在读取筛选选项…</p><p v-if="empty">还没有可筛选的素材资料。导入素材后再试。</p>
+      <p v-if="!options && !error" role="status">{{ $t('apfUi.reading_filter_options') }}</p><p v-if="empty">{{ $t('apfUi.no_asset_metadata_to_filter_yet_import_assets_and_try_again') }}</p>
       <template v-if="options">
         <fieldset v-for="group in groups.filter(item=>item.values.length)" :key="group.key">
           <legend>{{group.label}}</legend>
@@ -123,13 +125,13 @@ onBeforeUnmount(()=>{optionsRequest++;resizeObserver?.disconnect();window.remove
           <fieldset v-if="options.numeric_ranges[key]" class="apf-filter-range">
             <legend>{{label}} · {{options.numeric_ranges[key].min}}–{{options.numeric_ranges[key].max}}</legend>
             <template v-if="options.numeric_ranges[key].min!==options.numeric_ranges[key].max">
-              <label class="apf-range-bound"><span>最小值 <output>{{bound(key,'min')}}</output></span>
+              <label class="apf-range-bound"><span>{{ $t('apfUi.minimum_b2dcdc') }}<output>{{bound(key,'min')}}</output></span>
                 <input type="range" :min="options.numeric_ranges[key].min" :max="options.numeric_ranges[key].max" :step="step(key)"
-                  :value="bound(key,'min')" :aria-label="label+' 最小值'" @input="changeBound(key,'min',$event)" @change="apply" />
+                  :value="bound(key,'min')" :aria-label="label+$t('apfUi.minimum')" @input="changeBound(key,'min',$event)" @change="apply" />
               </label>
-              <label class="apf-range-bound"><span>最大值 <output>{{bound(key,'max')}}</output></span>
+              <label class="apf-range-bound"><span>{{ $t('apfUi.maximum_1e7a22') }}<output>{{bound(key,'max')}}</output></span>
                 <input type="range" :min="options.numeric_ranges[key].min" :max="options.numeric_ranges[key].max" :step="step(key)"
-                  :value="bound(key,'max')" :aria-label="label+' 最大值'" @input="changeBound(key,'max',$event)" @change="apply" />
+                  :value="bound(key,'max')" :aria-label="label+$t('apfUi.maximum')" @input="changeBound(key,'max',$event)" @change="apply" />
               </label>
             </template>
             <p v-else class="apf-single-range">{{options.numeric_ranges[key].min}}</p>
@@ -137,7 +139,7 @@ onBeforeUnmount(()=>{optionsRequest++;resizeObserver?.disconnect();window.remove
         </template>
       </template>
     </div>
-    <footer><button type="button" @pointerdown.stop @click="reset">重置</button><button type="button" @pointerdown.stop @click="emit('cancel')">关闭</button></footer>
+    <footer><button type="button" @pointerdown.stop @click="reset">{{ $t('apfUi.reset') }}</button><button type="button" @pointerdown.stop @click="emit('cancel')">{{ $t('apfUi.close') }}</button></footer>
   </section>
 </template>
 

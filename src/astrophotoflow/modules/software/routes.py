@@ -6,6 +6,8 @@ from astrophotoflow.core.http import ERROR_RESPONSES, authenticate
 from astrophotoflow.contracts.software import SirilCommand, SoftwareInstallRequest, SoftwareUninstallRequest, SoftwarePackage, SoftwarePreparation
 from astrophotoflow.contracts.workflows import PendingSoftwareAction, SoftwarePackageDetails
 from astrophotoflow.modules.software.public import get_command_catalog, list_packages, prepare_package
+from astrophotoflow.modules.software.public import list_releases
+from astrophotoflow.contracts.software import SoftwareReleaseListing
 
 
 router = APIRouter(prefix="/api/v1", responses=ERROR_RESPONSES)
@@ -14,6 +16,11 @@ router = APIRouter(prefix="/api/v1", responses=ERROR_RESPONSES)
 @router.get("/software/packages", response_model=list[SoftwarePackage], dependencies=[Depends(authenticate)])
 def get_software_packages(request: Request):
     return list_packages(request.app.state.settings)
+
+
+@router.get('/software/packages/{package_id}/releases', response_model=SoftwareReleaseListing, dependencies=[Depends(authenticate)])
+def get_software_releases(package_id: str, request: Request):
+    return list_releases(request.app.state.settings, package_id)
 
 
 @router.get("/software/packages/{package_id}/versions/{version}/commands", response_model=list[SirilCommand],

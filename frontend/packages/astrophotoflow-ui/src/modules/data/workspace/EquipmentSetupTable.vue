@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { uiT } from '../../../core/i18n'
+
 import { computed, inject } from 'vue'
 import type { EquipmentSetup } from '../api/contracts'
 import type { WorkspaceContext } from './Workspace.vue'
@@ -12,13 +14,13 @@ const {
   managementPagePartiallySelected, toggleManagementSelection, toggleManagementPage, selectRow
 } = inject<WorkspaceContext>('workspace')!
 const equipmentColumns = [
-  { key: 'camera', label: '相机' },
-  { key: 'telescope', label: '望远镜' },
-  { key: 'mount', label: '赤道仪' },
-  { key: 'filter', label: '滤镜' },
-  { key: 'accessory', label: '光学附件' }
+  { key: 'camera', get label() { return uiT('apfUi.camera_dacf07') } },
+  { key: 'telescope', get label() { return uiT('apfUi.telescope') } },
+  { key: 'mount', get label() { return uiT('apfUi.mount') } },
+  { key: 'filter', get label() { return uiT('apfUi.filter') } },
+  { key: 'accessory', get label() { return uiT('apfUi.optical_accessory') } }
 ] as const
-const columns = [{ key: 'name', label: '名称' }, ...equipmentColumns] as const
+const columns = [{ key: 'name', get label() { return uiT('apfUi.name') } }, ...equipmentColumns] as const
 type EquipmentColumn = typeof equipmentColumns[number]['key']
 const equipmentById = computed(() => new Map(relatedEquipment.value.map(item => [item.id, item])))
 const tableRows = computed(() => (rows.value as EquipmentSetup[]).map(setup => {
@@ -27,7 +29,7 @@ const tableRows = computed(() => (rows.value as EquipmentSetup[]).map(setup => {
     const equipment = component.source === 'inline' ? component.equipment : equipmentById.value.get(component.equipment_id)
     if (!equipment) continue
     const kind = equipment.kind === 'optical_system' ? 'telescope' : equipment.kind
-    names[kind].push(equipment.name + (equipment.kind === 'optical_system' ? '（既有成像系统）' : ''))
+    names[kind].push(equipment.name + (equipment.kind === 'optical_system' ? uiT('apfUi.existing_imaging_system') : ''))
   }
   return { setup, names }
 }))
@@ -36,15 +38,13 @@ const unresolvedEquipment = computed(() => (!relatedEquipmentReady.value || rela
 </script>
 
 <template>
-  <p v-if="unresolvedEquipment&&relatedEquipmentError" class="apf-error" role="alert">
-    设备资料读取失败：{{relatedEquipmentError}}
-    <LibraryButton type="button" @click="loadRelatedEquipment(true)">重试</LibraryButton>
+  <p v-if="unresolvedEquipment&&relatedEquipmentError" class="apf-error" role="alert">{{ $t('apfUi.could_not_read_equipment_metadata_value', { p0: (relatedEquipmentError) }) }}<LibraryButton type="button" @click="loadRelatedEquipment(true)">{{ $t('apfUi.retry') }}</LibraryButton>
   </p>
   <div class="apf-table-scroll apf-setup-table-scroll">
-    <table class="apf-assets-table apf-setup-table" aria-label="设备组合列表">
+    <table class="apf-assets-table apf-setup-table" :aria-label="$t('apfUi.equipment_setup_list')">
       <thead>
         <tr>
-          <th v-if="managementSelectMode" class="apf-setup-select-cell"><LibraryCheckbox label="全选当前页" :model-value="managementPageAllSelected" :indeterminate="managementPagePartiallySelected" :disabled="!tableRows.length||managementFilterBlocked||loading" @update:model-value="toggleManagementPage" /></th>
+          <th v-if="managementSelectMode" class="apf-setup-select-cell"><LibraryCheckbox :label="$t('apfUi.select_current_page')" :model-value="managementPageAllSelected" :indeterminate="managementPagePartiallySelected" :disabled="!tableRows.length||managementFilterBlocked||loading" @update:model-value="toggleManagementPage" /></th>
           <th v-for="column in columns" :key="column.key" :class="{'apf-setup-name-cell':column.key==='name'}" :aria-sort="setupSort.by===column.key?(setupSort.order==='asc'?'ascending':'descending'):undefined">
             <LibraryButton type="button" variant="textonly" class="apf-sort-button" :disabled="managementFilterBlocked||loading" @click="toggleSetupSort(column.key)">{{column.label}}<span v-if="setupSort.by===column.key" aria-hidden="true">{{setupSort.order==='asc'?' ▲':' ▼'}}</span></LibraryButton>
           </th>
@@ -52,12 +52,12 @@ const unresolvedEquipment = computed(() => (!relatedEquipmentReady.value || rela
       </thead>
       <tbody v-if="!loading">
         <tr v-for="row in tableRows" :key="row.setup.id" :aria-selected="managementSelectMode?managementSelection.has('equipment-setups:'+row.setup.id):selected?.id===row.setup.id" @click="!managementSelectMode&&selectRow(row.setup)">
-          <td v-if="managementSelectMode" class="apf-setup-select-cell"><LibraryCheckbox :label="'选择 '+row.setup.name" :model-value="managementSelection.has('equipment-setups:'+row.setup.id)" :disabled="managementFilterBlocked" @click.stop @update:model-value="toggleManagementSelection(row.setup)" /></td>
-          <td><LibraryButton type="button" variant="textonly" class="apf-setup-name" :aria-label="'查看组合 '+row.setup.name" :tooltip="row.setup.name" :disabled="managementSelectMode" @click.stop="selectRow(row.setup)">{{row.setup.name}}</LibraryButton></td>
+          <td v-if="managementSelectMode" class="apf-setup-select-cell"><LibraryCheckbox :label="$t('apfUi.select_beb481')+row.setup.name" :model-value="managementSelection.has('equipment-setups:'+row.setup.id)" :disabled="managementFilterBlocked" @click.stop @update:model-value="toggleManagementSelection(row.setup)" /></td>
+          <td><LibraryButton type="button" variant="textonly" class="apf-setup-name" :aria-label="$t('apfUi.view_setup')+row.setup.name" :tooltip="row.setup.name" :disabled="managementSelectMode" @click.stop="selectRow(row.setup)">{{row.setup.name}}</LibraryButton></td>
           <td v-for="column in equipmentColumns" :key="column.key">
-            <span v-if="unresolvedEquipment">{{relatedEquipmentError?'未读取':'读取中…'}}</span>
+            <span v-if="unresolvedEquipment">{{relatedEquipmentError?$t('apfUi.not_read'):$t('apfUi.reading')}}</span>
             <span v-else-if="row.names[column.key].length" class="apf-setup-equipment-cell" :title="row.names[column.key].join('\n')">
-              <span>{{row.names[column.key][0]}}{{row.names[column.key].length>1?' 等 '+row.names[column.key].length+' 件':''}}</span>
+              <span>{{row.names[column.key][0]}}{{row.names[column.key].length>1?$t('apfUi.and_others')+row.names[column.key].length+$t('apfUi.items'):''}}</span>
             </span>
             <span v-else>—</span>
           </td>

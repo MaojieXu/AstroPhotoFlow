@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { uiT } from '../../../core/i18n'
+
 import { onMounted, ref } from 'vue'
 import { ApiClientError } from '../api/client'
 import { assetApi } from '../api/index'
@@ -68,41 +70,41 @@ async function save(){
     )
     emit('saved',current)
   }catch(cause){
-    error.value=cause instanceof ApiClientError?cause.message:'请求失败。'
+    error.value=cause instanceof ApiClientError?cause.message:uiT('apfUi.request_failed')
   }finally{saving.value=false}
 }
-onMounted(()=>{void loadEquipment().catch(cause=>{error.value=cause instanceof Error?cause.message:'设备列表读取失败。'})})
+onMounted(()=>{void loadEquipment().catch(cause=>{error.value=cause instanceof Error?cause.message:uiT('apfUi.could_not_read_the_equipment_list')})})
 </script>
 
 <template>
-  <section class="apf-editor" aria-label="编辑素材资料">
+  <section class="apf-editor" :aria-label="$t('apfUi.edit_asset_metadata')">
     <form @submit.prevent="save">
-      <h2>编辑素材资料</h2>
-      <label>名称<input v-model="draft.name" required /></label>
-      <label>用途角色<select v-model="draft.role" disabled><option value="raw">原始素材</option><option value="calibration">校准素材</option></select><small>由帧用途自动派生</small></label>
-      <label>素材形态<select v-model="draft.classification!.frame_class" @change="changeFrameClass">
+      <h2>{{ $t('apfUi.edit_asset_metadata') }}</h2>
+      <label>{{ $t('apfUi.name') }}<input v-model="draft.name" required /></label>
+      <label>{{ $t('apfUi.asset_role') }}<select v-model="draft.role" disabled><option value="raw">{{ $t('apfUi.raw_asset') }}</option><option value="calibration">{{ $t('apfUi.calibration_asset') }}</option></select><small>{{ $t('apfUi.derived_automatically_from_frame_use') }}</small></label>
+      <label>{{ $t('apfUi.asset_form') }}<select v-model="draft.classification!.frame_class" @change="changeFrameClass">
         <option value="subframe">Subframe</option><option value="masterframe">Masterframe</option><option value="video">Video</option>
       </select></label>
-      <label v-if="draft.classification?.frame_class!=='video'">帧用途<select v-model="draft.classification!.frame_type">
+      <label v-if="draft.classification?.frame_class!=='video'">{{ $t('apfUi.frame_use') }}<select v-model="draft.classification!.frame_type">
         <option value="light">Light</option><option value="bias">Bias</option><option value="dark">Dark</option><option value="flat">Flat</option><option value="dark_flat">Dark Flat</option>
       </select></label>
-      <label>参数填写模式<select v-model="draft.parameters.parameter_mode">
-        <option value="standard">常规</option><option value="iso">ISO</option><option value="gain">Gain／Offset</option>
+      <label>{{ $t('apfUi.parameter_input_mode') }}<select v-model="draft.parameters.parameter_mode">
+        <option value="standard">{{ $t('apfUi.general') }}</option><option value="iso">ISO</option><option value="gain">Gain／Offset</option>
       </select></label>
-      <label>相机<select v-model="draft.parameters.camera_id"><option value="">未指定</option><option v-for="item in equipment.filter(x=>x.kind==='camera')" :key="item.id" :value="item.id">{{item.name}}</option></select></label>
-      <label v-if="['light','flat'].includes(draft.classification?.frame_type||'')">成像系统<select v-model="draft.parameters.optical_system_id"><option value="">未指定</option><option v-for="item in equipment.filter(x=>x.kind==='optical_system')" :key="item.id" :value="item.id">{{item.name}}</option></select></label>
-      <label v-if="['light','flat'].includes(draft.classification?.frame_type||'')">滤镜<select v-model="draft.parameters.filter_id"><option value="">未指定</option><option v-for="item in equipment.filter(x=>x.kind==='filter')" :key="item.id" :value="item.id">{{item.name}}</option></select></label>
+      <label>{{ $t('apfUi.camera_dacf07') }}<select v-model="draft.parameters.camera_id"><option value="">{{ $t('apfUi.not_specified') }}</option><option v-for="item in equipment.filter(x=>x.kind==='camera')" :key="item.id" :value="item.id">{{item.name}}</option></select></label>
+      <label v-if="['light','flat'].includes(draft.classification?.frame_type||'')">{{ $t('apfUi.imaging_system') }}<select v-model="draft.parameters.optical_system_id"><option value="">{{ $t('apfUi.not_specified') }}</option><option v-for="item in equipment.filter(x=>x.kind==='optical_system')" :key="item.id" :value="item.id">{{item.name}}</option></select></label>
+      <label v-if="['light','flat'].includes(draft.classification?.frame_type||'')">{{ $t('apfUi.filter') }}<select v-model="draft.parameters.filter_id"><option value="">{{ $t('apfUi.not_specified') }}</option><option v-for="item in equipment.filter(x=>x.kind==='filter')" :key="item.id" :value="item.id">{{item.name}}</option></select></label>
       <label v-for="field in [
         {key:'iso',label:'ISO',step:'1'}, {key:'gain',label:'Gain',step:'any'}, {key:'offset',label:'Offset',step:'any'},
-        {key:'exposure_seconds',label:'单帧曝光（秒）',step:'any'}, {key:'integration_seconds',label:'累计曝光（秒）',step:'any'},
-        {key:'sensor_temperature_c',label:'传感器实测温度（°C）',step:'any'},
-        {key:'binning_x',label:'水平 Binning',step:'1'}, {key:'binning_y',label:'垂直 Binning',step:'1'}
+        {key:'exposure_seconds',label:$t('apfUi.exposure_per_frame_seconds'),step:'any'}, {key:'integration_seconds',label:$t('apfUi.total_exposure_seconds'),step:'any'},
+        {key:'sensor_temperature_c',label:$t('apfUi.measured_sensor_temperature_c'),step:'any'},
+        {key:'binning_x',label:$t('apfUi.horizontal_binning'),step:'1'}, {key:'binning_y',label:$t('apfUi.vertical_binning'),step:'1'}
       ]" :key="field.key">{{field.label}}<input v-model="draft.parameters[field.key]" type="number" :step="field.step" /></label>
-      <label>CFA 排列<select v-model="draft.parameters.cfa_pattern"><option value="">未指定</option><option>RGGB</option><option>BGGR</option><option>GRBG</option><option>GBRG</option></select></label>
-      <label>多行备注<textarea v-model="draft.notes" rows="4" /></label>
-      <label>状态<select v-model="draft.status"><option value="active">启用</option><option value="archived">归档</option></select></label>
+      <label>{{ $t('apfUi.cfa_pattern') }}<select v-model="draft.parameters.cfa_pattern"><option value="">{{ $t('apfUi.not_specified') }}</option><option>RGGB</option><option>BGGR</option><option>GRBG</option><option>GBRG</option></select></label>
+      <label>{{ $t('apfUi.multiline_notes') }}<textarea v-model="draft.notes" rows="4" /></label>
+      <label>{{ $t('apfUi.status') }}<select v-model="draft.status"><option value="active">{{ $t('apfUi.active') }}</option><option value="archived">{{ $t('apfUi.archive') }}</option></select></label>
       <p v-if="error" class="apf-error" role="alert">{{error}}</p>
-      <footer class="apf-form-actions"><button type="button" @click="emit('close')">取消</button><button type="submit" :disabled="saving">{{saving?'保存中…':'保存'}}</button></footer>
+      <footer class="apf-form-actions"><button type="button" @click="emit('close')">{{ $t('apfUi.cancel') }}</button><button type="submit" :disabled="saving">{{saving?$t('apfUi.saving'):$t('apfUi.save')}}</button></footer>
     </form>
   </section>
 </template>

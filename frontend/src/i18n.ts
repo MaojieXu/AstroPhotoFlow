@@ -1,4 +1,5 @@
 import { createI18n } from 'vue-i18n'
+import { uiMessages, configureUII18n } from '@astrophotoflow/ui'
 
 import {
   getDefaultLocale,
@@ -76,6 +77,8 @@ export async function loadLocale(locale: SupportedLocale): Promise<void> {
         settings.default
       )
 
+      Object.assign(messages, uiMessages[locale])
+
       i18n.global.setLocaleMessage(locale, messages as LocaleMessages)
       loadedLocales.add(locale)
 
@@ -131,6 +134,17 @@ export function mergeCustomNodesI18n(i18nData: Record<string, unknown>): void {
       i18n.global.mergeLocaleMessage(locale, message)
     }
   }
+}
+
+export function mergeBundleNodeI18n(nodeDefinitions: Partial<Record<SupportedLocale, Record<string, unknown>>>) {
+  const merged = { ...customNodesI18nData }
+  for (const [locale, nodeDefs] of Object.entries(nodeDefinitions)) {
+    const existing = merged[locale]
+    const message = existing && typeof existing === 'object' ? existing as Record<string, unknown> : {}
+    const previous = message.nodeDefs && typeof message.nodeDefs === 'object' ? message.nodeDefs : {}
+    merged[locale] = { ...message, nodeDefs: { ...previous, ...nodeDefs } }
+  }
+  mergeCustomNodesI18n(merged)
 }
 
 export type NodeDefTextField = 'display_name' | 'description'
@@ -286,6 +300,7 @@ export function resolveNodeDefSlotText(
 
 // Only include English in the initial bundle; other locales lazy-load.
 const enMessages = buildLocale(en, enNodes, enCommands, enSettings)
+Object.assign(enMessages, uiMessages.en)
 type LocaleMessages = typeof enMessages
 
 const messages: Partial<Record<SupportedLocale, LocaleMessages>> = {
@@ -306,6 +321,8 @@ export const i18n = createI18n({
   missingWarn: /^(?!settings\.Comfy_Locale\.options\.).+/,
   fallbackWarn: /^(?!settings\.Comfy_Locale\.options\.).+/
 })
+
+configureUII18n((key, values) => i18n.global.t(key, values))
 
 /** Convenience shorthand: i18n.global */
 export const t: (typeof i18n.global)['t'] = i18n.global.t

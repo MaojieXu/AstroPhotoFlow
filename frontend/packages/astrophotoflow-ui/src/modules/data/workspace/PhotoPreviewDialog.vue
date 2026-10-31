@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { uiT } from '../../../core/i18n'
+
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { assetApi } from '../api/index'
 import { displayPreviewSchema } from '../api/contracts'
@@ -36,7 +38,7 @@ async function load() {
         timer = setTimeout(() => void read(false), 500)
         return
       }
-      if (state.status !== 'available') throw new Error(state.error?.message ?? '大图预览尚未就绪，请重试。')
+      if (state.status !== 'available') throw new Error(state.error?.message ?? uiT('apfUi.full_size_preview_is_not_ready_please_try_again'))
       if (!state.stretch) {
         void read(true)
         return
@@ -49,7 +51,7 @@ async function load() {
       emit('updated', photo)
     } catch (cause) {
       if (current !== generation) return
-      error.value = cause instanceof Error ? cause.message : '无法读取大图预览。'
+      error.value = cause instanceof Error ? cause.message : uiT('apfUi.could_not_read_the_full_size_preview')
       loading.value = false
     }
   }
@@ -72,11 +74,11 @@ onBeforeUnmount(() => { generation++; clear(); window.removeEventListener('keydo
 
 <template>
   <div v-if="photo" class="apf-photo-backdrop" @click.self="close">
-    <section class="apf-photo-dialog" role="dialog" aria-modal="true" :aria-label="photo.title + ' 大图预览'">
-      <header><strong>{{ photo.title }}</strong><button ref="closeButton" type="button" aria-label="关闭大图预览" @click="close">关闭</button></header>
-      <p v-if="loading" role="status">正在读取大图预览…</p>
-      <div v-else-if="error" class="apf-photo-error"><p role="alert">{{ error }}</p><button type="button" @click="load()">重试</button></div>
-      <div v-else-if="imageUrl" class="apf-photo-stage"><img :src="imageUrl" :alt="photo.title" @error="error='无法显示预览，请重试。'" /></div>
+    <section class="apf-photo-dialog" role="dialog" aria-modal="true" :aria-label="photo.title + $t('apfUi.full_size_preview')">
+      <header><strong>{{ photo.title }}</strong><button ref="closeButton" type="button" :aria-label="$t('apfUi.close_full_size_preview')" @click="close">{{ $t('apfUi.close') }}</button></header>
+      <p v-if="loading" role="status">{{ $t('apfUi.reading_full_size_preview') }}</p>
+      <div v-else-if="error" class="apf-photo-error"><p role="alert">{{ error }}</p><button type="button" @click="load()">{{ $t('apfUi.retry') }}</button></div>
+      <div v-else-if="imageUrl" class="apf-photo-stage"><img :src="imageUrl" :alt="photo.title" @error="error=$t('apfUi.could_not_display_the_preview_please_try_again')" /></div>
     </section>
   </div>
 </template>

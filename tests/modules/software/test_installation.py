@@ -54,6 +54,58 @@ def test_checkout_rejects_tag_moving_before_loading_code(tmp_path, monkeypatch):
     assert release['tag'] in calls[0]
 
 
+@pytest.mark.parametrize('changed', [False, True])
+def test_reference_snapshot_allows_git_eol_conversion_but_rejects_content_changes(tmp_path, monkeypatch, changed):
+    from copy import deepcopy
+    from astrophotoflow.contracts.bundles import BundleManifest
+    selected = deepcopy(bundles.release('siril'))
+    manifest = BundleManifest.model_validate(selected['manifest'])
+    selected['reference_files'] = {}
+    for name in [manifest.commands, manifest.assessments]:
+        if name is None:
+            continue
+        selected['reference_files'][name] = '{\r\n  "value": 1\r\n}\r\n'
+        path = tmp_path / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b'{\n  "value": 2\n}\n' if changed else b'{\n  "value": 1\n}\n')
+    adapter = tmp_path / manifest.adapter
+    adapter.parent.mkdir(parents=True, exist_ok=True)
+    adapter.write_bytes(b'fixture')
+    monkeypatch.setattr(bundles, 'git', lambda args, **kwargs: selected['commit'] if args[0] == 'rev-parse' else '')
+    monkeypatch.setattr(bundles, 'read_bundle', lambda root: (manifest, selected['operations'], selected['nodes']))
+    monkeypatch.setattr(bundles, 'read_bundle_locales', lambda *args: selected.get('localizations', {}))
+    monkeypatch.setattr(bundles.subprocess, 'run', lambda *args, **kwargs: SimpleNamespace(returncode=0, stdout=manifest.version_output))
+    monkeypatch.setattr(bundles, '_adapter', lambda *args: SimpleNamespace(**{name: lambda: None for name in ['build_plan', 'parse_result', 'parse_progress', 'parse_failure']}))
+    if changed:
+        with pytest.raises(ApiError) as failure:
+            bundles.checkout('siril', tmp_path, release_record=selected)
+        assert failure.value.code == 'BUNDLE_VERSION_CHANGED'
+        assert failure.value.message_key == 'bundle_reference_data_does_not_match_the_confirmed_snapshot_nothing_was_ins'
+    else:
+        assert bundles.checkout('siril', tmp_path, release_record=selected) == (manifest, selected['commit'])
+
+
+@pytest.mark.parametrize('locale', ['en', 'zh'])
+def test_install_failure_saves_localized_reason_and_keeps_diagnostic_fields(tmp_path, monkeypatch, locale):
+    from astrophotoflow.core.localization import error_message
+    settings = Settings('127.0.0.1', 8190, tmp_path / 'data', (), workspace=tmp_path)
+    path = tmp_path / 'comfyui-user/default/comfy.settings.json'
+    path.parent.mkdir(parents=True)
+    path.write_text(json.dumps({'Comfy.Locale': locale}), encoding='utf-8')
+    error = ApiError(409, 'BUNDLE_VERSION_CHANGED', '原始中文错误', fields=[{'path': 'reference/assessments.json', 'message': 'original diagnostic'}],
+                     message_key='bundle_reference_data_does_not_match_the_confirmed_snapshot_nothing_was_ins')
+    def fail(*args, **kwargs):
+        raise error
+    monkeypatch.setattr(bundles, 'checkout', fail)
+    package = public.get_package(settings, 'siril')
+    with pytest.raises(ApiError) as failure:
+        asyncio.run(public.install_package(settings, 'siril', '1.4.4', package.package_token))
+    reason = error_message(locale, error.code, error.message_key)
+    saved = public.get_package(settings, 'siril').last_error
+    assert saved.message == reason and saved.fields == error.fields
+    assert error_message(locale, failure.value.code, failure.value.message_key, failure.value.message_params) == error_message(locale, '', 'bundle_installation_failed_p0', {'p0': reason})
+
+
 @pytest.mark.parametrize('partial',[False,True])
 def test_failed_clone_keeps_previous_state_and_removes_staging(tmp_path,monkeypatch,partial):
     settings=Settings('127.0.0.1',8190,tmp_path/'data',(),workspace=tmp_path)

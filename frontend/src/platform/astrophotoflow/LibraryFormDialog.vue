@@ -22,7 +22,9 @@ const { t } = useI18n()
 
 watch(() => title, async () => {
   await nextTick()
-  content.value?.$el.querySelector('[autofocus]')?.focus()
+  if (!open) return
+  const element = content.value?.$el
+  if (element instanceof HTMLElement) element.querySelector<HTMLElement>('[autofocus]')?.focus()
 })
 
 function requestClose() {

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { uiT } from '../../../core/i18n'
+
 import {computed,inject,onBeforeUnmount,ref,watch} from 'vue'
 import {z} from 'zod'
 import {assetApi} from '../api/index'
@@ -34,7 +36,7 @@ function showVersion(row:z.infer<typeof datasetVersionSchema>){
   original.value=JSON.stringify({name:dataset.value!.name,notes:dataset.value!.notes??'',defaults:defaults.value,overrides:overrides.value})
 }
 async function load(){
-  if(dirty.value&&!window.confirm('重新读取将放弃未保存的组说明或校准关联。继续吗？'))return
+  if(dirty.value&&!window.confirm(uiT('apfUi.reading_again_discards_unsaved_group_descriptions_or_calibration_bindi')))return
   loading.value=true;error.value=''
   try{
     dataset.value=await assetApi.get('/astrophotoflow/api/v1/datasets/'+props.datasetId,datasetSchema)
@@ -52,12 +54,12 @@ async function load(){
     name.value=dataset.value.name;notes.value=dataset.value.notes??''
     const row=versions.value.find(row=>row.id===dataset.value!.current_version_id)
     if(row)showVersion(row)
-  }catch(cause){error.value=cause instanceof Error?cause.message:'校准关联读取失败。'}
+  }catch(cause){error.value=cause instanceof Error?cause.message:uiT('apfUi.could_not_read_calibration_bindings')}
   finally{loading.value=false}
 }
 function toggle(event:Event){opened.value=(event.target as HTMLDetailsElement).open;if(opened.value&&!dataset.value)void load()}
 function changeVersion(event:Event){
-  if(dirty.value&&!window.confirm('校准关联有未保存修改。放弃修改吗？')){(event.target as HTMLSelectElement).value=version.value!.id;return}
+  if(dirty.value&&!window.confirm(uiT('apfUi.calibration_bindings_have_unsaved_changes_discard_them'))){(event.target as HTMLSelectElement).value=version.value!.id;return}
   const row=versions.value.find(row=>row.id===(event.target as HTMLSelectElement).value)
   if(row){name.value=dataset.value!.name;notes.value=dataset.value!.notes??'';showVersion(row)}
 }
@@ -69,8 +71,8 @@ async function saveNotes(){
   try{
     dataset.value=await assetApi.send('/astrophotoflow/api/v1/datasets/'+props.datasetId,datasetSchema,'PATCH',{base_revision:dataset.value!.revision,name:name.value,notes:notes.value||null})
     original.value=JSON.stringify({...JSON.parse(original.value),name:name.value,notes:notes.value})
-    notice.value='组说明已保存。';emit('updated',dataset.value)
-  }catch(cause){error.value=cause instanceof Error?cause.message:'组说明保存失败。'}finally{saving.value=false}
+    notice.value=uiT('apfUi.group_description_saved');emit('updated',dataset.value)
+  }catch(cause){error.value=cause instanceof Error?cause.message:uiT('apfUi.could_not_save_the_group_description')}finally{saving.value=false}
 }
 async function saveBindings(){
   saving.value=true;error.value='';notice.value=''
@@ -81,30 +83,30 @@ async function saveBindings(){
     })
     dataset.value=await assetApi.get('/astrophotoflow/api/v1/datasets/'+props.datasetId,datasetSchema)
     versions.value=[saved,...versions.value.filter(row=>row.id!==saved.id)];showVersion(saved)
-    notice.value='已保存固定版本 v'+saved.version_number+' 的校准关联。';emit('updated',dataset.value)
-  }catch(cause){error.value=cause instanceof Error?cause.message:'校准关联保存失败。'}finally{saving.value=false}
+    notice.value=uiT('apfUi.saved_fixed_version_v')+saved.version_number+uiT('apfUi.calibration_bindings');emit('updated',dataset.value)
+  }catch(cause){error.value=cause instanceof Error?cause.message:uiT('apfUi.could_not_save_calibration_bindings')}finally{saving.value=false}
 }
 </script>
 <template>
   <details class="apf-calibration-editor" @toggle="toggle">
-    <summary>组说明、历史版本与校准关联</summary>
-    <p v-if="loading" role="status">正在读取完整组版本…</p>
-    <p v-if="error" role="alert" class="apf-error">{{error}} <LibraryButton type="button" @click="load">重新读取</LibraryButton></p>
+    <summary>{{ $t('apfUi.group_description_history_and_calibration_bindings') }}</summary>
+    <p v-if="loading" role="status">{{ $t('apfUi.reading_the_full_group_version') }}</p>
+    <p v-if="error" role="alert" class="apf-error">{{error}} <LibraryButton type="button" @click="load">{{ $t('apfUi.read_again') }}</LibraryButton></p>
     <template v-if="dataset&&version">
-      <LibraryTextField id="calibration-group-name" v-model="name" name="组名称" :disabled="saving" /><label>场景说明<textarea v-model="notes" :disabled="saving" /></label>
-      <LibraryButton type="button" :disabled="saving" @click="saveNotes">保存组说明</LibraryButton>
-      <label><span>固定组版本<LibraryInfo label="固定组版本" :text="'当前完整版本：'+version.id+'\n列表筛选不会改变本次完整成员范围。校准关联只保存固定版本，不执行校准或合成。'" /></span><select :value="version.id" :disabled="saving" @change="changeVersion"><option v-for="row in versions" :key="row.id" :value="row.id">v{{row.version_number}}{{row.id===dataset.current_version_id?' · 当前':' · 历史只读'}}</option></select></label>
-      <p>完整成员 {{version.members.length}} 张 · 校准关联保存作用于全部成员。</p>
-      <p v-if="!current">历史版本只读。<LibraryInfo label="历史版本" text="项目中已选的旧版关联保持原样。组名称和场景说明显示当前资料。" /></p>
-      <fieldset :disabled="saving||!current"><legend>组默认校准<LibraryInfo label="组默认校准" text="成员默认继承组校准；选择“不使用”明确停用，选择其他目标覆盖组默认值。关联只保存固定版本，不执行校准或合成。" /></legend>
-        <label v-for="frameType in frameTypes" :key="frameType">{{displayLabel(frameType)}}<CalibrationBindingSelect :model-value="defaults[frameType]" :frame-type="frameType" :targets="targets" :label="'组默认 '+displayLabel(frameType)" @update:model-value="setBinding(defaults,frameType,$event)" /></label>
+      <LibraryTextField id="calibration-group-name" v-model="name" :name="$t('apfUi.group_name')" :disabled="saving" /><label>{{ $t('apfUi.description') }}<textarea v-model="notes" :disabled="saving" /></label>
+      <LibraryButton type="button" :disabled="saving" @click="saveNotes">{{ $t('apfUi.save_group_description') }}</LibraryButton>
+      <label><span>{{ $t('apfUi.fixed_group_version') }}<LibraryInfo :label="$t('apfUi.fixed_group_version')" :text="$t('apfUi.current_full_version')+version.id+$t('apfUi.filtering_this_list_does_not_change_the_full_member_selection_calibrat')" /></span><select :value="version.id" :disabled="saving" @change="changeVersion"><option v-for="row in versions" :key="row.id" :value="row.id">v{{row.version_number}}{{row.id===dataset.current_version_id?$t('apfUi.current'):$t('apfUi.read_only_history')}}</option></select></label>
+      <p>{{ $t('apfUi.full_group_value_photos_calibration_changes_apply_to_every_member', { p0: (version.members.length) }) }}</p>
+      <p v-if="!current">{{ $t('apfUi.historical_versions_are_read_only') }}<LibraryInfo :label="$t('apfUi.historical_versions')" :text="$t('apfUi.previously_selected_project_references_remain_unchanged_the_group_name')" /></p>
+      <fieldset :disabled="saving||!current"><legend>{{ $t('apfUi.default_group_calibration') }}<LibraryInfo :label="$t('apfUi.default_group_calibration')" :text="$t('apfUi.members_inherit_group_calibration_by_default_choose_do_not_use_to_disa')" /></legend>
+        <label v-for="frameType in frameTypes" :key="frameType">{{displayLabel(frameType)}}<CalibrationBindingSelect :model-value="defaults[frameType]" :frame-type="frameType" :targets="targets" :label="$t('apfUi.group_default')+displayLabel(frameType)" @update:model-value="setBinding(defaults,frameType,$event)" /></label>
       </fieldset>
-      <div class="apf-calibration-members"><table><thead><tr><th>完整成员列表</th><th v-for="frameType in frameTypes" :key="frameType">{{displayLabel(frameType)}}</th></tr></thead><tbody>
+      <div class="apf-calibration-members"><table><thead><tr><th>{{ $t('apfUi.full_member_list') }}</th><th v-for="frameType in frameTypes" :key="frameType">{{displayLabel(frameType)}}</th></tr></thead><tbody>
         <tr v-for="member in version.members" :key="member.asset_version_id"><th>{{member.asset.name}} · v{{member.version.version_number}}<small>{{displayLabel(member.asset.classification?.frame_type)}}</small></th>
           <td v-for="frameType in frameTypes" :key="frameType"><span>{{displayLabel(frameType)}}</span><CalibrationBindingSelect :model-value="overrides[member.asset_version_id]?.[frameType]" :frame-type="frameType" :targets="targets" inherit :disabled="saving||!current" :label="member.asset.name+' '+displayLabel(frameType)" @update:model-value="setBinding(overrides[member.asset_version_id],frameType,$event)" /></td>
         </tr>
       </tbody></table></div>
-      <LibraryButton type="button" :disabled="saving||!current" @click="saveBindings">保存校准关联为新版本</LibraryButton>
+      <LibraryButton type="button" :disabled="saving||!current" @click="saveBindings">{{ $t('apfUi.save_calibration_bindings_as_a_new_version') }}</LibraryButton>
       <p v-if="notice" role="status">{{notice}}</p>
     </template>
   </details>

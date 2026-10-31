@@ -1,3 +1,4 @@
+from astrophotoflow.core.localization import error_message, exception_error, workspace_locale
 import asyncio
 import json
 import os
@@ -34,7 +35,7 @@ def _save(path: Path, value: dict):
 def _read(settings, prompt_id: UUID, call_id: UUID):
     path = _record_path(settings, prompt_id, call_id)
     if not path.is_file():
-        raise ApiError(404, "RESOURCE_NOT_FOUND", "未找到本次软件调用。")
+        raise ApiError(404, "RESOURCE_NOT_FOUND", "未找到本次软件调用。", message_key='the_software_invocation_was_not_found')
     value = json.loads(path.read_text(encoding="utf-8"))
     return value
 
@@ -49,28 +50,28 @@ def _record_ports(record):
 def _checked_file(settings, prompt_id, call_id, output_index, member_index, *, full=False):
     record = _read(settings, prompt_id, call_id)
     if record['state'] != 'completed':
-        raise ApiError(409, 'OUTPUT_NOT_READY', '该调用尚未完成完整输出检查。')
+        raise ApiError(409, 'OUTPUT_NOT_READY', '该调用尚未完成完整输出检查。', message_key='complete_output_validation_has_not_finished_for_this_invocation')
     ports = _record_ports(record)
     if output_index < 0 or output_index >= len(ports) or member_index < 0 or member_index >= len(ports[output_index]['files']):
-        raise ApiError(404, 'RESOURCE_NOT_FOUND', '没有该输出端口或固定成员。')
+        raise ApiError(404, 'RESOURCE_NOT_FOUND', '没有该输出端口或固定成员。', message_key='the_output_port_or_fixed_member_does_not_exist')
     port = ports[output_index]
     checked = CheckedOutput.model_validate_json(json.dumps(port['files'][member_index]))
     work = (settings.workspace / 'runs' / str(prompt_id) / 'work' / str(call_id)).resolve()
     if checked.run_directory.resolve() != work or not checked.path.resolve().is_relative_to(work):
-        raise ApiError(422, 'INVALID_REFERENCE', '输出位置不属于该调用。')
+        raise ApiError(422, 'INVALID_REFERENCE', '输出位置不属于该调用。', message_key='the_output_location_does_not_belong_to_this_invocation')
     try:
         stamp = checked.path.stat()
         if not checked.path.is_file() or stamp.st_size != checked.byte_size or checked.mtime_ns is not None and stamp.st_mtime_ns != checked.mtime_ns:
-            raise ApiError(409, 'SOURCE_CHANGED', '完整结果在检查后发生变化。')
+            raise ApiError(409, 'SOURCE_CHANGED', '完整结果在检查后发生变化。', message_key='the_complete_result_changed_after_validation')
         if full or checked.mtime_ns is None:
             current = check_output(settings, run_directory=work, path=checked.path, expected_format=checked.format,
                                    allow_empty=checked.format == 'other' and checked.byte_size == 0,
                                    colour_layout=(checked.scientific_metadata or {}).get('colour_layout'))
             if current.content_hash != checked.content_hash:
-                raise ApiError(409, 'SOURCE_CHANGED', '完整结果内容已变化。')
+                raise ApiError(409, 'SOURCE_CHANGED', '完整结果内容已变化。', message_key='the_complete_result_content_has_changed')
             checked = current
     except OSError as exc:
-        raise ApiError(410, 'OUTPUT_UNAVAILABLE', '完整结果已不在运行工作目录中；旧预览不代表原文件仍可用。') from exc
+        raise ApiError(410, 'OUTPUT_UNAVAILABLE', '完整结果已不在运行工作目录中；旧预览不代表原文件仍可用。', message_key='the_complete_result_is_no_longer_in_the_run_directory_an_old_preview_does_n') from exc
     return checked, record, port
 
 
@@ -116,26 +117,26 @@ def _call_summary(record, prompt_id, call_id):
 def _resolve_previous(settings, body: NativeBundleCall, locator: OutputLocator, expected):
     expected_type = expected.type
     if locator.run_id != body.prompt_id:
-        raise ApiError(422, "INVALID_REFERENCE", "只接受同次原生运行内已检查的科学输出。")
+        raise ApiError(422, "INVALID_REFERENCE", "只接受同次原生运行内已检查的科学输出。", message_key='only_validated_scientific_outputs_from_the_same_native_run_are_accepted')
     directory = settings.workspace / "runs" / str(body.prompt_id) / "siril"
     matches = [json.loads(path.read_text(encoding="utf-8")) for path in directory.glob("*.json")]
     matches = [record for record in matches if record["request"]["node_id"] == locator.node_execution_id and record["state"] == "completed"]
     if len(matches) != 1:
-        raise ApiError(409, "INVALID_REFERENCE", "上游输出尚未就绪或存在多个调用，无法确认采用哪次输出。")
+        raise ApiError(409, "INVALID_REFERENCE", "上游输出尚未就绪或存在多个调用，无法确认采用哪次输出。", message_key='the_upstream_output_is_not_ready_or_has_multiple_invocations_the_source_out')
     record = matches[0]
     ports = record.get('ports')
     if ports is None:
         if locator.output_index != 0 or expected_type != 'APF_SCIENCE':
-            raise ApiError(422, 'INVALID_REFERENCE', '旧调用没有请求的具名输出。')
+            raise ApiError(422, 'INVALID_REFERENCE', '旧调用没有请求的具名输出。', message_key='the_old_invocation_does_not_have_the_requested_named_output')
         selected, supporting = record['checked_outputs'], []
     else:
         if locator.output_index >= len(ports) or ports[locator.output_index]['type'] != expected_type:
-            raise ApiError(422, 'INVALID_REFERENCE', '上游输出端口不存在或类型不匹配。')
+            raise ApiError(422, 'INVALID_REFERENCE', '上游输出端口不存在或类型不匹配。', message_key='the_upstream_output_port_is_missing_or_has_an_incompatible_type')
         port = ports[locator.output_index]
         selected, supporting = port['files'], port['supporting_files']
     if locator.member_index is not None:
         if locator.member_index >= len(selected):
-            raise ApiError(422, "INVALID_REFERENCE", "上游成员超出固定输出范围。")
+            raise ApiError(422, "INVALID_REFERENCE", "上游成员超出固定输出范围。", message_key='the_upstream_member_is_outside_the_fixed_output_selection')
         selected = [selected[locator.member_index]]
         supporting = []
 
@@ -145,7 +146,7 @@ def _resolve_previous(settings, body: NativeBundleCall, locator: OutputLocator, 
                                allow_empty=previous['format'] == 'other' and previous['byte_size'] == 0,
                                colour_layout=(previous.get('scientific_metadata') or {}).get('colour_layout') or expected.colour_layout)
         if checked.content_hash != previous["content_hash"]:
-            raise ApiError(409, "SOURCE_CHANGED", "上游科学结果已变化。")
+            raise ApiError(409, "SOURCE_CHANGED", "上游科学结果已变化。", message_key='the_upstream_scientific_result_has_changed')
         return ResolvedOutputInput(
             kind="run_output", reference_index=0, locator=locator.model_copy(update={"member_index": locator.member_index if locator.member_index is not None else index}),
             read_path=checked.path, format=checked.format, selection={"kind": "whole_file"}, byte_size=checked.byte_size,
@@ -160,10 +161,10 @@ def _resolve_previous(settings, body: NativeBundleCall, locator: OutputLocator, 
 def _binding(settings, body):
     saved = get_definition(settings.workspace, body.definition_id)
     if saved.content_token != body.definition_token:
-        raise ApiError(409, "NODE_CONTENT_CONFLICT", "节点定义已变化，请重新加载节点。")
+        raise ApiError(409, "NODE_CONTENT_CONFLICT", "节点定义已变化，请重新加载节点。", message_key='the_node_definition_has_changed_reload_the_node')
     binding = saved.definition.execution
     if set(body.parameters) != {p.name for p in saved.definition.parameters}:
-        raise ApiError(422, "VALIDATION_ERROR", "节点参数与定义不一致。")
+        raise ApiError(422, "VALIDATION_ERROR", "节点参数与定义不一致。", message_key='node_parameters_do_not_match_the_definition')
     values = {name: body.parameters[source.name] if source.kind == "parameter" else source.value for name, source in binding.parameters.items()}
     operation = validate_parameters(settings, binding.package_id, binding.operation_id, values)
     return saved.definition, operation, values
@@ -172,18 +173,18 @@ def _binding(settings, body):
 def _references(definition, body, operation):
     if body.reference is not None:
         if len(definition.inputs) != 1:
-            raise ApiError(422, 'INVALID_REFERENCE', '多输入节点需要具名输入。')
+            raise ApiError(422, 'INVALID_REFERENCE', '多输入节点需要具名输入。', message_key='multi_input_nodes_require_named_inputs')
         references = {definition.inputs[0].name: body.reference}
     else:
         references = body.inputs
     if not set(references).issubset({port.name for port in definition.inputs}):
-        raise ApiError(422, 'INVALID_REFERENCE', '输入端口与节点定义不匹配。')
+        raise ApiError(422, 'INVALID_REFERENCE', '输入端口与节点定义不匹配。', message_key='input_ports_do_not_match_the_node_definition')
     result = {name: references[port] for name, port in definition.execution.inputs.items() if port in references}
     if any(item.required and item.name not in result for item in operation.inputs):
-        raise ApiError(422, 'INVALID_REFERENCE', '节点缺少必要输入。')
+        raise ApiError(422, 'INVALID_REFERENCE', '节点缺少必要输入。', message_key='a_required_node_input_is_missing')
     for item in operation.inputs:
         if item.name in result and isinstance(result[item.name], list) != item.multiple_connections:
-            raise ApiError(422, 'INVALID_REFERENCE', '输入连接数量形式与端口定义不匹配。')
+            raise ApiError(422, 'INVALID_REFERENCE', '输入连接数量形式与端口定义不匹配。', message_key='the_input_connection_cardinality_does_not_match_the_port_definition')
     return result
 
 
@@ -204,7 +205,7 @@ async def _run(app, settings, body: NativeBundleCall):
                     items, supporting_items = await asyncio.to_thread(_resolve_previous, settings, body, reference, expected)
                 else:
                     if expected.type not in {'APF_SCIENCE', 'APF_FILE'}:
-                        raise ApiError(422, 'INVALID_REFERENCE', '该端口需要本次运行中已固定的文件输出。')
+                        raise ApiError(422, 'INVALID_REFERENCE', '该端口需要本次运行中已固定的文件输出。', message_key='this_port_requires_a_file_output_fixed_within_this_run')
                     resolved = await asyncio.to_thread(resolve_canvas_inputs, app.state.database, settings, reference,
                                                        run_directory=work.parent / (str(body.call_id) + '-inputs') / name / str(group_index),
                                                        colour_layout=expected.colour_layout)
@@ -263,13 +264,13 @@ async def _run(app, settings, body: NativeBundleCall):
                         record['images'].append({'filename': filename,
                             'subfolder': f'apf-siril/{body.prompt_id}/{body.call_id}', 'type': 'output'})
                     except (ApiError, OSError, ValueError) as exc:
-                        record['preview_error'] = str(exc)
+                        record['preview_error'] = error_message(workspace_locale(settings.workspace), '', 'preview_generation_diagnostic', {'diagnostic': str(exc)})
             record["state"] = "completed"
     except asyncio.CancelledError:
         record["state"] = "cancelled"
     except Exception as exc:
         record["state"] = "failed"
-        record["error"] = {"code": exc.code if isinstance(exc, ApiError) else "SOFTWARE_EXECUTION_FAILED", "message": str(exc), 'fields': []}
+        record["error"] = exception_error(workspace_locale(settings.workspace), exc, code='SOFTWARE_EXECUTION_FAILED', message_key='software_execution_failed').model_dump()
     finally:
         _save(path, record)
 
@@ -303,7 +304,7 @@ def register_siril_calls(app, settings):
         _read(settings, prompt_id, call_id)
         path = settings.workspace / 'runs' / str(prompt_id) / 'work' / str(call_id) / 'siril.log'
         if not path.is_file():
-            raise ApiError(404, 'RESOURCE_NOT_FOUND', '该调用还没有程序日志。')
+            raise ApiError(404, 'RESOURCE_NOT_FOUND', '该调用还没有程序日志。', message_key='this_invocation_has_no_program_log_yet')
         return FileResponse(path, media_type='text/plain', filename='process.log')
 
     output_route = '/api/v1/runs/{prompt_id}/calls/{call_id}/outputs/{output_index}/members/{member_index}'
@@ -312,7 +313,7 @@ def register_siril_calls(app, settings):
     def output_analysis(prompt_id: UUID, call_id: UUID, output_index: int, member_index: int):
         checked, _, port = _checked_file(settings, prompt_id, call_id, output_index, member_index, full=True)
         if port['type'] != 'APF_ANALYSIS':
-            raise ApiError(422, 'INVALID_REFERENCE', '该输出端口不是分析结果。')
+            raise ApiError(422, 'INVALID_REFERENCE', '该输出端口不是分析结果。', message_key='this_output_port_is_not_an_analysis_result')
         return _analysis_values(checked.path)
 
     @app.get(output_route + '/file', dependencies=[Depends(authenticate)])
@@ -373,11 +374,11 @@ def register_siril_calls(app, settings):
     def output_view_file(prompt_id: UUID, call_id: UUID, output_index: int, member_index: int, key: str, file: str, admission: TaskAdmission):
         checked, _, _ = _checked_file(settings, prompt_id, call_id, output_index, member_index)
         if file not in {'overview', 'video'}:
-            raise ApiError(404, 'RESOURCE_NOT_FOUND', '没有该显示文件。')
+            raise ApiError(404, 'RESOURCE_NOT_FOUND', '没有该显示文件。', message_key='the_display_file_does_not_exist')
         job, release = app.state.media_views.acquire_output(checked, key)
         try:
             if file == 'video' and job['state']['kind'] != 'video':
-                raise ApiError(404, 'RESOURCE_NOT_FOUND', '该显示结果不是视频。')
+                raise ApiError(404, 'RESOURCE_NOT_FOUND', '该显示结果不是视频。', message_key='this_display_result_is_not_a_video')
             path = job['folder'] / 'overview.jpg' if file == 'overview' else job['folder'] / 'playback.mp4' if job['state']['proxy'] else job['path']
             return LeasedFileResponse(path, release, media_type='image/jpeg' if file == 'overview' else job['state']['mime_type'])
         except Exception:
@@ -388,19 +389,19 @@ def register_siril_calls(app, settings):
     async def start(body: NativeBundleCall):
         async with app.state.maintenance_lock:
             if app.state.maintenance or app.state.shutdown_started:
-                raise ApiError(409, "WORKBENCH_MAINTENANCE", "工作台正在维护。")
+                raise ApiError(409, "WORKBENCH_MAINTENANCE", "工作台正在维护。", message_key='the_workbench_is_undergoing_maintenance')
             path = _record_path(settings, body.prompt_id, body.call_id)
             if path.exists():
                 record = _read(settings, body.prompt_id, body.call_id)
                 if record["request"] != body.model_dump(mode="json"):
-                    raise ApiError(409, "SOFTWARE_CONTENT_CONFLICT", "调用 ID 已用于另一份输入。")
+                    raise ApiError(409, "SOFTWARE_CONTENT_CONFLICT", "调用 ID 已用于另一份输入。", message_key='the_invocation_id_is_already_used_for_different_input')
                 return record
             if any(not task.done() for task in app.state.software_tasks.values()):
-                raise ApiError(409, "SOFTWARE_BUSY", "软件包正在维护。")
+                raise ApiError(409, "SOFTWARE_BUSY", "软件包正在维护。", message_key='the_software_package_is_undergoing_maintenance_da8f9d')
             definition, operation, parameters = _binding(settings, body)
             _references(definition, body, operation)
             if not operation.ready:
-                raise ApiError(503, "SOFTWARE_NOT_READY", operation.reason or "请先安装 Siril。")
+                raise ApiError(503, "SOFTWARE_NOT_READY", operation.reason or "请先安装 Siril。", message_key='siril_install_required', fields=[{'path': 'software', 'message': operation.reason}] if operation.reason else [])
             _, entries, _ = get_bundle_metadata(settings, operation.package_id)
             entry = next(item for item in entries if item['operation']['operation_id'] == operation.operation_id)
             package = get_package(settings, operation.package_id)

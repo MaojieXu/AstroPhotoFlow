@@ -155,7 +155,41 @@
     "cancel": "Cancel",
     "uninstallNotice": "Only the platform program copy will be removed. Original files, node definitions and workflows are retained. Siril nodes cannot run until the software is installed again.",
     "noPackages": "No maintained software packages are available.",
-    "loadError": "Unable to read software status."
+    "loadError": "Unable to read software status.",
+    "bundleVersion": "Bundle version",
+    "selectVersion": "Select a version",
+    "versionUnknown": "Unknown version",
+    "versionUnavailable": "No longer listed",
+    "installed": "Installed",
+    "latestStable": "Latest stable",
+    "latestDev": "Latest dev",
+    "switchVersion": "Switch version",
+    "refreshVersions": "Refresh versions",
+    "checkingVersions": "Checking official versions…",
+    "versionsCheckedAt": "Last successful check:",
+    "releaseCheckFailed": "Cannot check official versions. Showing installed information and the last successful list. Check the network or Git credentials and refresh.",
+    "channel": {
+      "stable": "Stable",
+      "dev": "Development"
+    },
+    "releaseReasons": {
+      "invalid_metadata": "Invalid release metadata",
+      "unsupported_platform": "Unsupported system: {required}",
+      "unsupported_sdk": "Requires host API {required}",
+      "missing_resources": "Required Bundle files are missing",
+      "unsupported_schema": "Requires Bundle schema {required}"
+    },
+    "programVersion": "Program",
+    "reviewPlan": "Review plan",
+    "confirmSwitchVersion": "Confirm version switch",
+    "releaseCheckBusy": "Another version check is running. Refresh after it finishes.",
+    "nodeChanges": "Node changes",
+    "nodeAction": {
+      "create": "Add",
+      "update": "Update",
+      "remove": "Remove",
+      "retain": "Retain"
+    }
   },
   "astrophotoflow": {
     "imagePath": "Absolute image file path",

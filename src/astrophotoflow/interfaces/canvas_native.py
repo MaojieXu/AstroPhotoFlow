@@ -1,17 +1,24 @@
 import asyncio
 import hmac
+import os
+from pathlib import Path
 from uuid import UUID
 
 from aiohttp import web
 from pydantic import TypeAdapter, ValidationError
 
-from astrophotoflow.contracts.common import ErrorDetail
+from astrophotoflow.core.localization import localized_error, workspace_locale
 from astrophotoflow.contracts.workflows import CanvasAddResult, CanvasPageOut, NativeCanvasCommand, NativeCanvasGraphCommand, NativeCanvasEvent
 from astrophotoflow.comfyui.proxy import _configuration
 
 
-def _error(status: int, code: str, message: str):
-    return web.json_response({"error": {"code": code, "message": message, "fields": []}}, status=status)
+def _locale():
+    workspace = os.environ.get('APF_WORKSPACE')
+    return workspace_locale(Path(workspace)) if workspace else 'en'
+
+
+def _error(status: int, code: str, message_key: str):
+    return web.json_response({'error': localized_error(_locale(), code, message_key).model_dump()}, status=status)
 
 
 def _authorized(request):
@@ -66,7 +73,7 @@ def _unknown(request):
         operation_id=request.operation_id, page_id=request.page_id,
         workflow_id=request.workflow_id, graph_id=request.graph_id,
         applied=None, node_id=None,
-        error=ErrorDetail(code="CANVAS_RESULT_UNKNOWN", message="未收到画布应用结果；先查询同一 operation_id，不自动重发。", fields=[]),
+        error=localized_error(_locale(), 'CANVAS_RESULT_UNKNOWN', 'canvas_result_unknown'),
     )
 
 
@@ -78,32 +85,32 @@ def register_canvas_routes(routes):
     @routes.get("/astrophotoflow/internal/canvas/pages")
     async def pages(request):
         if not _authorized(request):
-            return _error(401, "AUTHENTICATION_REQUIRED", "需要平台服务令牌。")
+            return _error(401, "AUTHENTICATION_REQUIRED", 'canvas_auth_required')
         native = server()
         return web.json_response([page.model_dump(mode="json") for client_id, page in native.apf_canvas_pages.items() if client_id in native.sockets])
 
     @routes.post("/astrophotoflow/internal/canvas/requests")
     async def add(request):
         if not _authorized(request):
-            return _error(401, "AUTHENTICATION_REQUIRED", "需要平台服务令牌。")
+            return _error(401, "AUTHENTICATION_REQUIRED", 'canvas_auth_required')
         try:
             command = TypeAdapter(NativeCanvasCommand | NativeCanvasGraphCommand).validate_python(await request.json())
         except (ValidationError, ValueError):
-            return _error(422, "VALIDATION_ERROR", "画布请求无效。")
+            return _error(422, "VALIDATION_ERROR", 'canvas_invalid_request')
         native = server()
         body = command.request
         key = str(body.operation_id)
         operation = native.apf_canvas_operations.get(key)
         if operation is not None:
             if operation["command"] != command:
-                return _error(409, "CANVAS_REQUEST_CONFLICT", "operation_id 已用于其他请求。")
+                return _error(409, "CANVAS_REQUEST_CONFLICT", 'canvas_operation_conflict')
         else:
             target = next(((client_id, page) for client_id, page in native.apf_canvas_pages.items() if page.page_id == body.page_id), None)
             if target is None or target[0] not in native.sockets:
-                return _error(409, "CANVAS_OFFLINE", "目标画布不在线。")
+                return _error(409, "CANVAS_OFFLINE", 'canvas_offline')
             client_id, page = target
             if (page.workflow_id, page.graph_id, page.content_token) != (body.workflow_id, body.graph_id, body.content_token):
-                return _error(409, "CANVAS_TARGET_CHANGED", "目标画布或内容已变化，未应用修改。")
+                return _error(409, "CANVAS_TARGET_CHANGED", 'canvas_target_changed')
             future = asyncio.get_running_loop().create_future()
             operation = {"command": command, "client_id": client_id, "socket": native.sockets[client_id], "future": future}
             native.apf_canvas_operations[key] = operation
@@ -117,13 +124,13 @@ def register_canvas_routes(routes):
     @routes.get("/astrophotoflow/internal/canvas/requests/{operation_id}")
     async def result(request):
         if not _authorized(request):
-            return _error(401, "AUTHENTICATION_REQUIRED", "需要平台服务令牌。")
+            return _error(401, "AUTHENTICATION_REQUIRED", 'canvas_auth_required')
         try:
             key = str(UUID(request.match_info["operation_id"]))
         except ValueError:
-            return _error(422, "VALIDATION_ERROR", "operation_id 无效。")
+            return _error(422, "VALIDATION_ERROR", 'canvas_invalid_operation_id')
         operation = server().apf_canvas_operations.get(key)
         if operation is None:
-            return _error(404, "CANVAS_REQUEST_UNKNOWN", "当前引擎会话没有此请求的回执，不能据此认定未应用。")
+            return _error(404, "CANVAS_REQUEST_UNKNOWN", 'canvas_request_unknown')
         value = operation["future"].result() if operation["future"].done() else _unknown(operation["command"].request)
         return web.json_response(value.model_dump(mode="json"))

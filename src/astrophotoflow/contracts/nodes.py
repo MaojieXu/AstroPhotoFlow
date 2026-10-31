@@ -8,6 +8,7 @@ from pydantic import Field, JsonValue, field_validator, model_validator
 from astrophotoflow.contracts.common import ErrorDetail, StrictModel, UuidInput, check_name
 from astrophotoflow.contracts.software import ParameterDefinition, SoftwareOperation
 from astrophotoflow.contracts.bundles import BundlePreview
+from astrophotoflow.contracts.localization import CapabilityDisplay, Locale
 
 
 class NodePort(StrictModel):
@@ -115,6 +116,7 @@ class NodeCapability(StrictModel):
     preview: BundlePreview | None
     help: str
     examples: list[dict[str, JsonValue]]
+    display: dict[Locale, CapabilityDisplay] = Field(default_factory=dict)
 
 
 def definition_content_token(definition: NodeDefinition) -> str:

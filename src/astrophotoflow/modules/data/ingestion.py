@@ -1,4 +1,6 @@
 from __future__ import annotations
+
+from astrophotoflow.core.localization import error_message, localized_error, exception_error, workspace_locale
 from contextlib import contextmanager
 from concurrent.futures import ThreadPoolExecutor, wait
 from copy import deepcopy
@@ -43,10 +45,18 @@ CALIBRATION_TYPES = {"bias", "dark", "flat", "dark_flat"}
 
 
 class IngestionError(Exception):
-    def __init__(self, code: str, message: str):
+    def __init__(self, code: str, message: str, *, message_key: str):
         self.code = code
         self.message = message
+        self.message_key = message_key
         super().__init__(message)
+
+
+def _ingestion_error(settings, exc, *, code, message_key):
+    locale = workspace_locale(settings.workspace)
+    if isinstance(exc, IngestionError):
+        return localized_error(locale, exc.code, exc.message_key).model_dump()
+    return exception_error(locale, exc, code=code, message_key=message_key).model_dump()
 
 
 def _check_equipment(session, value: Any, expected: str) -> None:
@@ -54,7 +64,7 @@ def _check_equipment(session, value: Any, expected: str) -> None:
         return
     row = session.get(Equipment, str(value))
     if row is None or row.kind != expected:
-        raise invalid_reference(f"参数中的设备必须是现存的 {expected} 设备。")
+        raise invalid_reference(f"参数中的设备必须是现存的 {expected} 设备。", message_key='the_parameter_must_reference_an_existing_p0_device', message_params={'p0': expected})
 
 
 def validate_import_equipment(session, parameters: dict) -> None:
@@ -94,7 +104,7 @@ def _set_enumeration(database: Database, task_id: str, sources: list[dict], comp
 
 
 def _source_item(
-    database: Database, task_id: str, entry: dict, position: int, known: set[str]
+    database: Database, task_id: str, entry: dict, position: int, known: set[str], *, locale='en'
 ) -> None:
     identity = entry["identity"]
     with database.write_session() as session:
@@ -107,9 +117,9 @@ def _source_item(
             metadata_status="unsupported" if duplicate or entry.get("format") is None else "pending",
             preview_status="unsupported" if duplicate or entry.get("format") is None else "pending",
             error=(
-                {"code": "DUPLICATE_SOURCE", "message": "同一批次的重复来源只处理一次。"}
+                localized_error(locale, 'DUPLICATE_SOURCE', 'import_duplicate').model_dump()
                 if duplicate else
-                {"code": "UNSUPPORTED_FORMAT", "message": "该文件格式不在本阶段入库清单中。"}
+                localized_error(locale, 'UNSUPPORTED_FORMAT', 'import_format_unsupported').model_dump()
                 if entry.get("format") is None else
                 entry.get("error")
             ),
@@ -153,10 +163,10 @@ def _enumerate_task(database: Database, settings: Settings, task_id: str, task_d
                     break
                 if entry["identity"] in already_registered:
                     continue
-                _source_item(database, task_id, entry, position, known)
+                _source_item(database, task_id, entry, position, known, locale=workspace_locale(settings.workspace))
                 position += 1
         except ApiError as exc:
-            source["error"] = {"code": exc.code, "message": exc.message}
+            source["error"] = _ingestion_error(settings, exc, code='IMPORT_FAILED', message_key='import_copy_failed')
             source["enumeration_completed"] = True
         else:
             source["enumeration_completed"] = not stop_state[0]
@@ -197,7 +207,7 @@ def _read_hash_and_copy(path: Path, stage_path: Path | None, cancelled, progress
     try:
         import blake3
     except ImportError as exc:
-        raise IngestionError("SERVICE_NOT_CONFIGURED", "资产服务缺少 BLAKE3 依赖。") from exc
+        raise IngestionError("SERVICE_NOT_CONFIGURED", "资产服务缺少 BLAKE3 依赖。", message_key='import_blake3_missing') from exc
     hasher = blake3.blake3()
     total = 0
     destination = stage_path.open("xb") if stage_path is not None else None
@@ -205,7 +215,7 @@ def _read_hash_and_copy(path: Path, stage_path: Path | None, cancelled, progress
         with path.open("rb") as source:
             while chunk := source.read(8 * 1024 * 1024):
                 if cancelled():
-                    raise IngestionError("CANCELLED", "文件处理已取消。")
+                    raise IngestionError("CANCELLED", "文件处理已取消。", message_key='import_cancelled')
                 hasher.update(chunk)
                 total += len(chunk)
                 if destination is not None:
@@ -265,7 +275,7 @@ def _fit_preview_rows(database: Database, settings: Settings, version_id: str, h
     if selected is None:
         return "unsupported", None, None
     if selected["supported_kind"] in {"xtrans", "quad_bayer"}:
-        return "unsupported", f"{selected['supported_kind']} CFA 已登记；当前暂不支持其马赛克彩色预览。", None
+        return "unsupported", error_message(workspace_locale(settings.workspace), '', 'import_cfa_preview_unsupported', {'layout': selected['supported_kind']}), None
     failed = None
     display = None
     for size, edge in (("thumbnail", 100),):
@@ -314,7 +324,7 @@ def _fit_preview_rows(database: Database, settings: Settings, version_id: str, h
                     preview.display_parameters, preview.status, preview.error = display, "available", None
         except Exception:
             logger.exception("preview failed version_id=%s size=%s", version_id, size)
-            failed = "所选图像 HDU 的预览生成失败。"
+            failed = error_message(workspace_locale(settings.workspace), '', 'import_hdu_preview_failed')
             with database.write_session() as session:
                 preview = session.scalar(select(Preview).where(
                     Preview.asset_version_id == version_id, Preview.hdu_index == selected["hdu_index"],
@@ -562,7 +572,7 @@ def _refresh_fits_metadata(database: Database, settings: Settings, item_id: str,
         error = None
     except Exception:
         hdu_rows, parsed = [], {}
-        error = f"{category.upper()} 元数据解析失败；原始文件已完成内容入库。"
+        error = error_message(workspace_locale(settings.workspace), '', 'import_parse_failed', {'format': category.upper()})
     with database.write_session() as session:
         item = session.get(AssetTaskItem, item_id)
         asset = session.get(Asset, asset_id)
@@ -627,15 +637,15 @@ def _register_asset(database: Database, settings: Settings, task_data: dict, ite
         asset_name = Path(source_path).name
         location = f"roots/{root_spec.id}/{source_path}"
     if not original.is_file():
-        raise IngestionError("SOURCE_UNAVAILABLE", "所选来源不是可读文件。")
+        raise IngestionError("SOURCE_UNAVAILABLE", "所选来源不是可读文件。", message_key='import_source_unreadable')
     source_stamp = (task_data.get("source_stamps", {}).get((root_id, source_path)) or _source_stamp(original)) if root_id != "__upload__" else None
     if source_stamp is not None and _source_stamp(original) != source_stamp:
-        raise IngestionError("SOURCE_CHANGED", "来源文件在任务受理后发生变化，请确认来源并重新导入。")
+        raise IngestionError("SOURCE_CHANGED", "来源文件在任务受理后发生变化，请确认来源并重新导入。", message_key='import_source_changed')
     category = format_for_path(original)
     if category not in SUPPORTED_EXTENSIONS.values() and task_data.get("output_registration"):
         category = "other"
     if category not in SUPPORTED_EXTENSIONS.values() and category != "other":
-        raise IngestionError("UNSUPPORTED_FORMAT", "该文件格式不在本阶段入库清单中。")
+        raise IngestionError("UNSUPPORTED_FORMAT", "该文件格式不在本阶段入库清单中。", message_key='import_format_unsupported')
     parsed, hdu_rows, parse_error = {}, [], None
     defaults = task_data.get("import_defaults_snapshot") or {}
     if category in {"fits", "xisf"}:
@@ -646,7 +656,7 @@ def _register_asset(database: Database, settings: Settings, task_data: dict, ite
                 inspected = inspect_fits(original, task_data["parameters"].get("cfa_pattern"), colour_layout=task_data.get('output_colour_layout'))
                 parsed, hdu_rows = inspected["parsed_parameters"], inspected["hdus"]
         except Exception:
-            parse_error = f"{category.upper()} 元数据解析失败；原始文件仍将继续内容入库。"
+            parse_error = error_message(workspace_locale(settings.workspace), '', 'import_parse_pending_content', {'format': category.upper()})
     parameters, value_sources = _current_asset_parameters(task_data["parameters"], parsed, defaults.get("parameters"))
     if category == "fits" and not parse_error and parameters.get("cfa_pattern") and not parsed.get("cfa_pattern") and not task_data["parameters"].get("cfa_pattern"):
         hdu_rows = inspect_fits(original, parameters["cfa_pattern"], colour_layout=task_data.get('output_colour_layout'))["hdus"]
@@ -742,7 +752,7 @@ def _create_asset_content(database: Database, settings: Settings, task_data: dic
         stage.unlink(missing_ok=True)
     try:
         if source_stamp is not None and original != final and _source_stamp(original) != source_stamp:
-            raise IngestionError("SOURCE_CHANGED", "来源文件在登记后发生变化，请确认来源并重新导入。")
+            raise IngestionError("SOURCE_CHANGED", "来源文件在登记后发生变化，请确认来源并重新导入。", message_key='import_source_changed_registered')
         progress = task_data.get("progress")
         last_check, cancelled = 0.0, False
         def should_cancel():
@@ -754,7 +764,7 @@ def _create_asset_content(database: Database, settings: Settings, task_data: dic
         content_hash, byte_size = _read_hash_and_copy(original, stage, should_cancel,
             (lambda size: progress.copied(item_id, size)) if progress is not None else None)
         if source_stamp is not None and original != final and _source_stamp(original) != source_stamp:
-            raise IngestionError("SOURCE_CHANGED", "来源文件在后台读取时发生变化，请确认来源并重新导入。")
+            raise IngestionError("SOURCE_CHANGED", "来源文件在后台读取时发生变化，请确认来源并重新导入。", message_key='import_source_changed_reading')
         if _cancelled(database, task_data["id"]):
             return "CANCELLED"
         if final is not None and original != final:
@@ -961,7 +971,7 @@ def _process_preview(database: Database, settings: Settings, task_data: dict, it
                 item = session.get(AssetTaskItem, item_id)
                 item.preview_status, item.status = "failed", "completed_with_errors"
                 label = {"video": "视频首帧", "raw": "RAW", "xisf": "XISF"}.get(item_data["format"], "常规图像")
-                item.error = {"code": "PREVIEW_FAILED", "message": f"{label}预览生成失败：{exc}"}
+                item.error = _ingestion_error(settings, exc, code='PREVIEW_FAILED', message_key='import_preview_failed')
                 item.updated_at = datetime.now(timezone.utc)
         return
     if item_data["format"] not in {"fits", "video"}:
@@ -1004,7 +1014,7 @@ def _process_preview(database: Database, settings: Settings, task_data: dict, it
             root_obj, root_path = find_root(settings, root_id)
             image_path = resolve_relative(root_path, source_path)
         if _cancelled(database, task_id):
-            raise IngestionError("CANCELLED", "文件处理已取消。")
+            raise IngestionError("CANCELLED", "文件处理已取消。", message_key='import_cancelled')
         with database.read_session() as session:
             version_for_parse = session.get(AssetVersion, item_data["asset_version_id"])
             hdu_for_parse = session.scalar(select(FitsHduMetadata).where(
@@ -1036,14 +1046,14 @@ def _process_preview(database: Database, settings: Settings, task_data: dict, it
             item = session.get(AssetTaskItem, item_id)
             item.preview_status = "failed"
             item.status = "completed_with_errors"
-            item.error = {"code": exc.code, "message": exc.message}
+            item.error = _ingestion_error(settings, exc, code='IMPORT_FAILED', message_key='import_copy_failed')
     except Exception:
         logger.exception("preview failed task_id=%s item_id=%s", task_id, item_id)
         with database.write_session() as session:
             item = session.get(AssetTaskItem, item_id)
             item.preview_status = "failed"
             item.status = "completed_with_errors"
-            item.error = {"code": "PREVIEW_FAILED", "message": "预览生成失败；已入库内容保留。"}
+            item.error = localized_error(workspace_locale(settings.workspace), 'PREVIEW_FAILED', 'import_preview_failed').model_dump()
 
 def _content_item(database: Database, settings: Settings, task_data: dict, item_id: str) -> None:
     try:
@@ -1063,12 +1073,11 @@ def _content_item(database: Database, settings: Settings, task_data: dict, item_
     except Exception as exc:
         logger.exception("asset content failed task_id=%s item_id=%s", task_data["id"], item_id)
         code = exc.code if isinstance(exc, (IngestionError, ApiError)) else "CONTENT_READ_FAILED"
-        message = exc.message if isinstance(exc, (IngestionError, ApiError)) else "文件读取、散列或复制失败；已登记资料保留。"
         with database.write_session() as session:
             item = session.get(AssetTaskItem, item_id)
             item.status = "cancelled" if code == "CANCELLED" else "failed"
             item.content_status = "pending" if code == "CANCELLED" else "failed"
-            item.error = None if code == "CANCELLED" else {"code": code, "message": message}
+            item.error = None if code == 'CANCELLED' else _ingestion_error(settings, exc, code=code, message_key='import_copy_failed')
             if code == "SOURCE_CHANGED":
                 session.get(AssetVersion, item.asset_version_id).availability = "changed"
             item.updated_at = datetime.now(timezone.utc)
@@ -1172,8 +1181,7 @@ def process_task(database: Database, settings: Settings, task_id: str, workers=N
                             item = session.get(AssetTaskItem, item_id)
                             item.status, item.content_status = "failed", "failed"
                             item.metadata_status, item.preview_status = "unsupported", "unsupported"
-                            item.error = {"code": exc.code if isinstance(exc, (IngestionError, ApiError)) else "REGISTRATION_FAILED",
-                                          "message": exc.message if isinstance(exc, (IngestionError, ApiError)) else "文件资料登记失败。"}
+                            item.error = _ingestion_error(settings, exc, code='REGISTRATION_FAILED', message_key='import_registration_failed')
                     else:
                         with condition:
                             registered_ids.append(item_id)
@@ -1229,17 +1237,17 @@ def process_task(database: Database, settings: Settings, task_id: str, workers=N
             if task is not None and task.status not in {"cancelled", "interrupted"}:
                 task.status = "completed_with_errors" if session.scalar(select(func.count()).select_from(AssetTaskItem)
                     .where(AssetTaskItem.task_id == task_id, AssetTaskItem.content_status == "available")) else "failed"
-                task.error = {"code": "INTERNAL_ERROR", "message": "后台处理失败；已完成的文件结果保留。"}
+                task.error = localized_error(workspace_locale(settings.workspace), 'INTERNAL_ERROR', 'import_background_failed').model_dump()
                 task.updated_at = datetime.now(timezone.utc)
 
 
-def mark_interrupted_tasks(database: Database) -> int:
+def mark_interrupted_tasks(database: Database, *, locale='en') -> int:
     count = 0
     with database.write_session() as session:
         tasks = session.scalars(select(AssetTask).where(AssetTask.status.in_({"queued", "running", "cancelling"}))).all()
         for task in tasks:
             task.status = "interrupted"
-            task.error = {"code": "SERVICE_INTERRUPTED", "message": "服务中断，等待用户检查后恢复。"}
+            task.error = localized_error(locale, 'SERVICE_INTERRUPTED', 'import_interrupted').model_dump()
             task.updated_at = datetime.now(timezone.utc)
             count += 1
         running_items = session.scalars(select(AssetTaskItem).where(AssetTaskItem.status == "running")).all()

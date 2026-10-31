@@ -135,8 +135,8 @@ def main() -> None:
     parser = _parser()
     args = parser.parse_args()
     if args.command == "mcp":
-        from astrophotoflow.interfaces.mcp.server import server
-        server.run()
+        from astrophotoflow.interfaces.mcp.server import run
+        run()
         return
     try:
         if args.command == "runtime":

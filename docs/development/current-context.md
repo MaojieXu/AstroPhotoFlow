@@ -39,7 +39,7 @@
 - Python `.artifacts/venvs/dev`，根`uv.lock`；Node26.8.2、pnpm11.13.1及`frontend/pnpm-lock.yaml`。固定本机工具在`.artifacts/redesign/bin`，先核对实际版本。
 - 正常dev workspace为`.artifacts/workspaces/dev`，配置基线网页31388／服务31390；实际监听须查询。本轮未启停、更新或迁移它。
 - 受限环境可能重定向`LOCALAPPDATA`；不要据此改产品路径解析或重建共享CPU runtime。
-- 默认只实现代码，用户明确要求再做应用测试／构建／浏览器验收；文档链接检查和对应接口生成可随文档任务执行。不操作真实素材、全局MCP或默认指针。
+- Feature准备等级、预览展示和验证阶段按[开发流程](README.md)执行；文档链接检查和对应接口生成可随文档任务执行。不操作真实素材、全局MCP或默认指针。
 - 不恢复旧restructure／redesign任务。当前只做开发构建，正式发布另行批准。
 
 历史逐轮日志和结论按 [验证记录](test-matrix.md) 具体条目查；旧上下文原文可从Git `51046067:docs/development/current-context.md`查回，不再重复注入每个任务。

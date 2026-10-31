@@ -6,6 +6,25 @@ from pathlib import Path
 from astrophotoflow.contracts.bundles import BundleManifest
 from astrophotoflow.contracts.nodes import NodeDefinition
 from astrophotoflow.contracts.software import SoftwareOperation
+from astrophotoflow.contracts.localization import CapabilityDisplay
+
+
+def read_bundle_locales(root: Path, manifest: BundleManifest, operations: list) -> dict:
+    result = {}
+    identities = {entry['operation']['operation_id']: entry['operation'] for entry in operations}
+    for locale, filename in manifest.locales.items():
+        raw = json.loads(contained(root, filename).read_text(encoding='utf-8'))
+        if set(raw) != set(identities):
+            raise ValueError('Bundle translations must cover exactly the declared operations.')
+        result[locale] = {}
+        for identity, value in raw.items():
+            display = CapabilityDisplay.model_validate(value)
+            operation = identities[identity]
+            for section in ('parameters', 'inputs', 'outputs'):
+                if set(getattr(display, section)) != {item['name'] for item in operation[section]}:
+                    raise ValueError('Bundle display labels must match the declared ' + section + ': ' + identity)
+            result[locale][identity] = display.model_dump(mode='json')
+    return result
 
 
 def catalog():
@@ -46,4 +65,5 @@ def read_bundle(root: Path):
     for name in [manifest.commands, manifest.assessments]:
         if name is not None:
             contained(root, name)
+    read_bundle_locales(root, manifest, operations)
     return manifest, operations, nodes

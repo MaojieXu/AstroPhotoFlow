@@ -19,6 +19,12 @@ export const savedNodeSchema = z.object({
   })
 })
 export const nodeCapabilitySchema = z.object({
+  display: z.partialRecord(z.enum(['en', 'zh']), z.object({
+    name: z.string(), description: z.string(), help: z.string(),
+    parameters: z.record(z.string(), z.object({ label: z.string(), description: z.string() })),
+    inputs: z.record(z.string(), z.object({ label: z.string(), description: z.string() })),
+    outputs: z.record(z.string(), z.object({ label: z.string(), description: z.string() }))
+  })).default({}),
   node: savedNodeSchema, available: z.boolean(), reason: z.string().nullable(),
   preview: z.object({ kind: z.literal('science-image'), input: z.string(), max_edge: z.literal(1024) }).nullable(),
   help: z.string(), examples: z.array(z.record(z.string(), z.json())),

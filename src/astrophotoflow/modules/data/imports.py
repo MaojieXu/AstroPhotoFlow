@@ -1,4 +1,5 @@
 from __future__ import annotations
+from astrophotoflow.core.localization import localized_error, workspace_locale
 from fastapi import APIRouter
 
 from astrophotoflow.core.http import ERROR_RESPONSES
@@ -41,9 +42,9 @@ async def select_local_import(body: LocalSelectionRequest, request: Request):
             await asyncio.wait({chooser}, timeout=0.1)
         paths = await chooser
     except LocalSelectionBusy as exc:
-        raise ApiError(409, "LOCAL_PICKER_BUSY", str(exc)) from exc
+        raise ApiError(409, "LOCAL_PICKER_BUSY", str(exc), message_key='local_picker_busy', fields=[{'path': 'diagnostic', 'message': str(exc)}]) from exc
     except (OSError, ConfigurationError, subprocess.SubprocessError) as exc:
-        raise ApiError(503, "LOCAL_PICKER_UNAVAILABLE", "无法打开本机选择窗口，请检查本机桌面会话。") from exc
+        raise ApiError(503, "LOCAL_PICKER_UNAVAILABLE", "无法打开本机选择窗口，请检查本机桌面会话。", message_key='cannot_open_the_local_file_picker_check_the_local_desktop_session') from exc
     finally:
         cancelled.set()
     if not paths:
@@ -103,7 +104,7 @@ async def upload_file(task_id: UUID, index: int, request: Request):
             raise not_found()
         entry = dict(files[index])
         if entry["received"] != 0:
-            raise ApiError(409, "UPLOAD_ALREADY_RECEIVED", "该文件已上传；请重新选择文件创建导入批次。")
+            raise ApiError(409, "UPLOAD_ALREADY_RECEIVED", "该文件已上传；请重新选择文件创建导入批次。", message_key='this_file_has_already_been_uploaded_select_files_again_to_create_a_new_impo')
     target = request.app.state.settings.data_dir / "upload-staging" / shared._id(task_id) / entry["stored_name"]
     received = 0
     try:
@@ -116,16 +117,16 @@ async def upload_file(task_id: UUID, index: int, request: Request):
             task = session.get(AssetTask, shared._id(task_id))
             if task and task.status == "queued":
                 task.status = "failed"
-                task.error = {"code": "UPLOAD_FAILED", "message": "文件上传中断，请重新选择文件创建导入批次。"}
+                task.error = localized_error(workspace_locale(request.app.state.settings.workspace), 'UPLOAD_FAILED', 'upload_interrupted').model_dump()
                 task.updated_at = shared._now()
                 for item in session.scalars(select(AssetTaskItem).where(AssetTaskItem.task_id == task.id)).all():
                     item.status, item.content_status, item.error = "failed", "failed", task.error
                     item.updated_at = shared._now()
         shutil.rmtree(request.app.state.settings.data_dir / "upload-staging" / shared._id(task_id), ignore_errors=True)
-        raise ApiError(400, "UPLOAD_FAILED", "文件上传中断，请重新选择文件创建导入批次。") from exc
+        raise ApiError(400, "UPLOAD_FAILED", "文件上传中断，请重新选择文件创建导入批次。", message_key='the_upload_was_interrupted_select_files_again_to_create_a_new_import_batch') from exc
     if received != entry["size"]:
         target.unlink(missing_ok=True)
-        raise ApiError(400, "UPLOAD_SIZE_MISMATCH", "上传文件大小与选择时记录不一致，请重新选择文件。")
+        raise ApiError(400, "UPLOAD_SIZE_MISMATCH", "上传文件大小与选择时记录不一致，请重新选择文件。", message_key='the_upload_size_differs_from_the_selected_file_size_select_the_file_again')
     with database.write_session() as session:
         task = session.get(AssetTask, shared._id(task_id))
         files = list((task.report or {}).get("upload_files", []))
@@ -141,9 +142,9 @@ def start_upload_import(task_id: UUID, request: Request, background: BackgroundT
     if task is None or not (task.report or {}).get("upload_manifest"):
         raise not_found()
     if any(file["received"] != file["size"] for file in task.report["upload_files"]):
-        raise ApiError(409, "UPLOAD_INCOMPLETE", "所有文件上传完成后才能开始导入。")
+        raise ApiError(409, "UPLOAD_INCOMPLETE", "所有文件上传完成后才能开始导入。", message_key='all_file_uploads_must_finish_before_import_can_start')
     if task.status != "queued":
-        raise ApiError(409, "TASK_STATE_CONFLICT", "该上传批次已开始处理。")
+        raise ApiError(409, "TASK_STATE_CONFLICT", "该上传批次已开始处理。", message_key='processing_has_already_started_for_this_upload_batch')
     task.report = {**task.report, "upload_complete": True}
     task.updated_at = shared._now()
     background.add_task(process_task, request.app.state.database, request.app.state.settings, task.id, request.app.state.import_workers)
@@ -156,9 +157,9 @@ def fail_upload(task_id: UUID, request: Request, session: deps.WriteSession):
     if task is None or not (task.report or {}).get("upload_manifest"):
         raise not_found()
     if task.status != "queued":
-        raise ApiError(409, "TASK_STATE_CONFLICT", "后台处理已开始，不能按上传失败取消。")
+        raise ApiError(409, "TASK_STATE_CONFLICT", "后台处理已开始，不能按上传失败取消。", message_key='background_processing_has_started_it_cannot_be_canceled_as_an_upload_failur')
     task.status = "failed"
-    task.error = {"code": "UPLOAD_FAILED", "message": "文件上传未完成，请重新选择文件创建导入批次。"}
+    task.error = localized_error(workspace_locale(request.app.state.settings.workspace), 'UPLOAD_FAILED', 'upload_incomplete').model_dump()
     task.updated_at = shared._now()
     for item in session.scalars(select(AssetTaskItem).where(AssetTaskItem.task_id == task.id)).all():
         item.status = "failed"
@@ -239,7 +240,7 @@ def create_import(body: ImportCreate, request: Request, background: BackgroundTa
             selected = Path(source.path)
             entries = enumerate_local(selected)
             if not entries:
-                raise ApiError(422, "NO_SUPPORTED_FILES", "所选路径没有当前支持的素材文件。")
+                raise ApiError(422, "NO_SUPPORTED_FILES", "所选路径没有当前支持的素材文件。", message_key='the_selected_path_contains_no_currently_supported_asset_files')
             source_path = str(selected.resolve(strict=True))
         else:
             _, root = find_root(request.app.state.settings, source.root_id)
@@ -250,7 +251,7 @@ def create_import(body: ImportCreate, request: Request, background: BackgroundTa
             except ValueError:
                 pass
             else:
-                raise ApiError(422, "VALIDATION_ERROR", "素材根目录不能包含 AstroPhotoFlow 数据目录。")
+                raise ApiError(422, "VALIDATION_ERROR", "素材根目录不能包含 AstroPhotoFlow 数据目录。", message_key='an_asset_root_must_not_contain_the_astrophotoflow_data_directory')
             entries = list(enumerate_source(request.app.state.settings, source.root_id, source.path, lambda: False, lambda: None))
             source_path = source.path
         kind = "directory" if selected.is_dir() else "file"
@@ -315,7 +316,7 @@ def cancel_asset_task(task_id: UUID, request: Request, session: deps.WriteSessio
     if task is None:
         raise not_found()
     if task.status not in {"queued", "running", "cancelling", "interrupted"}:
-        raise ApiError(409, "TASK_STATE_CONFLICT", "当前任务状态不能取消。")
+        raise ApiError(409, "TASK_STATE_CONFLICT", "当前任务状态不能取消。", message_key='this_task_cannot_be_canceled_in_its_current_state')
     task.status = "cancelling" if task.status in {"running", "cancelling"} else "cancelled"
     task.updated_at = shared._now()
     if task.status == "cancelled":
@@ -333,9 +334,9 @@ def resume_asset_task(task_id: UUID, request: Request, background: BackgroundTas
     if task is None:
         raise not_found()
     if task.status != "interrupted":
-        raise ApiError(409, "TASK_STATE_CONFLICT", "只有服务中断的任务可恢复。")
+        raise ApiError(409, "TASK_STATE_CONFLICT", "只有服务中断的任务可恢复。", message_key='only_tasks_interrupted_by_the_service_can_be_resumed')
     if (task.report or {}).get("upload_manifest") and not (task.report or {}).get("upload_complete"):
-        raise ApiError(409, "UPLOAD_REQUIRES_SELECTION", "上传未完成，请重新选择文件并创建导入批次。")
+        raise ApiError(409, "UPLOAD_REQUIRES_SELECTION", "上传未完成，请重新选择文件并创建导入批次。", message_key='the_upload_is_incomplete_select_files_again_and_create_a_new_import_batch')
     task.status = "queued"
     task.error = None
     task.updated_at = shared._now()
@@ -354,10 +355,10 @@ def retry_asset_task(task_id: UUID, body: RetryCreate, request: Request, backgro
     if original is None:
         raise not_found()
     if original.status not in {"failed", "completed_with_errors", "cancelled"}:
-        raise ApiError(409, "TASK_STATE_CONFLICT", "当前任务状态不能重试。")
+        raise ApiError(409, "TASK_STATE_CONFLICT", "当前任务状态不能重试。", message_key='this_task_cannot_be_retried_in_its_current_state')
     selected_ids = [shared._id(value) for value in body.item_ids]
     if len(set(selected_ids)) != len(selected_ids):
-        raise ApiError(422, "VALIDATION_ERROR", "重试项不能重复。")
+        raise ApiError(422, "VALIDATION_ERROR", "重试项不能重复。", message_key='retry_entries_must_not_be_duplicated')
     items = session.scalars(select(AssetTaskItem).where(
         AssetTaskItem.task_id == original.id, AssetTaskItem.id.in_(selected_ids)
     ).order_by(AssetTaskItem.position)).all()
@@ -366,7 +367,7 @@ def retry_asset_task(task_id: UUID, body: RetryCreate, request: Request, backgro
     if any(item.status == "skipped" or not (
         item.content_status in {"pending", "failed"} or item.metadata_status == "failed" or item.preview_status in {"pending", "failed"}
     ) for item in items):
-        raise ApiError(422, "VALIDATION_ERROR", "所选项没有失败或未完成阶段，不能重试。")
+        raise ApiError(422, "VALIDATION_ERROR", "所选项没有失败或未完成阶段，不能重试。", message_key='the_selected_entry_has_no_failed_or_incomplete_stage_to_retry')
     source_task = session.get(AssetTask, original.retry_of_task_id) if original.retry_of_task_id else original
     retry_task_id = str(uuid4())
     target_dataset_id = source_task.target_dataset_id

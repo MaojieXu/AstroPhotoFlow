@@ -23,7 +23,7 @@ describe('Siril preview display', () => {
         description: '', source: 'package', inputs: [], outputs: [], parameters: [],
         execution: { package_id: 'siril', operation_id: 'autostretch' }
       } },
-      available: true, reason: null, preview: null, help: '', examples: [],
+      display: {}, available: true, reason: null, preview: null, help: '', examples: [],
       operation: { package_id: 'siril', operation_id: 'autostretch', parameters: [] }
     }
     vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify([capability])))

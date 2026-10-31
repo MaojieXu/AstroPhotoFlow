@@ -1,4 +1,6 @@
 export { Workspace } from './modules/data'
+export { uiMessages, configureUII18n } from './core/i18n'
+export { getWorkspaceLocale } from './core/client'
 export { createNodeClient, savedNodeSchema } from './modules/nodes/client'
 export type { NodeCapability, SavedNode, NodeParameter } from './modules/nodes/client'
 export { analysisResultSchema, runCallResultSchema, createRunResultClient, runResultBase, runOutputBase } from './modules/workflows/results'
@@ -24,5 +26,7 @@ export type {
   SoftwarePackage,
   SoftwarePackageDetails,
   SoftwarePreparation,
+  SoftwareRelease,
+  SoftwareReleaseListing,
   SirilCommand
 } from './modules/software'

@@ -17,7 +17,7 @@ type LocaleDefinition = {
 // Vite code-splits each matched module into its own async chunk; only the
 // resolved locale's bundle is fetched at runtime.
 const localeFiles = import.meta.glob<{ default: Record<string, unknown> }>(
-  './*/{main,nodeDefs,commands,settings}.json'
+  './zh/{main,nodeDefs,commands,settings}.json'
 )
 
 function loadersFor(locale: string): LocaleLoaderBundle {
@@ -31,19 +31,7 @@ function loadersFor(locale: string): LocaleLoaderBundle {
 
 export const localeDefinitions = {
   en: { text: 'English', loaders: null },
-  zh: { text: '中文', loaders: loadersFor('zh') },
-  'zh-TW': { text: '繁體中文', loaders: loadersFor('zh-TW') },
-  ru: { text: 'Русский', loaders: loadersFor('ru') },
-  ja: { text: '日本語', loaders: loadersFor('ja') },
-  ko: { text: '한국어', loaders: loadersFor('ko') },
-  fr: { text: 'Français', loaders: loadersFor('fr') },
-  es: { text: 'Español', loaders: loadersFor('es') },
-  ar: { text: 'عربي', loaders: loadersFor('ar') },
-  tr: { text: 'Türkçe', loaders: loadersFor('tr') },
-  'pt-BR': { text: 'Português (BR)', loaders: loadersFor('pt-BR') },
-  fa: { text: 'فارسی', loaders: loadersFor('fa') },
-  he: { text: 'עברית', loaders: loadersFor('he') },
-  it: { text: 'Italiano', loaders: loadersFor('it') }
+  zh: { text: '简体中文', loaders: loadersFor('zh') }
 } as const satisfies Record<string, LocaleDefinition>
 
 export type SupportedLocale = keyof typeof localeDefinitions

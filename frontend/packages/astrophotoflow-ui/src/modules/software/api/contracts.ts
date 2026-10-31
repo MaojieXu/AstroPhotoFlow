@@ -89,7 +89,12 @@ export const pendingSoftwareActionSchema = z
         restart_required: z.boolean().nullable(),
         restart_reason: z.string().nullable(),
         node_changes: z.array(softwarePlanNodeChangeSchema),
-        workflow_impacts: z.array(workflowImpactSchema)
+    workflow_impacts: z.array(workflowImpactSchema),
+    current_bundle_version: z.string().nullable().optional(),
+    target_bundle_version: z.string().nullable().optional(),
+    target_tag: z.string().nullable().optional(),
+    target_commit: z.string().nullable().optional(),
+    release_token: z.string().nullable().optional()
       })
       .strict(),
     confirmation_url: z.string(),
@@ -187,9 +192,29 @@ export const sirilCommandSchema = z
 export const softwareInstallRequestSchema = z
   .object({
     version: z.string(),
-    package_token: z.string()
+    package_token: z.string(),
+    bundle_version: z.string().optional(),
+    release_token: z.string().optional()
   })
   .strict()
+  .refine(value => (value.bundle_version === undefined) === (value.release_token === undefined), {
+    message: 'bundle_version and release_token must be provided together.'
+  })
+
+export const softwareReleaseSchema = z.object({
+  bundle_version: z.string(), software_version: z.string().nullable(), channel: z.enum(['stable', 'dev']),
+  tag: z.string(), commit: z.string(), is_latest: z.boolean(), compatible: z.boolean(),
+  reason_code: z.enum(['invalid_metadata', 'unsupported_platform', 'unsupported_sdk', 'unsupported_schema', 'missing_resources']).nullable(),
+  reason_parameters: z.record(z.string(), z.string()), release_token: z.string().nullable()
+}).strict()
+
+export const softwareReleaseListingSchema = z.object({
+  package_id: z.string(), releases: z.array(softwareReleaseSchema), checked_at: z.string().nullable(),
+  stale: z.boolean(), error: errorDetailSchema.nullable()
+}).strict()
+
+export type SoftwareRelease = z.infer<typeof softwareReleaseSchema>
+export type SoftwareReleaseListing = z.infer<typeof softwareReleaseListingSchema>
 
 export type SoftwarePackage = z.infer<typeof softwarePackageSchema>
 export type PendingSoftwareAction = z.infer<typeof pendingSoftwareActionSchema>

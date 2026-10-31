@@ -20,14 +20,14 @@ from astrophotoflow.contracts.bundles import (
 )
 from astrophotoflow.contracts.software import SoftwareOperation
 from astrophotoflow.core.errors import ApiError
-from astrophotoflow.modules.software.metadata import catalog, contained, read_bundle
+from astrophotoflow.modules.software.metadata import catalog, contained, read_bundle, read_bundle_locales
 from astrophotoflow.modules.software.environment import bundle_environment
 
 
 def release(package_id):
     value = catalog().get(package_id)
     if value is None:
-        raise ApiError(404, 'RESOURCE_NOT_FOUND', '未找到项目维护的软件包。')
+        raise ApiError(404, 'RESOURCE_NOT_FOUND', '未找到项目维护的软件包。', message_key='the_maintained_software_package_was_not_found')
     manifest = BundleManifest.model_validate(value['manifest'])
     if value['tag'] != 'v' + manifest.bundle_version:
         raise ValueError('Catalog tag does not match its version and release channel.')
@@ -60,7 +60,7 @@ def ensure_git(tool_root: Path | None):
     if executable:
         return executable
     if tool_root is None or os.name != 'nt':
-        raise ApiError(503, 'GIT_NOT_READY', '未找到平台 Git 运行工具。')
+        raise ApiError(503, 'GIT_NOT_READY', '未找到平台 Git 运行工具。', message_key='the_platform_git_tool_was_not_found')
     destination = tool_root / 'git-2.56.0.4'
     executable = destination / 'cmd/git.exe'
     if executable.is_file():
@@ -95,7 +95,7 @@ def ensure_git(tool_root: Path | None):
 def git(arguments, *, cwd=None, tool_root=None, on_progress=None):
     executable = ensure_git(tool_root)
     if executable is None:
-        raise ApiError(503, 'GIT_NOT_READY', '未找到 Git；请安装 Git for Windows 并登录私有仓库。')
+        raise ApiError(503, 'GIT_NOT_READY', '未找到 Git；请安装 Git for Windows 并登录私有仓库。', message_key='git_was_not_found_install_git_for_windows_and_authenticate_with_the_private')
     options = dict(cwd=cwd, text=True, encoding='utf-8', errors='replace',
                    env={**os.environ, 'GIT_TERMINAL_PROMPT': '0', 'LC_ALL': 'C'},
                    creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
@@ -111,11 +111,13 @@ def git(arguments, *, cwd=None, tool_root=None, on_progress=None):
                     raise
                 reading.result()
             if process.returncode:
-                raise ApiError(503, 'BUNDLE_FETCH_FAILED', 'Git 获取失败。请检查网络及系统 Git 凭据中的私有仓库访问权限。')
+                raise ApiError(503, 'BUNDLE_FETCH_FAILED', 'Git 获取失败。请检查网络及系统 Git 凭据中的私有仓库访问权限。', message_key='git_fetch_failed_check_the_network_and_private_repository_access_in_the_sys')
         return ''
     result = subprocess.run([executable, *arguments], capture_output=True, timeout=600, **options)
     if result.returncode:
-        raise ApiError(503, 'BUNDLE_FETCH_FAILED', 'Git 获取失败。请检查网络及系统 Git 凭据中的私有仓库访问权限。')
+        raise ApiError(503, 'BUNDLE_FETCH_FAILED', 'Git 获取失败。请检查网络及系统 Git 凭据中的私有仓库访问权限。',
+            fields=[{'path': 'git', 'message': re.sub(r'(https?://)[^\s/]+@', r'\1[redacted]@', result.stderr)[-4000:]}],
+            message_key='git_fetch_failed_check_the_network_and_private_repository_access_in_the_sys')
     return result.stdout.strip()
 
 
@@ -131,24 +133,31 @@ def _read_clone_progress(stream, on_progress):
                 previous = current
 
 
-def checkout(package_id: str, destination: Path, *, tool_root=None, on_progress=None):
-    item = release(package_id)
+def checkout(package_id: str, destination: Path, *, tool_root=None, on_progress=None, release_record=None):
+    official = release(package_id)
+    item = release_record if release_record is not None else official
+    if item['repository'] != official['repository'] or item['manifest']['package_id'] != package_id:
+        raise ValueError('The selected release is outside the maintained official repository.')
     if not item['commit']:
-        raise ApiError(503, 'BUNDLE_NOT_RELEASED', '该 Bundle 尚未发布固定提交。')
+        raise ApiError(503, 'BUNDLE_NOT_RELEASED', '该 Bundle 尚未发布固定提交。', message_key='this_bundle_has_no_published_pinned_commit_yet')
     git(['clone', '--depth', '1', '--branch', item['tag'], '--progress', '--', item['repository'], str(destination)], tool_root=tool_root, on_progress=on_progress)
     if on_progress is not None:
         on_progress('verifying', None)
     actual = git(['rev-parse', 'HEAD'], cwd=destination, tool_root=tool_root)
     if actual != item['commit']:
-        raise ApiError(409, 'BUNDLE_VERSION_CHANGED', '远端 tag 与已确认的提交不一致，未安装。')
+        raise ApiError(409, 'BUNDLE_VERSION_CHANGED', '远端 tag 与已确认的提交不一致，未安装。', message_key='the_remote_tag_does_not_match_the_confirmed_commit_nothing_was_installed')
     manifest, operations, nodes = read_bundle(destination)
-    if manifest.model_dump() != item['manifest'] or operations != item['operations'] or nodes != item['nodes']:
-        raise ApiError(409, 'BUNDLE_VERSION_CHANGED', 'Bundle 内容与发布目录不一致，未安装。')
+    if manifest.model_dump() != BundleManifest.model_validate(item['manifest']).model_dump() or operations != item['operations'] or nodes != item['nodes']:
+        raise ApiError(409, 'BUNDLE_VERSION_CHANGED', 'Bundle 内容与发布目录不一致，未安装。', message_key='bundle_content_does_not_match_the_release_catalog_nothing_was_installed')
+    # Metadata-only and full Git checkouts can apply different Windows EOL rules.
+    # Ignore only CRLF/LF conversion; all other reference content remains pinned.
     if 'reference_files' in item and {
-        name: contained(destination, name).read_bytes().decode('utf-8')
+        name: contained(destination, name).read_bytes().decode('utf-8').replace('\r\n', '\n')
         for name in [manifest.commands, manifest.assessments] if name is not None
-    } != item['reference_files']:
-        raise ApiError(409, 'BUNDLE_VERSION_CHANGED', 'Bundle 参考目录与已确认快照不一致，未安装。')
+    } != {name: content.replace('\r\n', '\n') for name, content in item['reference_files'].items()}:
+        raise ApiError(409, 'BUNDLE_VERSION_CHANGED', 'Bundle 参考目录与已确认快照不一致，未安装。', message_key='bundle_reference_data_does_not_match_the_confirmed_snapshot_nothing_was_ins')
+    if read_bundle_locales(destination, manifest, operations) != item.get('localizations', {}):
+        raise ApiError(409, 'BUNDLE_VERSION_CHANGED', 'Bundle translation snapshot differs.', message_key='bundle_content_does_not_match_the_release_catalog_nothing_was_installed')
     executable = contained(destination, manifest.executable)
     result = subprocess.run([str(executable), *manifest.version_args],
                             cwd=executable.parent, env=bundle_environment(executable),
@@ -156,7 +165,7 @@ def checkout(package_id: str, destination: Path, *, tool_root=None, on_progress=
                             creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
     if result.returncode or result.stdout.strip().casefold() != manifest.version_output.casefold():
         detail = (result.stderr.strip() or result.stdout.strip() or '程序没有输出。')[-2000:]
-        raise ApiError(503, 'SOFTWARE_NOT_READY', f'Bundle 程序版本检查失败（退出码 {result.returncode}，预期 {manifest.version_output}）：{detail}')
+        raise ApiError(503, 'SOFTWARE_NOT_READY', f'Bundle 程序版本检查失败（退出码 {result.returncode}，预期 {manifest.version_output}）：{detail}', message_key='bundle_executable_version_check_failed_exit_p0_expected_p1_p2', message_params={'p0': result.returncode, 'p1': manifest.version_output, 'p2': detail})
     adapter_path = contained(destination, manifest.adapter)
     adapter = _adapter(str(adapter_path), actual, adapter_path.read_bytes())
     if not callable(getattr(adapter, 'build_plan', None)):
@@ -265,7 +274,7 @@ def operation(workspace: Path, package_id: str, operation_id: str, ready: bool, 
     _, entries, _ = metadata(workspace, package_id)
     entry = next((value for value in entries if value['operation']['operation_id'] == operation_id), None)
     if entry is None:
-        raise ApiError(404, 'RESOURCE_NOT_FOUND', '未找到软件操作。')
+        raise ApiError(404, 'RESOURCE_NOT_FOUND', '未找到软件操作。', message_key='the_software_operation_was_not_found')
     return operation_from_entry(entry, ready, reason)
 
 

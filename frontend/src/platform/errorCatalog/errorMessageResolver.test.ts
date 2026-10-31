@@ -287,10 +287,10 @@ describe('errorMessageResolver', () => {
 
   it('falls back to raw API copy when catalog keys are missing in the active locale', () => {
     const originalLocale = i18n.global.locale.value
-    const originalKoMessages = i18n.global.getLocaleMessage('ko')
+    const originalMessages = i18n.global.getLocaleMessage('zh')
 
-    i18n.global.setLocaleMessage('ko', {} as typeof originalKoMessages)
-    i18n.global.locale.value = 'ko'
+    i18n.global.setLocaleMessage('zh', {} as typeof originalMessages)
+    i18n.global.locale.value = 'zh'
 
     try {
       expect(
@@ -308,7 +308,7 @@ describe('errorMessageResolver', () => {
         toastMessage: 'Required input is missing'
       })
     } finally {
-      i18n.global.setLocaleMessage('ko', originalKoMessages)
+      i18n.global.setLocaleMessage('zh', originalMessages)
       i18n.global.locale.value = originalLocale
     }
   })

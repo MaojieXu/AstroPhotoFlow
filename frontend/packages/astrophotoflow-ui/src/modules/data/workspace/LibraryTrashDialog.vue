@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { uiT } from '../../../core/i18n'
+
 import { computed, ref, watch } from 'vue'
 import { z } from 'zod'
 import { assetApi } from '../api/index'
@@ -81,7 +83,7 @@ async function load() {
     rows.value = result.items
     total.value = result.total
   } catch (cause) {
-    if (generation === readGeneration && props.open) error.value = cause instanceof Error ? cause.message : '回收站读取失败。'
+    if (generation === readGeneration && props.open) error.value = cause instanceof Error ? cause.message : uiT('apfUi.could_not_read_trash')
   } finally { if (generation === readGeneration && props.open) loading.value = false }
 }
 watch(() => props.open, open => {
@@ -110,7 +112,7 @@ async function loadGroupChildren() {
     if (generation !== readGeneration || !props.open || expandedGroup.value !== groupId || groupChildOffset.value !== childOffset) return
     groupChildren.value = result.items; groupChildTotal.value = result.total
   } catch (cause) {
-    if (generation === readGeneration && props.open) error.value = cause instanceof Error ? cause.message : '组内照片读取失败。'
+    if (generation === readGeneration && props.open) error.value = cause instanceof Error ? cause.message : uiT('apfUi.could_not_read_group_photos')
   } finally { if (generation === readGeneration && props.open) loading.value = false }
 }
 function togglePage(event: Event) {
@@ -132,11 +134,11 @@ async function restore() {
   busy.value = true; error.value=''; notice.value=''
   try {
     await assetApi.send('/astrophotoflow/api/v1/library/trash/restore', z.object({restored_count:z.number().int().nonnegative()}).strict(), 'POST', pageRequest(selectionRows()))
-    notice.value='已恢复所选记录。'
+    notice.value=uiT('apfUi.selected_records_restored')
     emit('changed')
     if (offset.value >= Math.max(0,total.value-selected.value.size)) offset.value=Math.max(0,offset.value-pageSize)
     await load()
-  } catch(cause) { error.value=cause instanceof Error?cause.message:'恢复失败。' }
+  } catch(cause) { error.value=cause instanceof Error?cause.message:uiT('apfUi.could_not_restore') }
   finally {busy.value=false}
 }
 async function requestPreview() {
@@ -150,7 +152,7 @@ async function requestPreview() {
     preview.value=result
     previewSelection.value=selection
     if (!result.tasks.length&&!result.references.some(reference=>reference.kind==='calibration')) deleteConfirm.value=true
-  } catch(cause) {if (generation === readGeneration && props.open) error.value=cause instanceof Error?cause.message:'永久删除预览失败。'}
+  } catch(cause) {if (generation === readGeneration && props.open) error.value=cause instanceof Error?cause.message:uiT('apfUi.could_not_preview_permanent_deletion')}
   finally {busy.value=false}
 }
 async function permanentlyDelete() {
@@ -160,12 +162,12 @@ async function permanentlyDelete() {
     const result=await assetApi.send('/astrophotoflow/api/v1/library/trash/delete',libraryTrashDeleteSchema,'POST',{
       ...previewSelection.value,preview_fingerprint:preview.value.preview_fingerprint
     })
-    notice.value=`已清理 ${result.deleted_count} 张照片、${result.deleted_entry_count} 条记录；删除文件 ${result.deleted_file_count} 个（${bytes(result.deleted_bytes)}），缺失文件 ${result.missing_file_count} 个。`+
-      (result.failed.length?` ${result.failed.length} 项保留在回收站中。${result.failed.map(item=>item.error).join('；')}`:'')
+    notice.value=uiT('apfUi.removed_value_photos_and_value_records_deleted_value_files_value_missi', { p0: (result.deleted_count), p1: (result.deleted_entry_count), p2: (result.deleted_file_count), p3: (bytes(result.deleted_bytes)), p4: (result.missing_file_count) })+
+      (result.failed.length?uiT('apfUi.value_entries_remain_in_trash_value', { p0: (result.failed.length), p1: (result.failed.map(item=>item.error).join('；')) }):'')
     if (result.failed.length) error.value=result.failed.map(item=>`${item.id}：${item.error}`).join('；')
     emit('changed')
     await load()
-  } catch(cause) {clearPreview();error.value=cause instanceof Error?cause.message:'永久删除失败。请重新预览后重试。'}
+  } catch(cause) {clearPreview();error.value=cause instanceof Error?cause.message:uiT('apfUi.permanent_deletion_failed_generate_a_new_preview_before_retrying')}
   finally {busy.value=false}
 }
 const bytes = (value:number) => value < 1024 ? `${value} B` : value < 1024*1024 ? `${(value/1024).toFixed(1)} KB` : `${(value/1024/1024).toFixed(1)} MB`
@@ -175,48 +177,48 @@ const bytes = (value:number) => value < 1024 ? `${value} B` : value < 1024*1024 
   <div v-if="open" class="trash-backdrop" role="presentation" @click.self="!busy&&emit('close')">
     <section class="trash-dialog" role="dialog" aria-modal="true" aria-labelledby="trash-title">
       <header class="trash-header">
-        <h2 id="trash-title">回收站</h2>
-        <button type="button" aria-label="关闭回收站" :disabled="busy" @click="emit('close')">关闭</button>
+        <h2 id="trash-title">{{ $t('apfUi.trash_ba35dc') }}</h2>
+        <button type="button" :aria-label="$t('apfUi.close_trash')" :disabled="busy" @click="emit('close')">{{ $t('apfUi.close') }}</button>
       </header>
       <div class="trash-content">
-        <p class="trash-description">恢复会保留原资产身份与资料。永久删除无法在应用内恢复。</p>
+        <p class="trash-description">{{ $t('apfUi.restoring_retains_the_original_asset_identity_and_metadata_permanent_d') }}</p>
         <p v-if="notice" role="status">{{notice}}</p>
         <p v-if="error" class="trash-error" role="alert">{{error}}</p>
         <div class="trash-table-wrap">
           <table>
-            <thead><tr><th class="trash-select"><input type="checkbox" aria-label="全选当前页" :checked="allSelected" :disabled="loading||busy" @change="togglePage"></th><th>名称</th><th>类型</th><th>移除时间</th><th>清理状态</th></tr></thead>
+            <thead><tr><th class="trash-select"><input type="checkbox" :aria-label="$t('apfUi.select_current_page')" :checked="allSelected" :disabled="loading||busy" @change="togglePage"></th><th>{{ $t('apfUi.name') }}</th><th>{{ $t('apfUi.type') }}</th><th>{{ $t('apfUi.removed_at') }}</th><th>{{ $t('apfUi.cleanup_status') }}</th></tr></thead>
             <tbody>
-              <tr v-if="loading&&!expandedGroup"><td colspan="5" class="trash-empty">正在读取回收站…</td></tr>
-              <tr v-else-if="!rows.length"><td colspan="5" class="trash-empty">回收站为空。</td></tr>
+              <tr v-if="loading&&!expandedGroup"><td colspan="5" class="trash-empty">{{ $t('apfUi.reading_trash') }}</td></tr>
+              <tr v-else-if="!rows.length"><td colspan="5" class="trash-empty">{{ $t('apfUi.trash_is_empty') }}</td></tr>
               <template v-for="row in displayRows" :key="row.entry_type+':'+row.id">
                 <tr :class="{'trash-child-row':row.entry_type==='asset'&&rows.some(group=>group.entry_type==='dataset'&&group.member_asset_ids.includes(row.id))}">
-                  <td class="trash-select"><input type="checkbox" :aria-label="'选择 '+row.name" :checked="selected.has(row.entry_type+':'+row.id)" :disabled="loading||busy" @change="toggleRow(row)"></td>
+                  <td class="trash-select"><input type="checkbox" :aria-label="$t('apfUi.select_beb481')+row.name" :checked="selected.has(row.entry_type+':'+row.id)" :disabled="loading||busy" @change="toggleRow(row)"></td>
                   <td>
                     <div class="trash-name">
-                      <button v-if="row.entry_type==='dataset'" type="button" class="trash-expand" :aria-expanded="expandedGroup===row.id" :disabled="busy" @click="toggleGroup(row)">{{expandedGroup===row.id?'收起':'展开'}}</button>
+                      <button v-if="row.entry_type==='dataset'" type="button" class="trash-expand" :aria-expanded="expandedGroup===row.id" :disabled="busy" @click="toggleGroup(row)">{{expandedGroup===row.id?$t('apfUi.collapse'):$t('apfUi.expand')}}</button>
                       <span>{{row.name}}</span>
                     </div>
-                    <small v-if="row.entry_type==='dataset'">{{row.photo_count}} 张照片</small>
-                    <small v-else-if="row.groups.length">归属组：{{row.groups.map(group=>group.name).join('、')}}</small>
+                    <small v-if="row.entry_type==='dataset'">{{ $t('apfUi.photos_value', { p0: (row.photo_count) }) }}</small>
+                    <small v-else-if="row.groups.length">{{ $t('apfUi.group_value', { p0: (row.groups.map(group=>group.name).join('、')) }) }}</small>
                     <small v-if="row.cleanup_error" class="trash-error">{{row.cleanup_error}}</small>
                   </td>
-                  <td>{{row.entry_type==='dataset'?'组':'照片'}}</td>
+                  <td>{{row.entry_type==='dataset'?$t('apfUi.group'):$t('apfUi.photo')}}</td>
                   <td class="trash-date">{{new Date(row.removed_at).toLocaleString()}}</td>
-                  <td><span :class="{'trash-error':row.cleanup_status!=='trash'}">{{row.cleanup_status==='trash'?'待清理':row.cleanup_status==='partial'?'部分清理（不可恢复）':'清理失败（不可恢复）'}}</span></td>
+                  <td><span :class="{'trash-error':row.cleanup_status!=='trash'}">{{row.cleanup_status==='trash'?$t('apfUi.pending_cleanup'):row.cleanup_status==='partial'?$t('apfUi.partial_cleanup_irreversible'):$t('apfUi.cleanup_failed_irreversible')}}</span></td>
                 </tr>
                 <template v-if="row.entry_type==='dataset'&&expandedGroup===row.id">
-                  <tr v-if="loading"><td colspan="5" class="trash-empty">正在读取组内照片…</td></tr>
+                  <tr v-if="loading"><td colspan="5" class="trash-empty">{{ $t('apfUi.reading_group_photos') }}</td></tr>
                   <tr v-for="child in groupChildren" :key="'child:'+child.id" class="trash-child-row">
-                    <td class="trash-select"><input type="checkbox" :aria-label="'选择 '+child.name" :checked="selected.has(child.entry_type+':'+child.id)" :disabled="loading||busy" @change="toggleRow(child)"></td>
+                    <td class="trash-select"><input type="checkbox" :aria-label="$t('apfUi.select_beb481')+child.name" :checked="selected.has(child.entry_type+':'+child.id)" :disabled="loading||busy" @change="toggleRow(child)"></td>
                     <td>{{child.name}}<small v-if="child.cleanup_error" class="trash-error">{{child.cleanup_error}}</small></td>
-                    <td>照片</td><td class="trash-date">{{new Date(child.removed_at).toLocaleString()}}</td>
-                    <td><span :class="{'trash-error':child.cleanup_status!=='trash'}">{{child.cleanup_status==='trash'?'待清理':child.cleanup_status==='partial'?'部分清理（不可恢复）':'清理失败（不可恢复）'}}</span></td>
+                    <td>{{ $t('apfUi.photo') }}</td><td class="trash-date">{{new Date(child.removed_at).toLocaleString()}}</td>
+                    <td><span :class="{'trash-error':child.cleanup_status!=='trash'}">{{child.cleanup_status==='trash'?$t('apfUi.pending_cleanup'):child.cleanup_status==='partial'?$t('apfUi.partial_cleanup_irreversible'):$t('apfUi.cleanup_failed_irreversible')}}</span></td>
                   </tr>
                   <tr><td colspan="5" class="trash-group-pages">
-                    <nav class="trash-pages" aria-label="组内照片分页">
-                      <button type="button" :disabled="groupChildOffset===0||loading||busy" @click="groupChildOffset=Math.max(0,groupChildOffset-pageSize);void loadGroupChildren()">组内上一页</button>
+                    <nav class="trash-pages" :aria-label="$t('apfUi.group_photo_pagination')">
+                      <button type="button" :disabled="groupChildOffset===0||loading||busy" @click="groupChildOffset=Math.max(0,groupChildOffset-pageSize);void loadGroupChildren()">{{ $t('apfUi.previous_group_page') }}</button>
                       <span>{{groupChildTotal?groupChildOffset+1:0}}–{{Math.min(groupChildOffset+groupChildren.length,groupChildTotal)}} / {{groupChildTotal}}</span>
-                      <button type="button" :disabled="groupChildOffset+groupChildren.length>=groupChildTotal||loading||busy" @click="groupChildOffset+=pageSize;void loadGroupChildren()">组内下一页</button>
+                      <button type="button" :disabled="groupChildOffset+groupChildren.length>=groupChildTotal||loading||busy" @click="groupChildOffset+=pageSize;void loadGroupChildren()">{{ $t('apfUi.next_group_page') }}</button>
                     </nav>
                   </td></tr>
                 </template>
@@ -224,31 +226,31 @@ const bytes = (value:number) => value < 1024 ? `${value} B` : value < 1024*1024 
             </tbody>
           </table>
         </div>
-        <section v-if="preview" class="trash-preview" aria-label="永久删除预览">
-          <h3>删除范围</h3><p>照片 {{preview.photo_count}} 张；托管文件 {{preview.managed_file_count}} 个，共 {{bytes(preview.managed_bytes)}}。</p>
-          <p v-if="preview.tasks.length" class="trash-error">导入任务仍占用：{{preview.tasks.join('、')}}。请先通过导入任务取消。</p>
-          <div v-if="preview.references.length"><h4>{{preview.references.some(reference=>reference.kind==='calibration')?'项目、组或校准关联':'将一并清理'}} {{preview.references.length}} 条项目或组关联</h4><p v-for="reference in preview.references" :key="reference.id">{{reference.name}} · {{reference.kind==='project_asset'?'项目照片':reference.kind==='project_dataset'?'项目图像组':reference.kind==='calibration'?'保留中的校准引用':'图像组成员'}} · 第 {{reference.version}} 版</p></div>
-          <p v-if="preview.references.some(reference=>reference.kind==='calibration')" role="alert">其他组的历史版本仍使用此校准目标，已阻止清理。先清理引用组；系统不会自动清空关联。</p>
+        <section v-if="preview" class="trash-preview" :aria-label="$t('apfUi.permanent_deletion_preview')">
+          <h3>{{ $t('apfUi.deletion_scope') }}</h3><p>{{ $t('apfUi.photos_value_managed_files_value_total_value', { p0: (preview.photo_count), p1: (preview.managed_file_count), p2: (bytes(preview.managed_bytes)) }) }}</p>
+          <p v-if="preview.tasks.length" class="trash-error">{{ $t('apfUi.import_tasks_still_hold_these_items_value_cancel_them_through_the_impo', { p0: (preview.tasks.join('、')) }) }}</p>
+          <div v-if="preview.references.length"><h4>{{ $t('apfUi.value_project_or_group_references_value', { p0: preview.references.some(reference=>reference.kind==='calibration')?$t('apfUi.project_group_or_calibration_references'):$t('apfUi.included_in_cleanup'), p1: preview.references.length }) }}</h4><p v-for="reference in preview.references" :key="reference.id">{{ $t('apfUi.value_value_version_value', { p0: reference.name, p1: reference.kind==='project_asset'?$t('apfUi.project_photos'):reference.kind==='project_dataset'?$t('apfUi.project_image_groups'):reference.kind==='calibration'?$t('apfUi.retained_calibration_references'):$t('apfUi.image_group_members'), p2: reference.version }) }}</p></div>
+          <p v-if="preview.references.some(reference=>reference.kind==='calibration')" role="alert">{{ $t('apfUi.historical_versions_of_other_groups_still_reference_this_calibration_t') }}</p>
         </section>
       </div>
       <footer class="trash-footer">
-        <nav class="trash-pages" aria-label="回收站分页">
-          <button type="button" :disabled="offset===0||loading||busy" @click="offset=Math.max(0,offset-pageSize);void load()">上一页</button>
+        <nav class="trash-pages" :aria-label="$t('apfUi.trash_pagination')">
+          <button type="button" :disabled="offset===0||loading||busy" @click="offset=Math.max(0,offset-pageSize);void load()">{{ $t('apfUi.previous_page') }}</button>
           <span>{{total?offset+1:0}}–{{Math.min(offset+rows.length,total)}} / {{total}}</span>
-          <button type="button" :disabled="offset+rows.length>=total||loading||busy" @click="offset+=pageSize;void load()">下一页</button>
+          <button type="button" :disabled="offset+rows.length>=total||loading||busy" @click="offset+=pageSize;void load()">{{ $t('apfUi.next_page') }}</button>
         </nav>
         <div class="trash-actions">
-          <span class="trash-selection">已选 {{selected.size}} 项</span>
-          <button type="button" :disabled="!selected.size||busy||selectionRows().some(row=>[...rows,...groupChildren].find(item=>item.id===row.id)?.cleanup_status!=='trash')" @click="restore">恢复</button>
-          <button type="button" class="trash-danger" :disabled="!selected.size||busy" @click="requestPreview">永久删除</button>
+          <span class="trash-selection">{{ $t('apfUi.selected_value', { p0: (selected.size) }) }}</span>
+          <button type="button" :disabled="!selected.size||busy||selectionRows().some(row=>[...rows,...groupChildren].find(item=>item.id===row.id)?.cleanup_status!=='trash')" @click="restore">{{ $t('apfUi.restore') }}</button>
+          <button type="button" class="trash-danger" :disabled="!selected.size||busy" @click="requestPreview">{{ $t('apfUi.permanently_delete') }}</button>
         </div>
       </footer>
       <div v-if="deleteConfirm" class="trash-confirm" role="alertdialog" aria-modal="true">
-        <h3>确认永久删除</h3><p>将清理 {{preview?.items.length}} 条记录、{{preview?.photo_count}} 张照片、{{preview?.managed_file_count}} 个托管文件（{{bytes(preview?.managed_bytes??0)}}）及 {{preview?.references.length}} 条项目或组关联。此操作无法在应用内恢复。</p>
+        <h3>{{ $t('apfUi.confirm_permanent_deletion') }}</h3><p>{{ $t('apfUi.permanently_remove_value_records_value_photos_value_managed_files_valu', { p0: (preview?.items.length), p1: (preview?.photo_count), p2: (preview?.managed_file_count), p3: (bytes(preview?.managed_bytes??0)), p4: (preview?.references.length) }) }}</p>
         <p v-if="preview?.references.length">{{[...new Set(preview.references.map(reference=>reference.name))].join('、')}}</p>
         <div class="trash-actions">
-          <button type="button" :disabled="busy" @click="deleteConfirm=false">取消</button>
-          <button type="button" class="trash-danger" :disabled="busy" @click="permanentlyDelete">确认永久删除</button>
+          <button type="button" :disabled="busy" @click="deleteConfirm=false">{{ $t('apfUi.cancel') }}</button>
+          <button type="button" class="trash-danger" :disabled="busy" @click="permanentlyDelete">{{ $t('apfUi.confirm_permanent_deletion') }}</button>
         </div>
       </div>
     </section>

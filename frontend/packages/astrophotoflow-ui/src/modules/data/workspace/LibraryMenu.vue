@@ -25,10 +25,10 @@ defineExpose({close,dismiss})
 
 <template>
   <component :is="controls.menu" v-if="controls?.menu" v-model:open="open" :items="items" align="end">
-    <template #trigger><LibraryButton type="button" aria-label="更多操作" tooltip="更多操作"><i class="icon-[lucide--ellipsis] size-4" aria-hidden="true" /></LibraryButton></template>
+    <template #trigger><LibraryButton type="button" :aria-label="$t('apfUi.more_actions')" :tooltip="$t('apfUi.more_actions')"><i class="icon-[lucide--ellipsis] size-4" aria-hidden="true" /></LibraryButton></template>
   </component>
   <details v-else ref="details" class="apf-equipment-more apf-workspace-more" @keydown.esc.stop.prevent="close(true)" @focusout="!details?.contains($event.relatedTarget as Node|null)&&close()">
-    <summary aria-label="更多操作" title="更多操作">…</summary>
+    <summary :aria-label="$t('apfUi.more_actions')" :title="$t('apfUi.more_actions')">…</summary>
     <div><template v-for="item in items" :key="item.label">
       <label v-if="item.radioGroup">{{item.label}}<select :aria-label="item.label" :value="item.radioGroup.value" :disabled="item.disabled" @change="selectOption(item,$event)"><option v-for="option in item.radioGroup.options" :key="option.value" :value="option.value">{{option.label}}</option></select></label>
       <LibraryButton v-else type="button" :disabled="item.disabled" @click="close();item.command()">{{item.label}}</LibraryButton>

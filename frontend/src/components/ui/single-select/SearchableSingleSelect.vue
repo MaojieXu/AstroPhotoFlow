@@ -80,6 +80,7 @@
               v-for="opt in filteredOptions"
               :key="opt.value"
               :value="opt"
+              :disabled="opt.disabled"
               :class="selectItemVariants({ layout: 'single' })"
             >
               <span class="truncate">{{ opt.name }}</span>

@@ -21,7 +21,7 @@ def _available_asset(session, version_id: str):
     if asset is None or asset.scope != "shared" or asset.status != "active":
         raise not_found()
     if version.availability != "available" or not version.content_hash or version.byte_size is None:
-        raise ApiError(409, "SOURCE_UNAVAILABLE", f"{asset.name} 的原件尚未就绪或已经变化，不能加入画布。")
+        raise ApiError(409, "SOURCE_UNAVAILABLE", f"{asset.name} 的原件尚未就绪或已经变化，不能加入画布。", message_key='the_original_for_p0_is_not_ready_or_has_changed_and_cannot_be_added_to_the_', message_params={'p0': asset.name})
     return asset, version
 
 
@@ -47,13 +47,13 @@ def prepare_canvas_data(database: Database, body: CanvasDataRequest) -> CanvasDa
         indexes = body.member_indexes
         if indexes is not None:
             if not set(indexes).issubset({member.position for member in members}):
-                raise ApiError(422, "INVALID_REFERENCE", "所选成员不属于固定图像组版本。")
+                raise ApiError(422, "INVALID_REFERENCE", "所选成员不属于固定图像组版本。", message_key='the_selected_member_does_not_belong_to_the_fixed_image_group_version')
             members = [member for member in members if member.position in indexes]
         if not members:
-            raise ApiError(422, "INVALID_REFERENCE", "空图像组不能加入画布。")
+            raise ApiError(422, "INVALID_REFERENCE", "空图像组不能加入画布。", message_key='an_empty_image_group_cannot_be_added_to_the_canvas')
         kinds = {(_available_asset(session, member.asset_version_id)[1].scientific_metadata or {}).get('format') == 'other' for member in members}
         if len(kinds) != 1:
-            raise ApiError(422, 'INVALID_REFERENCE', '文件与科学图像需要通过各自类型的输入端口加入。')
+            raise ApiError(422, 'INVALID_REFERENCE', '文件与科学图像需要通过各自类型的输入端口加入。', message_key='files_and_scientific_images_must_use_their_respective_input_port_types')
         file_group = True in kinds
         return CanvasDataOut(title=f"{dataset.name} · {len(members)} {'个文件' if file_group else '张'}",
             native_type='APF_FILE_REFERENCE' if file_group else 'APF_DATA_REFERENCE', reference=DatasetInputReference(
@@ -82,15 +82,15 @@ def inspect_canvas_data(database: Database, body: CanvasInspectRequest) -> Canva
             expected = {member.position: member.asset_version_id for member in members}
             indexes = [member.member_index for member in reference.members]
             if indexes != sorted(set(indexes)) or any(expected.get(member.member_index) != str(member.asset_version_id) for member in reference.members):
-                raise ApiError(422, "INVALID_REFERENCE", "引用成员与固定图像组版本不匹配。")
+                raise ApiError(422, "INVALID_REFERENCE", "引用成员与固定图像组版本不匹配。", message_key='referenced_members_do_not_match_the_fixed_image_group_version')
             if body.member_index >= len(reference.members):
-                raise ApiError(422, "INVALID_REFERENCE", "当前图片序号超出引用范围。")
+                raise ApiError(422, "INVALID_REFERENCE", "当前图片序号超出引用范围。", message_key='the_image_index_is_outside_the_reference_selection')
             current = reference.members[body.member_index]
             version_id, selection = str(current.asset_version_id), current.selection
             title, total = dataset.name, len(reference.members)
         else:
             if body.member_index != 0:
-                raise ApiError(422, "INVALID_REFERENCE", "单件素材只有一张。")
+                raise ApiError(422, "INVALID_REFERENCE", "单件素材只有一张。", message_key='a_single_asset_contains_only_one_image')
             version_id, selection = str(reference.asset_version_id), reference.selection
             title, total = None, 1
         version = session.get(AssetVersion, version_id)

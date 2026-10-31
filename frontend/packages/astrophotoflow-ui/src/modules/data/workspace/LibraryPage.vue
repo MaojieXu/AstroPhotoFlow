@@ -17,7 +17,7 @@ export default {
           <LibraryFilterPanel v-if="filterPanelOpen && isLibraryItemsView" :filters="activeFilters" :anchor="filterButton" @apply="applyFilters" @cancel="filterPanelOpen=false" />
   <CalibrationLibrary v-if="libraryCategory==='calibration'&&!activeDataset" />
   <WorkspaceRecords v-else />
-  <aside v-if="selected && selected.entry_type !== 'dataset'" class="apf-details" aria-label="所选素材文件">
+  <aside v-if="selected && selected.entry_type !== 'dataset'" class="apf-details" :aria-label="$t('apfUi.selected_asset_files')">
     <h2>{{ itemTitle(selected) }}</h2>
     <AssetContentChange :asset-id="rowAsset(selected).id" :has-version="!!rowAsset(selected).current_version_id" @accepted="loadRecords" />
   </aside>

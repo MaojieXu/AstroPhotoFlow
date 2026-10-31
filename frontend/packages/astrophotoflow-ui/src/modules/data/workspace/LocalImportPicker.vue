@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { uiT } from '../../../core/i18n'
+
 import { onBeforeUnmount, ref, watch } from 'vue'
 
 import { assetApi } from '../api/index'
@@ -37,10 +39,10 @@ async function choose() {
     const result = await assetApi.send('/astrophotoflow/api/v1/imports/select-local', localSelectionSchema, 'POST', {mode}, {signal:controller.signal})
     if (current !== generation || !open) return
     if (result.cancelled) close()
-    else if (!result.files.length) error.value = '所选文件夹当前层没有支持的素材文件。'
+    else if (!result.files.length) error.value = uiT('apfUi.no_supported_asset_files_at_the_selected_folder_level')
     else emit('selected', result.files, result.name ?? '', result.folder)
   } catch (cause) {
-    if (current === generation) error.value = cause instanceof Error ? cause.message : '本机文件选择失败。'
+    if (current === generation) error.value = cause instanceof Error ? cause.message : uiT('apfUi.could_not_select_local_files')
   } finally {
     if (current === generation) {
       loading.value = false
@@ -54,15 +56,15 @@ onBeforeUnmount(cancelSelection)
 </script>
 
 <template>
-  <LibraryDialog :open="open" :title="mode==='folder'?'选择本机文件夹':'选择本机文件'" @close="close">
+  <LibraryDialog :open="open" :title="mode==='folder'?$t('apfUi.select_local_folder'):$t('apfUi.select_local_files')" @close="close">
     <div class="apf-equipment-dialog-body">
-      <p v-if="loading" role="status">请在系统选择窗口中选择{{mode==='folder'?'文件夹':'一个或多个文件'}}。</p>
-      <p v-if="mode==='folder'">仅导入当前层支持的文件，不包含子文件夹。</p>
+      <p v-if="loading" role="status">{{ $t('apfUi.select_value_in_the_system_dialog', { p0: mode==='folder'?$t('apfUi.folder'):$t('apfUi.one_or_more_files') }) }}</p>
+      <p v-if="mode==='folder'">{{ $t('apfUi.only_supported_files_in_this_folder_are_imported_subfolders_are_exclud') }}</p>
       <p v-if="error" role="alert">{{error}}</p>
     </div>
     <footer class="apf-equipment-dialog-footer">
-      <LibraryButton @click="close">取消</LibraryButton>
-      <LibraryButton v-if="error" variant="primary" @click="choose">重新选择</LibraryButton>
+      <LibraryButton @click="close">{{ $t('apfUi.cancel') }}</LibraryButton>
+      <LibraryButton v-if="error" variant="primary" @click="choose">{{ $t('apfUi.choose_again') }}</LibraryButton>
     </footer>
   </LibraryDialog>
 </template>

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { uiT } from '../../../core/i18n'
+
 import { computed, onMounted, ref } from 'vue'
 import { ApiClientError } from '../api/client'
 import { assetApi } from '../api/index'
@@ -22,7 +24,7 @@ function path(url:string,params:Record<string,string|number>={}){
   const query=new URLSearchParams(Object.entries(params).map(([k,v])=>[k,String(v)]))
   return '/astrophotoflow/api/v1'+url+'?'+query.toString()
 }
-function message(cause:unknown){return cause instanceof ApiClientError?cause.message:'请求失败。'}
+function message(cause:unknown){return cause instanceof ApiClientError?cause.message:uiT('apfUi.request_failed')}
 function reportInlineFailure(){emit('failure',Object.values(inlineFailures.value).at(-1)??'')}
 function setInlineFailure(key:string,message:string){inlineFailures.value={...inlineFailures.value,[key]:message};reportInlineFailure()}
 function clearInlineFailure(key:string){
@@ -64,7 +66,7 @@ async function saveAssetField(asset:Asset,field:string,value:string|number|null)
   }catch(cause){const text=message(cause);setInlineFailure(failureKey,text);throw cause}
   finally{busy.value=false;emit('saving',false);if(saved)emit('updated')}
 }
-function close(){if(errorMessage.value&&!window.confirm('上次保存失败，仍要关闭并丢弃未保存输入吗？'))return;emit('close')}
+function close(){if(errorMessage.value&&!window.confirm(uiT('apfUi.the_last_save_failed_close_and_discard_unsaved_input_anyway')))return;emit('close')}
 async function load(){
   busy.value=true;error.value=''
   try{
@@ -125,37 +127,36 @@ onMounted(load)
 </script>
 
 <template>
-  <section class="apf-editor apf-dataset-editor" aria-label="编辑图像组">
-    <header><h2>图像组资料与成员</h2><button type="button" :disabled="busy" @click="close">关闭</button></header>
-    <p v-if="busy" role="status">正在读取或保存…</p>
+  <section class="apf-editor apf-dataset-editor" :aria-label="$t('apfUi.edit_image_group')">
+    <header><h2>{{ $t('apfUi.image_group_details_and_members') }}</h2><button type="button" :disabled="busy" @click="close">{{ $t('apfUi.close') }}</button></header>
+    <p v-if="busy" role="status">{{ $t('apfUi.reading_or_saving') }}</p>
     <p v-if="errorMessage" class="apf-error" role="alert">{{errorMessage}}</p>
     <template v-if="dataset">
-      <label>名称<InlineField :value="dataset.name" :save="value=>saveDatasetField('name',value)" @cancelled="clearInlineFailure('dataset:name')" /></label>
-      <label>备注<InlineField :value="dataset.notes" kind="textarea" :save="value=>saveDatasetField('notes',value)" @cancelled="clearInlineFailure('dataset:notes')" /></label>
-      <label>状态<InlineField :value="dataset.status" kind="select" :choices="[{value:'active',label:'启用'},{value:'archived',label:'归档'}]" :save="value=>saveDatasetField('status',value)" @cancelled="clearInlineFailure('dataset:status')" /></label>
-      <h3>固定成员（{{selection.length}}）</h3>
-      <p>移除或添加成员会产生新图像组版本；已有成员顺序保留，新成员追加。</p>
+      <label>{{ $t('apfUi.name') }}<InlineField :value="dataset.name" :save="value=>saveDatasetField('name',value)" @cancelled="clearInlineFailure('dataset:name')" /></label>
+      <label>{{ $t('apfUi.notes') }}<InlineField :value="dataset.notes" kind="textarea" :save="value=>saveDatasetField('notes',value)" @cancelled="clearInlineFailure('dataset:notes')" /></label>
+      <label>{{ $t('apfUi.status') }}<InlineField :value="dataset.status" kind="select" :choices="[{value:'active',label:$t('apfUi.active')},{value:'archived',label:$t('apfUi.archive')}]" :save="value=>saveDatasetField('status',value)" @cancelled="clearInlineFailure('dataset:status')" /></label>
+      <h3>{{ $t('apfUi.fixed_members_value', { p0: (selection.length) }) }}</h3>
+      <p>{{ $t('apfUi.adding_or_removing_members_creates_a_new_image_group_version_existing_') }}</p>
       <div v-for="asset in assets" :key="asset.id" class="apf-dataset-choice">
       <label>
         <input v-model="selection" type="checkbox" :value="asset.current_version_id" :disabled="!asset.current_version_id" />
         <InlineField :value="asset.name" @click.stop :save="value=>saveAssetField(asset,'name',value)" @cancelled="clearInlineFailure('asset:'+asset.id+':name')" /> ·
-        <InlineField v-if="asset.classification?.frame_class!=='video'" :value="asset.classification?.frame_type??''" :display="asset.classification?.frame_type??'未分类'" kind="select" @click.stop
-          :choices="[{value:'',label:'未指定'},{value:'light',label:'light'},{value:'bias',label:'bias'},{value:'dark',label:'dark'},{value:'flat',label:'flat'},{value:'dark_flat',label:'dark_flat'}]"
+        <InlineField v-if="asset.classification?.frame_class!=='video'" :value="asset.classification?.frame_type??''" :display="asset.classification?.frame_type??$t('apfUi.unclassified')" kind="select" @click.stop
+          :choices="[{value:'',label:$t('apfUi.not_specified')},{value:'light',label:'light'},{value:'bias',label:'bias'},{value:'dark',label:'dark'},{value:'flat',label:'flat'},{value:'dark_flat',label:'dark_flat'}]"
           :save="value=>saveAssetField(asset,'frame_type',value)" @cancelled="clearInlineFailure('asset:'+asset.id+':frame_type')" />
-        <span v-else>视频</span> · 曝光
-        <InlineField :value="asset.parameters?.exposure_seconds as number|null|undefined" @click.stop kind="number" :save="value=>saveAssetField(asset,'exposure_seconds',value)" @cancelled="clearInlineFailure('asset:'+asset.id+':exposure_seconds')" />
-        <InlineField :value="asset.status" kind="select" :choices="[{value:'active',label:'启用'},{value:'archived',label:'已归档'}]" :save="value=>saveAssetField(asset,'status',value)" @click.stop @cancelled="clearInlineFailure('asset:'+asset.id+':status')" />
+        <span v-else>{{ $t('apfUi.video') }}</span>{{ $t('apfUi.exposure') }}<InlineField :value="asset.parameters?.exposure_seconds as number|null|undefined" @click.stop kind="number" :save="value=>saveAssetField(asset,'exposure_seconds',value)" @cancelled="clearInlineFailure('asset:'+asset.id+':exposure_seconds')" />
+        <InlineField :value="asset.status" kind="select" :choices="[{value:'active',label:$t('apfUi.active')},{value:'archived',label:$t('apfUi.archived')}]" :save="value=>saveAssetField(asset,'status',value)" @click.stop @cancelled="clearInlineFailure('asset:'+asset.id+':status')" />
       </label>
-      <button type="button" :disabled="busy||!asset.current_version_id||trashedAssetIds.has(asset.id)" @click="trashConfirmAsset=asset">{{trashedAssetIds.has(asset.id)?'已移入回收站':'移入照片回收站'}}</button>
+      <button type="button" :disabled="busy||!asset.current_version_id||trashedAssetIds.has(asset.id)" @click="trashConfirmAsset=asset">{{trashedAssetIds.has(asset.id)?$t('apfUi.moved_to_trash'):$t('apfUi.move_to_photo_trash')}}</button>
       </div>
-      <div class="apf-form-actions"><button type="button" :disabled="busy" @click="close">取消</button><button type="button" :disabled="busy||Boolean(errorMessage)" @click="saveMembers">保存成员版本</button></div>
+      <div class="apf-form-actions"><button type="button" :disabled="busy" @click="close">{{ $t('apfUi.cancel') }}</button><button type="button" :disabled="busy||Boolean(errorMessage)" @click="saveMembers">{{ $t('apfUi.save_member_versions') }}</button></div>
     </template>
     <div v-if="trashConfirmAsset" class="apf-trash-confirm-backdrop" role="presentation" @click.self="trashConfirmAsset=undefined">
       <section class="apf-trash-confirm" role="alertdialog" aria-modal="true" aria-labelledby="member-trash-title">
-        <h3 id="member-trash-title">移入照片回收站？</h3>
-        <p>将移除“{{trashConfirmAsset.name}}”的正常展示。照片、版本和图像组成员关系保留，可从回收站恢复。</p>
-        <button type="button" :disabled="busy" @click="trashConfirmAsset=undefined">取消</button>
-        <button type="button" :disabled="busy" @click="moveMemberToTrash">确认移入</button>
+        <h3 id="member-trash-title">{{ $t('apfUi.move_to_photo_trash_4f79a1') }}</h3>
+        <p>{{ $t('apfUi.hide_value_from_normal_views_photos_versions_and_group_membership_are_', { p0: (trashConfirmAsset.name) }) }}</p>
+        <button type="button" :disabled="busy" @click="trashConfirmAsset=undefined">{{ $t('apfUi.cancel') }}</button>
+        <button type="button" :disabled="busy" @click="moveMemberToTrash">{{ $t('apfUi.confirm_move') }}</button>
       </section>
     </div>
   </section>

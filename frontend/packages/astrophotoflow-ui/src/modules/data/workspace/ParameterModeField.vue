@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { uiT } from '../../../core/i18n'
+
 import { nextTick, ref, watch } from 'vue'
 
 type RawNumber = number | string | null | undefined
@@ -50,7 +52,7 @@ function begin() {
     modeEditor.value?.focus()
     if (modeEditor.value && 'showPicker' in modeEditor.value) {
       try { modeEditor.value.showPicker() }
-      catch { error.value = '增益模式选项未能展开，请使用键盘打开。' }
+      catch { error.value = uiT('apfUi.could_not_expand_gain_modes_open_the_list_with_the_keyboard') }
     }
   })
 }
@@ -101,7 +103,7 @@ async function commit() {
     editorFocused.value = false
     saveAtEditStart.value = undefined
   } catch (cause) {
-    error.value = cause instanceof Error ? cause.message : '保存失败。'
+    error.value = cause instanceof Error ? cause.message : uiT('apfUi.could_not_save')
     await nextTick()
     ;(modeEditor.value ?? (activeMode === 'iso' ? isoEditor.value : gainEditor.value))?.focus()
   } finally {
@@ -142,20 +144,20 @@ watch(() => [props.value.parameter_mode, props.value.iso, props.value.gain, prop
   <span class="apf-mode-field" @focusin="focusin" @focusout="focusout">
     <template v-if="editing">
       <select ref="modeEditor" v-model="modeDraft" :disabled="saving" @keydown="keydown" @keyup="keyup">
-        <option :value="unsetMode ?? ''">未指定</option>
-        <option value="mixed" disabled>混合</option>
+        <option :value="unsetMode ?? ''">{{ $t('apfUi.not_specified') }}</option>
+        <option value="mixed" disabled>{{ $t('apfUi.mixed') }}</option>
         <option value="iso">ISO</option>
         <option value="gain">Gain／Offset</option>
       </select>
-      <input v-if="modeDraft==='iso'" ref="isoEditor" v-model="isoDraft" type="number" min="1" step="1" placeholder="未指定" :disabled="saving" aria-label="ISO" @keydown="keydown" />
+      <input v-if="modeDraft==='iso'" ref="isoEditor" v-model="isoDraft" type="number" min="1" step="1" :placeholder="$t('apfUi.not_specified')" :disabled="saving" aria-label="ISO" @keydown="keydown" />
       <template v-else-if="modeDraft==='gain'">
-        <input ref="gainEditor" v-model="gainDraft" type="number" step="any" :placeholder="value.gain==='mixed'?'混合':value.gain==='partial'?'部分缺失':'未指定'" :disabled="saving" aria-label="Gain" @keydown="keydown" />
+        <input ref="gainEditor" v-model="gainDraft" type="number" step="any" :placeholder="value.gain==='mixed'?$t('apfUi.mixed'):value.gain==='partial'?$t('apfUi.partially_missing'):$t('apfUi.not_specified')" :disabled="saving" aria-label="Gain" @keydown="keydown" />
         <span>/</span>
-        <input ref="offsetEditor" v-model="offsetDraft" type="number" step="any" :placeholder="value.offset==='mixed'?'混合':value.offset==='partial'?'部分缺失':'未指定'" :disabled="saving" aria-label="Offset" @keydown="keydown" />
+        <input ref="offsetEditor" v-model="offsetDraft" type="number" step="any" :placeholder="value.offset==='mixed'?$t('apfUi.mixed'):value.offset==='partial'?$t('apfUi.partially_missing'):$t('apfUi.not_specified')" :disabled="saving" aria-label="Offset" @keydown="keydown" />
       </template>
-      <small v-if="saving">保存中…</small><small v-if="error" class="apf-mode-error" role="alert">{{error}}</small>
+      <small v-if="saving">{{ $t('apfUi.saving') }}</small><small v-if="error" class="apf-mode-error" role="alert">{{error}}</small>
     </template>
-    <button v-else type="button" class="apf-inline-value" title="双击或按 Enter 编辑" @dblclick.stop.prevent="begin" @keydown.enter.stop.prevent="begin" @keydown.space.stop.prevent="begin">{{display}}<i aria-hidden="true" class="pi pi-pencil apf-edit-icon" /></button>
+    <button v-else type="button" class="apf-inline-value" :title="$t('apfUi.double_click_or_press_enter_to_edit')" @dblclick.stop.prevent="begin" @keydown.enter.stop.prevent="begin" @keydown.space.stop.prevent="begin">{{display}}<i aria-hidden="true" class="pi pi-pencil apf-edit-icon" /></button>
   </span>
 </template>
 

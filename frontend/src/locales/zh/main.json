@@ -155,7 +155,41 @@
     "cancel": "取消",
     "uninstallNotice": "仅移除平台专用程序副本。原件、节点定义和画布保持；重新安装前，Siril 节点无法执行。",
     "noPackages": "暂无可用的软件包清单。",
-    "loadError": "无法读取软件状态。"
+    "loadError": "无法读取软件状态。",
+    "bundleVersion": "Bundle 版本",
+    "selectVersion": "选择版本",
+    "versionUnknown": "版本未知",
+    "versionUnavailable": "官方列表已变化",
+    "installed": "已安装",
+    "latestStable": "最新正式版",
+    "latestDev": "最新开发版",
+    "switchVersion": "切换版本",
+    "refreshVersions": "刷新版本",
+    "checkingVersions": "正在检查官方版本…",
+    "versionsCheckedAt": "上次成功检查：",
+    "releaseCheckFailed": "无法检查官方版本，保留已安装信息和上次成功列表。请检查网络或 Git 凭据后刷新。",
+    "channel": {
+      "stable": "正式版",
+      "dev": "开发版"
+    },
+    "releaseReasons": {
+      "invalid_metadata": "版本声明无效",
+      "unsupported_platform": "不支持此系统：{required}",
+      "unsupported_sdk": "需要平台接口 {required}",
+      "missing_resources": "Bundle 缺少必要文件",
+      "unsupported_schema": "需要 Bundle 声明格式 {required}"
+    },
+    "programVersion": "程序",
+    "reviewPlan": "查看计划",
+    "confirmSwitchVersion": "确认切换版本",
+    "releaseCheckBusy": "已有版本检查正在进行，请完成后再刷新。",
+    "nodeChanges": "节点变化",
+    "nodeAction": {
+      "create": "新增",
+      "update": "更新",
+      "remove": "移除",
+      "retain": "保留"
+    }
   },
   "astrophotoflow": {
     "imagePath": "图像文件绝对路径",

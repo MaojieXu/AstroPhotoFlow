@@ -7,6 +7,7 @@ from pydantic import Field, model_validator
 from pydantic import JsonValue
 
 from astrophotoflow.contracts.common import StrictModel
+from astrophotoflow.contracts.localization import Locale
 from astrophotoflow.contracts.inputs import ScienceFormat, ScienceSelection
 
 
@@ -28,6 +29,7 @@ class BundleManifest(StrictModel):
     output_nodes: list[str] = Field(default_factory=list)
     commands: str | None = None
     assessments: str | None = None
+    locales: dict[Locale, str] = Field(default_factory=dict)
 
     @model_validator(mode='after')
     def channel_matches_version(self):

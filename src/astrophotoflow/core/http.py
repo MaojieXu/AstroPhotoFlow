@@ -29,7 +29,7 @@ ERROR_RESPONSES = {
 async def authenticate(request: Request, credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)]) -> None:
     expected = request.app.state.token
     if credentials is None or credentials.scheme.lower() != "bearer" or not hmac.compare_digest(credentials.credentials, expected):
-        raise ApiError(401, "AUTHENTICATION_REQUIRED", "需要有效的本机服务令牌。")
+        raise ApiError(401, "AUTHENTICATION_REQUIRED", "需要有效的本机服务令牌。", message_key='a_valid_local_service_token_is_required')
 
 
 def read_session(request: Request):
@@ -45,7 +45,7 @@ def write_session(request: Request):
 async def task_admission(request: Request):
     async with request.app.state.maintenance_lock:
         if request.app.state.maintenance:
-            raise ApiError(409, "WORKBENCH_MAINTENANCE", "工作台正在停止或重启，暂不接受新任务。")
+            raise ApiError(409, "WORKBENCH_MAINTENANCE", "工作台正在停止或重启，暂不接受新任务。", message_key='the_workbench_is_stopping_or_restarting_and_cannot_accept_new_tasks')
         yield
 
 

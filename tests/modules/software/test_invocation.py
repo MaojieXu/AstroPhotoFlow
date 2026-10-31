@@ -125,6 +125,48 @@ def test_partial_nonzero_exit_is_not_reported_as_success(configured, monkeypatch
     assert result.error.code == "SOFTWARE_EXECUTION_FAILED"
 
 
+@pytest.mark.parametrize('locale', ['en', 'zh'])
+@pytest.mark.parametrize('failure_phase', ['running', 'completed'])
+def test_observation_failures_use_localized_messages_and_preserve_diagnostics(configured, monkeypatch, locale, failure_phase):
+    import json
+    from astrophotoflow.core.localization import error_message
+    path = configured.workspace / 'comfyui-user/default/comfy.settings.json'
+    path.parent.mkdir(parents=True)
+    path.write_text(json.dumps({'Comfy.Locale': locale}), encoding='utf-8')
+    created = process_factory(monkeypatch)
+    diagnostic = 'database locked 原始诊断 {unchanged}'
+    failed = False
+    async def observe(value):
+        nonlocal failed
+        if value.state == failure_phase and not failed:
+            failed = True
+            raise OSError(diagnostic)
+    result = asyncio.run(public.invoke_operation(configured, invocation(configured), observe))
+    key = 'observation_start_failed' if failure_phase == 'running' else 'observation_result_failed'
+    assert result.error.code == 'OBSERVATION_FAILED'
+    assert result.error.message == error_message(locale, '', key)
+    assert result.error.fields == [{'path': 'diagnostic', 'message': diagnostic}]
+    assert len(created) == 1
+
+
+@pytest.mark.parametrize('locale', ['en', 'zh'])
+def test_nonzero_exit_preserves_raw_log_with_localized_summary(configured, monkeypatch, locale):
+    import json
+    from astrophotoflow.core.localization import error_message
+    path = configured.workspace / 'comfyui-user/default/comfy.settings.json'
+    path.parent.mkdir(parents=True)
+    path.write_text(json.dumps({'Comfy.Locale': locale}), encoding='utf-8')
+    process_factory(monkeypatch, exit_code=9)
+    diagnostic = 'Siril original log 原文 {value}'
+    monkeypatch.setattr(public.bundles, 'failure_reason', lambda *args: diagnostic)
+    async def observe(value):
+        pass
+    result = asyncio.run(public.invoke_operation(configured, invocation(configured), observe))
+    assert result.state == 'failed' and result.exit_code == 9
+    assert result.error.message == error_message(locale, '', 'software_exit_failed', {'exit_code': 9})
+    assert result.error.fields == [{'path': 'software_log', 'message': diagnostic}]
+
+
 def test_cancel_only_target_call_and_allow_maintenance_while_running(configured, monkeypatch):
     bodies = [invocation(configured, 1), invocation(configured, 1)]
     created = process_factory(monkeypatch, gated=True)

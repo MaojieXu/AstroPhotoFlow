@@ -516,9 +516,9 @@ describe('i18n', () => {
   })
 
   describe('loadLocale', () => {
-    it('should load shipped BCP-47 variants', async () => {
-      await loadLocale('zh-TW')
-      expect(i18n.global.getLocaleMessage('zh-TW')).toEqual(
+    it('normalizes a Chinese region variant to Simplified Chinese', async () => {
+      await setActiveLocale('zh-TW')
+      expect(i18n.global.getLocaleMessage('zh')).toEqual(
         expect.objectContaining({
           commands: expect.any(Object),
           nodeDefs: expect.any(Object),
@@ -540,15 +540,14 @@ describe('i18n', () => {
     })
 
     it('resolves shipped variants and sets the active locale', async () => {
-      expect(await setActiveLocale('pt-BR')).toBe('pt-BR')
-      expect(i18n.global.locale.value).toBe('pt-BR')
+      expect(await setActiveLocale('pt-BR')).toBe('en')
+      expect(i18n.global.locale.value).toBe('en')
       // pt is not shipped — pt-BR must not be promoted as a base match
       expect(await setActiveLocale('pt')).toBe('en')
     })
 
     it('honors prioritized navigator.languages', async () => {
-      // First preference unsupported, second shipped — should land on French.
-      expect(await setActiveLocale(['de-DE', 'fr-CA', 'en'])).toBe('fr')
+      expect(await setActiveLocale(['de-DE', 'fr-CA', 'zh-CN', 'en'])).toBe('zh')
     })
   })
 
@@ -565,28 +564,26 @@ describe('i18n', () => {
   describe('resolveSupportedLocale', () => {
     it('returns the canonical tag when the input is shipped', () => {
       expect(resolveSupportedLocale('en')).toBe('en')
-      expect(resolveSupportedLocale('ja')).toBe('ja')
-      expect(resolveSupportedLocale('zh-TW')).toBe('zh-TW')
-      expect(resolveSupportedLocale('pt-BR')).toBe('pt-BR')
-      expect(resolveSupportedLocale('it')).toBe('it')
+      expect(resolveSupportedLocale('ja')).toBe('en')
+      expect(resolveSupportedLocale('zh-TW')).toBe('zh')
+      expect(resolveSupportedLocale('pt-BR')).toBe('en')
+      expect(resolveSupportedLocale('it')).toBe('en')
     })
 
     it('matches case-insensitively per BCP-47 and returns canonical casing', () => {
       // Older browsers / OS configs may emit lowercase region tags.
-      expect(resolveSupportedLocale('pt-br')).toBe('pt-BR')
-      expect(resolveSupportedLocale('PT-BR')).toBe('pt-BR')
-      expect(resolveSupportedLocale('zh-tw')).toBe('zh-TW')
-      expect(resolveSupportedLocale('ZH-TW')).toBe('zh-TW')
+      expect(resolveSupportedLocale('pt-br')).toBe('en')
+      expect(resolveSupportedLocale('PT-BR')).toBe('en')
+      expect(resolveSupportedLocale('zh-tw')).toBe('zh')
+      expect(resolveSupportedLocale('ZH-TW')).toBe('zh')
       expect(resolveSupportedLocale('EN')).toBe('en')
     })
 
     it('falls back to the base tag when the full tag is unshipped', () => {
       // de-DE → de (unshipped) → en
       expect(resolveSupportedLocale('de-DE')).toBe('en')
-      // fr-CA → fr (shipped) → fr
-      expect(resolveSupportedLocale('fr-CA')).toBe('fr')
-      // ko-KR → ko (shipped) → ko
-      expect(resolveSupportedLocale('ko-KR')).toBe('ko')
+      expect(resolveSupportedLocale('fr-CA')).toBe('en')
+      expect(resolveSupportedLocale('ko-KR')).toBe('en')
       // zh-CN → zh (shipped) → zh (Simplified is the base)
       expect(resolveSupportedLocale('zh-CN')).toBe('zh')
     })
@@ -601,8 +598,7 @@ describe('i18n', () => {
     })
 
     it('walks a prioritized array per RFC 4647 lookup order', () => {
-      // First shipped match wins (de unshipped → fr shipped → fr).
-      expect(resolveSupportedLocale(['de-DE', 'fr-CA', 'en'])).toBe('fr')
+      expect(resolveSupportedLocale(['de-DE', 'fr-CA', 'en'])).toBe('en')
       // Empty / all-unshipped arrays fall back to en.
       expect(resolveSupportedLocale([])).toBe('en')
       expect(resolveSupportedLocale(['de', 'nl'])).toBe('en')

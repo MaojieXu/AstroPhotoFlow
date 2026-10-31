@@ -1,0 +1,1769 @@
+{
+  "messages": {
+    "configuration_is_being_saved_read_it_again_before_submitting": {
+      "en": "Configuration is being saved. Read it again before submitting.",
+      "zh": "配置正在保存，请重新读取后再提交。"
+    },
+    "configuration_has_changed_read_it_again": {
+      "en": "Configuration has changed. Read it again.",
+      "zh": "配置已被修改，请重新读取。"
+    },
+    "workspace_configuration_was_saved_but_the_default_location_could_not_be_sav": {
+      "en": "Workspace configuration was saved, but the default location could not be saved. Read it again.",
+      "zh": "workspace 配置已保存，但默认位置保存失败；请重新读取。"
+    },
+    "the_requested_resource_was_not_found": {
+      "en": "The requested resource was not found.",
+      "zh": "未找到请求的资源。"
+    },
+    "a_valid_local_service_token_is_required": {
+      "en": "A valid local service token is required.",
+      "zh": "需要有效的本机服务令牌。"
+    },
+    "the_workbench_is_stopping_or_restarting_and_cannot_accept_new_tasks": {
+      "en": "The workbench is stopping or restarting and cannot accept new tasks.",
+      "zh": "工作台正在停止或重启，暂不接受新任务。"
+    },
+    "the_requested_version_is_not_in_the_maintained_software_catalog": {
+      "en": "The requested version is not in the maintained software catalog.",
+      "zh": "请求的版本不在软件维护清单中。"
+    },
+    "the_package_state_has_changed_read_it_again_before_requesting_installation": {
+      "en": "The package state has changed. Read it again before requesting installation.",
+      "zh": "软件包状态已变化，请重新读取后请求安装。"
+    },
+    "a_software_action_is_already_running_for_this_package": {
+      "en": "A software action is already running for this package.",
+      "zh": "软件包已有动作正在执行。"
+    },
+    "confirm_installation_from_the_ready_workbench_webpage": {
+      "en": "Confirm installation from the ready workbench webpage.",
+      "zh": "必须从已就绪的工作台网页确认软件安装。"
+    },
+    "the_workbench_webpage_address_has_changed_review_the_installation_plan_agai": {
+      "en": "The workbench webpage address has changed. Review the installation plan again.",
+      "zh": "工作台网页地址已变化，请重新查看安装计划。"
+    },
+    "a_bundled_node_id_already_belongs_to_another_definition": {
+      "en": "A bundled node ID already belongs to another definition.",
+      "zh": "软件包配套节点ID已属于其他定义。"
+    },
+    "the_package_state_has_changed_read_it_again_before_uninstalling": {
+      "en": "The package state has changed. Read it again before uninstalling.",
+      "zh": "软件包状态已变化，请重新读取后卸载。"
+    },
+    "the_installation_or_operation_state_is_unknown_uninstallation_is_blocked": {
+      "en": "The installation or operation state is unknown. Uninstallation is blocked.",
+      "zh": "当前安装或操作状态不能确认，无法卸载。"
+    },
+    "could_not_confirm_that_the_workbench_webpage_is_ready": {
+      "en": "Could not confirm that the workbench webpage is ready.",
+      "zh": "无法确认工作台网页已就绪。"
+    },
+    "this_software_action_was_replaced_or_invalidated_by_a_service_restart": {
+      "en": "This software action was replaced or invalidated by a service restart.",
+      "zh": "该软件动作已被替换或服务重启后失效。"
+    },
+    "the_software_confirmation_page_connection_has_changed": {
+      "en": "The software confirmation page connection has changed.",
+      "zh": "软件确认页面连接已改变。"
+    },
+    "this_software_action_was_replaced_or_has_expired": {
+      "en": "This software action was replaced or has expired.",
+      "zh": "该软件动作已被替换或失效。"
+    },
+    "the_workbench_is_undergoing_maintenance_installation_cannot_be_confirmed": {
+      "en": "The workbench is undergoing maintenance. Installation cannot be confirmed.",
+      "zh": "工作台正在维护，无法确认软件安装。"
+    },
+    "the_package_state_has_changed_review_the_installation_plan_again": {
+      "en": "The package state has changed. Review the installation plan again.",
+      "zh": "软件包状态已变化，请重新查看安装计划。"
+    },
+    "bundled_node_definitions_have_changed_review_the_installation_plan_again": {
+      "en": "Bundled node definitions have changed. Review the installation plan again.",
+      "zh": "配套节点定义已变化，请重新查看安装计划。"
+    },
+    "the_package_state_changed_after_confirmation_installation_was_not_started": {
+      "en": "The package state changed after confirmation. Installation was not started.",
+      "zh": "确认后软件包状态发生变化，未开始安装。"
+    },
+    "bundle_files_were_updated_but_node_hot_loading_could_not_be_confirmed_query": {
+      "en": "Bundle files were updated, but node hot loading could not be confirmed. Query the software state.",
+      "zh": "Bundle 文件已更新，但无法确认节点热加载；请查询软件状态。"
+    },
+    "the_domain_service_database_is_not_ready": {
+      "en": "The domain service database is not ready.",
+      "zh": "领域服务数据库未就绪。"
+    },
+    "locale_unavailable": {
+      "en": "Cannot read the workspace language setting.",
+      "zh": "无法读取工作台语言设置。"
+    },
+    "cannot_read_the_workbench_configuration_check_the_configuration_file": {
+      "en": "Cannot read the workbench configuration. Check the configuration file.",
+      "zh": "无法读取工作台配置，请检查配置文件。"
+    },
+    "cannot_save_the_workbench_configuration_read_it_again_and_check_file_permis": {
+      "en": "Cannot save the workbench configuration. Read it again and check file permissions.",
+      "zh": "无法保存工作台配置，请重新读取并检查文件权限。"
+    },
+    "cannot_open_the_system_folder_picker_check_the_local_desktop_session_or_ent": {
+      "en": "Cannot open the system folder picker. Check the local desktop session or enter a path directly.",
+      "zh": "无法打开系统文件夹选择窗口。请检查本机桌面会话或直接填写路径。"
+    },
+    "image_group_versions_still_reference_the_selected_calibration_target_remove": {
+      "en": "Image group versions still reference the selected calibration target. Remove those groups before retrying cleanup.",
+      "zh": "仍有图像组版本使用所选校准目标；请先移除引用组，再重试清理校准目标。"
+    },
+    "p0_must_reference_a_fixed_calibration_dataset_version_or_a_master_calibrati": {
+      "en": "{p0} must reference a fixed calibration dataset version or a master calibration asset version with the same frame use.",
+      "zh": "{p0} 必须引用同用途的固定校准数据集版本或 Master 校准资产版本。"
+    },
+    "the_original_for_p0_is_not_ready_or_has_changed_and_cannot_be_added_to_the_": {
+      "en": "The original for {p0} is not ready or has changed and cannot be added to the canvas.",
+      "zh": "{p0} 的原件尚未就绪或已经变化，不能加入画布。"
+    },
+    "an_empty_image_group_cannot_be_added_to_the_canvas": {
+      "en": "An empty image group cannot be added to the canvas.",
+      "zh": "空图像组不能加入画布。"
+    },
+    "files_and_scientific_images_must_use_their_respective_input_port_types": {
+      "en": "Files and scientific images must use their respective input port types.",
+      "zh": "文件与科学图像需要通过各自类型的输入端口加入。"
+    },
+    "the_selected_member_does_not_belong_to_the_fixed_image_group_version": {
+      "en": "The selected member does not belong to the fixed image group version.",
+      "zh": "所选成员不属于固定图像组版本。"
+    },
+    "referenced_members_do_not_match_the_fixed_image_group_version": {
+      "en": "Referenced members do not match the fixed image group version.",
+      "zh": "引用成员与固定图像组版本不匹配。"
+    },
+    "the_image_index_is_outside_the_reference_selection": {
+      "en": "The image index is outside the reference selection.",
+      "zh": "当前图片序号超出引用范围。"
+    },
+    "a_single_asset_contains_only_one_image": {
+      "en": "A single asset contains only one image.",
+      "zh": "单件素材只有一张。"
+    },
+    "another_window_changed_the_configuration_read_it_again_before_saving": {
+      "en": "Another window changed the configuration. Read it again before saving.",
+      "zh": "配置已被其他窗口修改，请重新读取后保存。"
+    },
+    "p0_must_reference_an_existing_p1_device": {
+      "en": "{p0} must reference an existing {p1} device.",
+      "zh": "{p0} 必须引用现存的 {p1} 设备。"
+    },
+    "invalid_request_fields": {
+      "en": "Invalid request fields.",
+      "zh": "请求字段无效。"
+    },
+    "dataset_members_must_not_be_duplicated": {
+      "en": "Dataset members must not be duplicated.",
+      "zh": "数据集成员不能重复。"
+    },
+    "retained_members_must_keep_their_relative_order_new_members_may_only_be_app": {
+      "en": "Retained members must keep their relative order. New members may only be appended.",
+      "zh": "已有成员必须保留原有相对顺序，新成员只能追加。"
+    },
+    "new_members_must_follow_the_retained_members": {
+      "en": "New members must follow the retained members.",
+      "zh": "新成员必须追加到保留成员之后。"
+    },
+    "member_calibration_overrides_must_belong_to_the_full_member_list_in_this_re": {
+      "en": "Member calibration overrides must belong to the full member list in this request.",
+      "zh": "成员校准覆盖必须属于本次完整成员列表。"
+    },
+    "dataset_membership_has_changed_read_it_again_before_saving": {
+      "en": "Dataset membership has changed. Read it again before saving.",
+      "zh": "数据集成员已变化，请重新读取后保存。"
+    },
+    "another_window_changed_the_dataset_read_it_again_before_saving": {
+      "en": "Another window changed the dataset. Read it again before saving.",
+      "zh": "数据集已在其他窗口修改，请重新读取后保存。"
+    },
+    "shared_datasets_may_contain_only_shared_assets": {
+      "en": "Shared datasets may contain only shared assets.",
+      "zh": "共享数据集只能包含共享资产。"
+    },
+    "dataset_member_versions_have_changed_read_them_again_before_saving": {
+      "en": "Dataset member versions have changed. Read them again before saving.",
+      "zh": "数据集成员版本已变化，请重新读取后保存。"
+    },
+    "asset_metadata_has_changed_read_it_again_before_saving": {
+      "en": "Asset metadata has changed. Read it again before saving.",
+      "zh": "素材资料已变化，请重新读取后保存。"
+    },
+    "invalid_capture_parameters": {
+      "en": "Invalid capture parameters.",
+      "zh": "拍摄参数无效。"
+    },
+    "invalid_asset_classification": {
+      "en": "Invalid asset classification.",
+      "zh": "素材分类无效。"
+    },
+    "equipment_kind_cannot_be_changed_after_creation": {
+      "en": "Equipment kind cannot be changed after creation.",
+      "zh": "設備 kind 创建后不能修改。"
+    },
+    "specs_must_not_be_null": {
+      "en": "specs must not be null.",
+      "zh": "specs 不能为 null。"
+    },
+    "select_an_absolute_local_path": {
+      "en": "Select an absolute local path.",
+      "zh": "请选择本机绝对路径。"
+    },
+    "the_configured_asset_root_was_not_found": {
+      "en": "The configured asset root was not found.",
+      "zh": "未找到配置的素材根目录。"
+    },
+    "the_asset_root_is_currently_inaccessible": {
+      "en": "The asset root is currently inaccessible.",
+      "zh": "素材根目录当前不可访问。"
+    },
+    "the_source_must_be_a_relative_posix_path_within_the_root_directory": {
+      "en": "The source must be a relative POSIX path within the root directory.",
+      "zh": "来源路径必须是根目录内的相对 POSIX 路径。"
+    },
+    "the_selected_source_is_not_a_folder": {
+      "en": "The selected source is not a folder.",
+      "zh": "当前来源不是文件夹。"
+    },
+    "the_selected_local_path_cannot_be_read": {
+      "en": "The selected local path cannot be read.",
+      "zh": "所选本机路径当前无法读取。"
+    },
+    "the_source_is_missing_or_outside_the_configured_asset_root": {
+      "en": "The source is missing or outside the configured asset root.",
+      "zh": "来源不存在或超出配置的素材根目录。"
+    },
+    "this_folder_cannot_be_read": {
+      "en": "This folder cannot be read.",
+      "zh": "当前文件夹无法读取。"
+    },
+    "the_upload_size_differs_from_the_selected_file_size_select_the_file_again": {
+      "en": "The upload size differs from the selected file size. Select the file again.",
+      "zh": "上传文件大小与选择时记录不一致，请重新选择文件。"
+    },
+    "all_file_uploads_must_finish_before_import_can_start": {
+      "en": "All file uploads must finish before import can start.",
+      "zh": "所有文件上传完成后才能开始导入。"
+    },
+    "processing_has_already_started_for_this_upload_batch": {
+      "en": "Processing has already started for this upload batch.",
+      "zh": "该上传批次已开始处理。"
+    },
+    "background_processing_has_started_it_cannot_be_canceled_as_an_upload_failur": {
+      "en": "Background processing has started. It cannot be canceled as an upload failure.",
+      "zh": "后台处理已开始，不能按上传失败取消。"
+    },
+    "this_task_cannot_be_canceled_in_its_current_state": {
+      "en": "This task cannot be canceled in its current state.",
+      "zh": "当前任务状态不能取消。"
+    },
+    "only_tasks_interrupted_by_the_service_can_be_resumed": {
+      "en": "Only tasks interrupted by the service can be resumed.",
+      "zh": "只有服务中断的任务可恢复。"
+    },
+    "the_upload_is_incomplete_select_files_again_and_create_a_new_import_batch": {
+      "en": "The upload is incomplete. Select files again and create a new import batch.",
+      "zh": "上传未完成，请重新选择文件并创建导入批次。"
+    },
+    "this_task_cannot_be_retried_in_its_current_state": {
+      "en": "This task cannot be retried in its current state.",
+      "zh": "当前任务状态不能重试。"
+    },
+    "retry_entries_must_not_be_duplicated": {
+      "en": "Retry entries must not be duplicated.",
+      "zh": "重试项不能重复。"
+    },
+    "the_selected_entry_has_no_failed_or_incomplete_stage_to_retry": {
+      "en": "The selected entry has no failed or incomplete stage to retry.",
+      "zh": "所选项没有失败或未完成阶段，不能重试。"
+    },
+    "cannot_open_the_local_file_picker_check_the_local_desktop_session": {
+      "en": "Cannot open the local file picker. Check the local desktop session.",
+      "zh": "无法打开本机选择窗口，请检查本机桌面会话。"
+    },
+    "this_file_has_already_been_uploaded_select_files_again_to_create_a_new_impo": {
+      "en": "This file has already been uploaded. Select files again to create a new import batch.",
+      "zh": "该文件已上传；请重新选择文件创建导入批次。"
+    },
+    "the_upload_was_interrupted_select_files_again_to_create_a_new_import_batch": {
+      "en": "The upload was interrupted. Select files again to create a new import batch.",
+      "zh": "文件上传中断，请重新选择文件创建导入批次。"
+    },
+    "the_selected_path_contains_no_currently_supported_asset_files": {
+      "en": "The selected path contains no currently supported asset files.",
+      "zh": "所选路径没有当前支持的素材文件。"
+    },
+    "an_asset_root_must_not_contain_the_astrophotoflow_data_directory": {
+      "en": "An asset root must not contain the AstroPhotoFlow data directory.",
+      "zh": "素材根目录不能包含 AstroPhotoFlow 数据目录。"
+    },
+    "the_parameter_must_reference_an_existing_p0_device": {
+      "en": "The parameter must reference an existing {p0} device.",
+      "zh": "参数中的设备必须是现存的 {p0} 设备。"
+    },
+    "invalid_classification_metadata": {
+      "en": "Invalid classification metadata.",
+      "zh": "分类资料无效。"
+    },
+    "references_have_changed_preview_permanent_deletion_again": {
+      "en": "References have changed. Preview permanent deletion again.",
+      "zh": "引用状态已变化，请重新预览永久删除。"
+    },
+    "some_settings_still_have_project_assets_resolve_their_references_first": {
+      "en": "Some settings still have project assets. Resolve their references first.",
+      "zh": "部分设置仍有项目内素材，请先处理引用。"
+    },
+    "linked_records_have_changed_review_deletion_impact_again": {
+      "en": "Linked records have changed. Review deletion impact again.",
+      "zh": "关联记录已变化，请重新查看删除影响。"
+    },
+    "the_selection_contains_duplicate_records": {
+      "en": "The selection contains duplicate records.",
+      "zh": "所选列表包含重复记录。"
+    },
+    "the_record_has_changed_read_it_again_before_retrying": {
+      "en": "The record has changed. Read it again before retrying.",
+      "zh": "记录已变化，请重新读取后重试。"
+    },
+    "the_original_is_not_ready_or_has_changed": {
+      "en": "The original is not ready or has changed.",
+      "zh": "原件尚未就绪或已经变化。"
+    },
+    "the_original_is_being_cleaned_up_viewer_cache_preparation_and_reads_are_blo": {
+      "en": "The original is being cleaned up. Viewer cache preparation and reads are blocked.",
+      "zh": "原件正在清理，不能准备或读取查看缓存。"
+    },
+    "the_original_size_differs_from_the_fixed_version_check_content_changes_firs": {
+      "en": "The original size differs from the fixed version. Check content changes first.",
+      "zh": "原件大小与固定版本不同，请先检查内容变化。"
+    },
+    "this_output_is_not_a_viewable_scientific_image_or_video": {
+      "en": "This output is not a viewable scientific image or video.",
+      "zh": "该输出不是可查看的科学图像或视频。"
+    },
+    "pause_the_video_and_prepare_the_original_frame_first": {
+      "en": "Pause the video and prepare the original frame first.",
+      "zh": "请先暂停视频并准备原件帧。"
+    },
+    "tile_coordinates_are_outside_the_image_bounds": {
+      "en": "Tile coordinates are outside the image bounds.",
+      "zh": "瓦片坐标超出图像范围。"
+    },
+    "the_original_has_changed_since_it_was_viewed_check_content_changes_first": {
+      "en": "The original has changed since it was viewed. Check content changes first.",
+      "zh": "原件自上次查看后已经变化，请先检查内容变化。"
+    },
+    "this_asset_is_not_a_supported_viewable_media_type": {
+      "en": "This asset is not a supported viewable media type.",
+      "zh": "当前素材不是受支持的可查看媒体。"
+    },
+    "the_original_has_changed_check_the_asset_content_again": {
+      "en": "The original has changed. Check the asset content again.",
+      "zh": "原件已经变化，请重新检查素材内容。"
+    },
+    "the_video_playback_cache_does_not_belong_to_the_current_complete_result": {
+      "en": "The video playback cache does not belong to the current complete result.",
+      "zh": "视频播放缓存不属于当前完整结果。"
+    },
+    "no_original_frame_matches_the_paused_frame_timestamp": {
+      "en": "No original frame matches the paused-frame timestamp.",
+      "zh": "暂停帧时间戳没有对应的原始帧。"
+    },
+    "the_display_cache_is_stale_reopen_the_viewer": {
+      "en": "The display cache is stale. Reopen the viewer.",
+      "zh": "显示缓存已失效，请重新打开查看器。"
+    },
+    "the_display_state_does_not_belong_to_this_complete_result": {
+      "en": "The display state does not belong to this complete result.",
+      "zh": "显示状态不属于该完整结果。"
+    },
+    "the_display_cache_has_been_removed_reopen_the_viewer": {
+      "en": "The display cache has been removed. Reopen the viewer.",
+      "zh": "显示缓存已被回收，请重新打开查看器。"
+    },
+    "the_display_cache_does_not_match_the_current_complete_result": {
+      "en": "The display cache does not match the current complete result.",
+      "zh": "显示缓存与当前完整结果不匹配。"
+    },
+    "a_newer_viewer_request_has_replaced_this_request": {
+      "en": "A newer viewer request has replaced this request.",
+      "zh": "已切换到更新的查看请求。"
+    },
+    "the_complete_result_changed_after_viewer_preparation": {
+      "en": "The complete result changed after viewer preparation.",
+      "zh": "完整结果在查看准备后发生变化。"
+    },
+    "the_capture_preset_does_not_exist": {
+      "en": "The capture preset does not exist.",
+      "zh": "拍摄预设不存在。"
+    },
+    "the_capture_preset_s_equipment_setup_does_not_exist": {
+      "en": "The capture preset's equipment setup does not exist.",
+      "zh": "拍摄预设的使用组合不存在。"
+    },
+    "a_device_referenced_by_the_equipment_setup_does_not_exist": {
+      "en": "A device referenced by the equipment setup does not exist.",
+      "zh": "使用组合引用的设备不存在。"
+    },
+    "the_full_size_preview_is_still_being_generated_preview_cleanup_again_after_": {
+      "en": "The full-size preview is still being generated. Preview cleanup again after it finishes.",
+      "zh": "大图预览仍在生成，请完成后重新预览清理范围。"
+    },
+    "the_dataset_version_does_not_belong_to_the_specified_dataset": {
+      "en": "The dataset version does not belong to the specified dataset.",
+      "zh": "数据集版本不属于指定的数据集。"
+    },
+    "archived_datasets_cannot_be_added_to_projects": {
+      "en": "Archived datasets cannot be added to projects.",
+      "zh": "已归档数据集不能新建项目引用。"
+    },
+    "the_project_already_references_this_dataset_version": {
+      "en": "The project already references this dataset version.",
+      "zh": "项目已引用该数据集版本。"
+    },
+    "archived_assets_cannot_be_added_to_projects": {
+      "en": "Archived assets cannot be added to projects.",
+      "zh": "已归档资产不能新建项目引用。"
+    },
+    "the_project_already_references_this_asset_version": {
+      "en": "The project already references this asset version.",
+      "zh": "项目已引用该资产版本。"
+    },
+    "the_asset_file_changed_while_it_was_being_read_check_it_again": {
+      "en": "The asset file changed while it was being read. Check it again.",
+      "zh": "素材文件在读取期间发生变化，请重新检查。"
+    },
+    "the_fixed_asset_version_is_missing_or_unavailable": {
+      "en": "The fixed asset version is missing or unavailable.",
+      "zh": "固定素材版本不存在或当前不可用。"
+    },
+    "the_project_does_not_reference_this_fixed_asset_version": {
+      "en": "The project does not reference this fixed asset version.",
+      "zh": "项目未固定此素材版本。"
+    },
+    "the_fixed_asset_group_version_is_missing_or_unavailable": {
+      "en": "The fixed asset group version is missing or unavailable.",
+      "zh": "固定素材组版本不存在或当前不可用。"
+    },
+    "the_project_does_not_reference_this_fixed_asset_group_version": {
+      "en": "The project does not reference this fixed asset group version.",
+      "zh": "项目未固定此素材组版本。"
+    },
+    "content_registration_is_incomplete_for_this_fixed_asset_version": {
+      "en": "Content registration is incomplete for this fixed asset version.",
+      "zh": "固定素材版本尚未完成内容登记。"
+    },
+    "the_fixed_asset_content_differs_from_the_registered_version_check_and_confi": {
+      "en": "The fixed asset content differs from the registered version. Check and confirm the content change first.",
+      "zh": "固定素材内容与已登记版本不同；请先检查并确认内容变化。"
+    },
+    "insufficient_space_to_fix_the_scientific_inputs_for_this_run": {
+      "en": "Insufficient space to fix the scientific inputs for this run.",
+      "zh": "空间不足，无法固定本次科学输入。"
+    },
+    "the_current_asset_version_has_no_accepted_file_size": {
+      "en": "The current asset version has no accepted file size.",
+      "zh": "素材当前版本尚无已接受的文件大小。"
+    },
+    "content_change_confirmation_is_not_supported_for_this_file_format": {
+      "en": "Content-change confirmation is not supported for this file format.",
+      "zh": "当前文件格式不支持内容变化确认。"
+    },
+    "the_file_content_matches_the_current_asset_version_no_new_content_needs_to_": {
+      "en": "The file content matches the current asset version. No new content needs to be accepted.",
+      "zh": "文件内容与当前素材版本一致，无需接纳新内容。"
+    },
+    "the_file_changed_again_after_confirmation_check_it_again": {
+      "en": "The file changed again after confirmation. Check it again.",
+      "zh": "文件在确认后再次变化，请重新检查。"
+    },
+    "the_output_location_is_not_a_complete_file": {
+      "en": "The output location is not a complete file.",
+      "zh": "输出位置不是完整文件。"
+    },
+    "the_output_format_does_not_match_this_run_s_record": {
+      "en": "The output format does not match this run's record.",
+      "zh": "输出格式与本次运行记录不一致。"
+    },
+    "scientific_output_must_not_be_declared_as_an_empty_file": {
+      "en": "Scientific output must not be declared as an empty file.",
+      "zh": "科学输出不能声明为空文件。"
+    },
+    "the_output_file_is_empty": {
+      "en": "The output file is empty.",
+      "zh": "输出文件为空。"
+    },
+    "unknown_image_color_layout": {
+      "en": "Unknown image color layout.",
+      "zh": "未知的图像颜色布局。"
+    },
+    "the_actual_frame_count_does_not_match_the_software_result": {
+      "en": "The actual frame count does not match the software result.",
+      "zh": "完整输出的实际帧数与软件结果不一致。"
+    },
+    "the_output_file_changed_during_validation": {
+      "en": "The output file changed during validation.",
+      "zh": "输出文件在检查期间发生变化。"
+    },
+    "preview_dimensions_must_be_positive_integers": {
+      "en": "Preview dimensions must be positive integers.",
+      "zh": "预览尺寸必须是正整数。"
+    },
+    "the_output_file_changed_before_preview_generation": {
+      "en": "The output file changed before preview generation.",
+      "zh": "输出文件在预览生成前发生变化。"
+    },
+    "a_preview_must_not_overwrite_the_scientific_output_file": {
+      "en": "A preview must not overwrite the scientific output file.",
+      "zh": "预览不能覆盖科学输出文件。"
+    },
+    "the_selected_output_changed_after_validation": {
+      "en": "The selected output changed after validation.",
+      "zh": "所选输出在检查后发生变化。"
+    },
+    "the_asset_file_cannot_be_read_completely": {
+      "en": "The asset file cannot be read completely.",
+      "zh": "素材文件当前无法完整读取。"
+    },
+    "the_asset_source_is_currently_inaccessible": {
+      "en": "The asset source is currently inaccessible.",
+      "zh": "素材来源当前不可访问。"
+    },
+    "the_fixed_input_color_layout_does_not_match_the_operation_requirements": {
+      "en": "The fixed input color layout does not match the operation requirements.",
+      "zh": "固定输入的颜色布局与操作要求不一致。"
+    },
+    "insufficient_available_space_to_fix_the_scientific_inputs_for_this_run": {
+      "en": "Insufficient available space to fix the scientific inputs for this run.",
+      "zh": "可用空间不足，无法固定本次科学输入。"
+    },
+    "the_current_asset_version_has_no_accepted_complete_content_record": {
+      "en": "The current asset version has no accepted complete content record.",
+      "zh": "素材当前版本尚无已接受的完整内容记录。"
+    },
+    "the_asset_version_has_changed_check_it_again": {
+      "en": "The asset version has changed. Check it again.",
+      "zh": "素材版本已变化，请重新检查。"
+    },
+    "the_current_asset_version_has_changed_read_and_check_it_again": {
+      "en": "The current asset version has changed. Read and check it again.",
+      "zh": "素材当前版本已变化，请重新读取并检查。"
+    },
+    "there_is_no_pending_content_change_to_confirm_for_this_asset": {
+      "en": "There is no pending content change to confirm for this asset.",
+      "zh": "当前素材没有待确认的内容变化。"
+    },
+    "the_current_asset_version_cannot_be_used_to_accept_new_content": {
+      "en": "The current asset version cannot be used to accept new content.",
+      "zh": "素材当前版本不可用于内容接纳。"
+    },
+    "the_output_file_is_outside_this_run_directory_or_cannot_be_read": {
+      "en": "The output file is outside this run directory or cannot be read.",
+      "zh": "输出文件不在本次运行目录内或当前无法读取。"
+    },
+    "a_decoder_required_to_generate_a_p0_preview_is_unavailable": {
+      "en": "A decoder required to generate a {p0} preview is unavailable.",
+      "zh": "生成 {p0} 预览所需的解码依赖不可用。"
+    },
+    "output_preview_generation_failed_p0": {
+      "en": "Output preview generation failed: {p0}",
+      "zh": "输出预览生成失败：{p0}"
+    },
+    "the_output_file_changed_during_preview_generation": {
+      "en": "The output file changed during preview generation.",
+      "zh": "输出文件在预览生成期间发生变化。"
+    },
+    "could_not_write_the_output_preview_p0": {
+      "en": "Could not write the output preview: {p0}",
+      "zh": "输出预览写入失败：{p0}"
+    },
+    "the_output_file_is_outside_this_run_directory": {
+      "en": "The output file is outside this run directory.",
+      "zh": "输出文件不在本次运行目录内。"
+    },
+    "the_output_changed_while_being_copied_to_asset_registration_staging": {
+      "en": "The output changed while being copied to asset-registration staging.",
+      "zh": "输出在复制到素材登记暂存区时发生变化。"
+    },
+    "the_asset_file_cannot_be_read": {
+      "en": "The asset file cannot be read.",
+      "zh": "素材文件当前无法读取。"
+    },
+    "invalid_asset_storage_location": {
+      "en": "Invalid asset storage location.",
+      "zh": "素材存储位置无效。"
+    },
+    "a_fixed_input_file_already_exists_with_different_content": {
+      "en": "A fixed input file already exists with different content.",
+      "zh": "运行输入固定文件已存在但内容不同。"
+    },
+    "the_asset_changed_while_its_input_was_being_fixed": {
+      "en": "The asset changed while its input was being fixed.",
+      "zh": "素材在固定输入期间发生变化。"
+    },
+    "cannot_determine_the_fixed_fits_input_image_layout_software_processing_was_": {
+      "en": "Cannot determine the fixed FITS input image layout. Software processing was not started.",
+      "zh": "无法确定固定FITS输入的图像布局；未启动软件处理。"
+    },
+    "the_fixed_image_group_is_missing_or_has_been_removed": {
+      "en": "The fixed image group is missing or has been removed.",
+      "zh": "固定图像组不存在或已移除。"
+    },
+    "fixed_image_group_membership_or_order_does_not_match": {
+      "en": "Fixed image group membership or order does not match.",
+      "zh": "图像组固定成员或顺序不匹配。"
+    },
+    "the_fixed_asset_is_missing_or_its_original_is_not_ready": {
+      "en": "The fixed asset is missing or its original is not ready.",
+      "zh": "固定素材不存在或原件尚未就绪。"
+    },
+    "the_file_changed_again_while_preparing_a_content_record_check_it_again": {
+      "en": "The file changed again while preparing a content record. Check it again.",
+      "zh": "文件在准备新内容记录时再次变化，请重新检查。"
+    },
+    "the_asset_was_modified_while_new_content_was_being_accepted_check_it_again": {
+      "en": "The asset was modified while new content was being accepted. Check it again.",
+      "zh": "素材在内容接纳期间已被修改，请重新检查。"
+    },
+    "the_fits_output_cannot_be_parsed_completely": {
+      "en": "The FITS output cannot be parsed completely.",
+      "zh": "FITS 输出无法完整解析。"
+    },
+    "the_fits_output_has_no_supported_hdu_for_preview": {
+      "en": "The FITS output has no supported HDU for preview.",
+      "zh": "FITS 输出没有可预览的受支持 HDU。"
+    },
+    "task_id_is_already_used_for_a_different_asset_registration_operation": {
+      "en": "task_id is already used for a different asset-registration operation.",
+      "zh": "task_id 已用于不同的素材登记操作。"
+    },
+    "another_request_created_the_registration_task_query_the_task_state": {
+      "en": "Another request created the registration task. Query the task state.",
+      "zh": "登记任务已由另一个请求创建，请查询任务状态。"
+    },
+    "the_referenced_file_changed_again_during_content_acceptance_check_it_again": {
+      "en": "The referenced file changed again during content acceptance. Check it again.",
+      "zh": "引用文件在内容接纳期间再次变化，请重新检查。"
+    },
+    "the_xisf_output_cannot_be_parsed_completely": {
+      "en": "The XISF output cannot be parsed completely.",
+      "zh": "XISF 输出无法完整解析。"
+    },
+    "preview_generation_is_not_supported_for_p0_output": {
+      "en": "Preview generation is not supported for {p0} output.",
+      "zh": "{p0} 输出当前不支持生成预览。"
+    },
+    "the_asset_service_could_not_find_ffmpeg_to_generate_a_video_first_frame_pre": {
+      "en": "The asset service could not find FFmpeg to generate a video first-frame preview.",
+      "zh": "资产服务未找到 FFmpeg，无法生成视频首帧预览。"
+    },
+    "the_equipment_setup_must_reference_existing_registered_equipment": {
+      "en": "The equipment setup must reference existing registered equipment.",
+      "zh": "使用组合必须引用现存的注册设备。"
+    },
+    "live_display_samples_require_a_fixed_still_image_videos_and_numeric_arrays_": {
+      "en": "Live display samples require a fixed still image. Videos and numeric arrays are not supported inputs.",
+      "zh": "实时显示样本需要固定静态图像；视频和数值数组不能作为该预览输入。"
+    },
+    "this_live_sample_preview_uses_the_default_image_hdu_arbitrary_hdu_selection": {
+      "en": "This live sample preview uses the default image HDU; arbitrary HDU selection is not supported.",
+      "zh": "该实时样本预览使用默认图像HDU，不支持任意HDU选择。"
+    },
+    "the_original_changed_while_preparing_the_linear_preview": {
+      "en": "The original changed while preparing the linear preview.",
+      "zh": "准备线性预览时原件发生变化。"
+    },
+    "other_image_group_versions_still_reference_the_selected_calibration_target_": {
+      "en": "Other image group versions still reference the selected calibration target. Remove those groups first.",
+      "zh": "仍有其他图像组版本使用所选校准目标，请先移除引用组。"
+    },
+    "an_active_or_resumable_import_task_still_holds_the_selected_content_cancel_": {
+      "en": "An active or resumable import task still holds the selected content. Cancel the task first.",
+      "zh": "正在执行或可恢复的导入任务仍占用所选内容，请先取消任务。"
+    },
+    "this_record_was_cleaned_up_or_its_state_has_changed_and_cannot_be_restored": {
+      "en": "This record was cleaned up or its state has changed and cannot be restored.",
+      "zh": "该记录已清理或状态已变化，不能恢复。"
+    },
+    "trash_records_have_changed_read_them_again": {
+      "en": "Trash records have changed. Read them again.",
+      "zh": "垃圾桶记录已变化，请重新读取。"
+    },
+    "photo_versions_have_changed_read_them_again": {
+      "en": "Photo versions have changed. Read them again.",
+      "zh": "照片版本已变化，请重新读取。"
+    },
+    "dataset_versions_have_changed_read_them_again": {
+      "en": "Dataset versions have changed. Read them again.",
+      "zh": "数据集版本已变化，请重新读取。"
+    },
+    "only_content_still_in_trash_can_be_permanently_deleted": {
+      "en": "Only content still in Trash can be permanently deleted.",
+      "zh": "只能永久删除仍在垃圾桶中的内容。"
+    },
+    "trash_records_have_changed_preview_them_again": {
+      "en": "Trash records have changed. Preview them again.",
+      "zh": "垃圾桶记录已变化，请重新预览。"
+    },
+    "photo_versions_have_changed_preview_them_again": {
+      "en": "Photo versions have changed. Preview them again.",
+      "zh": "照片版本已变化，请重新预览。"
+    },
+    "dataset_versions_have_changed_preview_them_again": {
+      "en": "Dataset versions have changed. Preview them again.",
+      "zh": "数据集版本已变化，请重新预览。"
+    },
+    "the_cleanup_scope_has_changed_preview_it_again": {
+      "en": "The cleanup scope has changed. Preview it again.",
+      "zh": "清理范围已变化，请重新预览。"
+    },
+    "calibration_references_have_changed_remove_the_referencing_groups_first": {
+      "en": "Calibration references have changed. Remove the referencing groups first.",
+      "zh": "校准引用已变化，请先移除引用组。"
+    },
+    "dataset_member_versions_have_changed_read_them_again_before_deletion": {
+      "en": "Dataset member versions have changed. Read them again before deletion.",
+      "zh": "数据集成员版本已变化，请重新读取后删除。"
+    },
+    "the_photo_no_longer_belongs_to_this_group_s_cleanup_selection": {
+      "en": "The photo no longer belongs to this group's cleanup selection.",
+      "zh": "照片已不属于该组的待清理范围。"
+    },
+    "the_managed_file_is_outside_the_service_data_directory_cleanup_is_blocked": {
+      "en": "The managed file is outside the service data directory. Cleanup is blocked.",
+      "zh": "托管文件路径不在服务数据目录中，已阻止清理。"
+    },
+    "the_preview_file_is_outside_the_service_data_directory_cleanup_is_blocked": {
+      "en": "The preview file is outside the service data directory. Cleanup is blocked.",
+      "zh": "预览文件路径不在服务数据目录中，已阻止清理。"
+    },
+    "the_current_asset_version_has_changed_read_it_again_before_previewing_remov": {
+      "en": "The current asset version has changed. Read it again before previewing removal.",
+      "zh": "素材当前版本已变化，请重新读取后预览移除范围。"
+    },
+    "asset_group_member_versions_have_changed_read_them_again_before_previewing_": {
+      "en": "Asset group member versions have changed. Read them again before previewing removal.",
+      "zh": "素材组成员版本已变化，请重新读取后预览移除范围。"
+    },
+    "the_photo_was_restored_or_the_trash_scope_has_changed_preview_it_again": {
+      "en": "The photo was restored or the Trash scope has changed. Preview it again.",
+      "zh": "照片已恢复或垃圾桶范围已变化，请重新预览。"
+    },
+    "photo_metadata_or_versions_have_changed_preview_them_again": {
+      "en": "Photo metadata or versions have changed. Preview them again.",
+      "zh": "照片资料或版本已变化，请重新预览。"
+    },
+    "project_group_references_have_changed_preview_them_again": {
+      "en": "Project group references have changed. Preview them again.",
+      "zh": "项目组关联已变化，请重新预览。"
+    },
+    "project_or_group_references_have_changed_preview_them_again": {
+      "en": "Project or group references have changed. Preview them again.",
+      "zh": "项目或组关联已变化，请重新预览。"
+    },
+    "import_task_usage_has_changed_preview_it_again": {
+      "en": "Import task usage has changed. Preview it again.",
+      "zh": "导入任务占用已变化，请重新预览。"
+    },
+    "group_metadata_or_versions_have_changed_preview_them_again": {
+      "en": "Group metadata or versions have changed. Preview them again.",
+      "zh": "组资料或版本已变化，请重新预览。"
+    },
+    "the_group_s_cleanup_scope_has_changed_preview_it_again": {
+      "en": "The group's cleanup scope has changed. Preview it again.",
+      "zh": "组内待清理范围已变化，请重新预览。"
+    },
+    "group_membership_has_changed_preview_it_again": {
+      "en": "Group membership has changed. Preview it again.",
+      "zh": "组内成员已变化，请重新预览。"
+    },
+    "group_import_task_usage_has_changed_preview_it_again": {
+      "en": "Group import task usage has changed. Preview it again.",
+      "zh": "组导入任务占用已变化，请重新预览。"
+    },
+    "the_group_was_restored_or_the_trash_scope_has_changed_preview_it_again": {
+      "en": "The group was restored or the Trash scope has changed. Preview it again.",
+      "zh": "组已恢复或垃圾桶范围已变化，请重新预览。"
+    },
+    "group_versions_have_changed_preview_them_again": {
+      "en": "Group versions have changed. Preview them again.",
+      "zh": "组版本已变化，请重新预览。"
+    },
+    "project_references_have_changed_preview_them_again": {
+      "en": "Project references have changed. Preview them again.",
+      "zh": "项目关联已变化，请重新预览。"
+    },
+    "the_requested_node_definition_was_not_found": {
+      "en": "The requested node definition was not found.",
+      "zh": "未找到请求的节点定义。"
+    },
+    "a_new_custom_node_must_use_source_custom": {
+      "en": "A new custom node must use source=custom.",
+      "zh": "首次自定义节点保存只接受source=custom。"
+    },
+    "the_node_definition_has_changed_read_it_again_before_previewing": {
+      "en": "The node definition has changed. Read it again before previewing.",
+      "zh": "节点定义已改变，请重新读取后预览。"
+    },
+    "a_node_update_cannot_change_its_source_or_package_ownership": {
+      "en": "A node update cannot change its source or package ownership.",
+      "zh": "节点更新不能改变定义来源或软件包归属。"
+    },
+    "single_definition_updates_accept_custom_nodes_only": {
+      "en": "Single-definition updates accept custom nodes only.",
+      "zh": "单定义更新只接受自定义节点。"
+    },
+    "a_node_update_cannot_change_its_definition_id_or_package_ownership": {
+      "en": "A node update cannot change its definition ID or package ownership.",
+      "zh": "节点更新不能改变定义ID或软件包归属。"
+    },
+    "another_operation_is_modifying_the_node_definition": {
+      "en": "Another operation is modifying the node definition.",
+      "zh": "节点定义正在被其他操作修改。"
+    },
+    "bundled_definitions_must_use_source_package_and_match_the_target_package": {
+      "en": "Bundled definitions must use source=package and match the target package.",
+      "zh": "软件包定义必须标记为package并匹配目标包。"
+    },
+    "the_node_definition_has_changed_preview_it_again": {
+      "en": "The node definition has changed. Preview it again.",
+      "zh": "节点定义已改变，请重新预览。"
+    },
+    "the_bundled_node_definition_set_has_changed_read_it_again_before_replacemen": {
+      "en": "The bundled node definition set has changed. Read it again before replacement.",
+      "zh": "软件包节点定义集合已改变，请重新读取后替换。"
+    },
+    "the_node_definition_id_already_exists": {
+      "en": "The node definition ID already exists.",
+      "zh": "节点定义ID已存在。"
+    },
+    "the_node_definition_id_belongs_to_another_source_or_package": {
+      "en": "The node definition ID belongs to another source or package.",
+      "zh": "节点定义ID已属于其他来源或软件包。"
+    },
+    "the_maintained_software_package_was_not_found": {
+      "en": "The maintained software package was not found.",
+      "zh": "未找到项目维护的软件包。"
+    },
+    "the_platform_git_tool_was_not_found": {
+      "en": "The platform Git tool was not found.",
+      "zh": "未找到平台 Git 运行工具。"
+    },
+    "git_was_not_found_install_git_for_windows_and_authenticate_with_the_private": {
+      "en": "Git was not found. Install Git for Windows and authenticate with the private repository.",
+      "zh": "未找到 Git；请安装 Git for Windows 并登录私有仓库。"
+    },
+    "git_fetch_failed_check_the_network_and_private_repository_access_in_the_sys": {
+      "en": "Git fetch failed. Check the network and private repository access in the system Git credentials.",
+      "zh": "Git 获取失败。请检查网络及系统 Git 凭据中的私有仓库访问权限。"
+    },
+    "this_bundle_has_no_published_pinned_commit_yet": {
+      "en": "This Bundle has no published pinned commit yet.",
+      "zh": "该 Bundle 尚未发布固定提交。"
+    },
+    "the_remote_tag_does_not_match_the_confirmed_commit_nothing_was_installed": {
+      "en": "The remote tag does not match the confirmed commit. Nothing was installed.",
+      "zh": "远端 tag 与已确认的提交不一致，未安装。"
+    },
+    "bundle_content_does_not_match_the_release_catalog_nothing_was_installed": {
+      "en": "Bundle content does not match the release catalog. Nothing was installed.",
+      "zh": "Bundle 内容与发布目录不一致，未安装。"
+    },
+    "bundle_reference_data_does_not_match_the_confirmed_snapshot_nothing_was_ins": {
+      "en": "Bundle reference data does not match the confirmed snapshot. Nothing was installed.",
+      "zh": "Bundle 参考目录与已确认快照不一致，未安装。"
+    },
+    "bundle_executable_version_check_failed_exit_p0_expected_p1_p2": {
+      "en": "Bundle executable version check failed (exit {p0}, expected {p1}): {p2}",
+      "zh": "Bundle 程序版本检查失败（退出码 {p0}，预期 {p1}）：{p2}"
+    },
+    "the_software_operation_was_not_found": {
+      "en": "The software operation was not found.",
+      "zh": "未找到软件操作。"
+    },
+    "the_software_package_is_undergoing_maintenance": {
+      "en": "The software package is undergoing maintenance.",
+      "zh": "软件包当前正在维护。"
+    },
+    "the_release_version_was_not_found": {
+      "en": "The release version was not found.",
+      "zh": "未找到发布版本。"
+    },
+    "the_software_version_was_not_found": {
+      "en": "The software version was not found.",
+      "zh": "未找到软件版本。"
+    },
+    "the_software_state_or_release_version_has_changed": {
+      "en": "The software state or release version has changed.",
+      "zh": "软件状态或发布版本发生变化。"
+    },
+    "this_bundle_supports_windows_only": {
+      "en": "This Bundle supports Windows only.",
+      "zh": "当前 Bundle 只支持 Windows。"
+    },
+    "the_software_state_has_changed_confirm_it_again": {
+      "en": "The software state has changed. Confirm it again.",
+      "zh": "软件状态变化，请重新确认。"
+    },
+    "the_requested_software_command_reference_was_not_found": {
+      "en": "The requested software command reference was not found.",
+      "zh": "未找到请求的软件命令目录。"
+    },
+    "siril_is_undergoing_maintenance": {
+      "en": "Siril is undergoing maintenance.",
+      "zh": "Siril 正在维护。"
+    },
+    "live_previews_accept_only_platform_generated_display_samples": {
+      "en": "Live previews accept only platform-generated display samples.",
+      "zh": "实时预览仅接受平台生成的显示样本。"
+    },
+    "parameters_do_not_match_the_bundle_operation_definition": {
+      "en": "Parameters do not match the Bundle operation definition.",
+      "zh": "参数与 Bundle 操作定义不一致。"
+    },
+    "some_package_invocations_could_not_be_confirmed_stopped": {
+      "en": "Some package invocations could not be confirmed stopped.",
+      "zh": "软件包仍有无法确认停止的调用。"
+    },
+    "the_software_operation_definition_has_changed_submit_it_again": {
+      "en": "The software operation definition has changed. Submit it again.",
+      "zh": "软件操作定义已变化，请重新提交。"
+    },
+    "the_bundle_implementation_changed_after_acceptance_query_this_invocation_do": {
+      "en": "The Bundle implementation changed after acceptance. Query this invocation; do not replace an in-flight implementation with the new version.",
+      "zh": "调用受理后 Bundle 实现已变化，请查询本次状态，不得采用新版替换在途实现。"
+    },
+    "siril_parameters_do_not_match_the_exact_operation_definition": {
+      "en": "Siril parameters do not match the exact operation definition.",
+      "zh": "Siril 参数与准确操作定义不匹配。"
+    },
+    "named_inputs_do_not_match_the_software_operation_definition": {
+      "en": "Named inputs do not match the software operation definition.",
+      "zh": "具名输入与软件操作定义不匹配。"
+    },
+    "a_sequence_supporting_file_has_no_corresponding_input": {
+      "en": "A sequence supporting file has no corresponding input.",
+      "zh": "序列附属文件没有对应的输入。"
+    },
+    "the_run_directory_points_outside_the_workspace": {
+      "en": "The run directory points outside the workspace.",
+      "zh": "运行目录指向了工作区以外的位置。"
+    },
+    "software_may_write_only_within_this_invocation_s_working_directory": {
+      "en": "Software may write only within this invocation's working directory.",
+      "zh": "软件只能写入本次运行的工作目录。"
+    },
+    "the_software_package_is_undergoing_maintenance_da8f9d": {
+      "en": "The software package is undergoing maintenance.",
+      "zh": "软件包正在维护。"
+    },
+    "this_invocation_has_already_been_accepted_and_cannot_be_started_again": {
+      "en": "This invocation has already been accepted and cannot be started again.",
+      "zh": "该调用已受理，不能重复启动。"
+    },
+    "the_previous_version_is_still_pending_the_existing_installation_was_not_ove": {
+      "en": "The previous version is still pending. The existing installation was not overwritten.",
+      "zh": "上次版本仍待处理，未覆盖现有程序。"
+    },
+    "bundle_node_definition_not_confirmed": {
+      "en": "The Bundle node definition does not match the confirmed content.",
+      "zh": "Bundle 节点定义未采用确认的内容。"
+    },
+    "software_install_or_definition_write_failed": {
+      "en": "Software installation or bundled definition update failed.",
+      "zh": "软件安装或配套定义写入失败。"
+    },
+    "bundle_installation_failed_p0": {
+      "en": "Bundle installation failed: {p0}",
+      "zh": "Bundle 安装失败：{p0}"
+    },
+    "bundle_uninstallation_failed_p0": {
+      "en": "Bundle uninstallation failed: {p0}",
+      "zh": "Bundle 卸载失败：{p0}"
+    },
+    "input_member_count_does_not_match_the_operation_definition_p0": {
+      "en": "Input member count does not match the operation definition: {p0}",
+      "zh": "输入成员数量不符合操作定义：{p0}"
+    },
+    "a_scientific_input_changed_after_admission": {
+      "en": "A scientific input changed after admission.",
+      "zh": "科学输入在准入后发生变化。"
+    },
+    "scientific_inputs_must_not_be_inside_the_invocation_output_directory_that_w": {
+      "en": "Scientific inputs must not be inside the invocation output directory that will be created.",
+      "zh": "科学输入不能位于即将创建的调用输出目录内。"
+    },
+    "the_installation_result_could_not_be_saved_check_the_software_state_do_not_": {
+      "en": "The installation result could not be saved. Check the software state; do not repeat installation directly.",
+      "zh": "安装结果未能保存，需核对软件状态；请勿直接重复安装。"
+    },
+    "the_installed_bundle_does_not_provide_a_command_reference": {
+      "en": "The installed Bundle does not provide a command reference.",
+      "zh": "已安装 Bundle 没有提供命令参考目录。"
+    },
+    "the_original_changed_while_preparing_the_preview": {
+      "en": "The original changed while preparing the preview.",
+      "zh": "准备预览时原件发生变化。"
+    },
+    "invalid_parameters_p0": {
+      "en": "Invalid parameters: {p0}",
+      "zh": "参数无效：{p0}"
+    },
+    "invalid_siril_parameters_p0": {
+      "en": "Invalid Siril parameters: {p0}",
+      "zh": "Siril 参数无效：{p0}"
+    },
+    "input_format_does_not_match_the_operation_definition_p0": {
+      "en": "Input format does not match the operation definition: {p0}",
+      "zh": "输入格式不符合操作定义：{p0}"
+    },
+    "input_color_layout_does_not_match_the_operation_requirements_p0": {
+      "en": "Input color layout does not match the operation requirements: {p0}.",
+      "zh": "输入颜色布局与操作要求不一致：{p0}。"
+    },
+    "the_operation_does_not_support_the_selected_hdu_p0": {
+      "en": "The operation does not support the selected HDU: {p0}",
+      "zh": "操作不支持指定 HDU：{p0}"
+    },
+    "this_single_image_input_must_not_silently_use_the_first_frame_of_a_sequence": {
+      "en": "This single-image input must not silently use the first frame of a sequence: {p0}. Use a sequence operation or explicitly select the primary HDU.",
+      "zh": "该单图输入不能静默读取序列容器的首帧：{p0}；请使用适用的序列操作或明确选择主HDU。"
+    },
+    "this_input_has_no_confirmed_2d_grayscale_or_rgb_layout_p0": {
+      "en": "This input has no confirmed 2D grayscale or RGB layout: {p0}.",
+      "zh": "该输入没有已确认的二维灰度或RGB图像布局：{p0}。"
+    },
+    "the_operation_does_not_support_extension_hdus_p0": {
+      "en": "The operation does not support extension HDUs: {p0}",
+      "zh": "操作不支持扩展 HDU：{p0}"
+    },
+    "the_bundle_installation_location_does_not_match_its_state_record": {
+      "en": "The Bundle installation location does not match its state record.",
+      "zh": "Bundle 安装位置与状态记录不一致。"
+    },
+    "cannot_confirm_the_canvas_result_query_the_same_operation_id_do_not_automat": {
+      "en": "Cannot confirm the canvas result. Query the same operation_id; do not automatically replay it.",
+      "zh": "无法核对画布结果；请查询同一 operation_id，不要自动重发。"
+    },
+    "the_workbench_is_undergoing_maintenance_and_cannot_accept_canvas_writes": {
+      "en": "The workbench is undergoing maintenance and cannot accept canvas writes.",
+      "zh": "工作台正在维护，暂不接受画布写入。"
+    },
+    "the_workbench_is_undergoing_maintenance": {
+      "en": "The workbench is undergoing maintenance.",
+      "zh": "工作台正在维护。"
+    },
+    "this_live_preview_request_has_expired": {
+      "en": "This live preview request has expired.",
+      "zh": "该实时预览请求已过期。"
+    },
+    "a_newer_request_replaced_this_live_preview_request": {
+      "en": "A newer request replaced this live preview request.",
+      "zh": "该实时预览请求已被更新。"
+    },
+    "this_live_preview_request_is_closed": {
+      "en": "This live preview request is closed.",
+      "zh": "实时预览请求已关闭。"
+    },
+    "the_software_invocation_was_not_found": {
+      "en": "The software invocation was not found.",
+      "zh": "未找到本次软件调用。"
+    },
+    "complete_output_validation_has_not_finished_for_this_invocation": {
+      "en": "Complete output validation has not finished for this invocation.",
+      "zh": "该调用尚未完成完整输出检查。"
+    },
+    "the_output_port_or_fixed_member_does_not_exist": {
+      "en": "The output port or fixed member does not exist.",
+      "zh": "没有该输出端口或固定成员。"
+    },
+    "the_output_location_does_not_belong_to_this_invocation": {
+      "en": "The output location does not belong to this invocation.",
+      "zh": "输出位置不属于该调用。"
+    },
+    "only_validated_scientific_outputs_from_the_same_native_run_are_accepted": {
+      "en": "Only validated scientific outputs from the same native run are accepted.",
+      "zh": "只接受同次原生运行内已检查的科学输出。"
+    },
+    "the_upstream_output_is_not_ready_or_has_multiple_invocations_the_source_out": {
+      "en": "The upstream output is not ready or has multiple invocations. The source output cannot be determined.",
+      "zh": "上游输出尚未就绪或存在多个调用，无法确认采用哪次输出。"
+    },
+    "the_node_definition_has_changed_reload_the_node": {
+      "en": "The node definition has changed. Reload the node.",
+      "zh": "节点定义已变化，请重新加载节点。"
+    },
+    "node_parameters_do_not_match_the_definition": {
+      "en": "Node parameters do not match the definition.",
+      "zh": "节点参数与定义不一致。"
+    },
+    "input_ports_do_not_match_the_node_definition": {
+      "en": "Input ports do not match the node definition.",
+      "zh": "输入端口与节点定义不匹配。"
+    },
+    "a_required_node_input_is_missing": {
+      "en": "A required node input is missing.",
+      "zh": "节点缺少必要输入。"
+    },
+    "the_complete_result_changed_after_validation": {
+      "en": "The complete result changed after validation.",
+      "zh": "完整结果在检查后发生变化。"
+    },
+    "the_complete_result_is_no_longer_in_the_run_directory_an_old_preview_does_n": {
+      "en": "The complete result is no longer in the run directory. An old preview does not mean the original file is still available.",
+      "zh": "完整结果已不在运行工作目录中；旧预览不代表原文件仍可用。"
+    },
+    "the_old_invocation_does_not_have_the_requested_named_output": {
+      "en": "The old invocation does not have the requested named output.",
+      "zh": "旧调用没有请求的具名输出。"
+    },
+    "the_upstream_output_port_is_missing_or_has_an_incompatible_type": {
+      "en": "The upstream output port is missing or has an incompatible type.",
+      "zh": "上游输出端口不存在或类型不匹配。"
+    },
+    "the_upstream_member_is_outside_the_fixed_output_selection": {
+      "en": "The upstream member is outside the fixed output selection.",
+      "zh": "上游成员超出固定输出范围。"
+    },
+    "the_upstream_scientific_result_has_changed": {
+      "en": "The upstream scientific result has changed.",
+      "zh": "上游科学结果已变化。"
+    },
+    "multi_input_nodes_require_named_inputs": {
+      "en": "Multi-input nodes require named inputs.",
+      "zh": "多输入节点需要具名输入。"
+    },
+    "the_input_connection_cardinality_does_not_match_the_port_definition": {
+      "en": "The input connection cardinality does not match the port definition.",
+      "zh": "输入连接数量形式与端口定义不匹配。"
+    },
+    "this_invocation_has_no_program_log_yet": {
+      "en": "This invocation has no program log yet.",
+      "zh": "该调用还没有程序日志。"
+    },
+    "this_output_port_is_not_an_analysis_result": {
+      "en": "This output port is not an analysis result.",
+      "zh": "该输出端口不是分析结果。"
+    },
+    "the_display_file_does_not_exist": {
+      "en": "The display file does not exist.",
+      "zh": "没有该显示文件。"
+    },
+    "the_complete_result_content_has_changed": {
+      "en": "The complete result content has changed.",
+      "zh": "完整结果内容已变化。"
+    },
+    "this_display_result_is_not_a_video": {
+      "en": "This display result is not a video.",
+      "zh": "该显示结果不是视频。"
+    },
+    "the_invocation_id_is_already_used_for_different_input": {
+      "en": "The invocation ID is already used for different input.",
+      "zh": "调用 ID 已用于另一份输入。"
+    },
+    "this_port_requires_a_file_output_fixed_within_this_run": {
+      "en": "This port requires a file output fixed within this run.",
+      "zh": "该端口需要本次运行中已固定的文件输出。"
+    },
+    "invalid_reference": {
+      "en": "The reference is missing or has an incompatible type.",
+      "zh": "引用对象不存在或类型不匹配。"
+    },
+    "validation_error": {
+      "en": "Request data does not match the API contract.",
+      "zh": "请求数据不符合接口契约。"
+    },
+    "invalid_field": {
+      "en": "Invalid request field.",
+      "zh": "请求字段无效。"
+    },
+    "request_failed": {
+      "en": "The request failed. See diagnostic details.",
+      "zh": "请求失败，请查看诊断详情。"
+    },
+    "internal_error": {
+      "en": "An unexpected service error occurred.",
+      "zh": "服务发生未预期错误。"
+    },
+    "method_not_allowed": {
+      "en": "This resource does not support the HTTP method.",
+      "zh": "该资源不支持此 HTTP 方法。"
+    },
+    "restart_failed": {
+      "en": "The workbench could not restart. See diagnostic details.",
+      "zh": "工作台重启失败，请查看诊断详情。"
+    },
+    "control_busy": {
+      "en": "The workbench control operation could not be accepted. Query its current state.",
+      "zh": "无法受理工作台控制操作，请查询当前状态。"
+    },
+    "bundle_not_installed": {
+      "en": "The Bundle is not installed.",
+      "zh": "尚未安装 Bundle。"
+    },
+    "bundle_interrupted": {
+      "en": "The last install or uninstall was interrupted; its result is unknown.",
+      "zh": "上次安装或卸载被中断，无法确认结果。"
+    },
+    "bundle_migration_needed": {
+      "en": "The existing installation needs migration to a Bundle. Install the Bundle; the original program is retained.",
+      "zh": "现有安装尚未迁移到独立 Bundle，请安装 Bundle；保留原程序。"
+    },
+    "bundle_executable_missing": {
+      "en": "The Bundle executable is missing.",
+      "zh": "Bundle 程序缺失。"
+    },
+    "bundle_waiting_for_nodes": {
+      "en": "The Bundle is installed; waiting for node hot loading.",
+      "zh": "Bundle 已安装，等待节点热加载。"
+    },
+    "bundle_operation_missing": {
+      "en": "The bundled software operation is missing.",
+      "zh": "Bundle 中的软件操作已缺失。"
+    },
+    "bundle_node_missing": {
+      "en": "The bundled node is missing.",
+      "zh": "Bundle 中的节点已缺失。"
+    },
+    "release_check_busy": {
+      "en": "Official versions are already being checked. Refresh again when the check finishes.",
+      "zh": "正在检查官方版本，请在检查完成后刷新。"
+    },
+    "release_check_failed": {
+      "en": "Cannot check official versions. Check the network and system Git credentials.",
+      "zh": "无法检查官方版本，请检查网络和系统 Git 凭据。"
+    },
+    "release_changed": {
+      "en": "The selected official version changed or is incompatible. Refresh versions and confirm a new plan.",
+      "zh": "所选官方版本已变化或不兼容，请刷新版本并重新确认计划。"
+    },
+    "action_package_changed": {
+      "en": "The package state has changed. Review the installation plan again.",
+      "zh": "软件包状态已变化，请重新查看安装计划。"
+    },
+    "action_nodes_changed": {
+      "en": "Bundled node definitions have changed. Review the installation plan again.",
+      "zh": "配套节点定义已变化，请重新查看安装计划。"
+    },
+    "confirmation_page_expired": {
+      "en": "The software confirmation page connection has expired.",
+      "zh": "软件确认页面连接已过期。"
+    },
+    "no_pending_software_action": {
+      "en": "There is no pending software action to confirm.",
+      "zh": "当前没有待确认的软件动作。"
+    },
+    "native_bridge_unavailable": {
+      "en": "Could not verify the software page operation result.",
+      "zh": "无法核对软件页面操作结果。"
+    },
+    "native_page_rejected": {
+      "en": "The service rejected the page operation.",
+      "zh": "页面操作已被领域服务拒绝。"
+    },
+    "canvas_result_unknown": {
+      "en": "No canvas result was received. Query the same operation_id first; do not automatically resend.",
+      "zh": "未收到画布应用结果；先查询同一 operation_id，不自动重发。"
+    },
+    "canvas_auth_required": {
+      "en": "A platform service token is required.",
+      "zh": "需要平台服务令牌。"
+    },
+    "canvas_invalid_request": {
+      "en": "The canvas request is invalid.",
+      "zh": "画布请求无效。"
+    },
+    "canvas_operation_conflict": {
+      "en": "The operation_id has already been used for another request.",
+      "zh": "operation_id 已用于其他请求。"
+    },
+    "canvas_offline": {
+      "en": "The target canvas is offline.",
+      "zh": "目标画布不在线。"
+    },
+    "canvas_target_changed": {
+      "en": "The target canvas or content has changed. No changes were applied.",
+      "zh": "目标画布或内容已变化，未应用修改。"
+    },
+    "canvas_invalid_operation_id": {
+      "en": "The operation_id is invalid.",
+      "zh": "operation_id 无效。"
+    },
+    "canvas_request_unknown": {
+      "en": "This engine session has no receipt for this request. This does not establish that it was not applied.",
+      "zh": "当前引擎会话没有此请求的回执，不能据此认定未应用。"
+    },
+    "software_execution_failed": {
+      "en": "Software execution failed. See the original diagnostics.",
+      "zh": "软件执行失败，请查看原始诊断。"
+    },
+    "software_exit_failed": {
+      "en": "The program exited with code {exit_code}. See the original diagnostics.",
+      "zh": "程序退出代码 {exit_code}，请查看原始诊断。"
+    },
+    "observation_start_failed": {
+      "en": "Processing started, but its state could not be recorded. Query the existing result and logs first.",
+      "zh": "处理已启动，但状态记录失败，请先查询已有结果和日志。"
+    },
+    "observation_state_failed": {
+      "en": "The actual execution state could not be recorded. Query the existing result and logs first.",
+      "zh": "实际调用状态记录失败，请先查询已有结果和日志。"
+    },
+    "observation_result_failed": {
+      "en": "The processing result could not be recorded. Query the existing result and logs first.",
+      "zh": "处理结果记录失败，请先查询已有结果和日志。"
+    },
+    "uninstall_failed": {
+      "en": "Bundle uninstallation failed. See the original diagnostics.",
+      "zh": "Bundle 卸载失败，请查看原始诊断。"
+    },
+    "install_failed": {
+      "en": "Bundle installation failed. See the original diagnostics.",
+      "zh": "Bundle 安装失败，请查看原始诊断。"
+    },
+    "content_confirmation_unsupported": {
+      "en": "This file format does not support content-change confirmation.",
+      "zh": "当前文件格式不支持内容变化确认。"
+    },
+    "whole_file_hdu_forbidden": {
+      "en": "A whole_file selection must not contain an HDU index.",
+      "zh": "whole_file 选择不能包含 HDU 索引。"
+    },
+    "fits_hdu_index_required": {
+      "en": "A FITS HDU selection requires a non-negative index.",
+      "zh": "FITS HDU 选择需要非负索引。"
+    },
+    "fits_selection_only": {
+      "en": "Only FITS files support HDU selection.",
+      "zh": "只有 FITS 文件支持 HDU 选择。"
+    },
+    "fits_hdu_unavailable": {
+      "en": "The selected HDU is missing or does not support scientific reading.",
+      "zh": "所选 HDU 不存在或当前不支持科学读取。"
+    },
+    "group_members_duplicate": {
+      "en": "Image-group members must not be selected more than once.",
+      "zh": "素材组成员不能重复选择。"
+    },
+    "group_member_order": {
+      "en": "Image-group members must follow their fixed original order.",
+      "zh": "素材组成员必须按固定原始顺序选择。"
+    },
+    "group_members_mismatch": {
+      "en": "Selected members do not match the fixed image-group version.",
+      "zh": "所选成员与固定素材组版本不匹配。"
+    },
+    "output_name_invalid": {
+      "en": "The output name must not be blank.",
+      "zh": "输出名称不能为空。"
+    },
+    "node_file_write_failed": {
+      "en": "The node definition file could not be written.",
+      "zh": "节点定义文件写入失败。"
+    },
+    "node_file_remove_failed": {
+      "en": "The bundled node definition file could not be removed.",
+      "zh": "软件包节点定义文件移除失败。"
+    },
+    "software_install_not_allowed": {
+      "en": "The current software state does not allow installation.",
+      "zh": "当前软件状态不允许安装。"
+    },
+    "bundle_load_failed": {
+      "en": "Bundle node loading failed.",
+      "zh": "Bundle 节点加载失败。"
+    },
+    "siril_install_required": {
+      "en": "Install Siril from the software packages page first.",
+      "zh": "请先从软件包页面安装 Siril。"
+    },
+    "siril_not_ready": {
+      "en": "Siril is not ready.",
+      "zh": "Siril 尚未就绪。"
+    },
+    "node_software_not_ready": {
+      "en": "The node software is not ready.",
+      "zh": "节点所需软件未就绪。"
+    },
+    "siril_live_preview_failed": {
+      "en": "Siril live preview did not complete. See the original diagnostics.",
+      "zh": "Siril 实时预览未完成，请查看原始诊断。"
+    },
+    "forwarded_service_error": {
+      "en": "{message}",
+      "zh": "{message}"
+    },
+    "configuration_invalid": {
+      "en": "The configuration is invalid. See the original diagnostics.",
+      "zh": "配置无效，请查看原始诊断。"
+    },
+    "running_configuration_unavailable": {
+      "en": "The running configuration is unavailable. See the original diagnostics.",
+      "zh": "运行配置不可用，请查看原始诊断。"
+    },
+    "workbench_control_busy": {
+      "en": "Workbench control is busy. See the original diagnostics.",
+      "zh": "工作台控制忙碌，请查看原始诊断。"
+    },
+    "workbench_restart_failed": {
+      "en": "Workbench restart failed. See the original diagnostics.",
+      "zh": "工作台重启失败，请查看原始诊断。"
+    },
+    "local_picker_busy": {
+      "en": "The local file picker is busy.",
+      "zh": "本地文件选择器正忙。"
+    },
+    "media_reopen_required": {
+      "en": "The media cache is unavailable. Reopen the viewer.",
+      "zh": "媒体缓存不可用，请重新打开查看器。"
+    },
+    "binding_operation_mismatch": {
+      "en": "The node execution binding does not match the software operation.",
+      "zh": "节点执行绑定与提供的软件操作不匹配。"
+    },
+    "binding_input_mapping": {
+      "en": "Node input mappings do not match operation inputs or node ports.",
+      "zh": "节点输入映射与操作输入或定义端口不匹配。"
+    },
+    "binding_output_mapping": {
+      "en": "Node output mappings do not match operation outputs or node ports.",
+      "zh": "节点输出映射与操作输出或定义端口不匹配。"
+    },
+    "binding_parameter_mapping": {
+      "en": "Node parameter mappings do not match software operation parameters.",
+      "zh": "节点参数映射与软件操作参数不匹配。"
+    },
+    "binding_input_type": {
+      "en": "The node input type does not match the software operation.",
+      "zh": "节点输入类型与软件操作不匹配。"
+    },
+    "binding_output_type": {
+      "en": "The node output type does not match the software operation.",
+      "zh": "节点输出类型与软件操作不匹配。"
+    },
+    "binding_duplicate_id": {
+      "en": "The package definition list contains duplicate IDs.",
+      "zh": "软件包定义列表包含重复ID。"
+    },
+    "binding_parameter_type": {
+      "en": "The node parameter type does not match the software operation.",
+      "zh": "节点参数与软件操作参数类型不匹配。"
+    },
+    "binding_nullable": {
+      "en": "The node parameter nullable flag must match the software operation.",
+      "zh": "节点参数nullable标记必须与软件操作定义一致。"
+    },
+    "binding_minimum": {
+      "en": "The node parameter minimum must not expand the software operation range.",
+      "zh": "节点参数minimum不能扩大软件操作范围。"
+    },
+    "binding_maximum": {
+      "en": "The node parameter maximum must not expand the software operation range.",
+      "zh": "节点参数maximum不能扩大软件操作范围。"
+    },
+    "binding_choices": {
+      "en": "The node choice parameter must retain the software operation choices.",
+      "zh": "节点choice参数必须保留软件操作选项。"
+    },
+    "binding_parameter_range": {
+      "en": "The node parameter is outside the software operation definition: {name}",
+      "zh": "节点参数超出软件操作定义：{name}"
+    },
+    "binding_constant_invalid": {
+      "en": "The fixed parameter does not match the software operation definition: {name}",
+      "zh": "固定参数不符合软件操作定义：{name}"
+    },
+    "import_duplicate": {
+      "en": "Duplicate sources in the same batch are processed only once.",
+      "zh": "同一批次的重复来源只处理一次。"
+    },
+    "import_format_unsupported": {
+      "en": "This file format is not supported for import.",
+      "zh": "该文件格式不在本阶段入库清单中。"
+    },
+    "import_source_unreadable": {
+      "en": "The selected source is not a readable file.",
+      "zh": "所选来源不是可读文件。"
+    },
+    "import_source_changed": {
+      "en": "The source changed after task acceptance. Verify the source and import it again.",
+      "zh": "来源文件在任务受理后发生变化，请确认来源并重新导入。"
+    },
+    "import_source_changed_registered": {
+      "en": "The source changed after registration. Verify the source and import it again.",
+      "zh": "来源文件在登记后发生变化，请确认来源后重新导入。"
+    },
+    "import_source_changed_reading": {
+      "en": "The source changed during background reading. Verify the source and import it again.",
+      "zh": "来源文件在后台读取时发生变化，请确认来源后重新导入。"
+    },
+    "import_blake3_missing": {
+      "en": "The asset service is missing its BLAKE3 dependency.",
+      "zh": "资产服务缺少 BLAKE3 依赖。"
+    },
+    "import_cancelled": {
+      "en": "File processing was cancelled.",
+      "zh": "文件处理已取消。"
+    },
+    "import_copy_failed": {
+      "en": "File reading, hashing or copying failed. Registered metadata was retained.",
+      "zh": "文件读取、散列或复制失败；已登记资料保留。"
+    },
+    "import_registration_failed": {
+      "en": "File metadata registration failed.",
+      "zh": "文件资料登记失败。"
+    },
+    "import_background_failed": {
+      "en": "Background processing failed. Completed file results were retained.",
+      "zh": "后台处理失败；已完成的文件结果保留。"
+    },
+    "import_interrupted": {
+      "en": "The service was interrupted. Inspect the task before resuming it.",
+      "zh": "服务中断，等待用户检查后恢复。"
+    },
+    "import_parse_failed": {
+      "en": "{format} metadata parsing failed. Original file content was retained.",
+      "zh": "{format} 元数据解析失败；原始文件已完成内容入库。"
+    },
+    "import_parse_pending_content": {
+      "en": "{format} metadata parsing failed. Original file content import will continue.",
+      "zh": "{format} 元数据解析失败；原始文件仍将继续内容入库。"
+    },
+    "import_preview_failed": {
+      "en": "Preview generation failed. Imported content was retained.",
+      "zh": "预览生成失败；已入库内容保留。"
+    },
+    "import_hdu_preview_failed": {
+      "en": "Preview generation failed for the selected image HDU.",
+      "zh": "所选图像 HDU 的预览生成失败。"
+    },
+    "import_cfa_preview_unsupported": {
+      "en": "{layout} CFA was registered; mosaic colour previews are not supported yet.",
+      "zh": "{layout} CFA 已登记；当前暂不支持其马赛克彩色预览。"
+    },
+    "upload_interrupted": {
+      "en": "File upload was interrupted. Select the files again to create a new import batch.",
+      "zh": "文件上传中断，请重新选择文件创建导入批次。"
+    },
+    "upload_incomplete": {
+      "en": "File upload is incomplete. Select the files again to create a new import batch.",
+      "zh": "文件上传未完成，请重新选择文件创建导入批次。"
+    },
+    "source_outside_root": {
+      "en": "The source is unreadable or outside the asset root.",
+      "zh": "来源无法读取或超出素材根目录。"
+    },
+    "source_folder_unreadable": {
+      "en": "The folder is unreadable.",
+      "zh": "文件夹无法读取。"
+    },
+    "preview_layout_unsupported": {
+      "en": "This image layout does not support full-size previews yet.",
+      "zh": "此图像布局暂不支持大图预览。"
+    },
+    "preview_original_not_ready": {
+      "en": "Original storage or hashing is incomplete. Try again later.",
+      "zh": "原件托管或散列尚未完成，请稍后重试。"
+    },
+    "preview_metadata_not_ready": {
+      "en": "File metadata is not ready. Retry the import before generating a full-size preview.",
+      "zh": "文件元数据尚未解析完成，请重试导入后再生成大图。"
+    },
+    "preview_cleanup_active": {
+      "en": "Original cleanup is in progress. Full-size preview generation is unavailable.",
+      "zh": "原件正在清理，暂不能生成大图。"
+    },
+    "preview_recipe_not_ready": {
+      "en": "The thumbnail and its display parameters are not ready. Try again later.",
+      "zh": "缩略图及其显示参数尚未就绪，请稍后重试。"
+    },
+    "preview_stretch_not_ready": {
+      "en": "Fixed stretch parameters are not ready. Try again later.",
+      "zh": "固定拉伸参数尚未就绪，请稍后重试。"
+    },
+    "preview_cache_unavailable": {
+      "en": "The full-size preview cache is unavailable. Try again.",
+      "zh": "大图缓存不可用，请重试。"
+    },
+    "preview_not_generated": {
+      "en": "Generate a full-size preview to view it.",
+      "zh": "点击生成大图预览。"
+    },
+    "preview_interrupted": {
+      "en": "The service was interrupted before the full-size preview completed. Try again.",
+      "zh": "服务中断，大图预览尚未完成，请重试。"
+    },
+    "preview_queue_failed": {
+      "en": "The full-size preview could not be queued. Try again.",
+      "zh": "无法排队生成大图，请重试。"
+    },
+    "preview_generation_failed": {
+      "en": "Preview generation failed. See the original diagnostics.",
+      "zh": "预览生成失败，请查看原始诊断。"
+    },
+    "preview_generation_diagnostic": {
+      "en": "Preview generation failed: {diagnostic}",
+      "zh": "预览生成失败：{diagnostic}"
+    },
+    "field_member_duplicate": {
+      "en": "Member version IDs must not be duplicated.",
+      "zh": "成员版本 ID 不能重复。"
+    },
+    "field_member_order": {
+      "en": "Existing members must not be reordered.",
+      "zh": "不得重排已有成员。"
+    },
+    "field_member_append": {
+      "en": "New members may only be appended.",
+      "zh": "新成员只能追加。"
+    },
+    "field_capture_parameters": {
+      "en": "Check parameter values and equipment IDs.",
+      "zh": "请检查参数值及设备 ID。"
+    },
+    "field_asset_classification": {
+      "en": "Check the asset class and frame type.",
+      "zh": "请检查素材形态与帧用途。"
+    },
+    "field_equipment_kind": {
+      "en": "Must match the existing equipment kind.",
+      "zh": "必须与现有设备类型一致。"
+    },
+    "field_typed_specs": {
+      "en": "Provide a typed parameter object.",
+      "zh": "请提供类型化参数对象。"
+    },
+    "field_classification_required": {
+      "en": "Provide both a valid asset class and frame type.",
+      "zh": "请同时提供有效的素材形态和帧用途。"
+    },
+    "field_not_nullable": {
+      "en": "This field must not be null.",
+      "zh": "此字段不能为 null。"
+    },
+    "proxy_unconfigured": {
+      "en": "AstroPhotoFlow local service configuration or token is unavailable.",
+      "zh": "AstroPhotoFlow 本机服务配置或令牌不可用。"
+    },
+    "proxy_origin_denied": {
+      "en": "The request origin is not allowed by AstroPhotoFlow.",
+      "zh": "请求来源不在 AstroPhotoFlow 允许列表中。"
+    },
+    "proxy_same_origin_required": {
+      "en": "Requests without Origin must be same-origin Fetch requests.",
+      "zh": "缺少 Origin 时只接受同源 Fetch 请求。"
+    },
+    "proxy_timeout": {
+      "en": "Timed out waiting for the AstroPhotoFlow service.",
+      "zh": "等待 AstroPhotoFlow 服务超时。"
+    },
+    "proxy_unavailable": {
+      "en": "The AstroPhotoFlow service is unavailable.",
+      "zh": "AstroPhotoFlow 服务当前不可用。"
+    },
+    "proxy_maintenance": {
+      "en": "The workbench is under maintenance and cannot accept new runs.",
+      "zh": "工作台正在维护，暂不接受新运行。"
+    },
+    "proxy_state_unknown": {
+      "en": "The workbench maintenance state could not be confirmed.",
+      "zh": "无法确认工作台维护状态。"
+    },
+    "media_interrupted": {
+      "en": "Viewing preparation was interrupted. Retry explicitly.",
+      "zh": "查看准备被中断，请显式重试。"
+    },
+    "media_not_watched": {
+      "en": "High-resolution preparation was cancelled because there are no viewers.",
+      "zh": "无人继续查看，已取消高清准备。"
+    },
+    "media_executor_closing": {
+      "en": "The preview executor is shutting down. Try again later.",
+      "zh": "预览执行器正在关闭，请稍后重试。"
+    },
+    "media_failure_diagnostic": {
+      "en": "Viewing preparation failed: {diagnostic}",
+      "zh": "查看准备失败：{diagnostic}"
+    },
+    "bundle_load_diagnostic": {
+      "en": "Bundle node loading failed: {diagnostic}",
+      "zh": "Bundle 节点加载失败：{diagnostic}"
+    }
+  },
+  "codes": {
+    "CONFIGURATION_BUSY": "configuration_is_being_saved_read_it_again_before_submitting",
+    "CONFIGURATION_CONFLICT": "configuration_has_changed_read_it_again",
+    "CONFIGURATION_PARTIALLY_SAVED": "workspace_configuration_was_saved_but_the_default_location_could_not_be_sav",
+    "RESOURCE_NOT_FOUND": "the_requested_resource_was_not_found",
+    "AUTHENTICATION_REQUIRED": "a_valid_local_service_token_is_required",
+    "WORKBENCH_MAINTENANCE": "the_workbench_is_stopping_or_restarting_and_cannot_accept_new_tasks",
+    "VALIDATION_ERROR": "validation_error",
+    "SOFTWARE_CONTENT_CONFLICT": "the_package_state_has_changed_read_it_again_before_requesting_installation",
+    "SOFTWARE_BUSY": "a_software_action_is_already_running_for_this_package",
+    "WORKBENCH_NOT_READY": "confirm_installation_from_the_ready_workbench_webpage",
+    "SOFTWARE_ACTION_EXPIRED": "the_workbench_webpage_address_has_changed_review_the_installation_plan_agai",
+    "NODE_CONTENT_CONFLICT": "a_bundled_node_id_already_belongs_to_another_definition",
+    "BUNDLE_LOAD_FAILED": "bundle_files_were_updated_but_node_hot_loading_could_not_be_confirmed_query",
+    "SERVICE_UNAVAILABLE": "the_domain_service_database_is_not_ready",
+    "LOCALE_UNAVAILABLE": "locale_unavailable",
+    "CONFIGURATION_UNAVAILABLE": "cannot_read_the_workbench_configuration_check_the_configuration_file",
+    "CONFIGURATION_SAVE_FAILED": "cannot_save_the_workbench_configuration_read_it_again_and_check_file_permis",
+    "DIRECTORY_PICKER_UNAVAILABLE": "cannot_open_the_system_folder_picker_check_the_local_desktop_session_or_ent",
+    "CALIBRATION_IN_USE": "image_group_versions_still_reference_the_selected_calibration_target_remove",
+    "INVALID_REFERENCE": "invalid_reference",
+    "REVISION_CONFLICT": "another_window_changed_the_configuration_read_it_again_before_saving",
+    "SOURCE_UNAVAILABLE": "the_selected_local_path_cannot_be_read",
+    "UPLOAD_SIZE_MISMATCH": "the_upload_size_differs_from_the_selected_file_size_select_the_file_again",
+    "UPLOAD_INCOMPLETE": "all_file_uploads_must_finish_before_import_can_start",
+    "TASK_STATE_CONFLICT": "processing_has_already_started_for_this_upload_batch",
+    "UPLOAD_REQUIRES_SELECTION": "the_upload_is_incomplete_select_files_again_and_create_a_new_import_batch",
+    "LOCAL_PICKER_UNAVAILABLE": "cannot_open_the_local_file_picker_check_the_local_desktop_session",
+    "UPLOAD_ALREADY_RECEIVED": "this_file_has_already_been_uploaded_select_files_again_to_create_a_new_impo",
+    "UPLOAD_FAILED": "the_upload_was_interrupted_select_files_again_to_create_a_new_import_batch",
+    "NO_SUPPORTED_FILES": "the_selected_path_contains_no_currently_supported_asset_files",
+    "PREVIEW_STALE": "references_have_changed_preview_permanent_deletion_again",
+    "REFERENCES_EXIST": "some_settings_still_have_project_assets_resolve_their_references_first",
+    "SOURCE_CLEANUP_ACTIVE": "the_original_is_being_cleaned_up_viewer_cache_preparation_and_reads_are_blo",
+    "SOURCE_CHANGED": "the_original_size_differs_from_the_fixed_version_check_content_changes_firs",
+    "MEDIA_UNSUPPORTED": "this_output_is_not_a_viewable_scientific_image_or_video",
+    "MEDIA_NOT_IMAGE": "pause_the_video_and_prepare_the_original_frame_first",
+    "INVALID_TILE": "tile_coordinates_are_outside_the_image_bounds",
+    "FRAME_NOT_MATCHED": "no_original_frame_matches_the_paused_frame_timestamp",
+    "MEDIA_NOT_READY": "the_display_cache_is_stale_reopen_the_viewer",
+    "STALE_VIEW": "a_newer_viewer_request_has_replaced_this_request",
+    "PREVIEW_ACTIVE": "the_full_size_preview_is_still_being_generated_preview_cleanup_again_after_",
+    "INSUFFICIENT_STORAGE": "insufficient_space_to_fix_the_scientific_inputs_for_this_run",
+    "UNSUPPORTED_FORMAT": "content_change_confirmation_is_not_supported_for_this_file_format",
+    "OUTPUT_UNAVAILABLE": "the_output_location_is_not_a_complete_file",
+    "UNSUPPORTED_SELECTION": "the_fixed_input_color_layout_does_not_match_the_operation_requirements",
+    "PREVIEW_UNSUPPORTED": "the_fits_output_has_no_supported_hdu_for_preview",
+    "PREVIEW_DEPENDENCY_UNAVAILABLE": "the_asset_service_could_not_find_ffmpeg_to_generate_a_video_first_frame_pre",
+    "IMPORT_ACTIVE": "an_active_or_resumable_import_task_still_holds_the_selected_content_cancel_",
+    "TRASH_STATE_CONFLICT": "this_record_was_cleaned_up_or_its_state_has_changed_and_cannot_be_restored",
+    "TRASH_PREVIEW_STALE": "the_cleanup_scope_has_changed_preview_it_again",
+    "FILE_SCOPE_INVALID": "the_managed_file_is_outside_the_service_data_directory_cleanup_is_blocked",
+    "UNSUPPORTED_NODE_DEFINITION": "a_new_custom_node_must_use_source_custom",
+    "GIT_NOT_READY": "the_platform_git_tool_was_not_found",
+    "BUNDLE_FETCH_FAILED": "git_fetch_failed_check_the_network_and_private_repository_access_in_the_sys",
+    "BUNDLE_NOT_RELEASED": "this_bundle_has_no_published_pinned_commit_yet",
+    "BUNDLE_VERSION_CHANGED": "the_remote_tag_does_not_match_the_confirmed_commit_nothing_was_installed",
+    "SOFTWARE_NOT_READY": "this_bundle_supports_windows_only",
+    "INVALID_WORK_DIRECTORY": "the_run_directory_points_outside_the_workspace",
+    "BUNDLE_STATE_CONFLICT": "the_previous_version_is_still_pending_the_existing_installation_was_not_ove",
+    "SOFTWARE_STATE_SAVE_FAILED": "the_installation_result_could_not_be_saved_check_the_software_state_do_not_",
+    "CANVAS_CONNECTION_UNKNOWN": "cannot_confirm_the_canvas_result_query_the_same_operation_id_do_not_automat",
+    "PREVIEW_CANCELLED": "this_live_preview_request_is_closed",
+    "OUTPUT_NOT_READY": "complete_output_validation_has_not_finished_for_this_invocation",
+    "INTERNAL_ERROR": "internal_error",
+    "METHOD_NOT_ALLOWED": "method_not_allowed",
+    "WORKBENCH_RESTART_FAILED": "restart_failed",
+    "WORKBENCH_CONTROL_BUSY": "control_busy"
+  }
+}

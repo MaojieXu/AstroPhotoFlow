@@ -64,6 +64,8 @@ include = ["astrophotoflow", "astrophotoflow.*"]
 namespaces = false
 
 [tool.setuptools.package-data]
+"astrophotoflow.core" = ["locales/*.json"]
+"astrophotoflow.interfaces.mcp" = ["locales/*.json"]
 astrophotoflow = ["vendor/*.zip", "vendor/*.json", "vendor/*.lock", "vendor/*LICENSE"]
 "astrophotoflow.core.database" = ["alembic.ini", "alembic/*.py", "alembic/versions/*.py"]
 

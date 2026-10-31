@@ -252,12 +252,12 @@ describe('CustomerIoTelemetryProvider', () => {
       )
     )
 
-    i18n.global.locale.value = 'fr'
+    i18n.global.locale.value = 'zh'
 
     await vi.waitFor(() =>
       expect(hoisted.analytics.identify).toHaveBeenCalledWith(
         'test-uid-7f3a9c',
-        { email: 'user@example.com', locale: 'fr' }
+        { email: 'user@example.com', locale: 'zh' }
       )
     )
     i18n.global.locale.value = 'en'
