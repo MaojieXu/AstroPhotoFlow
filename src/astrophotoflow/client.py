@@ -14,6 +14,7 @@ from astrophotoflow.interfaces.client.library import LibraryOperations
 from astrophotoflow.interfaces.client.organization import OrganizationOperations
 from astrophotoflow.interfaces.client.software import SoftwareOperations
 from astrophotoflow.interfaces.client.canvas import CanvasOperations
+from astrophotoflow.interfaces.client.exports import ExportOperations
 
 
 from astrophotoflow.core.config import load_settings, load_running_settings, resolve_config_path
@@ -30,7 +31,7 @@ class ServiceApiError(RuntimeError):
         super().__init__(f"{code} (HTTP {status}): {message}{field_text}{suffix}")
 
 
-class AssetClient(ImportOperations, LibraryOperations, OrganizationOperations, SoftwareOperations, CanvasOperations):
+class AssetClient(ImportOperations, LibraryOperations, OrganizationOperations, SoftwareOperations, CanvasOperations, ExportOperations):
     def __init__(self, path: Path | None = None):
         self.config_path = resolve_config_path(path)
         workspace = self.config_path.parent

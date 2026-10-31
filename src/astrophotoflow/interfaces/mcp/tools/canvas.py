@@ -1,14 +1,33 @@
 from astrophotoflow.interfaces.mcp.localization import tool_description, node_display
 from typing import Any
+from typing import Annotated
+from pydantic import Field
 
 from astrophotoflow.contracts.workflows import CanvasAddRequest, CanvasGraphRequest
 
 
 def register(server, call, locale='en'):
     @server.tool(description=tool_description(locale, 'list_nodes'))
-    def list_nodes(query: str | None = None) -> list[dict[str, Any]]:
-        """Discover installed workspace nodes, availability, parameter schemas and bundle help. Command references are not executable nodes."""
-        return call(lambda client: [node_display(value, locale) for value in client.list_nodes(query)])
+    def list_nodes(query: str | None = None, limit: Annotated[int, Field(ge=1, le=10)] = 10,
+                   offset: Annotated[int, Field(ge=0)] = 0) -> dict[str, Any]:
+        """Search at most ten short installed-node summaries per page. Read parameters/examples with nodes.get/get_many. Command references are not executable nodes."""
+        def search(client):
+            values = client.list_nodes(query)
+            items = []
+            for value in values[offset:offset + limit]:
+                definition = value['node']['definition']
+                display = value.get('display', {}).get(locale, {})
+                items.append({'definition_id': definition['definition_id'],
+                              'name': display.get('name', definition['name']),
+                              'description': display.get('description', definition['description']),
+                              'available': value['available'], 'reason': value.get('reason'),
+                              'content_token': value['node']['content_token']})
+            return {'items': items, 'total': len(values), 'limit': limit, 'offset': offset}
+        return call(search)
+
+    @server.tool(description='批量读取指定节点完整定义。' if locale == 'zh' else 'Read full definitions for up to ten explicit node IDs in one call.')
+    def get_nodes(definition_ids: Annotated[list[str], Field(min_length=1, max_length=10)]) -> dict[str, Any]:
+        return call(lambda client: {'items': [node_display(client.get_node(identity), locale) for identity in definition_ids]})
 
     @server.tool(description=tool_description(locale, 'get_node'))
     def get_node(definition_id: str) -> dict[str, Any]:

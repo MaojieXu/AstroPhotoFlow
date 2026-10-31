@@ -31,6 +31,7 @@ export const mediaStateSchema = z.object({
   video_url: z.string().nullable(), mime_type: z.string().nullable(), proxy: z.boolean(),
   frame_index: z.number().int().nonnegative().nullable(), media_time: z.number().nullable(),
   frame_count: z.number().int().nonnegative().nullable(), duration: z.number().nullable(), note: z.string().nullable(),
+  display_recipe: z.record(z.string(), z.unknown()).nullable().optional(),
   error: z.object({ code: z.string(), message: z.string() }).strict().nullable()
 }).strict()
 

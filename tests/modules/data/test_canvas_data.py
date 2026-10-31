@@ -6,7 +6,7 @@ import blake3
 import numpy as np
 from astropy.io import fits
 from fastapi.testclient import TestClient
-from pydantic import ValidationError
+from pydantic import TypeAdapter, ValidationError
 
 from astrophotoflow.contracts.inputs import CanvasDataRequest
 from astrophotoflow.contracts.inputs import DatasetInputReference, ScienceSelection
@@ -14,7 +14,7 @@ from astrophotoflow.modules.data.public import resolve_canvas_inputs
 from astrophotoflow.core.config import Settings
 from astrophotoflow.core.errors import ApiError
 from astrophotoflow.core.database.db import Database
-from astrophotoflow.interfaces.data_reference_node import DataReferenceNode
+from astrophotoflow.contracts.data_nodes import ScienceReference
 from astrophotoflow.interfaces.http.app import create_app
 from astrophotoflow.modules.data.models import Asset, AssetVersion, Base, Dataset, DatasetMember, DatasetVersion, LibraryEntryRemoval, FitsHduMetadata, Preview, Equipment
 
@@ -56,7 +56,7 @@ def test_asset_canvas_reference_is_fixed_and_contains_no_preview_or_path(canvas_
     assert value == {"native_type": "APF_DATA_REFERENCE", "title": "frame-0.fits", "reference": {
         "kind": "asset_version", "asset_version_id": versions[0], "selection": {"kind": "whole_file", "hdu_index": None},
     }}
-    assert DataReferenceNode().reference(json.dumps(value["reference"])) == (value["reference"],)
+    assert TypeAdapter(ScienceReference).validate_json(json.dumps(value["reference"])).model_dump(mode="json") == value["reference"]
 
 
 @pytest.mark.parametrize("indexes", [None, [0, 2]])
@@ -97,9 +97,9 @@ def test_member_selection_rejects_ambiguous_ranges(entry_type, indexes):
         CanvasDataRequest(entry_type=entry_type, id=uuid4(), version_id=uuid4(), member_indexes=indexes)
 
 
-def test_reference_node_rejects_preview_payload():
+def test_science_reference_contract_rejects_preview_payload():
     with pytest.raises(ValidationError):
-        DataReferenceNode().reference(json.dumps({"kind": "preview", "url": "thumbnail.jpg"}))
+        TypeAdapter(ScienceReference).validate_json(json.dumps({"kind": "preview", "url": "thumbnail.jpg"}))
 
 
 def test_native_siril_inputs_resolve_complete_fixed_members_and_preserve_gain_zero(canvas_library, tmp_path):

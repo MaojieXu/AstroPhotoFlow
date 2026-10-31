@@ -47,6 +47,11 @@ ROUTES = [
     ("DELETE", "/software/packages/siril/autostretch-preview/{consumer_id}", "/software/packages/siril/autostretch-preview/{consumer_id}"),
     ("POST", "/software/packages/{package_id}/prepare", "/software/packages/{package_id}/prepare"),
     ("GET", "/capabilities", "/capabilities"),
+    ('GET', '/data-nodes/{run_id}/{execution_id}', '/data-nodes/{run_id}/{execution_id}'),
+    ('POST', '/exports/select-local', '/exports/select-local'),
+    ('POST', '/exports', '/exports'),
+    ('GET', '/exports/{request_id}', '/exports/{request_id}'),
+    ('POST', '/exports/{request_id}/cancel', '/exports/{request_id}/cancel'),
     ("GET", "/projects", "/projects"),
     ("POST", "/projects", "/projects"),
     ("GET", "/projects/{project_id}", "/projects/{project_id}"),
@@ -209,7 +214,7 @@ async def forward(request: web.Request, path_template: str) -> web.StreamRespons
             headers["Content-Type"] = request.headers.get("Content-Type", "application/json")
         streaming_upload = request.method == "PUT" and "/uploads/" in request.path
         body = request.content if streaming_upload else await request.read() if request.method in {"POST", "PATCH", "DELETE", "PUT"} else None
-        directory_selection = request.method == "POST" and path_template in {"/settings/workbench/select-directory", "/imports/select-local"}
+        directory_selection = request.method == "POST" and path_template in {"/settings/workbench/select-directory", "/imports/select-local", '/exports/select-local'}
         timeout = aiohttp.ClientTimeout(total=None, sock_connect=10, sock_read=None) if streaming_upload or directory_selection or media_stream else aiohttp.ClientTimeout(total=10)
         async with aiohttp.ClientSession(timeout=timeout) as client:
             async def upstream_response():

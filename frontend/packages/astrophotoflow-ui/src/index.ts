@@ -1,4 +1,6 @@
 export { Workspace } from './modules/data'
+export { createDataExportClient, dataResultSchema, exportReceiptSchema } from './modules/data/api/exports'
+export type { DataResult, ExportReceipt } from './modules/data/api/exports'
 export { uiMessages, configureUII18n } from './core/i18n'
 export { getWorkspaceLocale } from './core/client'
 export { createNodeClient, savedNodeSchema } from './modules/nodes/client'

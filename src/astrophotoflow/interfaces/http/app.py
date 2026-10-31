@@ -17,7 +17,8 @@ from astrophotoflow.core.localization import error_message, workspace_locale, lo
 from astrophotoflow.core.http import authenticate
 from astrophotoflow.core.config import Settings, ConfigurationError, _update_running_state
 from astrophotoflow.core.workbench import status as workbench_status
-from astrophotoflow.modules.data.public import DisplayPreviews, MediaViews, import_workers, data_busy
+from astrophotoflow.modules.data.public import DisplayPreviews, MediaViews, DataExports, import_workers, data_busy
+from astrophotoflow.interfaces.http.data_exports import router as export_router
 from astrophotoflow.contracts.workbench import BusyState
 from astrophotoflow.contracts.common import ErrorDetail, StrictModel, UuidInput
 from astrophotoflow.contracts.nodes import DefinitionWriteResult, NodeDefinition, SavedDefinition, definition_content_token
@@ -39,6 +40,7 @@ from astrophotoflow.modules.data.routes import router as data_router
 from astrophotoflow.modules.software.routes import router as software_router
 from astrophotoflow.modules.nodes.routes import router as nodes_router
 from astrophotoflow.modules.workflows.canvas import router as canvas_router
+from astrophotoflow.modules.workflows.data_nodes import router as data_node_router
 from astrophotoflow.modules.workflows.siril_preview import SirilPreviews, router as siril_preview_router
 from astrophotoflow.interfaces.http import system
 
@@ -60,14 +62,19 @@ def create_app(settings: Settings, token: str) -> FastAPI:
             app.state.import_workers = workers
             app.state.display_previews = DisplayPreviews(app.state.database, settings, workers[1])
             app.state.media_views = MediaViews(app.state.database, settings, workers[1])
+            app.state.data_exports = DataExports(app.state.database, settings, workers)
             app.state.siril_previews = SirilPreviews(app.state.database, settings, workers[1], app.state.media_views.cache)
             try:
                 yield
             finally:
+                await asyncio.to_thread(app.state.data_exports.close)
                 await app.state.siril_previews.close()
 
     app = FastAPI(lifespan=lifespan, title="AstroPhotoFlow Asset Service", version="1.0.0", docs_url=None, redoc_url=None)
     app.include_router(canvas_router)
+    app.include_router(data_node_router)
+    app.include_router(export_router)
+    app.state.data_exports = None
     app.include_router(siril_preview_router)
     app.state.siril_previews = None
     app.state.settings = settings
@@ -371,7 +378,7 @@ def create_app(settings: Settings, token: str) -> FastAPI:
             state = BusyState(busy=False, unknown=False, blockers=[])
             try:
                 set_maintenance(body.operation_id)
-                state = data_busy(app.state.database, app.state.media_views)
+                state = data_busy(app.state.database, app.state.media_views, app.state.data_exports)
                 active_software = [package_id for package_id, task in app.state.software_tasks.items() if not task.done()]
                 active_software.extend(f"{package.package_id}调用 {use.call_id}" for package in list_packages(settings) for use in get_usage(package.package_id))
                 active_software.extend(f"Siril准备 {call_id}" for call_id, task in app.state.siril_calls.items() if not task.done())

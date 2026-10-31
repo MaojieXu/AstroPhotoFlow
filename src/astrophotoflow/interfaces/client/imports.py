@@ -12,6 +12,27 @@ from astrophotoflow.contracts.common import StrictModel, UuidInput
 
 
 class ImportOperations:
+    def inspect_import_sources(self, body):
+        return self._result(self.client.post('/import-inspections', json=body.model_dump(mode='json'), timeout=None))
+
+    def get_import_inspection(self, scan_id: str):
+        return self.request('GET', f'/import-inspections/{scan_id}')
+
+    def list_inspection_entries(self, scan_id: str, kind: str = 'files', group_id: str | None = None, limit: int = 50, offset: int = 0):
+        return self.request('GET', f'/import-inspections/{scan_id}/entries', params={'kind': kind, 'group_id': group_id, 'limit': limit, 'offset': offset})
+
+    def submit_import_batch(self, body):
+        return self.request('POST', '/import-batches', json=body)
+
+    def get_import_batch(self, request_id: str):
+        return self.request('GET', f'/import-batches/{request_id}')
+
+    def wait_import_batch(self, body):
+        return self.request('POST', '/import-batches/wait', json=body)
+
+    def retry_batch_project_links(self, request_id: str, body):
+        return self.request('POST', f'/import-batches/{request_id}/project-references', json=body)
+
     def import_photo(self, path: Path, options: PhotoImportOptions | None = None) -> dict[str, Any]:
         return self.import_photos([path], options)
 

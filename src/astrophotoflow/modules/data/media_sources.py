@@ -136,6 +136,10 @@ class PixelSource:
             self.reserve(int(np.prod(descriptor.shape)) * np.dtype(descriptor.dtype).itemsize + 256)
             with np.load(self.path, allow_pickle=False) as archive:
                 array = archive[self.selection.array_key]
+        elif self.path.suffix.lower() in {'.png', '.tif', '.tiff'}:
+            from .image_formats import read_raster
+            array = read_raster(self.path)
+            self.linear = array.dtype != np.uint8
         else:
             with Image.open(self.path) as image:
                 pixel_bytes = 2 if image.mode.startswith("I;16") else 4 if image.mode in {"I", "F"} else 3

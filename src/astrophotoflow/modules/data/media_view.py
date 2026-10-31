@@ -323,6 +323,9 @@ class MediaViews:
                     state.overview_url, state.tile_url = "overview", "tiles/{level}/{x}/{y}"
                     state.frame_index = job["selection"].frame_index
                 state.selection = job["selection"]
+                state.display_recipe = dict(job['recipe'])
+                if job['recipe'].get('direct') and not job['playback'] and not state.needs_selection:
+                    state.display_recipe['display_range'] = [0, source.direct_max]
                 self._checkpoint(job["key"])
                 stamp = path.stat()
                 if (stamp.st_size, stamp.st_mtime_ns) != job["stamp"]:

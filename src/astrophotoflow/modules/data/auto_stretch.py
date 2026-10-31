@@ -72,7 +72,7 @@ def calculate_stretch(pixels: np.ndarray, *, balance_rgb: bool = True) -> dict:
                        shadows=shadows, highlights=highlights, midtones=midtones).model_dump()
 
 
-def render_stretch(pixels: np.ndarray, recipe: dict) -> Image.Image:
+def stretch_values(pixels: np.ndarray, recipe: dict) -> np.ndarray:
     values = np.asarray(pixels, dtype=np.float32)
     finite = np.isfinite(values)
     balanced = (values - recipe["input_offset"]) * np.asarray(recipe["white_balance"], dtype=np.float32)
@@ -80,5 +80,10 @@ def render_stretch(pixels: np.ndarray, recipe: dict) -> Image.Image:
     midtones = recipe["midtones"]
     transformed = (midtones - 1) * normalized / ((2 * midtones - 1) * normalized - midtones)
     transformed[~finite] = 0
+    return np.clip(transformed, 0, 1)
+
+
+def render_stretch(pixels: np.ndarray, recipe: dict) -> Image.Image:
+    transformed = stretch_values(pixels, recipe)
     image = np.asarray(np.clip(transformed * 255, 0, 255), dtype=np.uint8)
     return Image.fromarray(image).convert("RGB")

@@ -66,16 +66,18 @@ from astrophotoflow.interfaces.bundle_nodes import BundleNode
 from importlib.resources import files
 catalog=lambda:json.loads(files('astrophotoflow').joinpath('vendor/bundle-catalog.json').read_text(encoding='utf-8'))
 from astrophotoflow.contracts.nodes import NodeDefinition
-SirilAutostretchNode=type("TestBundleNode",(BundleNode,),{"definition":NodeDefinition.model_validate(catalog()["siril"]["nodes"][0]),"output_node":True})
+from astrophotoflow.contracts.software import SoftwareOperation
+SirilAutostretchNode=type("TestBundleNode",(BundleNode,),{"definition":NodeDefinition.model_validate(catalog()["siril"]["nodes"][0]),"output_node":True,"operation":SoftwareOperation.model_validate({**catalog()["siril"]["operations"][0]["operation"], "content_token":"fixture", "ready":True})})
 schema=SirilAutostretchNode.GET_SCHEMA()
 import asyncio
 from types import SimpleNamespace
 import astrophotoflow.interfaces.bundle_nodes as adapter
+SirilAutostretchNode.hidden=SimpleNamespace(extra_pnginfo=None)
 sessions=[]
 async def request(session, method, path, body=None):
     assert session._loop is asyncio.get_running_loop() and not session.closed
     sessions.append(session)
-    return {"state":"completed","images":[],"output":{},"preview_error":None}
+    return {"state":"completed","images":[],"outputs":[{}],"preview_error":None,"ports":[],"operation":{"package_id":"siril","version":"1.4.4","operation_id":"autostretch"},"bundle":{"version":"0.1.2-dev.1","commit":"test"}}
 adapter._request=request
 adapter.get_executing_context=lambda:SimpleNamespace(prompt_id="00000000-0000-4000-8000-000000000001",node_id="65",list_index=0)
 for _ in range(2):
@@ -105,12 +107,12 @@ def test_real_siril_autostretch_two_members_and_original_integrity(tmp_path):
         pytest.skip("Set APF_TEST_SIRIL_BUNDLE to a verified complete bundle checkout.")
     settings = Settings("127.0.0.1", 8190, tmp_path / "data", (), workspace=tmp_path)
     bundle = tmp_path / "software/siril/bundle"
-    shutil.copytree(source_app, bundle)
+    shutil.copytree(source_app, bundle, ignore=shutil.ignore_patterns(".git"))
     app = bundle / "app"
     import psutil
-    from astrophotoflow.modules.software.bundles import release
-    commit = release("siril")["commit"]
-    (bundle.parent/"bundle-lock.json").write_text(json.dumps({"commit":commit,"bundle_version":"0.1.0"}))
+    commit = subprocess.check_output(['git', '-c', 'safe.directory=' + str(Path(source_app).resolve()), '-C', source_app, 'rev-parse', 'HEAD'], text=True).strip()
+    manifest = json.loads((bundle / 'bundle.json').read_text(encoding='utf-8'))
+    (bundle.parent/"bundle-lock.json").write_text(json.dumps({"commit":commit,"bundle_version":manifest['bundle_version']}))
     (bundle.parent/"native-load.json").write_text(json.dumps({"commit":commit,"ready":True,"pid":os.getpid(),"create_time":psutil.Process().create_time()}))
     public._write_package_state(settings, "siril", SoftwarePackageState(
         installed_version="1.4.4", install_path=app, availability="ready", reason=None,
@@ -132,10 +134,28 @@ def test_real_siril_autostretch_two_members_and_original_integrity(tmp_path):
             content_hash="blake3:" + blake3.blake3(path.read_bytes()).hexdigest(), mtime_ns=path.stat().st_mtime_ns,
             scientific_metadata={"selected_hdu": 0},
         ))
+    from types import SimpleNamespace
+    from astrophotoflow.contracts.data_nodes import NativeDataExecute
+    from astrophotoflow.contracts.inputs import OutputLocator
+    from astrophotoflow.modules.workflows.data_nodes import execute_data, result_directory
+    from astrophotoflow.modules.workflows.software_calls import _resolve_previous
+    data_id = uuid4()
+    data_directory = result_directory(settings, run_id, data_id)
+    data_directory.mkdir(parents=True)
+    for index, original in enumerate(inputs):
+        np.save(data_directory / f'input-{index:06}.npy', fits.getdata(original.read_path), allow_pickle=False)
+    data_result = execute_data(None, settings, NativeDataExecute(run_id=run_id, execution_id=data_id,
+                               node_id='source-data', image_count=2, input_dtype='float32'))
+    data_inputs, supporting = _resolve_previous(settings, SimpleNamespace(prompt_id=run_id),
+        OutputLocator.model_validate(data_result['reference']), SimpleNamespace(type='APF_SCIENCE'))
+    assert len(data_inputs) == 2 and not supporting
+    data_hashes = [hashlib.sha256(item.read_path.read_bytes()).hexdigest() for item in data_inputs]
     body = SoftwareInvocation(
         run_id=run_id, call_id=call_id, node_execution_id="3", package_id="siril", version="1.4.4", operation_id="autostretch",
         operation_content_token=public.get_operation(settings, "siril", "1.4.4", "autostretch").content_token,
-        inputs={"image": inputs}, parameters={"linked": True, "shadowsclip": -2.8, "targetbg": 0.25},
+        bundle_commit=prepared.package.bundle_commit, inputs={"image": data_inputs},
+        parameters={**{parameter.name: parameter.default for parameter in public.get_operation(settings, "siril", "1.4.4", "autostretch").parameters},
+                    "linked": True, "shadowsclip": -2.8, "targetbg": 0.25},
         work_directory=tmp_path / "runs" / str(run_id) / "work" / str(call_id),
     )
     observations = []
@@ -146,9 +166,10 @@ def test_real_siril_autostretch_two_members_and_original_integrity(tmp_path):
     result = asyncio.run(public.invoke_operation(settings, body, observe))
     assert result.state == "completed", result.log_path.read_text(encoding="utf-8", errors="replace")
     assert result.exit_code == 0 and len(result.outputs["image"]) == 2
-    assert [path.name for path in [item.path for item in result.outputs["image"]]] == ["autostretch-000000.fit", "autostretch-000001.fit"]
+    assert [item.path.relative_to(body.work_directory).as_posix() for item in result.outputs["image"]] == ["member-000000/result.fit", "member-000001/result.fit"]
     for output in result.outputs["image"]:
         with fits.open(output.path) as hdus:
             assert hdus[0].data.shape == (32, 32) and np.isfinite(hdus[0].data).all()
     assert [hashlib.sha256(item.read_path.read_bytes()).hexdigest() for item in inputs] == hashes
+    assert [hashlib.sha256(item.read_path.read_bytes()).hexdigest() for item in data_inputs] == data_hashes
     assert observations[-1].active is False
