@@ -219,6 +219,19 @@ def resolve_release(settings, package_id, bundle_version, release_token):
     return resolve(settings, package_id, bundle_version, release_token)
 
 
+def _rename_bundle(source, destination):
+    # Version probes and Windows scanners can briefly hold executable handles.
+    # Keep the swap synchronous so cancellation cannot strand its rollback.
+    for attempt in range(6):
+        try:
+            source.rename(destination)
+            return
+        except OSError as exc:
+            if getattr(exc, 'winerror', None) not in {5, 32, 33} or attempt == 5:
+                raise
+            time.sleep(0.05 * 2 ** attempt)
+
+
 async def install_package(settings, package_id, version, expected_package_token, *, selected_release=None):
     release = selected_release if selected_release is not None else bundles.release(package_id)
     package = get_package(settings, package_id)
@@ -246,12 +259,12 @@ async def install_package(settings, package_id, version, expected_package_token,
         if previous.exists():
             raise ApiError(409, "BUNDLE_STATE_CONFLICT", "上次版本仍待处理，未覆盖现有程序。", message_key='the_previous_version_is_still_pending_the_existing_installation_was_not_ove')
         if destination.exists():
-            destination.rename(previous)
+            _rename_bundle(destination, previous)
         try:
-            (stage / "bundle").rename(destination)
+            _rename_bundle(stage / "bundle", destination)
         except OSError:
             if previous.exists():
-                previous.rename(destination)
+                _rename_bundle(previous, destination)
             raise
         activated = True
         lock = {"repository": release["repository"], "tag": release["tag"], "commit": commit, "bundle_version": manifest.bundle_version}
@@ -263,9 +276,9 @@ async def install_package(settings, package_id, version, expected_package_token,
         installed = get_package(settings, package_id)
     except (ApiError, OSError, ValueError, httpx.HTTPError, subprocess.SubprocessError) as exc:
         if activated:
-            (directory / 'bundle').rename(stage / 'failed-bundle')
+            _rename_bundle(directory / 'bundle', stage / 'failed-bundle')
             if (directory / 'previous-bundle').exists():
-                (directory / 'previous-bundle').rename(directory / 'bundle')
+                _rename_bundle(directory / 'previous-bundle', directory / 'bundle')
             for name, content in [('bundle-lock.json', old_lock), ('native-load.json', old_load)]:
                 if content is None:
                     (directory / name).unlink(missing_ok=True)

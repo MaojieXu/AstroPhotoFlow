@@ -228,7 +228,8 @@ def test_remove_checkout_handles_git_readonly_pack_files_and_keeps_siblings(tmp_
         bundles.remove_checkout(tmp_path,tmp_path)
 
 
-def test_update_switches_installed_metadata_and_adapter_without_touching_user_files(tmp_path, monkeypatch, bundle_install):
+@pytest.mark.parametrize('transient_lock', [False, True])
+def test_update_switches_installed_metadata_and_adapter_without_touching_user_files(tmp_path, monkeypatch, bundle_install, transient_lock):
     settings = Settings('127.0.0.1', 8190, tmp_path/'workspace/data', (), workspace=tmp_path/'workspace')
     root = bundle_install(settings)
     adapter = root/'adapter/siril.py'
@@ -259,6 +260,17 @@ def test_update_switches_installed_metadata_and_adapter_without_touching_user_fi
     workflow.write_text('{}', encoding='utf-8')
     before = public.get_package(settings, 'siril')
     assert before.update_available
+    rename = Path.rename
+    locked_attempts = []
+    if transient_lock:
+        def briefly_locked(path, target):
+            if path == root and Path(target).name == 'previous-bundle' and len(locked_attempts) < 2:
+                locked_attempts.append(path)
+                error = OSError(13, 'Bundle temporarily held by a Windows version probe')
+                error.winerror = 5
+                raise error
+            return rename(path, target)
+        monkeypatch.setattr(Path, 'rename', briefly_locked)
     after = asyncio.run(public.install_package(settings, 'siril', '1.4.4', before.package_token))
     second = bundles.adapter_plan(settings.workspace, 'siril', 'autostretch', [], {}, tmp_path/'runs/after')
     assert first.arguments == ['before'] and second.arguments == ['after']
@@ -269,3 +281,55 @@ def test_update_switches_installed_metadata_and_adapter_without_touching_user_fi
     removed = asyncio.run(public.uninstall_package(settings, 'siril', after.package_token))
     assert removed.availability == 'not_installed' and not root.exists()
     assert original.read_bytes() == b'protected original' and workflow.read_text(encoding='utf-8') == '{}'
+
+
+@pytest.mark.parametrize('winerror', [5, 32, 33, None])
+def test_bundle_rename_persistent_lock_is_bounded_and_preserves_files(tmp_path, monkeypatch, winerror):
+    source = tmp_path / 'bundle'
+    source.mkdir()
+    (source / 'original.fit').write_bytes(b'original')
+    target = tmp_path / 'previous-bundle'
+    attempts, waits = [], []
+    failure = OSError(13, 'locked')
+    if winerror is not None:
+        failure.winerror = winerror
+    def locked(path, destination):
+        attempts.append((path, destination))
+        raise failure
+    monkeypatch.setattr(Path, 'rename', locked)
+    monkeypatch.setattr(public.time, 'sleep', waits.append)
+    with pytest.raises(OSError) as caught:
+        public._rename_bundle(source, target)
+    assert caught.value is failure
+    assert len(attempts) == (6 if winerror is not None else 1)
+    assert sum(waits) <= 1.55 + 1e-9
+    assert (source / 'original.fit').read_bytes() == b'original'
+    assert not target.exists()
+
+
+def test_failed_stage_activation_restores_original_bundle(tmp_path, monkeypatch, bundle_install):
+    settings = Settings('127.0.0.1', 8190, tmp_path / 'data', (), workspace=tmp_path)
+    root = bundle_install(settings)
+    original_manifest = (root / 'bundle.json').read_bytes()
+    original_lock = (root.parent / 'bundle-lock.json').read_bytes()
+    def checkout(package_id, destination, **kwargs):
+        shutil.copytree(root, destination)
+        return bundles.read_bundle(destination)[0], 'staged'
+    monkeypatch.setattr(bundles, 'checkout', checkout)
+    rename = Path.rename
+    def locked_stage(path, destination):
+        if path.name == 'bundle' and path.parent.name.startswith('.bundle-install-'):
+            failure = OSError(13, 'stage locked')
+            failure.winerror = 32
+            raise failure
+        return rename(path, destination)
+    monkeypatch.setattr(Path, 'rename', locked_stage)
+    monkeypatch.setattr(public.time, 'sleep', lambda delay: None)
+    package = public.get_package(settings, 'siril')
+    with pytest.raises(ApiError) as failure:
+        asyncio.run(public.install_package(settings, 'siril', '1.4.4', package.package_token))
+    assert failure.value.code == 'SOFTWARE_NOT_READY'
+    assert (root / 'bundle.json').read_bytes() == original_manifest
+    assert (root.parent / 'bundle-lock.json').read_bytes() == original_lock
+    assert not (root.parent / 'previous-bundle').exists()
+    assert public.get_package(settings, 'siril').operation_state == 'failed'
