@@ -941,3 +941,20 @@
 - 真实Siril：独立临时目录中的干净Bundle dev `8310d4da2e68b2c3434fee22ca3ee100e8eb6dae`，与已发布 `5d16fb6fc10b4ee57de428d6eba522c918b1b441` 产品树一致，Bundle0.2.0-dev.2／Siril1.4.4；未改原Bundle仓库。两份32×32浮点合成输入经Data物化与科学引用解析交真实AutoStretch，完成2输出、顺序固定、尺寸与有限像素检查通过，外部原件及Data实际输入哈希均未改变；原生v3 schema／独立aiohttp会话检查通过。该验证不等于全160节点验收，也未声称已在Feature网页安装Bundle。
 - 限制：未完成用户整体验收、大规模整夜真实素材／冷缓存／长期可靠性、Linux／WSL、所有科学节点、复杂TIFF／多图XISF／RAW开发或完整工作流保存重载视觉闭环。IMAGE仅灰度／RGB浮点批次，float16固定转float32，无IMAGE下游输出；本机选择器仅Windows，不覆盖已存在文件。旧宿主缓存的扁平MCP schema需重连，新stdio已验证两域入口；不修改全局注册或默认指针。正常dev配置哈希保持原基线，main与其他Feature不变。
 - 清理口径：普通推送成功且远端dev包含最终候选后，删除919e Feature workspace、私有runtime、依赖缓存、合成导入／导出与运行证据、分支及Worktree，不额外备份。Git内本节及回归源码继续保留。完整日志原在该Feature `.artifacts/reports/database-mcp`，按授权随空间删除；历史日志路径不表示仍存在。当前Git Manager及a09c Node UI Feature保留。
+
+
+<a id="node-ui-bundle-integration"></a>
+
+## 2026-10-31 Siril 节点展示、开发绑定与自动结果集成审查
+
+- 原待审平台 `c139271125f49584313ef883c7250062e14cc85e`（基点 `711bd850b122ca64e1f147c645ba6fc0015c42ab`），Bundle `cdf952c14ae160e86add8dcc2142b16c39719936`（基点 `8310d4da2e68b2c3434fee22ca3ee100e8eb6dae`）。平台在 Feature 内整合已集成 Data/MCP 的 dev `974347a3d14379c25ab06e16b54fb8423b22629b`；Data runtime、导出及新显示控件同时保留，OpenAPI 按合并后代码生成。
+- 三个独立、未继承开发聊天的只读 Reviewer 分别审查自动队列、Bundle 开发来源与序列、显示及 Data 兼容；修复后复审通过。修复：生成超时／无法启动后维持失败状态；格式声明加入实际开发依赖；单帧压缩描述与实际文件一致且不覆盖多帧成员；删除待运行自动项后按原生队列及历史核对归属；未收到 prompt 回执时标失败；快速完成不会被提交返回覆盖为失败；连接 science/images 的 Data 不强制另填素材引用。不增加切图后的全局暂停，切图只停止旧图后续提交。
+- 测试夹具修复：Bundle 命令参数引号、预览有效来源字段、Vue i18n 部分 mock、真实原尺寸选项事件；已有 MCP 导入测试改为对共享测试库基线核对增量，仍验证检查不入库、仅新增两项、重复提交不重复。两项安装日志断言受 Data 迁移测试的进程日志配置影响，分进程分组执行通过，不修改产品日志行为。
+- 平台 Python 最终去重汇总 **709 passed、3 skipped**（712 个用例）。Data 全组 510 passed；其他后端／接口／架构／集成组修复后按定向重测替换结果，开启原生/Siril 环境的三个用例均通过。未启用的三个用例是：原生安装编辑卸载热加载综合用例、workspace 生命周期配置采用、启动失败时排空活动导入；不计为通过。额外实际 CPU 引擎自动目标／手动上游阻断 **2 passed**。Bundle 全组 **51 passed**。UI 包 **37 文件、287 passed**；原生桥接 **21 文件、99 passed**。合成截断 FITS、既有 ORM 环、JUnit record_property 警告保留；定向实现 ESLint 无错误，测试文件不在既有 lint 配置内。
+- 产品构建／预览固定为平台 `2a1b98cdb9dd26c39d79886525a567e1a7456b63`，配套 Bundle `bd55166c50fb40e40205b90b37a1459c742f9724`。bootstrap 回执 `f7db1ffb08914087be8675dc6d1b9a90`，completed/ready=true、dirty=false；构建 31.904 秒、双服务启动 12.037 秒，缓存复用总计 47.356 秒，不是冷准备。UI／原生类型检查、引擎归档和生产构建通过；网页清单及双服务实际端口为 32689／32691。后续仅更新验证文档，不改变已验证产品代码。
+- 实际原生自动目标：合成 96×64 RGB FITS → Data → Auto Stretch → MTF 与 Stat 两分支；prompt `6834e2f5-56a4-4557-9c68-5362f661eac5`、`d5f34a44-bc0a-4ef2-b38e-620de1c4bdeb` 均完成。每次三个软件调用、共享上游恰好一次，Stat 分析可读取，第二次修改 targetbg 使用新运行与签名；不可覆盖计算快照含两个目标和全部签名，原件 SHA256 不变。独立 CPU fixture 还验证 Data IMAGE 两成员→真实 Siril 1.4.4，尺寸、有限数值、输入及原件哈希保持。
+- 真实隔离 Chromium 页面显示工作台、素材侧栏及画布，节点库可打开，pageerror 为空；为避免用户草稿意外计算设置提交拦截，实际未发生提交。该观察只确认页面展示，不代表全部交互验收。
+- 160 节点、9 一级／32 二级分类、131 自动／29 手动及稳定 UUID／端口经测试与只读核对；旧 Bundle/旧分类兼容由回归覆盖。未将本轮结果解释为 160 操作逐项科学验收。完整双语往返、所有成员/显示选项的手工组合、RBF 高采样、StarNet/外部依赖、跨重启运行恢复仍未全面验收。
+- 本轮不发布新 Bundle 版本或 tag；manifest 仍为 `0.2.0-dev.2`，已发布 tag 对应 `5d16fb6fc10b4ee57de428d6eba522c918b1b441`，不得混称为候选。原安装副本不覆盖。正常 dev workspace、全局 MCP、main 和其他 Feature 保持；完整瞬时日志、合成数据与证据位于本 Feature 私有 .artifacts，按用户授权清理，不额外保留副本。Git 中本记录和回归源码继续保留。
+
+- 实际源码绑定复验通过：只改变 `reference/formats.json` 的内容指纹会触发生成与实现缓存失效，恢复原字节后回到准确原指纹；解除绑定后旧安装 `5d16fb6fc10b4ee57de428d6eba522c918b1b441` 就绪，重新绑定后 160 节点全部可用。manifest／操作／节点／双语／适配器／程序与安装锁哈希保持，不覆盖原安装。21 个外部操作配置及可编辑安装路径未引用本 Feature；清理前还须核对远端包含候选及实际进程停止。

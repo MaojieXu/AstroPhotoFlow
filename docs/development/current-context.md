@@ -9,7 +9,7 @@
 | 工作台基础 | 默认workspace、配置保存／采用值、自动端口回写、启停／重启及网页配置已集成；M1用户批准已有记录 | [M1](test-matrix.md#m1-foundation)；MCP控制及后续占用交接不能据此认定完成 |
 | 数据 | 素材与集合固定版本、项目资料、设备快照、校准、导入／预览／回收站；固定科学输入、整夜递归确认导入／聚合等待、独立项目固定引用及Data完整成员显式保存／导出已集成dev | [双域MCP与Data验证](test-matrix.md#database-mcp-data-export-integration)；M2整体验收、复杂格式与完整⑤运行闭环未因此完成 |
 | Siril Bundle | Siril 1.4.4／Bundle `0.2.0-dev.2`／SDK v2，160操作与节点、199命令覆盖；具名输入、多输出、分析／直方图、双语显示及官方固定版本选择，兼容SDK v1 | [科学接入验证](test-matrix.md#siril-sdk-v2-integration)、[双语与版本切换验证](test-matrix.md#agent-i18n-bundle-integration)；网页发现官方tag并显式确认安装／升级／回退，固定目录仍保留旧兼容入口；未宣称160节点逐项科学验收，seqprofile及外部依赖限制保留，完整M3／M4批准未完成 |
-| 节点 | workspace JSON定义保存／更新差异及Bundle原生加载、HTTP／CLI／MCP发现已有实现 | 通用节点编辑器、完整确认更新与端口重映射仍待补；Python／复合仍后续目标 |
+| 节点 | workspace JSON定义保存／更新差异及Bundle原生加载、HTTP／CLI／MCP发现已有实现 | Siril双语功能／命令名、两级分类、workspace开发源码绑定及显式目标自动完整结果已集成；[审查与验证](test-matrix.md#node-ui-bundle-integration)。通用编辑器、完整确认更新与端口重映射仍待补；Python／复合仍后续目标 |
 | 在线画布 | 固定素材入图、绝对路径托管导入、读取实际图、加节点／调参数／连线／删除及直接MCP编辑已有窄实现；保留目标／内容校验、回执和原生撤销 | 不等于完整项目图关联、所有入口保存后运行、SQLite运行权威或完整Agent执行 |
 | 网页 | 菜单／设置精简、素材列表与原生拖拽、workspace内容跳转已合入dev | [三分支集成记录](test-matrix.md)：只做Git一致性核对，未重跑合并后应用验收；workspace分支没有额外新增实现 |
 | 开发更新与Bundle维护 | workspace感知Vite前端更新、已安装Bundle的SDK Python适配器及声明JSON热加载、安装／更新／卸载刷新能力已实现；按用户要求取消运行／预览占用拒绝及在途旧实现保护 | [本地集成验证](test-matrix.md#hot-reload-integration)；平台后端Python仍显式重启，Node.js适配器加载未实现；长期可靠性及真实跨发布版本升级仍待验证 |
