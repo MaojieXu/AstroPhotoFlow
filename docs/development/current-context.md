@@ -8,7 +8,7 @@
 |---|---|---|
 | 工作台基础 | 默认workspace、配置保存／采用值、自动端口回写、启停／重启及网页配置已集成；M1用户批准已有记录 | [M1](test-matrix.md#m1-foundation)；MCP控制及后续占用交接不能据此认定完成 |
 | 数据 | 素材与集合固定版本、项目资料、设备快照、校准、导入／预览／回收站；固定科学输入、内容接纳及所选输出交接已有代码并集成dev | M2用户整体验收及⑤实际运行消费未因此完成 |
-| Siril Bundle | Siril 1.4.4／Bundle `0.2.0-dev.1`／SDK v2，本地实现160操作与节点，保留199命令覆盖；具名输入、多输出、分析／直方图与完整结果查看已有实现，兼容SDK v1 | [本地集成验证](test-matrix.md#siril-sdk-v2-integration)；本地预览采用新Bundle，默认发布目录仍为`0.1.2-dev.1`；未宣称160节点全部真实验收，seqprofile及外部依赖限制仍保留，完整M3／M4批准未完成 |
+| Siril Bundle | Siril 1.4.4／Bundle `0.2.0-dev.2`／SDK v2，160操作与节点、199命令覆盖；具名输入、多输出、分析／直方图、双语显示及官方固定版本选择，兼容SDK v1 | [科学接入验证](test-matrix.md#siril-sdk-v2-integration)、[双语与版本切换验证](test-matrix.md#agent-i18n-bundle-integration)；网页发现官方tag并显式确认安装／升级／回退，固定目录仍保留旧兼容入口；未宣称160节点逐项科学验收，seqprofile及外部依赖限制保留，完整M3／M4批准未完成 |
 | 节点 | workspace JSON定义保存／更新差异及Bundle原生加载、HTTP／CLI／MCP发现已有实现 | 通用节点编辑器、完整确认更新与端口重映射仍待补；Python／复合仍后续目标 |
 | 在线画布 | 固定素材入图、绝对路径托管导入、读取实际图、加节点／调参数／连线／删除及直接MCP编辑已有窄实现；保留目标／内容校验、回执和原生撤销 | 不等于完整项目图关联、所有入口保存后运行、SQLite运行权威或完整Agent执行 |
 | 网页 | 菜单／设置精简、素材列表与原生拖拽、workspace内容跳转已合入dev | [三分支集成记录](test-matrix.md)：只做Git一致性核对，未重跑合并后应用验收；workspace分支没有额外新增实现 |
