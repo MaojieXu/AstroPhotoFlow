@@ -44,6 +44,8 @@ def read_bundle(root: Path):
     manifest = BundleManifest.model_validate_json((root / 'bundle.json').read_text(encoding='utf-8'))
     operations = [json.loads(contained(root, name).read_text(encoding='utf-8')) for name in manifest.operations]
     for entry in operations:
+        if type(entry.get('automatic_result_preview', False)) is not bool:
+            raise ValueError('Automatic result preview policy must be a boolean.')
         operation = SoftwareOperation.model_validate(dict(entry['operation'], content_token='', ready=False, reason=None))
         if operation.package_id != manifest.package_id or operation.version != manifest.software_version:
             raise ValueError('Bundle operation identity mismatch.')

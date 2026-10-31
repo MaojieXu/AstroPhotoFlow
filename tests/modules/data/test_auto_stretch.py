@@ -33,6 +33,15 @@ def test_rgb_white_balance_removes_cast_without_neutralizing_a_red_object():
     assert np.median(image[..., 1]) == pytest.approx(63, abs=3)
 
 
+def test_preserving_rgb_uses_one_curve_without_white_balance():
+    mono = np.random.default_rng(1).normal(.01, .001, (80, 90)).astype(np.float32)
+    pixels = mono[..., None] * [1, 2, 1]
+    recipe = calculate_stretch(pixels, balance_rgb=False)
+    assert recipe['white_balance'] == [1, 1, 1]
+    medians = np.median(np.asarray(render_stretch(pixels, recipe)), axis=(0, 1))
+    assert medians[1] > medians[0] == medians[2]
+
+
 @pytest.mark.parametrize("pixels", [np.zeros((8, 10), dtype=np.float32),
                                     np.ones((8, 10), dtype=np.float32),
                                     np.broadcast_to([0, 100, 200], (8, 10, 3))])

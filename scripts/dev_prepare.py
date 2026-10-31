@@ -75,6 +75,8 @@ def prepare(report: dict) -> int:
     parser.add_argument("--start", action="store_true", help="Also prepare the CPU runtime and start the two services")
     parser.add_argument("--stop", action="store_true", help="Stop only this workspace through core control")
     parser.add_argument("--offline", action="store_true")
+    parser.add_argument('--bundle-source', action='append', default=[], metavar='PACKAGE=PATH')
+    parser.add_argument('--clear-bundle-source', action='append', default=[], metavar='PACKAGE')
     parser.add_argument("--service-port", type=int, default=8190)
     parser.add_argument("--comfyui-port", type=int, default=8188)
     args = parser.parse_args()
@@ -89,6 +91,8 @@ def prepare(report: dict) -> int:
         parser.error("--build和--frontend-assets只能选择一个。")
     if args.stop and (args.start or args.build or args.frontend_assets):
         parser.error("--stop不能同时准备或启动预览。")
+    if args.stop and (args.bundle_source or args.clear_bundle_source):
+        parser.error('--stop cannot change Bundle source bindings.')
     env = environment(workspace, args.cache_dir.resolve() if args.cache_dir else None)
     if args.offline:
         env["UV_OFFLINE"] = "1"
@@ -206,6 +210,13 @@ def prepare(report: dict) -> int:
             if args.build or not frontend_matches(assets, workspace / "web"):
                 command.extend(["--frontend-assets", str(assets)])
         report["workspace_result"] = json.loads(run("workspace", command))
+        from astrophotoflow.modules.software import development
+        if args.bundle_source or args.clear_bundle_source:
+            report['development_sources'] = development.configure(workspace, args.bundle_source, args.clear_bundle_source, report['python'])
+        else:
+            report['development_sources'] = {key: development.source_state(workspace, key).model_dump(mode='json') for key in development.bindings(workspace)}
+        if any(value['state'] == 'failed' for value in report['development_sources'].values()):
+            raise RuntimeError('Development Bundle generation failed; inspect development_sources in the receipt.')
         if args.start:
             report["preview"] = json.loads(run("start", cli + ["start", "--workspace", str(workspace)]))
             report["ready"] = report["preview"]["state"] == "completed"

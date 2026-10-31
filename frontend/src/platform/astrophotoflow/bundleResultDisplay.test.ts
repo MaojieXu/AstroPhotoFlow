@@ -22,5 +22,6 @@ it('refreshes an existing display extension after its module is replaced', async
   node.comfyClass = 'APF_169de0837f814cdea3295541ecacf463'
   await active?.nodeCreated?.(node, app)
   expect(node.widgets?.filter(widget => widget.name === 'apf_result_view')).toHaveLength(1)
+  expect(node.hideOutputImages).toBe(true)
   expect(previous).not.toHaveBeenCalled()
 })

@@ -10,6 +10,8 @@ export interface SirilPreviewRequest {
   linked: boolean
   shadowsclip: number
   targetbg: number
+  preview_max_edge?: 512 | 1024 | 2048 | null
+  display_balance?: 'auto' | 'preserve' | null
 }
 
 export function createSirilPreviewClient(fetchApi: FetchApi) {
@@ -40,6 +42,8 @@ export interface BundlePreviewRequest {
   package_id: string
   operation_id: string
   parameters: Record<string, unknown>
+  preview_max_edge?: 512 | 1024 | 2048 | null
+  display_balance?: 'auto' | 'preserve' | null
 }
 
 export function createBundlePreviewClient(fetchApi: FetchApi) {

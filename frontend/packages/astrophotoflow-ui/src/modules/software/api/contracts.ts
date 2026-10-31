@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { bundleDevelopmentSourceSchema } from '../../../core/bundleDevelopmentSource'
 
 const errorDetailSchema = z
   .object({
@@ -13,6 +14,7 @@ const errorDetailSchema = z
 export const softwarePackageSchema = z
   .object({
     package_id: z.string(),
+    development_source: bundleDevelopmentSourceSchema.nullable().optional(),
     name: z.string(),
     available_versions: z.array(z.string()),
     installed_version: z.string().nullable(),

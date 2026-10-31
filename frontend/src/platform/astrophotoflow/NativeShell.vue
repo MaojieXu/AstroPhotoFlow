@@ -16,12 +16,14 @@ import { useApp } from '@/scripts/appInstance'
 import { registerDataReferenceDisplay } from './dataReferenceDisplay'
 import { registerSirilPreviewDisplay } from './sirilPreviewDisplay'
 import { registerBundleResultDisplay } from './bundleResultDisplay'
+import { useAutomaticResults } from './useAutomaticResults'
 
 registerDataReferenceDisplay(useApp())
 const disposeBundleDisplay = registerSirilPreviewDisplay(useApp())
 if (disposeBundleDisplay) onBeforeUnmount(disposeBundleDisplay)
 registerBundleResultDisplay(useApp())
 useCanvasDataSession()
+useAutomaticResults()
 
 const settings = useSettingStore()
 const paletteService = useColorPaletteService()
@@ -48,7 +50,7 @@ onMounted(async () => {
       await settings.set('Comfy.Locale', locale)
     }
   } catch (error) {
-    toast.error(t('apfUi.request_failed'), { description: error instanceof Error ? error.message : String(error) })
+    toast.error(t('g.error'), { description: error instanceof Error ? error.message : String(error) })
   }
 })
 </script>

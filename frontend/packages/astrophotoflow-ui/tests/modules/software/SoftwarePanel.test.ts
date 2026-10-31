@@ -67,6 +67,26 @@ function client(overrides: Partial<SoftwareClient> = {}): SoftwareClient {
 }
 
 describe('SoftwarePanel', () => {
+  it('shows a development source separately from the installed release and refreshes it', async () => {
+    const source = { root: 'C:/feature/Siril', head: 'a'.repeat(40), dirty: true, fingerprint: 'b'.repeat(64),
+      state: 'ready' as const, error: null, software_version: '1.4.4', bundle_version: '0.2.0-dev.2' }
+    const installed = { ...packageInfo, installed_version: '1.4.4', install_path: 'C:/workspace/software/siril/bundle/app',
+      bundle_version: '0.2.0-dev.2', bundle_commit: 'c'.repeat(40), development_source: source }
+    const apiClient = client({ listPackages: vi.fn().mockResolvedValue([installed]),
+      getPackage: vi.fn().mockResolvedValue({ ...details, package: installed }) })
+    const wrapper = mount(SoftwarePanel, { props: { client: apiClient, confirmSoftware: vi.fn(), confirmationAvailable: true, translate, refreshKey: 0 } })
+    await flushPromises()
+    expect(wrapper.get('[data-testid="development-source"]').text()).toContain('C:/feature/Siril')
+    expect(wrapper.get('[data-testid="development-source"]').text()).toContain(source.fingerprint)
+    vi.mocked(apiClient.getPackage).mockResolvedValue({ ...details, package: { ...installed,
+      development_source: { ...source, state: 'failed', error: 'Generation failed' } } })
+    await wrapper.setProps({ refreshKey: 1 })
+    await flushPromises()
+    expect(wrapper.get('[data-testid="development-source"]').text()).toContain('Generation failed')
+    expect(apiClient.requestInstall).not.toHaveBeenCalled()
+    expect(apiClient.listReleases).toHaveBeenCalledTimes(1)
+    wrapper.unmount()
+  })
   it('shows every maintained package in its own row', async () => {
     const other = { ...packageInfo, package_id: 'other', name: 'Other Bundle' }
     const apiClient = client({ listPackages: vi.fn().mockResolvedValue([packageInfo, other]),

@@ -1,4 +1,4 @@
-import { resolveNodeDefText, setActiveLocale } from '@/i18n'
+import { resolveNodeCategoryLabel, resolveNodeDefText, setActiveLocale } from '@/i18n'
 import { fromPartial } from '@total-typescript/shoehorn'
 import { bundleCapabilities } from './bundleCatalog'
 import type { NodeCapability } from '@astrophotoflow/ui'
@@ -12,23 +12,39 @@ import { useExtensionStore } from '@/stores/extensionStore'
 import { useNodeDefStore } from '@/stores/nodeDefStore'
 import type { ComfyNodeDefImpl } from '@/stores/nodeDefStore'
 import type { ComfyApp, ComfyExtension } from '@/types/comfy'
-import { attachSirilPreview, registerSirilPreviewDisplay } from './sirilPreviewDisplay'
+import { attachSirilPreview, configureBundleNode, registerSirilPreviewDisplay } from './sirilPreviewDisplay'
 
 describe('Siril preview display', () => {
+  it('uses native default-title resolution and preserves authored titles', () => {
+    const type = 'APF_title_fixture'
+    bundleCapabilities.set(type, fromPartial<NodeCapability>({ node: { definition: { name: 'Auto Stretch (autostretch)' } },
+      display: { en: { name: 'Auto Stretch (autostretch)' }, zh: { name: '自动拉伸（autostretch）' } } }))
+    onTestFinished(() => { bundleCapabilities.delete(type) })
+    const defaultNode = new LGraphNode('自动拉伸（autostretch）')
+    defaultNode.comfyClass = type
+    configureBundleNode(defaultNode)
+    expect(defaultNode.title).toBe('')
+    const custom = new LGraphNode('My processing plan')
+    custom.comfyClass = type
+    configureBundleNode(custom)
+    expect(custom.title).toBe('My processing plan')
+  })
   it('refreshes the open catalog on a bundle event and keeps missing graph nodes', async () => {
     setActivePinia(createPinia())
     const type = 'APF_00000000000040008000000000000002'
     const capability: NodeCapability = {
+      automatic_result_preview: false,
       node: { native_type: type, content_token: 'current', definition: {
         definition_id: '00000000-0000-4000-8000-000000000002', name: 'Reloadable bundle',
         description: '', source: 'package', inputs: [], outputs: [], parameters: [],
-        execution: { package_id: 'siril', operation_id: 'autostretch' }
+        category: ['stretch-color', 'automatic-stretch'],
+        execution: { package_id: 'siril', operation_id: 'autostretch', inputs: {} }
       } },
       display: {
-        en: { name: 'Translated Bundle', description: 'English description', help: '', inputs: {}, outputs: {}, parameters: {} },
-        zh: { name: '中文节点', description: '中文说明', help: '', inputs: {}, outputs: {}, parameters: {} }
+        en: { name: 'Translated Bundle', category: ['Stretch and Color', 'Automatic Stretch'], description: 'English description', help: '', inputs: {}, outputs: {}, parameters: {} },
+        zh: { name: '中文节点', category: ['拉伸与色彩', '自动拉伸'], description: '中文说明', help: '', inputs: {}, outputs: {}, parameters: {} }
       }, available: true, reason: null, preview: null, help: '', examples: [],
-      operation: { package_id: 'siril', operation_id: 'autostretch', parameters: [] }
+      operation: { package_id: 'siril', operation_id: 'autostretch', parameters: [], inputs: [] }
     }
     vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify([capability])))
     class ReloadableBundleNode extends LGraphNode {}
@@ -40,6 +56,7 @@ describe('Siril preview display', () => {
     definitions.nodeDefsByName.NativeFixtureNode = fromPartial<ComfyNodeDefImpl>({ name: 'NativeFixtureNode' })
     const graph = new LGraph()
     const node = LiteGraph.createNode(type)!
+    node.title = 'My custom processing title'
     graph.add(node)
     const app = fromPartial<ComfyApp>({
       rootGraph: graph, isGraphReady: true,
@@ -57,8 +74,10 @@ describe('Siril preview display', () => {
     const persisted = JSON.stringify(graph.serialize())
     await setActiveLocale('en')
     expect(resolveNodeDefText('display_name', type, 'Backend name')).toBe('Translated Bundle')
+    expect(resolveNodeCategoryLabel('siril/stretch-color/automatic-stretch', '')).toBe('Automatic Stretch')
     await setActiveLocale('zh')
     expect(resolveNodeDefText('display_name', type, 'Backend name')).toBe('中文节点')
+    expect(resolveNodeCategoryLabel('siril/stretch-color/automatic-stretch', '')).toBe('自动拉伸')
     await setActiveLocale('en')
     expect(JSON.stringify(graph.serialize())).toBe(persisted)
     vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify([{ ...capability, display: {}, available: false, reason: 'Removed' }])))
@@ -68,6 +87,7 @@ describe('Siril preview display', () => {
     expect(definitions.visibleNodeDefs).toEqual([])
     expect(graph.nodes).toContain(node)
     expect(resolveNodeDefText('display_name', type, 'Backend name')).toBe('Backend name')
+    expect(resolveNodeCategoryLabel('siril/stretch-color/automatic-stretch', 'automatic-stretch')).toBe('automatic-stretch')
     await setActiveLocale('zh')
     expect(resolveNodeDefText('display_name', type, 'Backend name')).toBe('Backend name')
     expect(JSON.stringify(graph.serialize())).toBe(persisted)

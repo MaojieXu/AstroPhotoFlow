@@ -30,11 +30,20 @@ export function attachSirilPreview(node: LGraphNode) {
     inputSpec: { name: 'apf_siril_preview', type: 'STRING' },
     options: {
       serialize: false, surfaces: { canvas: 'never', vueNode: 'shown', panel: 'never' },
-      getMinHeight: () => 270, getMaxHeight: () => 270
+      getMinHeight: () => 40, getMaxHeight: () => 330
     }
   })
   widget.serialize = false
   node.addCustomWidget(widget)
+}
+
+export function configureBundleNode(node: LGraphNode) {
+  const capability = node.comfyClass ? bundleCapabilities.get(node.comfyClass) : undefined
+  if (capability) {
+    const defaults = [capability.node.definition.name, ...Object.values(capability.display).map(display => display?.name)]
+    if (defaults.includes(node.title)) node.title = ''
+  }
+  attachSirilPreview(node)
 }
 
 export function registerSirilPreviewDisplay(app: ComfyApp) {
@@ -47,17 +56,28 @@ export function registerSirilPreviewDisplay(app: ComfyApp) {
   })
   function hydrate() {
     for (const graph of [app.rootGraph, ...app.rootGraph.subgraphs.values()]) {
-      for (const node of graph.nodes) attachSirilPreview(node)
+      for (const node of graph.nodes) configureBundleNode(node)
     }
   }
   async function refreshCatalog() {
     const capabilities = await createNodeClient(fetch).list()
     const translations: Partial<Record<'en' | 'zh', Record<string, unknown>>> = {}
+    const categoryTranslations: Partial<Record<'en' | 'zh', Record<string, string>>> = {}
     for (const locale of ['en', 'zh'] as const) {
       const definitions: Record<string, unknown> = {}
+      const categories: Record<string, string> = {}
       for (const capability of capabilities) {
         const display = capability.display[locale]
         if (!display) continue
+        const packageId = capability.node.definition.execution.package_id
+        const category = capability.node.definition.category
+        if (category.length) {
+          categories[normalizeI18nKey(packageId)] = packageId === 'siril' ? 'Siril' : packageId
+          category.forEach((part, index) => {
+            const path = [packageId, ...category.slice(0, index + 1)].join('/')
+            categories[normalizeI18nKey(path)] = escapeI18nMessage(display.category[index] ?? part)
+          })
+        }
         definitions[normalizeI18nKey(capability.node.native_type)] = {
           display_name: escapeI18nMessage(display.name),
           description: escapeI18nMessage(display.description),
@@ -68,8 +88,9 @@ export function registerSirilPreviewDisplay(app: ComfyApp) {
         }
       }
       translations[locale] = definitions
+      categoryTranslations[locale] = categories
     }
-    mergeBundleNodeI18n(translations)
+    mergeBundleNodeI18n(translations, categoryTranslations)
     const previous = [...bundleCapabilities.keys()]
     bundleCapabilities.clear()
     for (const capability of capabilities) bundleCapabilities.set(capability.node.native_type, capability)
@@ -101,7 +122,7 @@ export function registerSirilPreviewDisplay(app: ComfyApp) {
   const extension = {
     name: 'AstroPhotoFlow.BundlePreview',
     setup: refreshCatalog,
-    nodeCreated: attachSirilPreview,
+    nodeCreated: configureBundleNode,
     afterConfigureGraph: hydrate
   }
   const existing = useExtensionStore().extensions.find(value => value.name === extension.name)

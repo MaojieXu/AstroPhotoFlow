@@ -19,6 +19,7 @@ class DisplayLabel(StrictModel):
 
 class CapabilityDisplay(StrictModel):
     name: str
+    category: list[str] = Field(default_factory=list)
     description: str
     help: str
     parameters: dict[str, DisplayLabel] = Field(default_factory=dict)

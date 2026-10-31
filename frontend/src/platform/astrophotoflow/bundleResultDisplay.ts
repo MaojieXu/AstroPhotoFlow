@@ -12,10 +12,11 @@ const registered = new WeakSet<ComfyApp>()
 export function attachBundleResult(node: LGraphNode) {
   if (
     !node.comfyClass ||
-    !/^APF_[a-f0-9]{32}$/.test(node.comfyClass) ||
-    node.widgets?.some((widget) => widget.name === 'apf_result_view')
+    !/^APF_[a-f0-9]{32}$/.test(node.comfyClass)
   )
     return
+  node.hideOutputImages = true
+  if (node.widgets?.some((widget) => widget.name === 'apf_result_view')) return
   const widget = new ComponentWidgetImpl({
     node,
     name: 'apf_result_view',

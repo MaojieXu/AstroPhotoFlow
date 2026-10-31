@@ -1,6 +1,7 @@
 import { default as DOMPurify } from 'dompurify'
 import { cloneDeep, toString } from 'es-toolkit/compat'
 import { toValue } from 'vue'
+import { resolveNodeCategoryLabel } from '@/i18n'
 
 import { isMiddleButtonEvent } from '@/base/pointerUtils'
 import { transferLinkPresentation } from '@/core/graph/transferLinkPresentation'
@@ -1517,7 +1518,7 @@ export class LGraphCanvas implements CustomEventDispatcher<LGraphCanvasEventMap>
         if (index === -1) {
           categoryEntries.push({
             value: category_path,
-            content: name,
+            content: resolveNodeCategoryLabel(category_path, name),
             has_submenu: true,
             callback: function (value, _event, _mouseEvent, contextMenu) {
               inner_onMenuAdded(value.value, contextMenu)

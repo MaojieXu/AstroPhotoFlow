@@ -11,6 +11,31 @@ from astrophotoflow.modules.software import bundles
 from astrophotoflow.contracts.nodes import NodeDefinition
 
 
+def test_automatic_snapshot_is_private_immutable_and_does_not_save_an_engineering_workflow(tmp_path):
+    settings = Settings('127.0.0.1', 8190, tmp_path, (), workspace=tmp_path)
+    app = create_app(settings, 'token')
+    prompt, workflow = uuid4(), uuid4()
+    body = {'workflow': {'id': str(workflow), 'nodes': [], 'extra': {}}, 'targets': ['2'], 'signatures': {'1': 'a' * 64, '2': 'b' * 64}}
+
+    async def scenario():
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url='http://test') as client:
+            path = f'/internal/native/runs/{prompt}/snapshot'
+            assert (await client.post(path, json=body)).status_code == 401
+            headers = {'Authorization': 'Bearer token'}
+            assert (await client.post(path, json=body, headers=headers)).status_code == 200
+            assert (await client.post(path, json=body, headers=headers)).status_code == 200
+            changed = {**body, 'signatures': {**body['signatures'], '2': 'c' * 64}}
+            assert (await client.post(path, json=changed, headers=headers)).status_code == 409
+            assert (await client.post(path, json={**body, 'targets': ['missing']}, headers=headers)).status_code == 422
+    try:
+        asyncio.run(scenario())
+        saved = json.loads((settings.workspace / 'runs' / str(prompt) / 'calculation-snapshot.json').read_text(encoding='utf-8'))
+        assert saved == body
+        assert not (settings.workspace / 'workflows').exists()
+    finally:
+        app.state.database.close()
+
+
 def test_native_call_is_idempotent_and_not_a_public_execution_route(tmp_path, monkeypatch):
     settings = Settings("127.0.0.1", 8190, tmp_path, (), workspace=tmp_path)
     app = create_app(settings, "token")

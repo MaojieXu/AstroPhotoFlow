@@ -1213,7 +1213,9 @@ class PromptServer():
 
                 self.node_replace_manager.apply_replacements(prompt)
 
-                valid = await execution.validate_prompt(prompt_id, prompt, partial_execution_targets)
+                workflow_extra = ((((json_data.get('extra_data') or {}).get('extra_pnginfo') or {}).get('workflow') or {}).get('extra') or {})
+                automatic_result = workflow_extra.get('apfAutomaticResult') if isinstance(workflow_extra, dict) else None
+                valid = await execution.validate_prompt(prompt_id, prompt, partial_execution_targets, automatic_result)
                 extra_data = {}
                 if "extra_data" in json_data:
                     extra_data = json_data["extra_data"]

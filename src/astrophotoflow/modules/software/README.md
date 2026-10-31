@@ -4,6 +4,8 @@
 
 Bundle SDK v1保留已发布单图输入／输出契约；v2消费真实具名图像／序列／文件输入、多输出与分析文件。契约见`contracts/bundles.py`、`contracts/software.py`，具体命令和参数声明仍在独立Bundle，不在平台生成空节点。宿主负责进程、实际观察、取消、输出范围检查；分析与科学输出分别交⑤／②检查，进程退出不等于节点结果已就绪。
 
+操作声明的可选 `automatic_result_preview` 布尔值允许该操作成为自动结果计算目标和依赖，缺省为false；节点目录提供同名能力。显式自动目标不改变原生输出节点身份，整条依赖链均须允许自动执行。主进程正常退出后最多观察已知进程树5秒，确认停止再发布完整结果；仍活动或无法核实时保留unknown，不据此重跑。
+
 开发预览可用进程级`ASTROPHOTOFLOW_BUNDLE_CATALOG`读取独立目录快照，默认仍使用包内固定发布目录。覆盖不会更新默认workspace、全局MCP或正常dev；同样必须固定新tag与SHA、走现有安装计划／网页确认及实际原生加载。快照导出要求干净已提交checkout且HEAD与tag一致，不能把脏工作区冒充旧SHA。操作见[开发流程](../../../../docs/development/README.md)。
 `environment.py`提供两侧共用的 Bundle 子进程环境；Windows 的程序搜索路径只使用 Bundle 程序目录和系统目录，其他环境值保留，不修改宿主环境。
 

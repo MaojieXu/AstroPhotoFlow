@@ -110,6 +110,17 @@ class SoftwareOperation(StrictModel):
         return self
 
 
+class BundleDevelopmentSource(StrictModel):
+    root: Path
+    head: str | None = None
+    dirty: bool = True
+    fingerprint: str = ''
+    state: Literal['building', 'ready', 'failed'] = 'building'
+    error: str | None = None
+    software_version: str | None = None
+    bundle_version: str | None = None
+
+
 class SoftwarePackage(StrictModel):
     package_id: str
     name: str
@@ -130,6 +141,27 @@ class SoftwarePackage(StrictModel):
     update_available: bool = False
     restart_required: bool = False
     migration_required: bool = False
+    development_source: BundleDevelopmentSource | None = None
+
+    @property
+    def effective_version(self):
+        return self.development_source.software_version if self.development_source else self.installed_version
+
+    @property
+    def effective_bundle_commit(self):
+        return self.development_source.head if self.development_source else self.bundle_commit
+
+    @property
+    def effective_bundle_version(self):
+        return self.development_source.bundle_version if self.development_source else self.bundle_version
+
+    @property
+    def effective_availability(self):
+        return ('ready' if self.development_source.state == 'ready' else 'not_ready') if self.development_source else self.availability
+
+    @property
+    def effective_reason(self):
+        return self.development_source.error if self.development_source else self.reason
 
 
 class SoftwarePackageState(StrictModel):
@@ -200,6 +232,7 @@ class SoftwareInvocation(StrictModel):
     operation_id: str
     operation_content_token: str
     bundle_commit: str | None = None
+    development_source: BundleDevelopmentSource | None = None
     inputs: dict[str, list[ResolvedInput]]
     supporting_inputs: dict[str, list[ResolvedInput]] = Field(default_factory=dict)
     parameters: dict[str, JsonValue]
@@ -280,6 +313,21 @@ class SirilPreviewRequest(AutostretchParameters):
     member_index: int = Field(default=0, ge=0)
     consumer_id: UuidInput
     generation: int = Field(ge=0)
+    preview_max_edge: Literal[512, 1024, 2048] | None = 1024
+    display_balance: Literal['auto', 'preserve'] | None = None
+
+
+class AutomaticResultSnapshot(StrictModel):
+    workflow: dict[str, JsonValue]
+    targets: list[str] = Field(min_length=1)
+    signatures: dict[str, str]
+
+    @model_validator(mode='after')
+    def valid_targets(self):
+        if not set(self.targets).issubset(self.signatures) or any(len(value) != 64 or any(c not in '0123456789abcdef' for c in value) for value in self.signatures.values()):
+            raise ValueError('Automatic result targets require content signatures.')
+        UUID(str(self.workflow.get('id')))
+        return self
 
 
 class NativeBundleCall(StrictModel):
@@ -289,6 +337,7 @@ class NativeBundleCall(StrictModel):
     definition_id: UuidInput
     definition_token: str
     workflow_id: UuidInput | None = None
+    calculation_signature: str | None = None
     reference: InputReference | OutputLocator | None = None
     inputs: dict[str, InputReference | OutputLocator | list[InputReference | OutputLocator]] = Field(default_factory=dict)
     parameters: dict[str, JsonValue]
@@ -310,6 +359,8 @@ class BundlePreviewRequest(StrictModel):
     package_id: str
     operation_id: str
     parameters: dict[str, JsonValue]
+    preview_max_edge: Literal[512, 1024, 2048] | None = 1024
+    display_balance: Literal['auto', 'preserve'] | None = None
 
 
 class RunOutputPort(StrictModel):
@@ -325,10 +376,12 @@ class RunCallResult(StrictModel):
     call_id: UUID
     node_id: str
     workflow_id: UUID | None = None
+    calculation_signature: str | None = None
     package_id: str | None = None
     software_version: str | None = None
     bundle_version: str | None = None
     bundle_commit: str | None = None
+    development_source: BundleDevelopmentSource | None = None
     operation_id: str | None = None
     definition_token: str | None = None
     state: Literal['starting', 'running', 'completed', 'failed', 'cancelled', 'unknown']

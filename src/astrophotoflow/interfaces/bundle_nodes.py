@@ -20,8 +20,9 @@ from astrophotoflow.core.config import load_running_settings
 from astrophotoflow.core.errors import ApiError
 from astrophotoflow.contracts.nodes import NodeDefinition, definition_content_token
 from astrophotoflow.modules.nodes.public import list_definitions, replace_package_definitions
-from astrophotoflow.modules.software.metadata import catalog as bundle_catalog, read_bundle
+from astrophotoflow.modules.software.metadata import catalog as bundle_catalog, read_bundle, read_bundle_locales
 from astrophotoflow.modules.software.environment import bundle_environment
+from astrophotoflow.modules.software import development
 from astrophotoflow.contracts.bundles import BundleManifest
 from astrophotoflow.contracts.software import SoftwareOperation
 import subprocess
@@ -43,10 +44,12 @@ async def _request(session: aiohttp.ClientSession, method: str, path: str, body=
 
 
 class BundleNode(io.ComfyNode):
+    APF_AUTOMATIC_RESULT = False
     RELATIVE_PYTHON_MODULE = "custom_nodes.astrophotoflow"
     definition: NodeDefinition
     operation: SoftwareOperation
     output_node: bool = False
+    search_aliases: tuple[str, ...] = ()
 
     @classmethod
     def define_schema(cls):
@@ -82,12 +85,17 @@ class BundleNode(io.ComfyNode):
                 options["options"] = parameter.choices
             controls.append(factory.Input(parameter.name, **options))
         return io.Schema(node_id=f"APF_{definition.definition_id.hex}", display_name=definition.name,
-            category=definition.execution.package_id,
+            category="/".join([definition.execution.package_id, *definition.category]),
+            search_aliases=list(cls.search_aliases),
             description=definition.description,
             inputs=inputs + controls,
             outputs=[io.Custom(port.type).Output(display_name=port.name) for port in definition.outputs],
             hidden=[io.Hidden.extra_pnginfo],
             is_output_node=cls.output_node, not_idempotent=True)
+
+    @classmethod
+    def fingerprint_inputs(cls, **kwargs):
+        return float('nan')
 
     @classmethod
     async def execute(cls, **kwargs):
@@ -110,6 +118,14 @@ class BundleNode(io.ComfyNode):
                     'workflow_id': ((cls.hidden.extra_pnginfo or {}).get('workflow') or {}).get('id'),
                     "definition_id": str(cls.definition.definition_id), "definition_token": definition_content_token(cls.definition),
                     "parameters": {parameter.name: kwargs[parameter.name] for parameter in cls.definition.parameters}}
+            workflow = (cls.hidden.extra_pnginfo or {}).get('workflow') or {}
+            automatic = (workflow.get('extra') or {}).get('apfAutomaticResult')
+            if automatic is not None:
+                if not cls.APF_AUTOMATIC_RESULT:
+                    raise RuntimeError('This operation requires manual execution.')
+                await _request(session, 'POST', f'/internal/native/runs/{context.prompt_id}/snapshot',
+                               {'workflow': workflow, 'targets': automatic['targets'], 'signatures': automatic['signatures']})
+                body['calculation_signature'] = automatic['signatures'][str(context.node_id)]
             path = f"/internal/native/bundles/calls/{context.prompt_id}/{call_id}"
             record = await _request(session, "POST", "/internal/native/bundles/calls", body)
             progress = ProgressBar(100)
@@ -134,8 +150,10 @@ class BundleNode(io.ComfyNode):
                 'prompt_id': context.prompt_id, 'call_id': call_id, 'node_id': str(context.node_id),
                 'state': 'completed',
                 'workflow_id': body['workflow_id'],
+                'calculation_signature': body.get('calculation_signature'),
                 'package_id': record['operation']['package_id'], 'software_version': record['operation']['version'],
                 'bundle_version': record['bundle']['version'], 'bundle_commit': record['bundle']['commit'],
+                'development_source': record['bundle'].get('development_source'),
                 'operation_id': record['operation']['operation_id'], 'definition_token': body['definition_token'],
                 'ports': [{'name': port['name'], 'type': port['type'], 'members': len(port['files']),
                            'formats': [file['format'] for file in port['files']],
@@ -146,10 +164,11 @@ class BundleNode(io.ComfyNode):
 
 
 def _bundle_files(workspace):
-    paths = set((workspace / "nodes").glob("*.json"))
+    paths = {*((workspace / "nodes").glob("*.json")), development.bindings_path(workspace)}
     catalog = bundle_catalog()
     for package_id in catalog:
-        root = workspace / "software" / package_id / "bundle"
+        root = development.source_root(workspace, package_id, require_ready=False)
+        paths.add(development.receipt_path(workspace, package_id))
         paths.update((root / "bundle.json", root.parent / "bundle-lock.json"))
         try:
             manifest = BundleManifest.model_validate_json((root / "bundle.json").read_text(encoding="utf-8"))
@@ -179,14 +198,17 @@ def _collect_bundle_nodes():
     classes, names, observations = {}, {}, []
     for package_id in catalog:
         observation = {"ready": True, "reason": None, "nodes": {}}
-        root = settings.workspace / "software" / package_id / "bundle"
+        root = development.source_root(settings.workspace, package_id, require_ready=False)
         try:
+            development.source_root(settings.workspace, package_id)
             if not root.is_dir():
                 raise ValueError("尚未安装 Bundle。")
             manifest, operations, bundled = read_bundle(root)
+            displays = read_bundle_locales(root, manifest, operations)
             if manifest.package_id != package_id:
                 raise ValueError('Bundle package identity mismatch.')
-            lock = json.loads((root.parent / "bundle-lock.json").read_text(encoding="utf-8"))
+            lock = development.identity(settings.workspace, package_id)
+            observation.update(commit=lock['commit'], fingerprint=lock.get('fingerprint'), root=str(root))
             executable = (root / manifest.executable).resolve()
             if not executable.is_relative_to(root.resolve()) or not (root / manifest.adapter).is_file():
                 raise ValueError("Bundle executable or adapter is unavailable.")
@@ -195,7 +217,6 @@ def _collect_bundle_nodes():
                 creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0)
             if checked.returncode or checked.stdout.strip().casefold() != manifest.version_output.casefold():
                 raise ValueError("Bundle program version check failed.")
-            observation["commit"] = lock["commit"]
             current = [item for item in list_definitions(settings.workspace)
                        if item.definition.source == "package" and item.definition.execution.package_id == package_id]
             incoming = {UUID(value["definition_id"]): NodeDefinition.model_validate(value) for value in bundled}
@@ -220,6 +241,10 @@ def _collect_bundle_nodes():
                 operation_entry = next(value['operation'] for value in operations if value['operation']['operation_id'] == definition.execution.operation_id)
                 operation = SoftwareOperation.model_validate(dict(operation_entry, ready=True, reason=None, content_token=''))
                 cls = type(saved.native_type, (BundleNode,), {"definition": definition, 'operation': operation,
+                    'APF_AUTOMATIC_RESULT': next(value.get('automatic_result_preview', False) for value in operations if value['operation']['operation_id'] == definition.execution.operation_id),
+                    "search_aliases": tuple(sorted({definition.execution.operation_id, definition.name,
+                        *(values[definition.execution.operation_id]['name'] for values in displays.values()
+                          if definition.source == 'package' and definition.execution.operation_id in values)})),
                     "RELATIVE_PYTHON_MODULE": "custom_nodes." + package_id,
                     "output_node": str(definition.definition_id) in manifest.output_nodes})
                 schema = cls.GET_SCHEMA()
@@ -231,7 +256,7 @@ def _collect_bundle_nodes():
         except (OSError, KeyError, ValueError, ImportError, RuntimeError, ApiError, subprocess.SubprocessError) as exc:
             observation.update(ready=False, reason=error_message(workspace_locale(settings.workspace), '', 'bundle_load_diagnostic', {'diagnostic': str(exc)}))
         observation.update(pid=os.getpid(), create_time=psutil.Process().create_time())
-        path = settings.workspace / "software" / package_id / "native-load.json"
+        path = development.observation_path(settings.workspace, package_id)
         observations.append((path, observation))
     return classes, names, observations
 
@@ -245,6 +270,8 @@ def _apply_bundle_nodes(server, registry, display_names, collected):
     display_names.update(names)
     server.apf_bundle_types = set(classes)
     for path, observation in observations:
+        if path.name == 'native-load-development.json':
+            path.parent.mkdir(parents=True, exist_ok=True)
         if path.parent.is_dir():
             part = path.with_suffix(".part")
             part.write_text(json.dumps(observation, ensure_ascii=False), encoding="utf-8")
@@ -274,6 +301,7 @@ def watch_bundle_nodes(server):
         while True:
             await asyncio.sleep(1)
             try:
+                await asyncio.to_thread(development.refresh_sources, Path(workspace))
                 current = await asyncio.to_thread(_bundle_files, Path(workspace))
                 if current != previous:
                     await reload_bundle_nodes(server)

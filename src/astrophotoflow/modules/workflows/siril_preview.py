@@ -67,9 +67,10 @@ class SirilPreviews:
                     raise CancelledError("实时预览已取消。")
 
             package = get_package(self.settings, body.package_id)
-            operation = get_operation(self.settings, body.package_id, package.installed_version, body.operation_id)
+            operation = get_operation(self.settings, body.package_id, package.effective_version, body.operation_id)
             layout = next(item.colour_layout for item in operation.inputs if item.name == 'image')
-            decoder_key = json.dumps([body.package_id, package.installed_version, package.bundle_commit, body.parameters.get('runtime', '{}')], sort_keys=True)
+            decoder_key = json.dumps([body.package_id, package.effective_version, package.effective_bundle_commit,
+                package.development_source.fingerprint if package.development_source else None, body.parameters.get('runtime', '{}')], sort_keys=True)
             work = self.executor.submit(prepare_siril_sample, self.database, self.settings, self.cache, body, checkpoint, decoder_key, layout)
             sample = None
             directory = None
@@ -79,10 +80,10 @@ class SirilPreviews:
                 sample = await asyncio.shield(asyncio.wrap_future(work))
                 directory = sample.folder / str(uuid4())
                 if sample.path != sample.folder / "linear.fit":
-                    result = await preview_operation(self.settings, sample.path, directory, body.parameters, package_id=body.package_id, operation_id=body.operation_id, prepare_sample=True)
+                    result = await preview_operation(self.settings, sample.path, directory, body.parameters, package_id=body.package_id, operation_id=body.operation_id, prepare_sample=True, preview_max_edge=body.preview_max_edge)
                 else:
                     result = await preview_operation(self.settings, sample.path, directory, body.parameters, package_id=body.package_id, operation_id=body.operation_id)
-                future = self.executor.submit(direct_fits_image, result, None, 1024)
+                future = self.executor.submit(direct_fits_image, result, None, body.preview_max_edge, display_balance=body.display_balance)
                 image = await asyncio.shield(asyncio.wrap_future(future))
                 stream = BytesIO()
                 image.save(stream, format="PNG")
@@ -132,8 +133,8 @@ class SirilPreviews:
              responses={200: {"content": {"image/png": {"schema": {"type": "string", "format": "binary"}}}}})
 async def preview(body: BundlePreviewRequest, request: Request):
     package = get_package(request.app.state.settings, body.package_id)
-    if package.availability != "ready":
-        raise ApiError(503, "SOFTWARE_NOT_READY", package.reason or "请先安装 Siril。", message_key='siril_install_required', fields=[{'path': 'diagnostic', 'message': package.reason or "请先安装 Siril。"}])
+    if package.effective_availability != "ready":
+        raise ApiError(503, "SOFTWARE_NOT_READY", package.effective_reason or "请先安装 Siril。", message_key='siril_install_required', fields=[{'path': 'diagnostic', 'message': package.effective_reason or "请先安装 Siril。"}])
     validate_parameters(request.app.state.settings, body.package_id, body.operation_id, body.parameters)
     manager = request.app.state.siril_previews
     async with request.app.state.maintenance_lock:
@@ -164,7 +165,7 @@ async def release(consumer_id: UUID, request: Request):
 async def legacy_preview(body: SirilPreviewRequest, request: Request):
     return await preview(BundlePreviewRequest(reference=body.reference, member_index=body.member_index,
         consumer_id=body.consumer_id, generation=body.generation, package_id="siril", operation_id="autostretch",
-        parameters=body.model_dump(include={"linked", "shadowsclip", "targetbg"})), request)
+        parameters=body.model_dump(include={"linked", "shadowsclip", "targetbg"}), preview_max_edge=body.preview_max_edge, display_balance=body.display_balance), request)
 
 
 @router.delete("/packages/siril/autostretch-preview/{consumer_id}", status_code=204, response_class=Response)

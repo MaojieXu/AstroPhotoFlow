@@ -4,6 +4,7 @@ from astrophotoflow.contracts.inputs import InputReference
 
 
 class DataReferenceNode:
+    APF_AUTOMATIC_RESULT = True
     CATEGORY = "Data"
     RETURN_TYPES = ("APF_SCIENCE",)
     RETURN_NAMES = ("science",)

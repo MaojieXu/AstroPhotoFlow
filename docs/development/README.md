@@ -155,6 +155,26 @@ CLI、浏览器和 MCP 各自核对目标；Shell 环境不会重定向已连接
 
 ### 独立Bundle候选预览
 
+#### 开发源码绑定
+
+在本 Feature workspace 中，固定入口可直接绑定独立 Bundle Worktree：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/bootstrap.ps1 --workspace .artifacts/workspaces/node-ui-bundle --bundle-source siril=.artifacts/bundles/AstroPhotoFlow-Siril --start
+```
+
+首次平台代码／网页修改仍先停止自己的实例，再使用 `--build --start`。绑定记录只写入该workspace的 `run/bundle-sources.json`，两个服务共享；不更改默认workspace、全局MCP或已安装Bundle副本。Siril Worktree的 `development.json` 声明Python生成入口和作者资料／辅助文件监听范围，使用本空间开发Python生成。之后修改Bundle源码会自动生成、校验、热加载并刷新节点目录及预览；修改Vue／CSS继续使用上文Vite入口。
+
+软件面板、准备回执和调用记录标明开发路径、HEAD、dirty与内容指纹。适配器依赖和预览缓存随指纹失效。生成／校验失败会使开发源不可用，软件面板显示诊断，停止新预览／调用；修正后自动恢复，画布及自定义标题保留。开发模式沿用在途调用行为，不保存旧实现快照。
+
+解除绑定并恢复已安装版本，无需重新安装：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/bootstrap.ps1 --workspace .artifacts/workspaces/node-ui-bundle --clear-bundle-source siril --start
+```
+
+#### 固定版本候选
+
 Siril 在独立私有仓库维护；不因普通 Feature 初始化而准备 Bundle。需要候选预览时，按授权取得干净且 HEAD 等于开发 tag 的 checkout，再导出目录：
 
 ```powershell

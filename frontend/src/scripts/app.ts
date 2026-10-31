@@ -314,6 +314,7 @@ export class ComfyApp implements IComfyApp {
     batchCount: number
     requestId: number
     queueNodeIds?: NodeExecutionId[]
+    automaticResult?: QueuePromptOptions['automaticResult']
     workflowQueueIntent?: WorkflowQueueIntent
   }[] = []
   private nextQueueRequestId = 1
@@ -1050,6 +1051,7 @@ export class ComfyApp implements IComfyApp {
 
   async getNodeDefs(): Promise<Record<string, ComfyNodeDefV1>> {
     const translateNodeDef = (def: ComfyNodeDefV1): ComfyNodeDefV1 => {
+      if (def.name.startsWith('APF_')) return def
       return {
         ...def,
         category: (typeof def.category === 'string' ? def.category : '')
@@ -1730,7 +1732,7 @@ export class ComfyApp implements IComfyApp {
     const options = Array.isArray(optionsOrQueueNodeIds)
       ? { queueNodeIds: optionsOrQueueNodeIds }
       : optionsOrQueueNodeIds
-    const { queueNodeIds, intent } = options
+    const { queueNodeIds, intent, automaticResult } = options
     if (
       intent?.trigger_source === 'auto_queue' &&
       partnerRunGateBlocksAutoQueue()
@@ -1742,6 +1744,7 @@ export class ComfyApp implements IComfyApp {
       number,
       batchCount,
       queueNodeIds,
+      automaticResult,
       requestId,
       workflowQueueIntent: intent
     })
@@ -1830,6 +1833,7 @@ export class ComfyApp implements IComfyApp {
           number,
           batchCount,
           queueNodeIds,
+          automaticResult,
           requestId,
           workflowQueueIntent
         } = this.queueItems.pop()!
@@ -1887,6 +1891,19 @@ export class ComfyApp implements IComfyApp {
             }
           )
           const queuedNodes = collectAllNodes(this.rootGraph)
+          if (automaticResult) {
+            if (!await automaticResult.isCurrent(p.output)) {
+              queueResultOverride = false
+              break
+            }
+            p.workflow.extra = { ...p.workflow.extra, apfAutomaticResult: { targets: automaticResult.targets, signatures: automaticResult.signatures } }
+            for (const id of Object.keys(p.output)) {
+              if (!Object.hasOwn(automaticResult.signatures, id)) delete p.output[id]
+            }
+          } else if (p.workflow.extra?.apfAutomaticResult) {
+            p.workflow.extra = { ...p.workflow.extra }
+            delete p.workflow.extra.apfAutomaticResult
+          }
           let workflowContext: WorkflowExecutionContext | undefined
           if (executionContext) {
             workflowContext = toWorkflowExecutionContext(executionContext, {
@@ -1919,6 +1936,7 @@ export class ComfyApp implements IComfyApp {
               previewMethod
             })
             const responseReceivedAt = performance.now()
+            if (res.prompt_id) automaticResult?.queued(res.prompt_id)
             delete api.authToken
             delete api.apiKey
             if (!res.prompt_id) {

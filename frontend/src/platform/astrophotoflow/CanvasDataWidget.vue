@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { createCanvasDataClient, createMediaClient, scienceReferenceSchema } from '@astrophotoflow/ui'
-import type { CanvasInspect, MediaState, MediaViewerRequest } from '@astrophotoflow/ui'
+import type { CanvasInspect, MediaSelection, MediaState, MediaViewerRequest } from '@astrophotoflow/ui'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
@@ -17,6 +17,7 @@ import type { ComponentWidget } from '@/scripts/domWidget'
 import { api } from '@/scripts/api'
 import { useApp } from '@/scripts/appInstance'
 import MediaViewer from './MediaViewer.vue'
+import PreviewControls from './PreviewControls.vue'
 
 const { widget } = defineProps<{ widget: ComponentWidget<string | object> }>()
 const { t } = useI18n()
@@ -29,6 +30,8 @@ const index = ref(0)
 const data = ref<CanvasInspect>()
 const fileReference = computed(() => widget.node.comfyClass === 'APF_FILE_REFERENCE' || data.value?.format === 'other')
 const image = ref('')
+const maxEdge = ref<MediaSelection['preview_max_edge']>(1024)
+const balance = ref<MediaSelection['display_balance']>(null)
 const loading = ref(false)
 const phase = ref<MediaState['phase']>()
 const failure = ref('')
@@ -163,7 +166,7 @@ async function load() {
       const media = createMediaClient((path, init) => fetch(path, { ...init, signal }))
       const member = reference.kind === 'dataset_version' ? reference.members[index.value] : reference
       const selection = { hdu_index: member?.selection.hdu_index, ...(item.format === 'video' ? { frame_index: 0 } : {}) }
-      let state = await media.prepare(base, { ...selection, consumer_id: consumerId, generation: current })
+      let state = await media.prepare(base, { ...selection, consumer_id: consumerId, generation: current, preview_max_edge: maxEdge.value, display_balance: balance.value })
       while (state.status === 'generating') {
         phase.value = state.phase
         await new Promise<void>(resolve => {
@@ -219,13 +222,13 @@ function openViewer() {
       const client = createCanvasDataClient((path, init) => fetch(path, { ...init, signal }))
       const current = await client.inspect(reference, position)
       const selected = reference.kind === 'dataset_version' ? reference.members[position] : reference
-      return { title: current.name, basePath: `/astrophotoflow/api/v1/library/assets/${current.asset_id}/versions/${current.asset_version_id}/previews`, selection: { hdu_index: selected?.selection.hdu_index } }
+      return { title: current.name, basePath: `/astrophotoflow/api/v1/library/assets/${current.asset_id}/versions/${current.asset_version_id}/previews`, selection: { hdu_index: selected?.selection.hdu_index, preview_max_edge: maxEdge.value, display_balance: balance.value } }
     }
   }
 }
 
 watch(referenceText, () => { index.value = 0; details.value = false; mediaRequest.value = undefined })
-watch([referenceText, index], () => void load(), { immediate: true })
+watch([referenceText, index, maxEdge, balance], () => void load(), { immediate: true })
 onBeforeUnmount(() => {
   importController.abort()
   generation++
@@ -244,19 +247,20 @@ onBeforeUnmount(() => {
     </div>
     <span v-if="importFailure" role="alert" class="text-error">{{ importFailure }}</span>
     <strong class="shrink-0 truncate text-base-foreground" :title="data?.name">{{ data?.name ?? t('astrophotoflow.libraryImage') }}</strong>
-    <div v-if="fileReference" class="flex min-h-20 items-center gap-2 rounded-sm bg-component-node-widget-background p-3"><i class="icon-[lucide--file-text] size-6" aria-hidden="true" /><span class="break-words">{{ failure || t('astrophotoflow.results.fixedFile') }}</span></div>
-    <div v-else class="group relative h-56 min-h-56 w-full overflow-hidden rounded-sm bg-component-node-widget-background" role="button" tabindex="0" :aria-label="t('astrophotoflow.media.open')" @click="openViewer" @keydown.enter.prevent="openViewer" @keydown.space.prevent="openViewer">
+    <div v-if="fileReference" class="flex min-h-20 items-center gap-2 rounded-sm bg-component-node-widget-background p-3"><i class="icon-[lucide--file-text] size-6" aria-hidden="true" /><span class="wrap-break-word">{{ failure || t('astrophotoflow.results.fixedFile') }}</span></div>
+    <PreviewControls v-if="!fileReference" v-model:max-edge="maxEdge" v-model:balance="balance" />
+    <div v-if="!fileReference" class="group relative h-56 min-h-56 w-full overflow-hidden rounded-sm bg-component-node-widget-background" role="button" tabindex="0" :aria-label="t('astrophotoflow.media.open')" @click="openViewer" @keydown.enter.prevent="openViewer" @keydown.space.prevent="openViewer">
       <ImagePreview v-if="image" :image-urls="[image]" display-only @load-error="imageFailed" />
       <div v-else class="flex h-full min-w-0 flex-col items-center justify-center gap-2 px-3 text-muted-foreground" role="status">
         <i :class="loading ? 'icon-[lucide--loader-circle] size-5 animate-spin' : 'icon-[lucide--image-off] size-5'" aria-hidden="true" />
-        <span class="max-h-24 overflow-auto break-words">{{ failure || t(phase === 'queued' ? 'astrophotoflow.media.queued' : 'astrophotoflow.media.preparing') }}</span>
+        <span class="max-h-24 overflow-auto wrap-break-word">{{ failure || t(phase === 'queued' ? 'astrophotoflow.media.queued' : 'astrophotoflow.media.preparing') }}</span>
         <Button v-if="failure" variant="textonly" @click.stop="load()">{{ t('astrophotoflow.retryPreview') }}</Button>
       </div>
-      <div v-if="image && (loading || failure)" class="absolute bottom-1 left-1 right-1 rounded-sm bg-base-background px-2 py-1" role="status">
+      <div v-if="image && (loading || failure)" class="absolute right-1 bottom-1 left-1 rounded-sm bg-base-background px-2 py-1" role="status">
         {{ failure || t(phase === 'queued' ? 'astrophotoflow.media.queued' : 'astrophotoflow.media.preparing') }}
         <Button v-if="failure" variant="textonly" @click.stop="load()">{{ t('astrophotoflow.retryPreview') }}</Button>
       </div>
-      <Button class="absolute top-1 right-1 invisible group-hover:visible group-focus-within:visible" variant="textonly" size="icon" :aria-label="t('astrophotoflow.media.open')" @click.stop="openViewer"><i class="icon-[lucide--expand] size-4" /></Button>
+      <Button class="invisible absolute top-1 right-1 group-focus-within:visible group-hover:visible" variant="textonly" size="icon" :aria-label="t('astrophotoflow.media.open')" @click.stop="openViewer"><i class="icon-[lucide--expand] size-4" /></Button>
     </div>
     <div class="flex h-8 shrink-0 items-center justify-between gap-1">
       <Button size="icon" variant="textonly" :aria-label="t('g.previousImage')" :disabled="index === 0" @click="index--"><i class="icon-[lucide--chevron-left] size-4" /></Button>
@@ -274,7 +278,7 @@ onBeforeUnmount(() => {
       <DialogPortal><DialogOverlay /><DialogContent size="md" class="max-h-[85vh] overflow-y-auto" :aria-describedby="undefined">
         <DialogHeader><DialogTitle>{{ data?.name }}</DialogTitle><Button variant="textonly" size="icon" :aria-label="t('g.close')" @click="details = false"><i class="icon-[lucide--x] size-4" /></Button></DialogHeader>
         <p class="text-muted-foreground">{{ t(fileReference ? 'astrophotoflow.results.fixedFile' : 'astrophotoflow.currentImageMetadata') }}</p>
-        <dl class="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-2"><template v-for="[label, value] in [...summary, ...extra]" :key="label"><dt class="text-muted-foreground">{{ label }}</dt><dd class="m-0 break-words">{{ value }}</dd></template></dl>
+        <dl class="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-2"><template v-for="[label, value] in [...summary, ...extra]" :key="label"><dt class="text-muted-foreground">{{ label }}</dt><dd class="m-0 wrap-break-word">{{ value }}</dd></template></dl>
       </DialogContent></DialogPortal>
     </Dialog>
     <MediaViewer v-if="mediaRequest" :request="mediaRequest" @close="mediaRequest = undefined" @index="index = $event" />

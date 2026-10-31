@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 from uuid import UUID
+from filelock import FileLock
 
 from fastapi import Depends, Query, Request, Response
 from fastapi.responses import FileResponse
@@ -13,7 +14,7 @@ from astrophotoflow.contracts.inputs import CheckedOutput, OutputLocator, Resolv
 from astrophotoflow.contracts.bundles import AnalysisResult
 from astrophotoflow.contracts.media import MediaSelection, MediaState
 from astrophotoflow.contracts.nodes import NodeDefinition
-from astrophotoflow.contracts.software import NativeBundleCall, RunCallResult, SoftwareInvocation, SoftwareObservation, SoftwareOperation
+from astrophotoflow.contracts.software import AutomaticResultSnapshot, NativeBundleCall, RunCallResult, SoftwareInvocation, SoftwareObservation, SoftwareOperation
 from astrophotoflow.core.errors import ApiError
 from astrophotoflow.core.http import TaskAdmission, authenticate
 from astrophotoflow.modules.data.public import LeasedFileResponse, check_output, render_output_preview, resolve_canvas_inputs
@@ -106,9 +107,9 @@ def _call_summary(record, prompt_id, call_id):
     bundle = record.get('bundle') or {}
     error = record.get('error') or (record.get('result') or {}).get('error')
     return RunCallResult.model_validate_json(json.dumps(dict(prompt_id=str(prompt_id), call_id=str(call_id), node_id=record['request']['node_id'], state=record['state'],
-        workflow_id=record['request'].get('workflow_id'), package_id=operation.get('package_id'), software_version=operation.get('version'),
+        workflow_id=record['request'].get('workflow_id'), calculation_signature=record['request'].get('calculation_signature'), package_id=operation.get('package_id'), software_version=operation.get('version'),
         bundle_version=bundle.get('version'), bundle_commit=bundle.get('commit'), operation_id=operation.get('operation_id'),
-        definition_token=record['request'].get('definition_token'),
+        definition_token=record['request'].get('definition_token'), development_source=bundle.get('development_source'),
         ports=[dict(name=port['name'], type=port['type'], members=len(port['files']), formats=[file['format'] for file in port['files']],
                     names=[Path(file['path']).name for file in port['files']]) for port in _record_ports(record)],
         preview_error=record.get('preview_error'), observation=record.get('observation'), error={'fields': [], **error} if error else None), ensure_ascii=False))
@@ -216,10 +217,13 @@ async def _run(app, settings, body: NativeBundleCall):
             run_id=body.prompt_id, node_execution_id=body.node_id, call_id=body.call_id,
             package_id=operation.package_id, version=operation.version, operation_id=operation.operation_id, operation_content_token=operation.content_token,
             bundle_commit=record['bundle']['commit'],
+            development_source=get_package(settings, operation.package_id).development_source,
             inputs=inputs, supporting_inputs=supporting, parameters=parameters,
             work_directory=work,
         )
         record["invocation"] = invocation.model_dump(mode="json")
+        if invocation.development_source is not None:
+            record['bundle']['development_source'] = invocation.development_source.model_dump(mode='json')
 
         async def observe(observation):
             record["state"] = 'running' if observation.state == 'completed' else observation.state
@@ -277,6 +281,19 @@ async def _run(app, settings, body: NativeBundleCall):
 
 def register_siril_calls(app, settings):
     app.state.siril_calls = {}
+
+    @app.post('/internal/native/runs/{prompt_id}/snapshot', dependencies=[Depends(authenticate)], include_in_schema=False)
+    def calculation_snapshot(prompt_id: UUID, body: AutomaticResultSnapshot):
+        path = settings.workspace / 'runs' / str(prompt_id) / 'calculation-snapshot.json'
+        path.parent.mkdir(parents=True, exist_ok=True)
+        value = body.model_dump(mode='json')
+        with FileLock(str(path.with_suffix('.lock'))):
+            if path.exists():
+                if json.loads(path.read_text(encoding='utf-8')) != value:
+                    raise ApiError(409, 'CALCULATION_SNAPSHOT_CONFLICT', '计算快照与本次运行不一致。')
+            else:
+                _save(path, value)
+        return {'recorded': True}
 
     @app.get('/api/v1/runs/{prompt_id}/calls', response_model=list[RunCallResult], dependencies=[Depends(authenticate)])
     async def list_call_results(prompt_id: UUID, node_id: str | None = None, limit: int = Query(default=50, ge=1, le=100), offset: int = Query(default=0, ge=0)):
@@ -387,6 +404,17 @@ def register_siril_calls(app, settings):
 
     @app.post("/internal/native/bundles/calls", dependencies=[Depends(authenticate)], include_in_schema=False)
     async def start(body: NativeBundleCall):
+        if body.calculation_signature is not None:
+            snapshot = settings.workspace / 'runs' / str(body.prompt_id) / 'calculation-snapshot.json'
+            if not snapshot.is_file():
+                raise ApiError(409, 'CALCULATION_SNAPSHOT_MISSING', '自动计算快照尚未记录。')
+            captured = AutomaticResultSnapshot.model_validate_json(snapshot.read_text(encoding='utf-8'))
+            if captured.signatures.get(body.node_id) != body.calculation_signature or captured.workflow.get('id') != str(body.workflow_id):
+                raise ApiError(409, 'CALCULATION_SNAPSHOT_CONFLICT', '自动计算签名或工作流不一致。')
+            definition = get_definition(settings.workspace, body.definition_id).definition
+            _, entries, _ = get_bundle_metadata(settings, definition.execution.package_id)
+            if not any(entry['operation']['operation_id'] == definition.execution.operation_id and entry.get('automatic_result_preview', False) for entry in entries):
+                raise ApiError(409, 'AUTOMATIC_RESULT_MANUAL_OPERATION', '该操作需要手动运行。')
         async with app.state.maintenance_lock:
             if app.state.maintenance or app.state.shutdown_started:
                 raise ApiError(409, "WORKBENCH_MAINTENANCE", "工作台正在维护。", message_key='the_workbench_is_undergoing_maintenance')
@@ -409,7 +437,8 @@ def register_siril_calls(app, settings):
                       "invocation": None, "observation": None, "ports": [], "outputs": [],
                       'definition': definition.model_dump(mode='json'), 'operation': operation.model_dump(mode='json'),
                       'parameters': parameters,
-                      'bundle': {'version': package.bundle_version, 'commit': package.bundle_commit},
+                      'bundle': {'version': package.effective_bundle_version, 'commit': package.effective_bundle_commit,
+                                 'development_source': package.development_source.model_dump(mode='json') if package.development_source else None},
                       'output_display': entry.get('output_display', 'direct'),
                       "images": [], "error": None, "preview_error": None}
             _save(path, record)

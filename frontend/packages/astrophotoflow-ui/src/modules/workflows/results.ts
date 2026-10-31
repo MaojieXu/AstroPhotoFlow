@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { bundleDevelopmentSourceSchema } from '../../core/bundleDevelopmentSource'
 
 import { createApiClient } from '../../core/client'
 import type { FetchApi } from '../../core/client'
@@ -24,10 +25,12 @@ export const runCallResultSchema = z
     call_id: z.uuid(),
     node_id: z.string(),
     workflow_id: z.uuid().nullable().optional(),
+    calculation_signature: z.string().nullable().optional(),
     package_id: z.string().nullable().optional(),
     software_version: z.string().nullable().optional(),
     bundle_version: z.string().nullable().optional(),
     bundle_commit: z.string().nullable().optional(),
+    development_source: bundleDevelopmentSourceSchema.nullable().optional(),
     operation_id: z.string().nullable().optional(),
     definition_token: z.string().nullable().optional(),
     state: z.enum([

@@ -19931,6 +19931,85 @@
         ],
         "title": "AutoStretch"
       },
+      "BundleDevelopmentSource": {
+        "properties": {
+          "root": {
+            "type": "string",
+            "format": "path",
+            "title": "Root"
+          },
+          "head": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Head"
+          },
+          "dirty": {
+            "type": "boolean",
+            "title": "Dirty",
+            "default": true
+          },
+          "fingerprint": {
+            "type": "string",
+            "title": "Fingerprint",
+            "default": ""
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "building",
+              "ready",
+              "failed"
+            ],
+            "title": "State",
+            "default": "building"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "software_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Software Version"
+          },
+          "bundle_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bundle Version"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "root"
+        ],
+        "title": "BundleDevelopmentSource"
+      },
       "BundlePreview": {
         "properties": {
           "kind": {
@@ -20007,6 +20086,38 @@
             },
             "type": "object",
             "title": "Parameters"
+          },
+          "preview_max_edge": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "enum": [
+                  512,
+                  1024,
+                  2048
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preview Max Edge",
+            "default": 1024
+          },
+          "display_balance": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "auto",
+                  "preserve"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Balance"
           }
         },
         "additionalProperties": false,
@@ -21196,6 +21307,13 @@
           "name": {
             "type": "string",
             "title": "Name"
+          },
+          "category": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Category"
           },
           "description": {
             "type": "string",
@@ -24907,6 +25025,38 @@
               }
             ],
             "title": "Display Range"
+          },
+          "display_balance": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "auto",
+                  "preserve"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Balance"
+          },
+          "preview_max_edge": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "enum": [
+                  512,
+                  1024,
+                  2048
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preview Max Edge",
+            "default": 1024
           }
         },
         "additionalProperties": false,
@@ -25435,6 +25585,32 @@
       },
       "NodeCapability": {
         "properties": {
+          "automatic_result_preview": {
+            "type": "boolean",
+            "title": "Automatic Result Preview",
+            "default": false
+          },
+          "implementation_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Implementation Token"
+          },
+          "development_source": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BundleDevelopmentSource"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "node": {
             "$ref": "#/components/schemas/SavedDefinition"
           },
@@ -25536,6 +25712,13 @@
           "description": {
             "type": "string",
             "title": "Description"
+          },
+          "category": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Category"
           },
           "inputs": {
             "items": {
@@ -26594,6 +26777,17 @@
             ],
             "title": "Workflow Id"
           },
+          "calculation_signature": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Calculation Signature"
+          },
           "package_id": {
             "anyOf": [
               {
@@ -26637,6 +26831,16 @@
               }
             ],
             "title": "Bundle Commit"
+          },
+          "development_source": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BundleDevelopmentSource"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "operation_id": {
             "anyOf": [
@@ -27001,6 +27205,38 @@
             "type": "integer",
             "minimum": 0.0,
             "title": "Generation"
+          },
+          "preview_max_edge": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "enum": [
+                  512,
+                  1024,
+                  2048
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preview Max Edge",
+            "default": 1024
+          },
+          "display_balance": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "auto",
+                  "preserve"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Balance"
           }
         },
         "additionalProperties": false,
@@ -27688,6 +27924,16 @@
             "type": "boolean",
             "title": "Migration Required",
             "default": false
+          },
+          "development_source": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BundleDevelopmentSource"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "additionalProperties": false,

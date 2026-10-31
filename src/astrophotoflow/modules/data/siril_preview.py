@@ -19,7 +19,7 @@ from astrophotoflow.modules.data.previews import _library_version
 from astrophotoflow.modules.data.science_inputs import _asset_path
 
 
-def fits_sample(path: Path, hdu_index: int, max_edge: int, checkpoint=lambda: None, *, siril_output=False, colour_layout=None):
+def fits_sample(path: Path, hdu_index: int, max_edge: int | None, checkpoint=lambda: None, *, siril_output=False, colour_layout=None):
     source = PixelSource(path, "fits", MediaSelection(hdu_index=hdu_index), {'colour_layout': colour_layout}, path.parent,
                          lambda _size: None, checkpoint)
     with source.pixels() as hdu:
@@ -30,12 +30,12 @@ def fits_sample(path: Path, hdu_index: int, max_edge: int, checkpoint=lambda: No
             height, width = hdu.shape[1:]
         else:
             width, height = source.dimensions()
-        step = max(1, math.ceil(max(width, height) / max_edge))
+        step = max(1, math.ceil(max(width, height) / max_edge)) if max_edge else 1
         pixels = source._fits_region(hdu, (0, 0, width, height), step)
     return pixels
 
 
-def direct_fits_image(path: Path, hdu_index: int | None, max_edge: int, *, colour_layout='planar') -> Image.Image:
+def direct_fits_image(path: Path, hdu_index: int | None, max_edge: int | None, *, colour_layout='planar', display_balance=None) -> Image.Image:
     if hdu_index is None:
         from astrophotoflow.modules.data.fits_preview import inspect_fits
         hdu_index = inspect_fits(path, colour_layout=colour_layout)['selected_hdu']
@@ -47,6 +47,9 @@ def direct_fits_image(path: Path, hdu_index: int | None, max_edge: int, *, colou
     else:
         values = np.asarray(pixels, dtype=np.float32)
     values = np.nan_to_num(values, nan=0, posinf=1, neginf=0)
+    if display_balance == 'auto' and values.ndim == 3:
+        from astrophotoflow.modules.data.auto_stretch import calculate_stretch
+        values = values * np.asarray(calculate_stretch(values)['white_balance'])
     return Image.fromarray((np.clip(values, 0, 1) * 255).astype(np.uint8)).convert("RGB")
 
 
@@ -82,7 +85,7 @@ def prepare_siril_sample(database, settings, cache, body, check_cancel, decoder_
         hdu = selection.hdu_index or 0
         if hdu != 0 or selection.kind != "whole_file":
             raise ApiError(422, "UNSUPPORTED_SELECTION", "该实时样本预览使用默认图像HDU，不支持任意HDU选择。", message_key='this_live_sample_preview_uses_the_default_image_hdu_arbitrary_hdu_selection')
-        identity = json.dumps([str(item.asset_version_id), version.content_hash, stamp.st_size, stamp.st_mtime_ns, str(body.consumer_id), hdu, decoder_key])
+        identity = json.dumps([str(item.asset_version_id), version.content_hash, stamp.st_size, stamp.st_mtime_ns, str(body.consumer_id), hdu, decoder_key, body.preview_max_edge])
         key = hashlib.sha256(identity.encode()).hexdigest()[:40]
         algorithm = "siril-live-1:" + key
         folder = settings.data_dir / "previews" / str(item.asset_version_id) / "media" / key
@@ -110,7 +113,7 @@ def prepare_siril_sample(database, settings, cache, body, check_cancel, decoder_
                 sample.path = path
                 (folder / "manifest.json").write_text(json.dumps({"input": "linear.fit", "output": "result.png"}), encoding="utf-8")
                 return sample
-            pixels = fits_sample(path, hdu, 1024, check_cancel, colour_layout=colour_layout)
+            pixels = fits_sample(path, hdu, body.preview_max_edge, check_cancel, colour_layout=colour_layout)
             header = fits.Header()
             if pixels.ndim == 3:
                 pixels = np.moveaxis(pixels, -1, 0)

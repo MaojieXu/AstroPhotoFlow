@@ -50,6 +50,16 @@ beforeEach(() => {
 afterEach(() => vi.useRealTimers())
 
 describe('shared original-resolution media viewer', () => {
+  it('requests changed display settings for the same original', async () => {
+    const view = setup(1)
+    await waitFor(() => expect(createImageViewport).toHaveBeenCalled())
+    await fireEvent.update(screen.getByRole('combobox', { name: 'astrophotoflow.media.previewResolution' }), '2048')
+    await waitFor(() => expect(view.prepare).toHaveBeenLastCalledWith('/frame/0', expect.objectContaining({ preview_max_edge: 2048, display_range: null })))
+    await waitFor(() => expect(createImageViewport).toHaveBeenCalledTimes(2))
+    await fireEvent.update(screen.getByRole('combobox', { name: 'astrophotoflow.media.rgbDisplay' }), 'auto')
+    await waitFor(() => expect(view.prepare).toHaveBeenLastCalledWith('/frame/0', expect.objectContaining({ display_balance: 'auto', display_range: null })))
+    view.unmount()
+  })
   it('opens one of a thousand frames, prefetches only adjacent thumbnails and preserves the view on switching', async () => {
     const user = userEvent.setup()
     const { member, prepare, viewport } = setup()

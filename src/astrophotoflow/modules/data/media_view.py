@@ -36,7 +36,7 @@ from astrophotoflow.modules.data.science_inputs import _asset_path
 
 
 router = APIRouter(prefix="/api/v1", responses=deps.ERROR_RESPONSES, dependencies=[Depends(deps.authenticate)])
-ALGORITHM = "media-view-2"
+ALGORITHM = "media-view-3"
 
 
 class LeasedFileResponse(FileResponse):
@@ -286,6 +286,19 @@ class MediaViews:
                         state.media_time = timestamp
                     source = self._pixels(job, lambda: self._checkpoint(job["key"]))
                     state.width, state.height = source.dimensions()
+                    step = max(1, math.ceil(max(state.width, state.height) / 4096))
+                    if source.cfa and step % 2 == 0:
+                        step += 1
+                    pixels = source.read((0, 0, state.width, state.height), step)
+                    balance = job['selection'].display_balance
+                    if job['selection'].display_range is None:
+                        if balance is not None and pixels.ndim == 3:
+                            if job['recipe'].get('direct') or not source.linear:
+                                job['recipe'] = {**job['recipe'], 'display_white_balance': source.stretch()['white_balance'] if balance == 'auto' else [1, 1, 1]}
+                            else:
+                                job['recipe'] = {'auto_stretch': source.stretch(balance_rgb=balance == 'auto')}
+                        elif source.linear and pixels.ndim == 3 and 'stretch_low' in job['recipe'] and 'auto_stretch' not in job['recipe']:
+                            job['recipe'] = {}
                     if source.linear and not ("auto_stretch" in job["recipe"] or "stretch_low" in job["recipe"] or job['recipe'].get('direct')):
                         if job.get('output_source'):
                             job['recipe'] = {'auto_stretch': source.stretch()}
@@ -294,13 +307,15 @@ class MediaViews:
                             job["recipe"] = describe_recipe(context, {"auto_stretch": context["auto_stretch"] or self._stretch(job, source, context)})
                     if source.cfa and source.cfa not in {"MONO", "RGGB", "BGGR", "GRBG", "GBRG"}:
                         state.note = "此CFA排列以原尺寸传感器灰度马赛克查看。"
-                    step = max(1, math.ceil(max(state.width, state.height) / 4096))
-                    if source.cfa and step % 2 == 0:
-                        step += 1
                     self._checkpoint(job["key"])
-                    overview = source.render(source.read((0, 0, state.width, state.height), step), job["recipe"])
+                    edge = job['selection'].preview_max_edge
+                    if edge is None:
+                        self.cache.reserve(state.width * state.height * 12)
+                        pixels = source.read((0, 0, state.width, state.height))
+                    overview = source.render(pixels, job["recipe"])
                     self._checkpoint(job["key"])
-                    overview.thumbnail((2048, 2048), Image.Resampling.LANCZOS)
+                    if edge is not None:
+                        overview.thumbnail((edge, edge), Image.Resampling.LANCZOS)
                     buffer = BytesIO()
                     overview.save(buffer, format="JPEG", quality=90)
                     self.cache.write(folder / "overview.jpg", buffer.getvalue())
