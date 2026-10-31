@@ -2,6 +2,7 @@ from io import BytesIO
 from pathlib import Path
 from threading import Event
 import time
+import json
 
 from astropy.io import fits
 from fastapi.testclient import TestClient
@@ -63,6 +64,38 @@ def native_url(url):
     return url.removeprefix("/astrophotoflow")
 
 
+@pytest.mark.parametrize('edge', [512, 1024, 2048, None])
+def test_legacy_rgb_preview_rebalances_and_resolution_is_display_only(media_service, edge):
+    settings, app, client, source = media_service
+    mono = np.random.default_rng(12).normal(.01, .0005, (320, 2100)).astype(np.float32)
+    pixels = np.stack([mono, mono * 2, mono], axis=0)
+    hdu = fits.PrimaryHDU(pixels)
+    hdu.header['CTYPE3'] = 'RGB'
+    path = source / 'cast.fit'
+    hdu.writeto(path)
+    original = path.read_bytes()
+    base, item = add(client, 'cast.fit')
+    with app.state.database.write_session() as session:
+        row = session.scalar(select(Preview).where(Preview.asset_version_id == item['asset_version_id'], Preview.size == 'thumbnail'))
+        row.display_parameters = {'stretch_low': .005, 'stretch_high': .025}
+    state = prepare(client, base, {'preview_max_edge': edge})
+    assert state['status'] == 'available'
+    overview = np.asarray(Image.open(BytesIO(client.get(native_url(state['overview_url']), headers=AUTH).content)))
+    assert overview.shape[1] == (min(2100, edge) if edge else 2100)
+    medians = np.median(overview, axis=(0, 1))
+    assert medians.max() - medians.min() <= 2
+    preserve = prepare(client, base, {'preview_max_edge': edge, 'display_balance': 'preserve'})
+    assert preserve['key'] != state['key']
+    cast = np.asarray(Image.open(BytesIO(client.get(native_url(preserve['overview_url']), headers=AUTH).content)))
+    medians = np.median(cast, axis=(0, 1))
+    assert medians[1] > medians[0]
+    restored = prepare(client, base, {'preview_max_edge': edge})
+    assert restored['key'] == state['key']
+    manifest = settings.data_dir / 'previews' / item['asset_version_id'] / 'media' / state['key'] / 'manifest.json'
+    assert len(json.loads(manifest.read_text())['recipe']['auto_stretch']['white_balance']) == 3
+    assert path.read_bytes() == original
+
+
 def test_checked_output_view_uses_thresholds_and_hdu_without_registering_assets(media_service, tmp_path):
     settings, app, _, _ = media_service
     source = tmp_path / 'output.fit'
@@ -89,6 +122,19 @@ def test_checked_output_view_uses_thresholds_and_hdu_without_registering_assets(
         assert np.all(np.abs(tile[0, 1].astype(int) - 127) <= 1)
     finally:
         release()
+    for balance in ('auto', 'preserve'):
+        prepared = views.prepare_output(checked, MediaSelection(hdu_index=1, display_balance=balance), direct=True)
+        future = views.preparing.get(prepared.key)
+        if future is not None:
+            future.result(timeout=30)
+        balanced_state = views.output_status(checked, prepared.key)
+        assert balanced_state.status == 'available'
+        job, release = views.acquire_output(checked, balanced_state.key)
+        try:
+            displayed = np.asarray(Image.open(BytesIO(views.tile(job, balanced_state.max_level, 0, 0))))
+            np.testing.assert_array_equal(displayed, tile)
+        finally:
+            release()
     with app.state.database.read_session() as session:
         assert session.scalars(select(Asset.id)).all() == before
         assert session.scalars(select(Preview)).all() == []

@@ -23,12 +23,13 @@ from astrophotoflow.contracts.software import (
     SirilCommand, SoftwareOperation, SoftwarePackage, SoftwarePackageState, SoftwarePreparation,
     ParameterDefinition, ProducedFile, SoftwareInvocation, SoftwareObservation, SoftwareResult, SoftwareCancelResult, SoftwareUse,
 )
-from astrophotoflow.contracts.bundles import NamedProcessPlan, ProcessPlan
+from astrophotoflow.contracts.bundles import BundleManifest, NamedProcessPlan, ProcessPlan
 from astrophotoflow.core.config import Settings
 from astrophotoflow.core.errors import ApiError
 from astrophotoflow.core.localization import error_message, workspace_locale, localized_error, exception_error
 from astrophotoflow.modules.software import bundles
 from astrophotoflow.modules.software.environment import bundle_environment
+from astrophotoflow.modules.software import development
 
 
 _PACKAGE_LOCKS: dict[str, asyncio.Lock] = {}
@@ -108,7 +109,8 @@ async def maintain_package(package_id: str):
 def get_package(settings: Settings, package_id: str) -> SoftwarePackage:
     from astrophotoflow.modules.software.releases import version_key
     release = bundles.release(package_id)
-    manifest, operations, _ = bundles.metadata(settings.workspace, package_id)
+    installed_root = settings.workspace / 'software' / package_id / 'bundle'
+    manifest = bundles.read_bundle(installed_root)[0] if installed_root.is_dir() else BundleManifest.model_validate(release['manifest'])
     path = _state_path(settings, package_id)
     state = SoftwarePackageState.model_validate_json(path.read_text(encoding="utf-8")) if path.is_file() else SoftwarePackageState(
         installed_version=None, install_path=None, availability="not_installed", reason="尚未安装 Bundle。",
@@ -150,7 +152,20 @@ def get_package(settings: Settings, package_id: str) -> SoftwarePackage:
     display_state = state.model_dump()
     if reason_key:
         display_state['reason'] = error_message(workspace_locale(settings.workspace), '', reason_key)
-    return SoftwarePackage(package_id=package_id, name=manifest.name,
+    source = development.source_state(settings.workspace, package_id)
+    if source is not None and source.state == 'ready':
+        observation = development.observation_path(settings.workspace, package_id)
+        loaded = json.loads(observation.read_text(encoding='utf-8')) if observation.is_file() else {}
+        try:
+            alive = psutil.Process(loaded['pid']).create_time() == loaded['create_time']
+        except (KeyError, psutil.Error):
+            alive = False
+        matches = loaded.get('root') == str(source.root) and loaded.get('fingerprint') == source.fingerprint
+        if not alive or not matches or not loaded.get('ready'):
+            diagnostic = loaded.get('reason') if alive and matches else None
+            source = source.model_copy(update={'state': 'failed' if diagnostic else 'building',
+                'error': diagnostic or 'Waiting for development nodes to load.'})
+    return SoftwarePackage(package_id=package_id, name=manifest.name, development_source=source,
         available_versions=[release["manifest"]["software_version"]], package_token=token,
         bundle_version=lock.get("bundle_version"), bundle_commit=lock.get("commit"), restart_required=restart_required,
         update_available=state.installed_version is not None and root.is_dir()
@@ -181,13 +196,13 @@ def get_operation(settings, package_id, version, operation_id):
     if version != manifest.software_version:
         raise ApiError(404, "RESOURCE_NOT_FOUND", "未找到软件版本。", message_key='the_software_version_was_not_found')
     package = get_package(settings, package_id)
-    return bundles.operation(settings.workspace, package_id, operation_id, package.availability == "ready", package.reason)
+    return bundles.operation(settings.workspace, package_id, operation_id, package.effective_availability == "ready", package.effective_reason)
 
 
 def list_operations(settings, package_id):
     _, entries, _ = bundles.metadata(settings.workspace, package_id)
     package = get_package(settings, package_id)
-    return [bundles.operation_from_entry(entry, package.availability == 'ready', package.reason) for entry in entries]
+    return [bundles.operation_from_entry(entry, package.effective_availability == 'ready', package.effective_reason) for entry in entries]
 
 
 def get_bundle_metadata(settings, package_id):
@@ -195,7 +210,7 @@ def get_bundle_metadata(settings, package_id):
 
 
 def get_bundle_display(settings, package_id):
-    root = settings.workspace / 'software' / package_id / 'bundle'
+    root = development.source_root(settings.workspace, package_id)
     if root.is_dir():
         manifest, operations, _ = bundles.metadata(settings.workspace, package_id)
         return bundles.read_bundle_locales(root, manifest, operations)
@@ -360,7 +375,7 @@ def get_command_catalog(package_id: str, version: str, settings=None) -> list[Si
     if package_id != "siril" or version != "1.4.4":
         raise ApiError(404, "RESOURCE_NOT_FOUND", "未找到请求的软件命令目录。", message_key='the_requested_software_command_reference_was_not_found')
     if settings is not None:
-        root = settings.workspace / 'software' / package_id / 'bundle'
+        root = development.source_root(settings.workspace, package_id)
         if root.is_dir():
             manifest, _, _ = bundles.metadata(settings.workspace, package_id)
             if manifest.commands is None or manifest.assessments is None:
@@ -406,10 +421,10 @@ async def _stop_preview(process):
     await asyncio.shield(process.wait())
 
 
-async def preview_operation(settings: Settings, source: Path, directory: Path, parameters, *, package_id: str, operation_id: str, prepare_sample: bool = False) -> Path:
+async def preview_operation(settings: Settings, source: Path, directory: Path, parameters, *, package_id: str, operation_id: str, prepare_sample: bool = False, preview_max_edge: int | None = 1024) -> Path:
     package = get_package(settings, package_id)
-    if package.availability != "ready":
-        raise ApiError(503, "SOFTWARE_NOT_READY", package.reason or "请先在软件包页面安装 Siril。", message_key='siril_install_required', fields=[{'path': 'software', 'message': package.reason}] if package.reason else [])
+    if package.effective_availability != "ready":
+        raise ApiError(503, "SOFTWARE_NOT_READY", package.effective_reason or "请先在软件包页面安装 Siril。", message_key='siril_install_required', fields=[{'path': 'software', 'message': package.effective_reason}] if package.effective_reason else [])
     lock = _PACKAGE_LOCKS.get(package_id)
     if lock is not None and lock.locked():
         raise ApiError(409, "SOFTWARE_BUSY", "Siril 正在维护。", message_key='siril_is_undergoing_maintenance')
@@ -422,7 +437,7 @@ async def preview_operation(settings: Settings, source: Path, directory: Path, p
     try:
         directory.mkdir(parents=True, exist_ok=False)
         plan = bundles.adapter_plan(settings.workspace, package_id, operation_id, {'image': [source]}, parameters,
-                                    directory, preview=True, prepare_sample=prepare_sample)
+                                    directory, preview=True, prepare_sample=prepare_sample and preview_max_edge == 1024)
         target = plan.outputs['image'].files[0].path if isinstance(plan, NamedProcessPlan) else plan.outputs[0]
         environment = None
         if isinstance(plan, NamedProcessPlan):
@@ -432,7 +447,7 @@ async def preview_operation(settings: Settings, source: Path, directory: Path, p
                 environment.update(OPENBLAS_NUM_THREADS=str(plan.thread_limit), OMP_NUM_THREADS=str(plan.thread_limit))
         source_stamp = source.stat()
         log = directory / "preview.log"
-        executable = bundles.contained(settings.workspace / "software" / package_id / "bundle", bundles.metadata(settings.workspace, package_id)[0].executable)
+        executable = bundles.contained(development.source_root(settings.workspace, package_id), bundles.metadata(settings.workspace, package_id)[0].executable)
         with log.open("wb") as stream:
             spawn = asyncio.create_task(asyncio.create_subprocess_exec(
                 str(executable), *plan.arguments, cwd=directory,
@@ -454,7 +469,8 @@ async def preview_operation(settings: Settings, source: Path, directory: Path, p
             after = source.stat()
             if (source_stamp.st_size, source_stamp.st_mtime_ns) != (after.st_size, after.st_mtime_ns):
                 raise ApiError(409, "SOURCE_CHANGED", "准备预览时原件发生变化。", message_key='the_original_changed_while_preparing_the_preview')
-            plan.linear_sample.replace(directory.parent / "linear.fit")
+            if preview_max_edge == 1024:
+                plan.linear_sample.replace(directory.parent / "linear.fit")
         return target
     except asyncio.CancelledError:
         if process is not None:
@@ -488,7 +504,7 @@ def _validate_invocation(settings: Settings, invocation: SoftwareInvocation):
         raise ApiError(409, "SOFTWARE_CONTENT_CONFLICT", "软件操作定义已变化，请重新提交。", message_key='the_software_operation_definition_has_changed_submit_it_again')
     package = get_package(settings, invocation.package_id)
     manifest, _, _ = bundles.metadata(settings.workspace, invocation.package_id)
-    if invocation.bundle_commit != package.bundle_commit and (manifest.host_api == 2 or invocation.bundle_commit is not None):
+    if invocation.bundle_commit != package.effective_bundle_commit and (manifest.host_api == 2 or invocation.bundle_commit is not None):
         raise ApiError(409, 'SOFTWARE_CONTENT_CONFLICT', '调用受理后 Bundle 实现已变化，请查询本次状态，不得采用新版替换在途实现。', message_key='the_bundle_implementation_changed_after_acceptance_query_this_invocation_do')
     if set(invocation.parameters) != {item.name for item in operation.parameters}:
         raise ApiError(422, "VALIDATION_ERROR", "Siril 参数与准确操作定义不匹配。", message_key='siril_parameters_do_not_match_the_exact_operation_definition')
@@ -666,7 +682,7 @@ async def invoke_operation(settings: Settings, invocation: SoftwareInvocation,
             environment = {**os.environ, **plan.environment, **{name: str(plan.temporary_directory) for name in ('TEMP', 'TMP', 'TMPDIR')}}
             if plan.thread_limit is not None:
                 environment.update(OPENBLAS_NUM_THREADS=str(plan.thread_limit), OMP_NUM_THREADS=str(plan.thread_limit))
-        executable = bundles.contained(settings.workspace / "software" / invocation.package_id / "bundle",
+        executable = bundles.contained(development.source_root(settings.workspace, invocation.package_id),
                                        bundles.metadata(settings.workspace, invocation.package_id)[0].executable)
         if call.cancelled:
             state = "cancelled"
@@ -734,6 +750,10 @@ async def invoke_operation(settings: Settings, invocation: SoftwareInvocation,
             code = await asyncio.shield(call.process.wait())
         error = exception_error(workspace_locale(settings.workspace), exc, code='SOFTWARE_EXECUTION_FAILED', message_key='software_execution_failed').model_copy(update={'code': 'SOFTWARE_EXECUTION_FAILED'})
     finally:
+        if call.process is not None and call.process.returncode is not None and call.observation.runtime_ref:
+            deadline = time.monotonic() + 5
+            while _runtime_active(call.observation.runtime_ref) is True and time.monotonic() < deadline:
+                await asyncio.sleep(0.1)
         active = _runtime_active(call.observation.runtime_ref) if call.observation.runtime_ref else call.process is not None and call.process.returncode is None
         if active is not False:
             state = 'unknown'

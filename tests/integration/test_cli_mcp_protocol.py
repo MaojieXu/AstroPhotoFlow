@@ -550,10 +550,11 @@ def test_apf_mcp_confirmed_recursive_batch_and_fixed_project_links(service, tmp_
                     result = _tool_data(await session.call_tool('data_management', {'operation': operation, 'arguments': arguments}), service)
                     record_property(operation + '_seconds', time.perf_counter() - start)
                     return result
+                baseline = await call('assets.list', {'limit': 50})
                 scan = await call('imports.inspect', {'body': {'paths': [str(root)]}})
                 assert scan['file_count'] == 2
                 before = await call('assets.list', {'limit': 50})
-                assert before['total'] == 0
+                assert before['total'] == baseline['total']
                 definitions = await call('describe', {'operations': ['imports.submit', 'import_tasks.wait']})
                 assert len(definitions['items']) == 2
                 project = await call('projects.create', {'body': {'name': 'Confirmed night'}})
@@ -569,7 +570,7 @@ def test_apf_mcp_confirmed_recursive_batch_and_fixed_project_links(service, tmp_
                 repeated = await call('imports.submit', {'body': body})
                 assert repeated['groups'][0]['task_id'] == accepted['groups'][0]['task_id']
                 assets = await call('assets.list', {'limit': 50})
-                assert assets['total'] == 2
+                assert assets['total'] == baseline['total'] + 2
                 references = await call('projects.list_datasets', {'project_id': project['id'], 'limit': 50})
                 assert references['total'] == 1
                 assert references['items'][0]['dataset_version_id'] == link['dataset_version_id']

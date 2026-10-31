@@ -5,6 +5,7 @@ from astrophotoflow.contracts.data_nodes import ScienceReference
 
 
 class DataReferenceNode:
+    APF_AUTOMATIC_RESULT = True
     CATEGORY = "Data"
     RETURN_TYPES = ("APF_SCIENCE",)
     RETURN_NAMES = ("science",)

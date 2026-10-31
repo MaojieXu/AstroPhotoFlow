@@ -14,6 +14,7 @@ const props = defineProps<{
   controls?: { button: Component; dialog: Component; select?: Component }
   packageId?: string
   operationId?: string
+  refreshKey?: number
 }>()
 
 const packages = ref<SoftwarePackage[]>([])
@@ -47,9 +48,13 @@ onBeforeUnmount(() => { disposed = true })
       <component :is="controls?.button ?? 'button'" type="button" size="sm" @click="load">{{ translate('apfSoftware.reload') }}</component>
     </div>
     <p v-else-if="!visiblePackages.length" class="p-3">{{ translate('apfSoftware.noPackages') }}</p>
-    <SoftwarePackageRow v-for="entry in visiblePackages" v-else :key="entry.package_id"
-      :client="client" :package-id="entry.package_id" :operation-id="operationId"
-      :confirm-software="confirmSoftware" :confirmation-available="confirmationAvailable"
-      :translate="translate" :controls="controls" />
+    <template v-else>
+      <SoftwarePackageRow
+        v-for="entry in visiblePackages" :key="entry.package_id"
+        :client="client" :package-id="entry.package_id" :operation-id="operationId"
+        :refresh-key="refreshKey"
+        :confirm-software="confirmSoftware" :confirmation-available="confirmationAvailable"
+        :translate="translate" :controls="controls" />
+    </template>
   </section>
 </template>

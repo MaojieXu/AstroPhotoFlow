@@ -18,6 +18,41 @@ from astrophotoflow.core.config import Settings
 from astrophotoflow.modules.software import public
 
 
+def test_real_native_category_paths_and_legacy_category():
+    python = os.environ.get('APF_NATIVE_PYTHON')
+    if not python:
+        pytest.skip('Set APF_NATIVE_PYTHON to the prepared ComfyUI interpreter.')
+    repo = Path(__file__).resolve().parents[2]
+    script = '''import sys
+sys.path.insert(0, sys.argv[1])
+from comfy.cli_args import args
+args.cpu = True
+from astrophotoflow.interfaces.bundle_nodes import BundleNode
+import math
+assert math.isnan(BundleNode.fingerprint_inputs())
+assert BundleNode.APF_AUTOMATIC_RESULT is False
+from astrophotoflow.contracts.nodes import NodeDefinition
+from astrophotoflow.contracts.software import SoftwareOperation
+from astrophotoflow.modules.software.metadata import catalog
+release = catalog()['siril']
+raw = release['nodes'][0]
+operation = SoftwareOperation.model_validate(dict(release['operations'][0]['operation'], ready=True, reason=None, content_token=''))
+legacy = type('LegacyCategoryNode', (BundleNode,), {'definition': NodeDefinition.model_validate(raw), 'operation': operation})
+assert legacy.GET_SCHEMA().category == 'siril'
+definition = NodeDefinition.model_validate(dict(raw, category=['stretch-color', 'automatic-stretch'], name='Auto Stretch (autostretch)'))
+current = type('CategorizedNode', (BundleNode,), {'definition': definition, 'operation': operation, 'search_aliases': ('Auto Stretch (autostretch)', '自动拉伸（autostretch）', 'autostretch')})
+schema = current.GET_SCHEMA()
+assert schema.category == 'siril/stretch-color/automatic-stretch'
+assert schema.node_id == legacy.GET_SCHEMA().node_id
+assert schema.display_name == 'Auto Stretch (autostretch)'
+assert '自动拉伸（autostretch）' in schema.search_aliases
+assert [port.id for port in schema.inputs] == [port.id for port in legacy.GET_SCHEMA().inputs]
+'''
+    result = subprocess.run([python, '-c', script, str(repo / 'engine/ComfyUI')],
+                            env={**os.environ, 'PYTHONPATH': str(repo / 'src')}, capture_output=True, text=True, timeout=120)
+    assert result.returncode == 0, result.stderr
+
+
 def test_real_native_v3_siril_schema():
     python = os.environ.get("APF_NATIVE_PYTHON")
     if not python:

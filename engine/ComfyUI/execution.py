@@ -1144,7 +1144,33 @@ def full_type_name(klass):
         return klass.__qualname__
     return module + '.' + klass.__qualname__
 
-async def validate_prompt(prompt_id, prompt, partial_execution_list: Union[list[str], None]):
+async def validate_prompt(prompt_id, prompt, partial_execution_list: Union[list[str], None], automatic_result=None):
+    if automatic_result is not None:
+        try:
+            targets = automatic_result['targets']
+            signatures = automatic_result['signatures']
+            if not isinstance(targets, list) or not targets or set(targets) != set(partial_execution_list or []):
+                raise ValueError('Automatic result targets must match the explicit execution targets.')
+            visited = set()
+
+            def check_automatic(node_id):
+                if node_id in visited:
+                    return
+                visited.add(node_id)
+                node = prompt[node_id]
+                cls = nodes.NODE_CLASS_MAPPINGS[node['class_type']]
+                if not getattr(cls, 'APF_AUTOMATIC_RESULT', False):
+                    raise ValueError(f'Node {node_id} requires manual execution.')
+                if node_id not in signatures:
+                    raise ValueError(f'Node {node_id} has no calculation signature.')
+                for value in node.get('inputs', {}).values():
+                    if isinstance(value, list) and len(value) == 2 and isinstance(value[0], str) and value[0] in prompt:
+                        check_automatic(value[0])
+
+            for target in targets:
+                check_automatic(target)
+        except (KeyError, TypeError, ValueError) as exc:
+            return (False, {'type': 'automatic_result_invalid', 'message': str(exc), 'details': '', 'extra_info': {}}, [], {})
     outputs = set()
     for x in prompt:
         if 'class_type' not in prompt[x]:
@@ -1179,7 +1205,7 @@ async def validate_prompt(prompt_id, prompt, partial_execution_list: Union[list[
             }
             return (False, error, [], {})
 
-        if hasattr(class_, 'OUTPUT_NODE') and class_.OUTPUT_NODE is True:
+        if (automatic_result is not None and x in automatic_result['targets']) or (hasattr(class_, 'OUTPUT_NODE') and class_.OUTPUT_NODE is True):
             if partial_execution_list is None or x in partial_execution_list:
                 outputs.add(x)
 

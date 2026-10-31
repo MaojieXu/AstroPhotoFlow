@@ -14,6 +14,7 @@ import DialogTitle from '@/components/ui/dialog/DialogTitle.vue'
 import Input from '@/components/ui/input/Input.vue'
 
 import { createImageViewport } from './mediaViewport'
+import PreviewControls from './PreviewControls.vue'
 import type { ImageScreenBounds, ImageViewportSnapshot } from './mediaViewport'
 
 const { request } = defineProps<{ request: MediaViewerRequest }>()
@@ -285,6 +286,7 @@ onBeforeUnmount(() => {
         </template>
         <Button v-if="state?.arrays.length || (state?.hdus.length ?? 0) > 1" variant="textonly" @click="chooseArray = !chooseArray">{{ t('astrophotoflow.media.arraySelection') }}</Button>
         <Button v-if="state?.kind === 'image' && !state.needs_selection" variant="textonly" :disabled="loading" @click="showDisplayRange = !showDisplayRange">{{ t('astrophotoflow.media.displayThresholds') }}</Button>
+        <PreviewControls v-if="state?.kind === 'image' && !state.needs_selection" v-model:max-edge="form.preview_max_edge" v-model:balance="form.display_balance" :disabled="loading" @change="load(index, { ...form, display_range: null })" />
         <Button v-if="state?.kind === 'video'" variant="textonly" :disabled="presentedTime === undefined" @click="inspectFrame">{{ t('astrophotoflow.media.inspectFrame') }}</Button>
         <Button v-if="pausedFrame" variant="textonly" @click="resumeVideo">{{ t('astrophotoflow.media.backToVideo') }}</Button>
         <span class="ml-auto text-muted-foreground">{{ state?.width && state.height ? `${state.width} × ${state.height}` : '' }}</span>

@@ -8,6 +8,8 @@ import ImagePreview from '@/renderer/extensions/vueNodes/components/ImagePreview
 import { api } from '@/scripts/api'
 import type { ComponentWidget } from '@/scripts/domWidget'
 import { bundleCapabilities } from './bundleCatalog'
+import PreviewControls from './PreviewControls.vue'
+import type { MediaSelection } from '@astrophotoflow/ui'
 import { useSidebarTabStore } from '@/stores/workspace/sidebarTabStore'
 
 const { widget } = defineProps<{ widget: ComponentWidget<string | object> }>()
@@ -16,6 +18,9 @@ const tabs = useSidebarTabStore()
 const revision = ref(0)
 const index = ref(0)
 const image = ref('')
+const expanded = ref(false)
+const maxEdge = ref<MediaSelection['preview_max_edge']>(1024)
+const balance = ref<MediaSelection['display_balance']>(null)
 const failure = ref('')
 const phase = ref<'idle' | 'waiting' | 'updating' | 'ready' | 'failed'>('idle')
 const notInstalled = ref(false)
@@ -56,7 +61,8 @@ const parameters = computed(() => {
   return Object.fromEntries(capability.value.node.definition.parameters.map(parameter => [parameter.name,
     controls.find(control => control.name === parameter.name)?.value ?? parameter.default]))
 })
-const signature = computed(() => JSON.stringify([sourceText.value, parameters.value, index.value, capability.value?.available, capability.value?.node.content_token]))
+const signature = computed(() => JSON.stringify([sourceText.value, parameters.value, index.value, capability.value?.available,
+  capability.value?.node.content_token, capability.value?.development_source?.fingerprint, maxEdge.value, balance.value]))
 
 function clearImage() {
   if (image.value) URL.revokeObjectURL(image.value)
@@ -69,6 +75,7 @@ function schedule() {
   clearTimeout(timer)
   failure.value = ''
   notInstalled.value = false
+  if (!expanded.value) { phase.value = 'idle'; clearImage(); return }
   if (capability.value && !capability.value.available) {
     failure.value = capability.value.reason ?? t('apfSoftware.unavailable')
     notInstalled.value = true
@@ -97,7 +104,8 @@ async function render() {
   failure.value = ''
   try {
     const blob = await client.render({ reference: fixed, member_index: index.value,
-      consumer_id: consumer, generation: current, parameters: values, package_id: capability.value.operation.package_id, operation_id: capability.value.operation.operation_id }, signal)
+      consumer_id: consumer, generation: current, parameters: values, package_id: capability.value.operation.package_id, operation_id: capability.value.operation.operation_id,
+      preview_max_edge: maxEdge.value, display_balance: balance.value }, signal)
     if (current !== generation || signal.aborted) return
     clearImage()
     image.value = URL.createObjectURL(blob)
@@ -116,6 +124,7 @@ function imageFailed() { failure.value = t('astrophotoflow.previewUnavailable');
 watch(sourceText, () => { index.value = 0; clearImage() })
 watch(index, clearImage)
 watch(signature, schedule, { immediate: true })
+watch(expanded, schedule)
 onMounted(() => api.addEventListener('graphChanged', changed))
 onBeforeUnmount(() => {
   generation++
@@ -129,7 +138,9 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="flex h-full min-w-0 flex-col gap-1 px-2 py-1" @pointerdown.stop @pointermove.stop @pointerup.stop @keydown.stop @wheel.stop>
-    <span class="text-xs text-muted-foreground">{{ t('astrophotoflow.siril.quickPreview') }}</span>
+    <Button size="sm" variant="textonly" :aria-expanded="expanded" @click="expanded = !expanded">{{ t('astrophotoflow.siril.quickPreview') }}</Button>
+    <template v-if="expanded">
+    <PreviewControls v-model:max-edge="maxEdge" v-model:balance="balance" />
     <div class="relative h-48 min-h-48 w-full overflow-hidden rounded-sm bg-component-node-widget-background">
       <ImagePreview v-if="image" :image-urls="[image]" display-only :class="phase !== 'ready' ? 'opacity-40' : ''" @load-error="imageFailed" />
       <div v-if="phase !== 'ready'" class="absolute inset-0 flex flex-col items-center justify-center gap-2 overflow-auto p-2 text-center text-xs text-muted-foreground" :role="failure ? 'alert' : 'status'">
@@ -144,5 +155,6 @@ onBeforeUnmount(() => {
       <span>{{ index + 1 }} / {{ total }}</span>
       <Button size="icon" variant="textonly" :disabled="index + 1 >= total" :aria-label="t('g.next')" @click="index++"><i class="icon-[lucide--chevron-right] size-4" /></Button>
     </div>
+    </template>
   </div>
 </template>

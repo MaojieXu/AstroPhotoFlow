@@ -3,7 +3,7 @@ import { cloneDeep, uniq } from 'es-toolkit/compat'
 import { defineStore } from 'pinia'
 import { computed, ref, watchEffect } from 'vue'
 
-import { resolveNodeDefText, t } from '@/i18n'
+import { resolveNodeCategoryLabel, resolveNodeDefText, t } from '@/i18n'
 import { promotedInputSource } from '@/core/graph/subgraph/promotedInputWidget'
 import { resolveConcretePromotedWidget } from '@/core/graph/subgraph/resolveConcretePromotedWidget'
 import { resolveDynamicInputSpec } from '@/core/graph/widgets/dynamicInputSpec'
@@ -318,7 +318,13 @@ export function buildNodeDefTree(
   const { pathExtractor } = options
   const defaultPathExtractor = (nodeDef: ComfyNodeDefImpl) =>
     nodeDef.nodePath.split('/')
-  return buildTree(nodeDefs, pathExtractor || defaultPathExtractor)
+  const tree = buildTree(nodeDefs, pathExtractor || defaultPathExtractor)
+  function translateFolders(node: TreeNode<ComfyNodeDefImpl>) {
+    if (!node.leaf) node.label = resolveNodeCategoryLabel(node.key, node.label)
+    node.children?.forEach(translateFolders)
+  }
+  translateFolders(tree)
+  return tree
 }
 
 export function createDummyFolderNodeDef(folderPath: string): ComfyNodeDefImpl {

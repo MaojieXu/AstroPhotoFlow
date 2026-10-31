@@ -22,6 +22,7 @@ from astrophotoflow.contracts.software import SoftwareOperation
 from astrophotoflow.core.errors import ApiError
 from astrophotoflow.modules.software.metadata import catalog, contained, read_bundle, read_bundle_locales
 from astrophotoflow.modules.software.environment import bundle_environment
+from astrophotoflow.modules.software import development
 
 
 def release(package_id):
@@ -48,7 +49,7 @@ def remove_checkout(path: Path, parent: Path):
 
 
 def metadata(workspace: Path, package_id: str):
-    root = workspace / 'software' / package_id / 'bundle'
+    root = development.source_root(workspace, package_id)
     if root.is_dir():
         return read_bundle(root)
     item = release(package_id)
@@ -184,11 +185,11 @@ def _adapter(path: str, commit: str, source: bytes):
 
 
 def adapter_plan(workspace: Path, package_id: str, operation_id: str, sources, parameters, directory, **options):
-    root = workspace / 'software' / package_id / 'bundle'
+    root = development.source_root(workspace, package_id)
     manifest, _, _ = metadata(workspace, package_id)
-    lock = json.loads((root.parent / 'bundle-lock.json').read_text(encoding='utf-8'))
+    lock = development.identity(workspace, package_id)
     adapter_path = contained(root, manifest.adapter)
-    adapter = _adapter(str(adapter_path), lock['commit'], adapter_path.read_bytes())
+    adapter = _adapter(str(adapter_path), lock.get('fingerprint', lock['commit']), adapter_path.read_bytes())
     if manifest.host_api == 2:
         plan = NamedProcessPlan.model_validate(adapter.build_plan(operation_id, sources, parameters, directory, **options))
         paths = [plan.temporary_directory]
@@ -218,11 +219,11 @@ def collect_result(workspace: Path, package_id: str, operation_id: str, plan, di
             BundleFile(path=path, format=plan.output_format) for path in plan.outputs
             if path.is_file() and path.stat().st_size > 0
         ]})
-    root = workspace / 'software' / package_id / 'bundle'
+    root = development.source_root(workspace, package_id)
     manifest, _, _ = metadata(workspace, package_id)
-    lock = json.loads((root.parent / 'bundle-lock.json').read_text(encoding='utf-8'))
+    lock = development.identity(workspace, package_id)
     adapter_path = contained(root, manifest.adapter)
-    adapter = _adapter(str(adapter_path), lock['commit'], adapter_path.read_bytes())
+    adapter = _adapter(str(adapter_path), lock.get('fingerprint', lock['commit']), adapter_path.read_bytes())
     adapter.parse_result(operation_id, directory, plan, log_path)
     outputs, supporting = {}, {}
 

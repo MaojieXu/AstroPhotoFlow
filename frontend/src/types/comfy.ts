@@ -71,6 +71,12 @@ type Widgets = Record<string, CustomComfyWidgetConstructor>
  */
 export interface QueuePromptOptions {
   queueNodeIds?: NodeExecutionId[]
+  automaticResult?: {
+    targets: string[]
+    signatures: Record<string, string>
+    isCurrent: (prompt: ComfyApiWorkflow) => Promise<boolean>
+    queued: (promptId: string) => void
+  }
   intent?: WorkflowQueueIntent
 }
 

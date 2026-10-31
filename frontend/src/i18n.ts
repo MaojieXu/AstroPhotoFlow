@@ -42,6 +42,8 @@ const loadingLocales = new Map<string, Promise<void>>()
 const customNodesI18nData: Record<string, unknown> = {}
 let bundleNodeDefinitions: Partial<Record<SupportedLocale, Record<string, unknown>>> = {}
 const replacedBundleNodeDefinitions: Record<string, Record<string, unknown>> = {}
+let bundleNodeCategories: Partial<Record<SupportedLocale, Record<string, string>>> = {}
+const replacedBundleNodeCategories: Record<string, Record<string, unknown>> = {}
 
 /**
  * Dynamically load a shipped locale's bundles (nodeDefs, commands, settings).
@@ -154,14 +156,33 @@ function applyBundleNodeI18n(locale: SupportedLocale) {
     nodeDefs[name] = definition
   }
   replacedBundleNodeDefinitions[locale] = originals
-  i18n.global.setLocaleMessage(locale, { ...messages, nodeDefs } as LocaleMessages)
+  const nodeCategories = { ...(messages.nodeCategories as Record<string, unknown>) }
+  for (const [name, original] of Object.entries(replacedBundleNodeCategories[locale] ?? {})) {
+    if (original === undefined) delete nodeCategories[name]
+    else nodeCategories[name] = original
+  }
+  const categoryOriginals: Record<string, unknown> = {}
+  for (const [name, label] of Object.entries(bundleNodeCategories[locale] ?? {})) {
+    categoryOriginals[name] = nodeCategories[name]
+    nodeCategories[name] = label
+  }
+  replacedBundleNodeCategories[locale] = categoryOriginals
+  i18n.global.setLocaleMessage(locale, { ...messages, nodeDefs, nodeCategories } as LocaleMessages)
 }
 
-export function mergeBundleNodeI18n(nodeDefinitions: Partial<Record<SupportedLocale, Record<string, unknown>>>) {
+export function mergeBundleNodeI18n(
+  nodeDefinitions: Partial<Record<SupportedLocale, Record<string, unknown>>>,
+  nodeCategories: Partial<Record<SupportedLocale, Record<string, string>>> = {}
+) {
   bundleNodeDefinitions = nodeDefinitions
+  bundleNodeCategories = nodeCategories
   for (const locale of Object.keys(localeDefinitions) as SupportedLocale[]) {
     if (loadedLocales.has(locale)) applyBundleNodeI18n(locale)
   }
+}
+
+export function resolveNodeCategoryLabel(path: string, fallback: string): string {
+  return st(`nodeCategories.${normalizeI18nKey(path.replace(/^root\//, '').replace(/\/$/, ''))}`, fallback)
 }
 
 export type NodeDefTextField = 'display_name' | 'description'

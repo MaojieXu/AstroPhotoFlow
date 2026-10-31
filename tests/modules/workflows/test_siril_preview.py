@@ -31,10 +31,10 @@ def test_live_preview_cancels_old_generation_and_releases_samples(tmp_path, monk
         return directory / "result.fit"
 
     monkeypatch.setattr(siril_preview, "prepare_siril_sample", sample)
-    monkeypatch.setattr(siril_preview, 'get_package', lambda *_args: SimpleNamespace(installed_version='1.4.4', bundle_commit='fixture'))
+    monkeypatch.setattr(siril_preview, 'get_package', lambda *_args: SimpleNamespace(effective_version='1.4.4', effective_bundle_commit='fixture', development_source=None))
     monkeypatch.setattr(siril_preview, 'get_operation', lambda *_args: SimpleNamespace(inputs=[SimpleNamespace(name='image', colour_layout='planar')]))
     monkeypatch.setattr(siril_preview, "preview_operation", run)
-    monkeypatch.setattr(siril_preview, "direct_fits_image", lambda *_args: Image.new("RGB", (12, 9), "blue"))
+    monkeypatch.setattr(siril_preview, "direct_fits_image", lambda *_args, **_kwargs: Image.new("RGB", (12, 9), "blue"))
 
     class Cache:
         def write(self, path, content):
@@ -67,7 +67,7 @@ def test_preview_http_is_authenticated_and_does_not_accept_source_paths(tmp_path
 
     settings = Settings("127.0.0.1", 8190, tmp_path, (), workspace=tmp_path)
     app = create_app(settings, "token")
-    monkeypatch.setattr(siril_preview, "get_package", lambda *_args: SimpleNamespace(availability="ready"))
+    monkeypatch.setattr(siril_preview, "get_package", lambda *_args: SimpleNamespace(effective_availability="ready"))
 
     async def render(_body):
         return b"\x89PNGpreview"

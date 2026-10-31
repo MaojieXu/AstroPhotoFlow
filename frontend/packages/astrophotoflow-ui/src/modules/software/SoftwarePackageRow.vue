@@ -14,6 +14,7 @@ const props = defineProps<{
   controls?: { button: Component; dialog: Component; select?: Component }
   packageId: string
   operationId?: string
+  refreshKey?: number
 }>()
 
 type PanelState =
@@ -30,7 +31,7 @@ const busy = computed(() => state.value.phase === 'requesting' || state.value.ph
 const installed = computed(() => !software.value?.migration_required && (software.value?.installed_version != null || software.value?.install_path != null))
 const uninstallAction = computed(() => action.value?.state === 'running' ? action.value.plan.action === 'uninstall' : installed.value)
 const stateSaveFailed = computed(() => action.value?.error?.code === 'SOFTWARE_STATE_SAVE_FAILED' || software.value?.last_error?.code === 'SOFTWARE_STATE_SAVE_FAILED')
-const ready = computed(() => software.value?.availability === 'ready' && !busy.value && !stateSaveFailed.value)
+const ready = computed(() => (software.value?.development_source ? software.value.development_source.state === 'ready' : software.value?.availability === 'ready') && !busy.value && !stateSaveFailed.value)
 const releases = shallowRef<SoftwareReleaseListing>()
 const releasesLoading = ref(false)
 const releasesFailure = ref(false)
@@ -101,6 +102,7 @@ function changeSelection(value: string | number | undefined) { selectedValue.val
 function selectNative(event: Event) { if (event.target instanceof HTMLSelectElement) changeSelection(event.target.value) }
 const progressLabel = computed(() => props.translate(software.value?.phase ? 'apfSoftware.installPhase.' + software.value.phase : 'apfSoftware.installing'))
 const statusText = computed(() => {
+  if (software.value?.development_source) return software.value.development_source.error ?? props.translate('apfSoftware.developmentReady')
   if (busy.value) return props.translate(action.value?.plan.action === 'uninstall' ? 'apfSoftware.uninstalling' : 'apfSoftware.installing')
   const actionError = action.value?.error
   if (actionError?.code === 'SOFTWARE_STATE_SAVE_FAILED') return actionError.message
@@ -203,6 +205,7 @@ async function confirmAction() {
 }
 
 onMounted(() => { void load(); void refreshReleases() })
+watch(() => props.refreshKey, () => void load())
 watch(() => [props.packageId, props.operationId], () => void load())
 onBeforeUnmount(() => {
   disposed = true
@@ -226,11 +229,21 @@ onBeforeUnmount(() => {
           tabindex="0"
         />
         <span class="min-w-0 flex-1 truncate font-medium">{{ software.name }}</span>
-        <span class="text-xs text-muted-foreground">Bundle {{ software.bundle_version ?? translate(installed ? 'apfSoftware.versionUnknown' : 'apfSoftware.notInstalled') }} · {{ translate('apfSoftware.programVersion') }} {{ software.installed_version ?? translate(installed ? 'apfSoftware.versionUnknown' : 'apfSoftware.notInstalled') }}</span>
+        <span class="text-xs text-muted-foreground">{{ translate('apfSoftware.bundleLabel') }} {{ software.bundle_version ?? translate(installed ? 'apfSoftware.versionUnknown' : 'apfSoftware.notInstalled') }} · {{ translate('apfSoftware.programVersion') }} {{ software.installed_version ?? translate(installed ? 'apfSoftware.versionUnknown' : 'apfSoftware.notInstalled') }}</span>
+        <div v-if="software.development_source" data-testid="development-source" class="basis-full text-xs break-all text-muted-foreground">
+          <strong>{{ translate('apfSoftware.developmentSource') }}</strong>
+          · {{ translate('apfSoftware.developmentState.' + software.development_source.state) }}
+          · {{ software.development_source.bundle_version }} / {{ software.development_source.software_version }}
+          <div>{{ software.development_source.root }}</div>
+          <div>{{ translate('apfSoftware.developmentHead') }} {{ software.development_source.head }} · {{ translate(software.development_source.dirty ? 'apfSoftware.developmentDirty' : 'apfSoftware.developmentClean') }}</div>
+          <div>{{ translate('apfSoftware.developmentFingerprint') }} {{ software.development_source.fingerprint }}</div>
+          <div v-if="software.development_source.error" role="alert">{{ software.development_source.error }}</div>
+        </div>
         <div class="flex min-w-0 basis-full items-center gap-2">
-          <component v-if="controls?.select" :is="controls.select" :model-value="selectedValue" :options="versionOptions"
+          <component
+            :is="controls.select" v-if="controls?.select" :model-value="selectedValue" :options="versionOptions"
             :label="translate('apfSoftware.bundleVersion')" :disabled="busy" size="md" class="min-w-0 flex-1"
-            :popover-max-width="'min(560px, calc(100vw - 32px))'" @update:model-value="changeSelection" />
+            popover-max-width="min(560px, calc(100vw - 32px))" @update:model-value="changeSelection" />
           <select v-else :value="selectedValue" :aria-label="translate('apfSoftware.bundleVersion')" :disabled="busy" class="min-w-0 flex-1" @change="selectNative">
             <option v-if="!selectedValue" value="" disabled>{{ translate('apfSoftware.selectVersion') }}</option>
             <option v-for="version in versionOptions" :key="version.value" :value="version.value" :disabled="version.disabled">{{ version.name }}</option>
@@ -279,7 +292,7 @@ onBeforeUnmount(() => {
     >
       <div class="flex min-h-0 flex-col gap-3 overflow-y-auto p-4 text-sm">
         <div class="font-medium">{{ software?.name }} {{ action.plan.target_version ?? action.plan.current_version }}</div>
-        <p>Bundle {{ action.plan.current_bundle_version ?? translate('apfSoftware.notInstalled') }} → {{ action.plan.target_bundle_version ?? translate('apfSoftware.notInstalled') }}</p>
+        <p>{{ translate('apfSoftware.bundleLabel') }} {{ action.plan.current_bundle_version ?? translate('apfSoftware.notInstalled') }} → {{ action.plan.target_bundle_version ?? translate('apfSoftware.notInstalled') }}</p>
         <p v-if="action.plan.target_tag" class="break-all">{{ action.plan.target_tag }} · {{ action.plan.target_commit }}</p>
         <p v-if="action.plan.restart_required">{{ action.plan.restart_reason }}</p>
           <p v-if="action.plan.action === 'uninstall'">{{ translate('apfSoftware.uninstallNotice') }}</p>

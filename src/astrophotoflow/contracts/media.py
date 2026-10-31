@@ -20,6 +20,8 @@ class MediaSelection(StrictModel):
     playback_key: str | None = None
     proxy: bool = False
     display_range: tuple[FiniteFloat, FiniteFloat] | None = None
+    display_balance: Literal['auto', 'preserve'] | None = None
+    preview_max_edge: Literal[512, 1024, 2048] | None = 1024
 
     @field_validator("display_range", mode="before")
     @classmethod

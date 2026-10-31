@@ -1,9 +1,9 @@
 import { bundleCapabilities } from './bundleCatalog'
 import type { NodeCapability } from '@astrophotoflow/ui'
 import { fromPartial } from '@total-typescript/shoehorn'
-import { render, screen } from '@testing-library/vue'
+import { fireEvent, render, screen } from '@testing-library/vue'
 import { nextTick } from 'vue'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 
 import type { ComponentWidget } from '@/scripts/domWidget'
 import { LGraph, LGraphNode } from '@/lib/litegraph/src/litegraph'
@@ -21,7 +21,7 @@ vi.mock('@/renderer/extensions/vueNodes/components/ImagePreview.vue', () => ({
   default: { props: ['imageUrls'], template: '<div data-testid="preview">{{ imageUrls[0] }}</div>' }
 }))
 
-function setup() {
+function setup(expand = true) {
   const graph = new LGraph()
   const source = new LGraphNode('Data')
   source.comfyClass = 'APF_DATA_REFERENCE'
@@ -42,11 +42,55 @@ function setup() {
   source.connect(0, node, 0)
   const widget = fromPartial<ComponentWidget<string | object>>({ node })
   const wrapper = render(SirilPreviewWidget, { props: { widget }, global: { mocks: { $t: (key: string) => key } } })
+  if (expand) wrapper.container.querySelector('button')?.click()
   return { wrapper, values }
 }
 
 describe('Siril live preview', () => {
+  it('does not calculate the optional sample preview until expanded', async () => {
+    vi.useFakeTimers()
+    const { wrapper } = setup(false)
+    onTestFinished(() => { wrapper.unmount(); vi.useRealTimers() })
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(service.render).not.toHaveBeenCalled()
+  })
+  it('regenerates the preview when resolution or RGB display changes', async () => {
+    vi.useFakeTimers()
+    service.render.mockResolvedValue(new Blob(['png'], { type: 'image/png' }))
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:current')
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})
+    const { wrapper } = setup()
+    onTestFinished(() => { wrapper.unmount(); vi.useRealTimers() })
+    await vi.advanceTimersByTimeAsync(350)
+    await fireEvent.update(screen.getByRole('combobox', { name: 'astrophotoflow.media.previewResolution' }), '2048')
+    await vi.advanceTimersByTimeAsync(350)
+    expect(service.render).toHaveBeenLastCalledWith(expect.objectContaining({ preview_max_edge: 2048 }), expect.any(AbortSignal))
+    await fireEvent.update(screen.getByRole('combobox', { name: 'astrophotoflow.media.rgbDisplay' }), 'preserve')
+    await vi.advanceTimersByTimeAsync(350)
+    expect(service.render).toHaveBeenLastCalledWith(expect.objectContaining({ display_balance: 'preserve' }), expect.any(AbortSignal))
+  })
   beforeEach(() => { service.release.mockResolvedValue(undefined) })
+  it('refreshes a preview when only the development source fingerprint changes', async () => {
+    vi.useFakeTimers()
+    service.render.mockResolvedValue(new Blob(['png']))
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:development')
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})
+    const { wrapper } = setup()
+    onTestFinished(() => { wrapper.unmount(); vi.useRealTimers() })
+    const type = 'APF_169de0837f814cdea3295541ecacf463'
+    const capability = bundleCapabilities.get(type)!
+    const development = { root: 'C:/feature/Siril', head: 'a'.repeat(40), dirty: true, fingerprint: 'before',
+      state: 'ready' as const, error: null, software_version: '1.4.4', bundle_version: '0.2.0-dev.2' }
+    bundleCapabilities.set(type, { ...capability, development_source: development })
+    await nextTick()
+    await vi.advanceTimersByTimeAsync(350)
+    expect(service.render).toHaveBeenCalledTimes(1)
+    bundleCapabilities.set(type, { ...capability, development_source: { ...development, fingerprint: 'after' } })
+    await nextTick()
+    await vi.advanceTimersByTimeAsync(350)
+    expect(service.render).toHaveBeenCalledTimes(2)
+    expect(service.render.mock.calls[1][0].parameters).toEqual(service.render.mock.calls[0][0].parameters)
+  })
   it('debounces parameter edits, preserves zero, and releases requests on unmount', async () => {
     vi.useFakeTimers()
     service.render.mockResolvedValue(new Blob(['png'], { type: 'image/png' }))

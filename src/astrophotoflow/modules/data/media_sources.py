@@ -258,21 +258,23 @@ class PixelSource:
                 array = _bayer_demosaic(array, pattern, x0 + ox, y0 + oy, step)
             return array
 
-    def stretch(self):
+    def stretch(self, *, balance_rgb=True):
         if self.category == "fits":
             with fits.open(self.path, memmap=False, lazy_load_hdus=True) as file:
                 hdu = file[self.selection.hdu_index or 0]
                 from astrophotoflow.modules.data.fits_preview import apply_colour_layout
                 apply_colour_layout(hdu, self.parameters.get('colour_layout'))
                 kind = "rgb" if len(hdu.shape) == 3 else "bayer" if str(self.parameters.get("cfa_pattern") or hdu.header.get("BAYERPAT", "")).upper() in {"RGGB", "BGGR", "GRBG", "GBRG"} else "mono"
-            return calculate_stretch(read_stretch_pixels(self.path, self.selection.hdu_index or 0, kind, self.parameters, self.check_cancel))
+            return calculate_stretch(read_stretch_pixels(self.path, self.selection.hdu_index or 0, kind, self.parameters, self.check_cancel), balance_rgb=balance_rgb)
         with self.pixels() as data:
             if self.cfa:
                 from astrophotoflow.modules.data.auto_stretch import sample_statistics
-                return calculate_stretch(sample_statistics(data))
-            return calculate_stretch(data)
+                return calculate_stretch(sample_statistics(data), balance_rgb=balance_rgb)
+            return calculate_stretch(data, balance_rgb=balance_rgb)
 
     def render(self, pixels, recipe):
+        if 'display_white_balance' in recipe:
+            pixels = np.asarray(pixels, dtype=np.float32) * np.asarray(recipe['display_white_balance'], dtype=np.float32)
         if recipe.get('direct'):
             from astrophotoflow.modules.data.fits_preview import _display
             return _display(pixels, (0, self.direct_max))

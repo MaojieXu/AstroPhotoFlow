@@ -15,7 +15,9 @@ export const mediaSelectionSchema = z.object({
   media_time: z.number().nonnegative().nullable().optional(),
   playback_key: z.string().nullable().optional(),
   proxy: z.boolean().default(false),
-  display_range: z.tuple([z.number().finite(), z.number().finite()]).nullable().optional()
+  display_range: z.tuple([z.number().finite(), z.number().finite()]).nullable().optional(),
+  display_balance: z.enum(['auto', 'preserve']).nullable().optional(),
+  preview_max_edge: z.union([z.literal(512), z.literal(1024), z.literal(2048)]).nullable().optional()
 }).strict()
 
 export const mediaStateSchema = z.object({

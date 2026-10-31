@@ -42,7 +42,7 @@ def sample_pixels(pixels: np.ndarray, max_edge: int) -> np.ndarray:
     return np.asarray(pixels[::stride, ::stride], dtype=np.float32)
 
 
-def calculate_stretch(pixels: np.ndarray) -> dict:
+def calculate_stretch(pixels: np.ndarray, *, balance_rgb: bool = True) -> dict:
     values = sample_statistics(pixels)
     color = values.ndim == 3
     valid = values[np.isfinite(values).all(axis=-1)] if color else values[np.isfinite(values)]
@@ -50,13 +50,13 @@ def calculate_stretch(pixels: np.ndarray) -> dict:
         raise ValueError("此照片没有可用于自动拉伸的有效像素。")
     offset = min(0.0, float(valid.min()))
     positive = valid - offset
-    if color:
+    if color and balance_rgb:
         # Median background is robust to sparse stars. Balance all channels
         # before applying a single linked tone curve, keeping background neutral.
         background = np.median(positive, axis=0)
         gains = np.divide(float(background.mean()), background, out=np.ones(3, dtype=np.float32), where=background > 0)
     else:
-        gains = np.ones(1, dtype=np.float32)
+        gains = np.ones(3 if color else 1, dtype=np.float32)
     balanced = positive * gains
     luminance = balanced.mean(axis=-1) if color else balanced
     median = float(np.median(luminance))

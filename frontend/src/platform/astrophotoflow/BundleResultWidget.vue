@@ -8,18 +8,21 @@ import {
 } from '@astrophotoflow/ui'
 import type {
   AnalysisResult,
+  MediaSelection,
   MediaViewerRequest,
   RunCallResult
 } from '@astrophotoflow/ui'
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import Button from '@/components/ui/button/Button.vue'
 import type { ComponentWidget } from '@/scripts/domWidget'
-import { useApp } from '@/scripts/appInstance'
 import { useNodeOutputStore } from '@/stores/nodeOutputStore'
 
 import MediaViewer from './MediaViewer.vue'
+import MediaImagePreview from './MediaImagePreview.vue'
+import { bundleCapabilities } from './bundleCatalog'
+import { automaticResultState, retryAutomaticResult, setAutomaticResult } from './useAutomaticResults'
 
 const { widget } = defineProps<{ widget: ComponentWidget<string | object> }>()
 const { t } = useI18n()
@@ -33,14 +36,19 @@ const viewer = ref<MediaViewerRequest>()
 let controller: AbortController | undefined
 let generation = 0
 
-const result = computed(() => {
-  const values = outputs.getNodeOutputs(widget.node)?.apf_result
-  if (!Array.isArray(values)) return undefined
+const automatic = computed(() => automaticResultState(widget.node))
+const supportsAutomatic = computed(() => !!bundleCapabilities.get(widget.node.comfyClass ?? '')?.automatic_result_preview)
+const automaticEnabled = computed(() => { void automatic.value; return widget.node.properties.apfAutomaticResult !== false })
+const lastResult = shallowRef<RunCallResult>()
+watch(() => outputs.getNodeOutputs(widget.node)?.apf_result, values => {
+  if (!Array.isArray(values)) return
   const parsed = runCallResultSchema.safeParse(values.at(-1))
-  return parsed.success && parsed.data.workflow_id === useApp().rootGraph.id
-    ? parsed.data
-    : undefined
-})
+  if (!parsed.success || parsed.data.workflow_id !== widget.node.graph?.rootGraph.id) return
+  if (parsed.data.calculation_signature && parsed.data.calculation_signature !== automatic.value?.submitted) return
+  lastResult.value = parsed.data
+}, { immediate: true })
+const result = computed(() => lastResult.value?.workflow_id === widget.node.graph?.rootGraph.id ? lastResult.value : undefined)
+const stale = computed(() => result.value?.calculation_signature && result.value.calculation_signature !== automatic.value?.signature)
 const port = computed(() => result.value?.ports[outputIndex.value])
 const hasFile = computed(() => !!port.value && port.value.members > 0)
 const canView = computed(
@@ -98,7 +106,7 @@ async function loadAnalysis() {
   }
 }
 
-function openViewer() {
+function openViewer(selection: Partial<MediaSelection> = {}) {
   const snapshot: RunCallResult | undefined = result.value
   const selected = port.value
   const selectedOutput = outputIndex.value
@@ -108,7 +116,7 @@ function openViewer() {
     total: selected.members,
     member: async (index) => ({
       title: `${widget.node.title} · ${selected.name} · ${index + 1} · ${snapshot.prompt_id.slice(0, 8)}`,
-      basePath: runOutputBase(snapshot, selectedOutput, index)
+      basePath: runOutputBase(snapshot, selectedOutput, index), selection
     })
   }
 }
@@ -144,10 +152,13 @@ onBeforeUnmount(() => {
     @wheel.stop
   >
     <p class="m-0 font-medium">{{ t('astrophotoflow.results.title') }}</p>
-    <p v-if="!result" class="m-0 text-muted-foreground">
+    <label v-if="supportsAutomatic" class="flex items-center gap-2"><input type="checkbox" :checked="automaticEnabled" @change="setAutomaticResult(widget.node, !automaticEnabled)" />{{ t('astrophotoflow.results.automatic') }}</label>
+    <p v-if="automatic" :role="automatic.phase === 'failed' ? 'alert' : 'status'" class="m-0 wrap-break-word text-muted-foreground">{{ t(`astrophotoflow.results.auto_${stale && automatic.phase === 'completed' ? 'waiting' : automatic.phase}`) }}<span v-if="automatic.error"> · {{ automatic.error }}</span><Button v-if="automatic.phase === 'failed'" size="sm" variant="textonly" @click="retryAutomaticResult(widget.node)">{{ t('g.retry') }}</Button></p>
+    <p v-if="!result && !automatic" class="m-0 text-muted-foreground">
       {{ t('astrophotoflow.results.runFirst') }}
     </p>
-    <template v-else>
+    <template v-if="result">
+      <p v-if="stale" class="m-0 text-muted-foreground">{{ t('astrophotoflow.results.previousResult') }}</p>
       <div class="flex flex-wrap items-center gap-1">
         <label class="flex min-h-8 min-w-0 flex-1 items-center gap-1"
           >{{ t('astrophotoflow.results.output')
@@ -200,7 +211,7 @@ onBeforeUnmount(() => {
           v-if="canView"
           size="sm"
           variant="secondary"
-          @click="openViewer"
+          @click="openViewer()"
           >{{ t('astrophotoflow.media.open') }}</Button
         >
         <a
@@ -213,6 +224,7 @@ onBeforeUnmount(() => {
       <p v-else class="m-0 text-muted-foreground">
         {{ t('astrophotoflow.results.noOutput') }}
       </p>
+      <MediaImagePreview v-if="canView && result" :key="`${result.call_id}:${outputIndex}:${memberIndex}`" :base="runOutputBase(result, outputIndex, memberIndex)" :title="port?.names[memberIndex] ?? ''" @open="openViewer" />
       <p v-if="loading" role="status" class="m-0 text-muted-foreground">
         {{ t('astrophotoflow.results.loading') }}
       </p>

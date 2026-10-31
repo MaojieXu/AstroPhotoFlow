@@ -6,7 +6,7 @@ from uuid import UUID
 from pydantic import Field, JsonValue, field_validator, model_validator
 
 from astrophotoflow.contracts.common import ErrorDetail, StrictModel, UuidInput, check_name
-from astrophotoflow.contracts.software import ParameterDefinition, SoftwareOperation
+from astrophotoflow.contracts.software import BundleDevelopmentSource, ParameterDefinition, SoftwareOperation
 from astrophotoflow.contracts.bundles import BundlePreview
 from astrophotoflow.contracts.localization import CapabilityDisplay, Locale
 
@@ -47,12 +47,20 @@ class NodeDefinition(StrictModel):
     source: Literal["custom", "package"]
     name: str
     description: str
+    category: list[str] = Field(default_factory=list)
     inputs: list[NodePort]
     outputs: list[NodePort]
     parameters: list[ParameterDefinition]
     execution: SoftwareBinding
 
     _name = field_validator("name")(check_name)
+
+    @field_validator("category")
+    @classmethod
+    def valid_category(cls, value):
+        if any(not part.strip() or part != part.strip() or "/" in part for part in value):
+            raise ValueError("Category levels must be non-empty names without slashes.")
+        return value
 
     @model_validator(mode="after")
     def valid_names(self):
@@ -109,6 +117,9 @@ class NativeNodeLoad(StrictModel):
 
 
 class NodeCapability(StrictModel):
+    automatic_result_preview: bool = False
+    implementation_token: str | None = None
+    development_source: BundleDevelopmentSource | None = None
     node: SavedDefinition
     operation: SoftwareOperation | None
     available: bool
@@ -121,5 +132,7 @@ class NodeCapability(StrictModel):
 
 def definition_content_token(definition: NodeDefinition) -> str:
     content = definition.model_dump(mode="json")
+    if not definition.category:
+        content.pop('category')
     encoded = json.dumps(content, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()
