@@ -1,3 +1,4 @@
+import { assert } from '@/base/assert'
 import { createI18n } from 'vue-i18n'
 import { uiMessages, configureUII18n } from '@astrophotoflow/ui'
 
@@ -141,6 +142,7 @@ export function mergeCustomNodesI18n(i18nData: Record<string, unknown>): void {
 
 function applyBundleNodeI18n(locale: SupportedLocale) {
   const messages = i18n.global.getLocaleMessage(locale)
+  assert(messages, 'Bundle translations require loaded locale messages')
   const nodeDefs = { ...(messages.nodeDefs as Record<string, unknown>) }
   for (const [name, original] of Object.entries(replacedBundleNodeDefinitions[locale] ?? {})) {
     if (original === undefined) delete nodeDefs[name]
