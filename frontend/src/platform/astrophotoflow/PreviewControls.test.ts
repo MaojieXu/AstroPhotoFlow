@@ -10,7 +10,8 @@ describe('preview display controls', () => {
     const view = render(PreviewControls)
     const resolution = screen.getByRole('combobox', { name: 'astrophotoflow.media.previewResolution' })
     expect(screen.getAllByRole('option').slice(0, 4).map(option => option.textContent)).toEqual(['512 px', '1024 px', '2048 px', 'astrophotoflow.media.originalResolution'])
-    await fireEvent.update(resolution, '')
+    ;(resolution as HTMLSelectElement).selectedIndex = 3
+    await fireEvent.change(resolution)
     expect(view.emitted('update:maxEdge')?.at(-1)).toEqual([null])
     await fireEvent.update(screen.getByRole('combobox', { name: 'astrophotoflow.media.rgbDisplay' }), 'preserve')
     expect(view.emitted('update:balance')?.at(-1)).toEqual(['preserve'])

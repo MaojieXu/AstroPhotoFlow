@@ -20,6 +20,8 @@ vi.mock('@/stores/queueStore', () => ({ useQueuePendingTaskCountStore: stores.qu
 
 function setup() {
   vi.useFakeTimers()
+  vi.spyOn(api, 'getQueue').mockResolvedValue({ Running: [], Pending: [fromPartial({ id: 'automatic-prompt' })] })
+  vi.spyOn(api, 'fetchApi').mockResolvedValue(new Response('{}'))
   const graph = new LGraph()
   const source = new LGraphNode('Source')
   const node = new LGraphNode('Process')
@@ -50,7 +52,7 @@ function setup() {
   return { ...view, prompt, id, graph, queuePrompt, app, workflow, context }
 }
 
-afterEach(() => { automaticResultStates.clear(); bundleCapabilities.clear(); vi.useRealTimers() })
+afterEach(() => { automaticResultStates.clear(); bundleCapabilities.clear(); vi.useRealTimers(); vi.restoreAllMocks() })
 
 describe('automatic native result scheduling', () => {
   it('queues both branch leaves once with their shared upstream in one prompt', async () => {
@@ -130,4 +132,37 @@ describe('automatic native result scheduling', () => {
     expect(automaticResultStates.get(`${view.graph.id}:${view.id}`)?.phase).toBe('failed')
     view.unmount()
   })
+})
+
+
+it('marks a submission without a prompt receipt failed even when the host returns true', async () => {
+  const view = setup()
+  view.queuePrompt.mockImplementationOnce(async () => true)
+  await vi.advanceTimersByTimeAsync(1000)
+  await vi.waitFor(() => expect(automaticResultStates.get(`${view.graph.id}:${view.id}`)?.phase).toBe('failed'))
+  api.dispatchCustomEvent('graphChanged', null)
+  await vi.advanceTimersByTimeAsync(1000)
+  expect(view.queuePrompt).toHaveBeenCalledTimes(1)
+  view.unmount()
+})
+
+it('releases a deleted queued prompt after native status, without looping or treating query errors as deletion', async () => {
+  const view = setup()
+  await vi.advanceTimersByTimeAsync(500)
+  await vi.waitFor(() => expect(view.queuePrompt).toHaveBeenCalledTimes(1))
+  vi.mocked(api.getQueue).mockRejectedValueOnce(new Error('offline'))
+  api.dispatchCustomEvent('status', null)
+  await vi.advanceTimersByTimeAsync(500)
+  await vi.waitFor(() => expect(api.getQueue).toHaveBeenCalledTimes(1))
+  expect(automaticResultStates.get(`${view.graph.id}:${view.id}`)?.phase).toBe('queued')
+  vi.mocked(api.getQueue).mockResolvedValue({ Running: [], Pending: [] })
+  api.dispatchCustomEvent('status', null)
+  await vi.advanceTimersByTimeAsync(1500)
+  await vi.waitFor(() => expect(automaticResultStates.get(`${view.graph.id}:${view.id}`)?.phase).toBe('failed'))
+  expect(view.queuePrompt).toHaveBeenCalledTimes(1)
+  view.prompt[view.id].inputs.strength = .7
+  api.dispatchCustomEvent('graphChanged', null)
+  await vi.advanceTimersByTimeAsync(500)
+  await vi.waitFor(() => expect(view.queuePrompt).toHaveBeenCalledTimes(2))
+  view.unmount()
 })

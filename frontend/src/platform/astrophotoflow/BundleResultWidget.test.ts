@@ -11,7 +11,7 @@ import BundleResultWidget from './BundleResultWidget.vue'
 const f = vi.hoisted(() => ({ result: vi.fn(), state: vi.fn() }))
 vi.mock('@/stores/nodeOutputStore', () => ({ useNodeOutputStore: () => ({ getNodeOutputs: f.result }) }))
 vi.mock('./useAutomaticResults', () => ({ automaticResultState: f.state, setAutomaticResult: vi.fn(), retryAutomaticResult: vi.fn() }))
-vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }))
+vi.mock('vue-i18n', async (original) => ({ ...await original<typeof import('vue-i18n')>(), useI18n: () => ({ t: (key: string) => key }) }))
 
 describe('complete result ownership', () => {
   it('retains the old result as stale and rejects other workflows and late signatures', async () => {

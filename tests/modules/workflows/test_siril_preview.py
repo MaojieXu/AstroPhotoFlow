@@ -67,7 +67,7 @@ def test_preview_http_is_authenticated_and_does_not_accept_source_paths(tmp_path
 
     settings = Settings("127.0.0.1", 8190, tmp_path, (), workspace=tmp_path)
     app = create_app(settings, "token")
-    monkeypatch.setattr(siril_preview, "get_package", lambda *_args: SimpleNamespace(availability="ready"))
+    monkeypatch.setattr(siril_preview, "get_package", lambda *_args: SimpleNamespace(effective_availability="ready"))
 
     async def render(_body):
         return b"\x89PNGpreview"

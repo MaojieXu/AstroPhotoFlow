@@ -56,6 +56,7 @@ export function useAutomaticResults() {
   let obsolete = false
   let active: { promptId: string; owner: string; signatures: Record<string, string>; completed: Set<string> } | undefined
   let mounted = false
+  let reconciling = false
 
   function policies(prompt: ComfyApiWorkflow): Record<string, AutomaticNodePolicy> {
     return Object.fromEntries(Object.entries(prompt).map(([id, value]) => {
@@ -98,7 +99,11 @@ export function useAutomaticResults() {
         const phase = paused ? 'paused' : plan.blocked[id] ?? (old?.signature === plan.signatures[id] ? old.phase : 'waiting')
         automaticResultStates.set(key, { ...old, signature: plan.signatures[id], phase })
       }
-      if (active || submitting || !execution.isIdle || queue.count > 0) return
+      if (active) {
+        await reconcileActive()
+        return
+      }
+      if (submitting || !execution.isIdle || queue.count > 0) return
       const changedIds = plan.eligible.filter(id => automaticResultStates.get(`${owner}:${id}`)?.submitted !== plan.signatures[id])
       const targets = changedIds.filter(id => !changedIds.some(other => other !== id && plan.ancestors[other].has(id)))
       if (!targets.length) return
@@ -112,7 +117,7 @@ export function useAutomaticResults() {
         const old = automaticResultStates.get(key)
         if (old) automaticResultStates.set(key, { ...old, submitted: signatures[id], phase: 'queued', error: undefined })
       }
-      const accepted = await app.queuePrompt(0, 1, {
+      await app.queuePrompt(0, 1, {
         queueNodeIds: targets.flatMap(id => { const value = tryNormalizeNodeExecutionId(id); return value ? [value] : [] }),
         intent: { trigger_source: 'auto_queue' },
         automaticResult: { targets, signatures,
@@ -128,7 +133,7 @@ export function useAutomaticResults() {
           queued: promptId => { active = { promptId, owner, signatures, completed: new Set() } }
         }
       })
-      if (!accepted && !active) {
+      if (!active) {
         for (const id of required) {
           const key = `${owner}:${id}`
           const old = automaticResultStates.get(key)
@@ -144,6 +149,26 @@ export function useAutomaticResults() {
         submitting = false
         if (obsolete) { obsolete = false; changed() }
       }
+    }
+  }
+
+  async function reconcileActive() {
+    if (!active || reconciling || !execution.isIdle) return
+    const pending = active
+    reconciling = true
+    try {
+      const items = await api.getQueue({ throwOnError: true })
+      if (active !== pending || [...items.Running, ...items.Pending].some(item => item.id === pending.promptId)) return
+      const response = await api.fetchApi(`/history/${encodeURIComponent(pending.promptId)}`)
+      if (!response.ok || active !== pending) return
+      const history = await response.json()
+      if (active !== pending) return
+      const completed = history[pending.promptId]?.status?.status_str === 'success'
+      finished(new CustomEvent(completed ? 'execution_success' : 'execution_interrupted', { detail: { prompt_id: pending.promptId } }))
+    } catch {
+      // Unknown queue state retains ownership until a later native status update.
+    } finally {
+      reconciling = false
     }
   }
 
@@ -183,6 +208,7 @@ export function useAutomaticResults() {
   watch(() => [execution.isIdle, queue.count], changed)
   onMounted(() => {
     mounted = true
+    api.addEventListener('status', changed)
     api.addEventListener('graphChanged', changed)
     api.addEventListener('execution_start', started)
     api.addEventListener('execution_success', finished)
@@ -195,6 +221,7 @@ export function useAutomaticResults() {
     mounted = false
     generation++
     clearTimeout(timer)
+    api.removeEventListener('status', changed)
     api.removeEventListener('graphChanged', changed)
     api.removeEventListener('execution_start', started)
     api.removeEventListener('execution_success', finished)

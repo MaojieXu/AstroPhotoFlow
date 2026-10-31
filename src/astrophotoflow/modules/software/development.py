@@ -172,7 +172,7 @@ def _refresh(workspace, package_id, binding, *, force):
             _write(path, value)
             return
         if force or inputs != value.get('input_fingerprint'):
-            value.pop('generation_failed', None)
+            value['generation_failed'] = True
             value.update(state='building', error='Generating development Bundle.', input_fingerprint=inputs)
             value.pop('pending', None)
             _write(path, value)
@@ -184,6 +184,7 @@ def _refresh(workspace, package_id, binding, *, force):
             if result.returncode:
                 value['generation_failed'] = True
                 raise ValueError(f'Development generation failed ({result.returncode}); see {log}')
+            value.pop('generation_failed', None)
             output = content_fingerprint(root)
             value['dirty'] = bool(subprocess.check_output([*git, 'status', '--porcelain'], **options).strip())
         elif value.get('generation_failed') and output == value.get('output_fingerprint'):

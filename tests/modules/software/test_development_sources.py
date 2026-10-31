@@ -5,6 +5,8 @@ import sys
 import os
 
 import psutil
+import pytest
+import subprocess
 
 from astrophotoflow.core.config import Settings
 from astrophotoflow.modules.software import bundles, development, public
@@ -96,3 +98,24 @@ def test_only_the_current_source_observation_controls_native_readiness(tmp_path,
     values.update(ready=True, reason=None)
     observation.write_text(json.dumps(values))
     assert public.get_package(settings, 'siril').development_source.state == 'ready'
+
+
+@pytest.mark.parametrize('failure', [subprocess.TimeoutExpired('generate', 120), OSError('cannot start')])
+def test_generation_exception_stays_failed_until_author_change(tmp_path, bundle_install, monkeypatch, failure):
+    settings, _, source = _source(tmp_path, bundle_install, monkeypatch)
+    development.configure(settings.workspace, ['siril=' + str(source)], [], sys.executable)
+    (source / 'authored.json').write_text(json.dumps({'name': 'Changed'}))
+    original_run = development.subprocess.run
+    def fail(*args, **kwargs):
+        raise failure
+    monkeypatch.setattr(development.subprocess, 'run', fail)
+    development.refresh_sources(settings.workspace)
+    development.refresh_sources(settings.workspace)
+    assert development.source_state(settings.workspace, 'siril').state == 'failed'
+    monkeypatch.setattr(development.subprocess, 'run', original_run)
+    development.refresh_sources(settings.workspace)
+    assert development.source_state(settings.workspace, 'siril').state == 'failed'
+    (source / 'authored.json').write_text(json.dumps({'name': 'Fixed'}))
+    development.refresh_sources(settings.workspace)
+    development.refresh_sources(settings.workspace)
+    assert development.source_state(settings.workspace, 'siril').state == 'ready'
