@@ -19,6 +19,8 @@ import { useApp } from '@/scripts/appInstance'
 import MediaViewer from './MediaViewer.vue'
 import DataRunWidget from './DataRunWidget.vue'
 import { useNodeOutputStore } from '@/stores/nodeOutputStore'
+import { createExecutableNodeMap } from '@/utils/executionUtil'
+import { getExecutionIdByNode } from '@/utils/graphTraversalUtil'
 
 const { widget } = defineProps<{ widget: ComponentWidget<string | object> }>()
 const { t } = useI18n()
@@ -31,10 +33,14 @@ const nodeOutputs = useNodeOutputStore()
 const bindings = computed(() => {
   void revision.value
   const result: Record<string, (string | number)[]> = {}
-  for (const input of widget.node.inputs ?? []) {
-    if (!['science', 'images'].includes(input.name) || input.link == null) continue
-    const link = widget.node.graph?.links.get(input.link)
-    if (link) result[input.name] = [String(link.origin_id), link.origin_slot]
+  if (!widget.node.inputs?.some(input => ['science', 'images'].includes(input.name) && input.link != null)) return result
+  const root = useApp().rootGraph
+  const id = getExecutionIdByNode(root, widget.node)
+  const dto = id ? createExecutableNodeMap(root).get(id) : undefined
+  for (const [slot, input] of (dto?.inputs ?? []).entries()) {
+    if (!['science', 'images'].includes(input.name)) continue
+    const link = dto?.resolveInput(slot)
+    if (link && !link.widgetInfo) result[input.name] = [link.origin_id, link.origin_slot]
   }
   return result
 })

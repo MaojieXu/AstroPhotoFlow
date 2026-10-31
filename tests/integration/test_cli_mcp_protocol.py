@@ -526,3 +526,51 @@ def test_apf_display_preview_stdio_image_and_cli_export(service, tmp_path):
                                cwd=ROOT, env=service["env"], capture_output=True, text=True, check=False)
     assert collision.returncode == 1 and photo.name in collision.stderr
     assert photo.read_bytes() == original
+
+
+def test_apf_mcp_confirmed_recursive_batch_and_fixed_project_links(service, tmp_path, record_property):
+    import numpy as np
+    from astropy.io import fits
+    from uuid import uuid4
+    root = tmp_path / 'synthetic-night'
+    (root / 'nested').mkdir(parents=True)
+    for path in [root / 'first.fits', root / 'nested/second.fits']:
+        fits.writeto(path, np.arange(64, dtype=np.float32).reshape(8, 8),
+                     fits.Header({'OBJECT': 'M31', 'IMAGETYP': 'Light Frame', 'EXPTIME': 0, 'GAIN': 0}))
+    async def exercise():
+        params = StdioServerParameters(command=_entrypoint('apf'), args=['mcp'], env=service['env'], cwd=str(ROOT))
+        async with stdio_client(params) as streams:
+            async with ClientSession(*streams) as session:
+                await session.initialize()
+                advertised = (await session.list_tools()).tools
+                assert {tool.name for tool in advertised} == {'data_management', 'node_canvas_management'}
+                record_property('advertised_schema_bytes', len(json.dumps([tool.input_schema for tool in advertised]).encode()))
+                async def call(operation, arguments):
+                    start = time.perf_counter()
+                    result = _tool_data(await session.call_tool('data_management', {'operation': operation, 'arguments': arguments}), service)
+                    record_property(operation + '_seconds', time.perf_counter() - start)
+                    return result
+                scan = await call('imports.inspect', {'body': {'paths': [str(root)]}})
+                assert scan['file_count'] == 2
+                before = await call('assets.list', {'limit': 50})
+                assert before['total'] == 0
+                definitions = await call('describe', {'operations': ['imports.submit', 'import_tasks.wait']})
+                assert len(definitions['items']) == 2
+                project = await call('projects.create', {'body': {'name': 'Confirmed night'}})
+                body = {'scan_id': scan['scan_id'], 'request_id': str(uuid4()),
+                        'project_id': project['id'], 'project_revision': project['revision'],
+                        'groups': [{'name': 'Confirmed M31', 'group_id': scan['groups'][0]['id']}]}
+                accepted = await call('imports.submit', {'body': body})
+                completed = await call('import_tasks.wait', {'body': {'request_id': body['request_id'], 'wait_seconds': 20}})
+                assert completed['state'] == 'completed', completed
+                assert completed['groups'][0]['items_total'] == 2
+                link = completed['groups'][0]['project_link']
+                assert link['state'] == 'linked'
+                repeated = await call('imports.submit', {'body': body})
+                assert repeated['groups'][0]['task_id'] == accepted['groups'][0]['task_id']
+                assets = await call('assets.list', {'limit': 50})
+                assert assets['total'] == 2
+                references = await call('projects.list_datasets', {'project_id': project['id'], 'limit': 50})
+                assert references['total'] == 1
+                assert references['items'][0]['dataset_version_id'] == link['dataset_version_id']
+    asyncio.run(exercise())

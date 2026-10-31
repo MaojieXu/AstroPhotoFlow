@@ -9,7 +9,7 @@ from threading import Event, Lock
 from uuid import UUID, uuid5
 
 from filelock import FileLock
-from astrophotoflow.contracts.data_nodes import ExportRequest
+from astrophotoflow.contracts.data_nodes import ExportRequest, ExportReceipt
 from astrophotoflow.contracts.inputs import CheckedOutput
 from astrophotoflow.contracts.media import MediaSelection
 from astrophotoflow.core.errors import ApiError, not_found
@@ -51,7 +51,8 @@ class DataExports:
         if not path.is_file(): raise not_found()
         with self.lock:
             record = json.loads(path.read_text(encoding='utf-8'))
-        return {key: value for key, value in record.items() if key not in {'request', 'fingerprint', 'sources'}}
+        public = {key: value for key, value in record.items() if key not in {'request', 'fingerprint', 'sources'}}
+        return ExportReceipt.model_validate_json(json.dumps(public)).model_dump(exclude_unset=True)
 
     def existing(self, body):
         path = self._directory(body.request_id) / 'receipt.json'
@@ -170,9 +171,9 @@ class DataExports:
                             pixels = read_display_image(current.path, current.format, selected, folder, current.scientific_metadata)
                             header = None
                             if current.format in {'fits', 'xisf'}:
-                                _, header = read_image(current.path, current.format, selected, folder)
+                                _, header = read_image(current.path, current.format, selected, folder, current.scientific_metadata)
                         else:
-                            pixels, header = read_image(current.path, current.format, selected, folder)
+                            pixels, header = read_image(current.path, current.format, selected, folder, current.scientific_metadata)
                         checkpoint()
                         pixels = convert_pixels(pixels, body.settings, folder / 'converted.npy', checkpoint)
                         suffix = EXTENSIONS[body.settings.format]

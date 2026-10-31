@@ -1,5 +1,6 @@
 """Full-resolution grayscale/RGB codecs. Never use display JPEGs as input."""
 from pathlib import Path
+import re
 import numpy as np
 from astropy.io import fits
 from PIL import Image, ImageOps
@@ -8,7 +9,7 @@ import tifffile
 from xisf import XISF
 
 from astrophotoflow.core.errors import ApiError
-from .fits_preview import _rgb_channel_first
+from .fits_preview import _rgb_channel_first, apply_colour_layout
 
 EXTENSIONS = {'fits': '.fits', 'xisf': '.xisf', 'tiff': '.tif', 'png': '.png', 'jpeg': '.jpg'}
 
@@ -52,6 +53,8 @@ def valid_image(array):
 
 def read_display_image(path, category, selection, folder, metadata):
     """Use the viewer's full-resolution interpretation (including CFA) before applying its frozen tone recipe."""
+    if category == 'raw':
+        raise ApiError(422, 'UNSUPPORTED_CONVERSION', 'Decode/demosaic RAW explicitly upstream before conversion, or copy the original file.')
     from .media_sources import PixelSource
     pixel_path, pixel_category = path, category
     if category == 'video' and Path(path).suffix.lower() != '.ser':
@@ -65,7 +68,7 @@ def read_display_image(path, category, selection, folder, metadata):
     return valid_image(source.read((0, 0, width, height), 1))
 
 
-def read_image(path, category, selection, folder):
+def read_image(path, category, selection, folder, metadata=None):
     header = None
     if category == 'fits':
         with fits.open(path, memmap=False) as hdus:
@@ -76,6 +79,7 @@ def read_image(path, category, selection, folder):
             if index not in images:
                 raise ApiError(422, 'SELECTION_REQUIRED', 'The selected HDU is not an image plane.')
             hdu = hdus[index]
+            apply_colour_layout(hdu, (metadata or {}).get('colour_layout'))
             header = hdu.header.copy()
             array = np.array(hdu.data)
             if array.ndim == 3 and _rgb_channel_first(header):
@@ -172,6 +176,22 @@ def write_image(path, array, header, settings):
     header.add_history(f'AstroPhotoFlow export: {settings.format}/{settings.precision}/{settings.conversion}')
     if settings.format == 'fits':
         if array.ndim == 3:
+            if str(header.get('CTYPE1', '')).strip().upper() in {'RGB', 'COLOR'}:
+                axes = {'1': '3', '2': '1', '3': '2'}
+                remapped = []
+                for card in header.cards:
+                    key = card.keyword
+                    scalar = re.fullmatch(r'(CTYPE|CUNIT|CRPIX|CRVAL|CDELT|CROTA|CNAME|CRDER|CSYER)([123])([A-Z]?)', key)
+                    matrix = re.fullmatch(r'(PC|CD)([123])_([123])([A-Z]?)', key)
+                    parameter = re.fullmatch(r'(PV|PS)([123])_(\d+)([A-Z]?)', key)
+                    if scalar:
+                        key = scalar[1] + axes[scalar[2]] + scalar[3]
+                    elif matrix:
+                        key = matrix[1] + axes[matrix[2]] + '_' + axes[matrix[3]] + matrix[4]
+                    elif parameter:
+                        key = parameter[1] + axes[parameter[2]] + '_' + parameter[3] + parameter[4]
+                    remapped.append((key, card.value, card.comment))
+                header = fits.Header(remapped)
             header['CTYPE3'] = 'RGB'
             array = np.moveaxis(array, -1, 0)
         fits.PrimaryHDU(array, header=header).writeto(path, overwrite=False)

@@ -215,3 +215,81 @@ def test_large_inspection_summary_does_not_expand_all_members(environment):
     page = client.get(f"/api/v1/import-inspections/{scan['scan_id']}/entries?kind=groups&offset=10&limit=10", headers=AUTH).json()
     assert len(page['items']) == 10 and page['total'] == 25
     assert not {group['id'] for group in scan['groups']} & {group['id'] for group in page['items']}
+
+
+@pytest.mark.parametrize('archive', [False, True])
+def test_project_link_retry_preserves_published_members_or_reports_archive_failure(environment, monkeypatch, archive):
+    from astrophotoflow.modules.data import import_batches
+    source, client, db = environment
+    write_fits(source / 'one.fits')
+    write_fits(source / 'two.fits')
+    scan = inspect(client, source)
+    project = client.post('/api/v1/projects', headers=AUTH, json={'name': 'Target'}).json()
+    finalize = import_batches.finalize_project_links
+    monkeypatch.setattr(import_batches, 'finalize_project_links', lambda *args: None)
+    body = submission(scan, project_id=project['id'], project_revision=project['revision'])
+    accepted = client.post('/api/v1/import-batches', headers=AUTH, json=body).json()
+    task_id = accepted['groups'][0]['task_id']
+    edited = client.patch(f"/api/v1/projects/{project['id']}", headers=AUTH,
+                          json={'base_revision': 1, 'notes': 'Manual change'}).json()
+    monkeypatch.setattr(import_batches, 'finalize_project_links', finalize)
+    finalize(db, body['request_id'])
+    with db.read_session() as session:
+        task = session.get(AssetTask, task_id)
+        dataset_id, published = task.dataset_id, task.report['dataset_version_id']
+    dataset = client.get(f'/api/v1/datasets/{dataset_id}', headers=AUTH).json()
+    if archive:
+        changed = client.patch(f'/api/v1/datasets/{dataset_id}', headers=AUTH,
+                               json={'base_revision': dataset['revision'], 'status': 'archived'})
+    else:
+        version = client.get(f'/api/v1/datasets/{dataset_id}/versions/{published}', headers=AUTH).json()
+        changed = client.post(f'/api/v1/datasets/{dataset_id}/versions', headers=AUTH,
+                              json={'base_revision': dataset['revision'], 'asset_version_ids': [version['members'][0]['asset_version_id']]})
+    assert changed.status_code in {200, 201}, changed.text
+    response = client.post(f"/api/v1/import-batches/{body['request_id']}/project-references", headers=AUTH,
+                           json={'base_revision': edited['revision']})
+    assert response.status_code == 200, response.text
+    status = client.get(f"/api/v1/import-batches/{body['request_id']}", headers=AUTH).json()
+    link = status['groups'][0]['project_link']
+    assert status['state'] != 'running', status
+    if archive:
+        assert link['state'] == 'failed', status
+    else:
+        assert link['state'] == 'linked', status
+        assert link['dataset_version_id'] == published
+    with db.read_session() as session:
+        assert session.scalar(select(func.count()).select_from(AssetTask)) == 1
+
+
+def test_retry_of_first_failed_member_links_actual_published_order(environment, monkeypatch):
+    from astrophotoflow.modules.data import ingestion
+    source, client, db = environment
+    write_fits(source / 'a.fits')
+    write_fits(source / 'b.fits')
+    scan = inspect(client, source)
+    project = client.post('/api/v1/projects', headers=AUTH, json={'name': 'Recovery'}).json()
+    original = ingestion._source_item
+    def fail_first(database, task_id, entry, position, known, **kwargs):
+        if Path(entry['path']).name == 'a.fits':
+            entry = {**entry, 'error': {'code': 'SOURCE_UNAVAILABLE', 'message': 'Transient registration failure'}}
+        original(database, task_id, entry, position, known, **kwargs)
+    from pathlib import Path
+    monkeypatch.setattr(ingestion, '_source_item', fail_first)
+    body = submission(scan, project_id=project['id'], project_revision=project['revision'])
+    response = client.post('/api/v1/import-batches', headers=AUTH, json=body)
+    assert response.status_code == 202, response.text
+    root_id = response.json()['groups'][0]['task_id']
+    task = client.get(f'/api/v1/asset-tasks/{root_id}', headers=AUTH).json()
+    failed = next(item for item in task['items'] if Path(item['source_path']).name == 'a.fits')
+    monkeypatch.setattr(ingestion, '_source_item', original)
+    retried = client.post(f'/api/v1/asset-tasks/{root_id}/retry', headers=AUTH, json={'item_ids': [failed['id']]})
+    assert retried.status_code == 202, retried.text
+    retry_id = retried.json()['task_id']
+    with db.read_session() as session:
+        published = session.get(AssetTask, retry_id).report['dataset_version_id']
+    response = client.post(f"/api/v1/import-batches/{body['request_id']}/project-references", headers=AUTH,
+                           json={'base_revision': project['revision']})
+    assert response.status_code == 200, response.text
+    status = client.get(f"/api/v1/import-batches/{body['request_id']}", headers=AUTH).json()
+    assert status['groups'][0]['project_link']['state'] == 'linked', status
+    assert status['groups'][0]['project_link']['dataset_version_id'] == published

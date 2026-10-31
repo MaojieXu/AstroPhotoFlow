@@ -200,3 +200,54 @@ def test_member_partial_failure_keeps_order_and_does_not_rerun_native_data(works
     assert [item['state'] for item in receipt['results']] == ['completed', 'failed']
     assert receipt['results'][1]['error']['code'] == 'CONVERSION_REQUIRES_DECISION'
     assert len(list(destination.glob('*.png'))) == 1
+
+
+@pytest.mark.parametrize('width', [3, 7])
+def test_export_uses_declared_planar_layout_without_fits_axis_marker(workspace, tmp_path, width):
+    settings, client, database = workspace
+    body, _ = image_result(settings, database, count=1)
+    directory = result_directory(settings, body.run_id, body.execution_id)
+    path = directory / 'image-000001.fits'
+    values = np.arange(3 * 4 * width, dtype=np.float32).reshape(3, 4, width)
+    fits.PrimaryHDU(values).writeto(path, overwrite=True)
+    from astrophotoflow.modules.data.science_inputs import check_output
+    import json
+    record_path = directory / 'result.json'
+    record = json.loads(record_path.read_text(encoding='utf-8'))
+    checked = check_output(settings, run_directory=directory, path=path, expected_format='fits', colour_layout='planar')
+    record['members'][0]['checked'] = checked.model_dump(mode='json')
+    record_path.write_text(json.dumps(record), encoding='utf-8')
+    destination = tmp_path / 'rgb.tif'
+    request = {'request_id': str(uuid4()), 'source': {'run_id': str(body.run_id), 'execution_id': str(body.execution_id)},
+               'target': 'local', 'destination': str(destination), 'member_indexes': [0],
+               'settings': {'format': 'tiff', 'precision': 'float32'}}
+    assert client.post('/api/v1/exports', headers=AUTH, json=request).status_code == 202
+    receipt = wait_export(client, request['request_id'])
+    assert receipt['state'] == 'completed', receipt
+    np.testing.assert_array_equal(read_raster(destination), np.moveaxis(values, 0, -1))
+
+
+def test_interleaved_fits_conversion_rewrites_colour_axis(tmp_path):
+    values = np.arange(60, dtype=np.float32).reshape(4, 5, 3)
+    header = fits.Header({'CTYPE1': 'RGB', 'CTYPE2': 'RA---TAN', 'CTYPE3': 'DEC--TAN',
+                          'CRPIX1': 1, 'CRPIX2': 2, 'CRPIX3': 3})
+    settings = ExportSettings(format='fits', precision='float32')
+    path = tmp_path / 'planar.fits'
+    write_image(path, values, header, settings)
+    from astrophotoflow.modules.data.science_inputs import check_output
+    checked = check_output(SimpleNamespace(), run_directory=tmp_path, path=path, expected_format='fits', colour_layout='planar')
+    assert checked.format == 'fits'
+    with fits.open(path) as hdus:
+        assert hdus[0].header['CTYPE1'] == 'RA---TAN'
+        assert hdus[0].header['CTYPE2'] == 'DEC--TAN'
+        assert hdus[0].header['CTYPE3'] == 'RGB'
+        assert hdus[0].header['CRPIX1'] == 2
+        assert hdus[0].header['CRPIX2'] == 3
+        np.testing.assert_array_equal(hdus[0].data, np.moveaxis(values, -1, 0))
+
+
+def test_raw_display_export_requires_explicit_upstream_development(tmp_path):
+    from astrophotoflow.contracts.media import MediaSelection
+    from astrophotoflow.modules.data.image_formats import read_display_image
+    with pytest.raises(ApiError, match='upstream'):
+        read_display_image(tmp_path / 'sensor.cr2', 'raw', MediaSelection(), tmp_path, {})

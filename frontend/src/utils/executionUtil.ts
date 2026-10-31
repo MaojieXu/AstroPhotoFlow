@@ -89,27 +89,7 @@ export const graphToPrompt = async (
   workflow.extra ??= {}
   workflow.extra.frontendVersion = __COMFYUI_FRONTEND_VERSION__
 
-  const nodeDtoMap = new Map<ExecutionId, ExecutableLGraphNode>()
-  for (const node of graph.computeExecutionOrder(false)) {
-    const dto: ExecutableLGraphNode = new ExecutableNodeDTO(
-      node,
-      [],
-      nodeDtoMap
-    )
-
-    nodeDtoMap.set(dto.id, dto)
-
-    if (
-      node.mode === LGraphEventMode.NEVER ||
-      node.mode === LGraphEventMode.BYPASS
-    ) {
-      continue
-    }
-
-    for (const innerNode of dto.getInnerNodes()) {
-      nodeDtoMap.set(innerNode.id, innerNode)
-    }
-  }
+  const nodeDtoMap = createExecutableNodeMap(graph)
 
   const output: ComfyApiWorkflow = {}
   // Process nodes in order of execution
@@ -204,4 +184,30 @@ export const graphToPrompt = async (
   }
 
   return { workflow: workflow as ComfyWorkflowJSON, output }
+}
+
+export function createExecutableNodeMap(graph: LGraph) {
+  const nodeDtoMap = new Map<ExecutionId, ExecutableLGraphNode>()
+  for (const node of graph.computeExecutionOrder(false)) {
+    const dto: ExecutableLGraphNode = new ExecutableNodeDTO(
+      node,
+      [],
+      nodeDtoMap
+    )
+
+    nodeDtoMap.set(dto.id, dto)
+
+    if (
+      node.mode === LGraphEventMode.NEVER ||
+      node.mode === LGraphEventMode.BYPASS
+    ) {
+      continue
+    }
+
+    for (const innerNode of dto.getInnerNodes()) {
+      nodeDtoMap.set(innerNode.id, innerNode)
+    }
+  }
+
+  return nodeDtoMap
 }

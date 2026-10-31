@@ -15,7 +15,7 @@ from astrophotoflow.core import http as deps
 from astrophotoflow.core.errors import ApiError, not_found
 from .import_inspection import read_manifest, source_stamp
 from .imports import create_import
-from .models import AssetTask, AssetTaskItem, Dataset, Project, ProjectDatasetReference
+from .models import AssetTask, AssetTaskItem, Dataset, DatasetMember, DatasetVersion, Project, ProjectDatasetReference
 from .projects import add_project_dataset_reference
 from pathlib import Path
 
@@ -158,22 +158,35 @@ def finalize_project_links(database, request_id):
             family, items = group_items(session, tasks, root)
             dataset_id = root.dataset_id or root.target_dataset_id
             dataset = session.get(Dataset, dataset_id) if dataset_id else None
+            published_ids = {task.report.get('dataset_version_id') for task in family} - {None}
+            expected_members = [item.asset_version_id for item in items]
+            published = None
+            for version in session.scalars(select(DatasetVersion).where(
+                    DatasetVersion.id.in_(published_ids), DatasetVersion.dataset_id == dataset_id
+            ).order_by(DatasetVersion.version_number.desc())):
+                members = list(session.scalars(select(DatasetMember.asset_version_id).where(
+                    DatasetMember.dataset_version_id == version.id).order_by(DatasetMember.position)))
+                if len(members) == len(expected_members) and set(members) == set(expected_members):
+                    published = version
+                    break
             project = session.get(Project, project_id)
-            if not items or any(item.content_status != 'available' for item in items) or dataset is None:
+            if not items or any(item.content_status != 'available' for item in items) or dataset is None or published is None:
                 result = {'state': 'skipped', 'code': 'IMPORT_NOT_READY', 'message': 'Only groups with all originals available are linked. Retry failed items, then explicitly retry project linking.'}
+            elif dataset.status != 'active':
+                result = {'state': 'failed', 'code': 'INVALID_REFERENCE', 'message': 'The imported dataset is archived; restore it before retrying project linking.'}
             elif project is None or project.status != 'active' or project.revision != expected:
                 result = {'state': 'failed', 'code': 'REVISION_CONFLICT', 'message': 'Project changed after confirmation. Read it before retrying project linking.'}
             else:
                 existing = session.scalar(select(ProjectDatasetReference).where(
                     ProjectDatasetReference.project_id == project_id,
-                    ProjectDatasetReference.dataset_version_id == dataset.current_version_id))
+                    ProjectDatasetReference.dataset_version_id == published.id))
                 if existing:
-                    result = {'state': 'linked', 'reference_id': existing.id, 'dataset_version_id': dataset.current_version_id, 'revision_delta': 0}
+                    result = {'state': 'linked', 'reference_id': existing.id, 'dataset_version_id': published.id, 'revision_delta': 0}
                 else:
                     reference = add_project_dataset_reference(UUID(project_id), ProjectDatasetReferenceCreate(
-                        base_revision=expected, dataset_id=dataset.id, dataset_version_id=dataset.current_version_id), session)
+                        base_revision=expected, dataset_id=dataset.id, dataset_version_id=published.id), session)
                     expected += 1
-                    result = {'state': 'linked', 'reference_id': str(reference['id']), 'dataset_version_id': dataset.current_version_id, 'revision_delta': 1}
+                    result = {'state': 'linked', 'reference_id': str(reference['id']), 'dataset_version_id': published.id, 'revision_delta': 1}
             # projects routes expire ORM instances; merge against the current report.
             root.report = {**root.report, 'agent_batch': {**root.report['agent_batch'], 'project_link': result}}
             session.flush()
@@ -239,5 +252,5 @@ def retry_project_links(request_id: UUID, body: ImportBatchProjectRetry, request
         if batch['project_link']['state'] != 'linked':
             batch['project_link'] = {'state': 'pending'}
         root.report = {**root.report, 'agent_batch': batch}
-    background.add_task(finalize_project_links, request.app.state.database, str(request_id))
+    background.add_task(finalize_task_batch, request.app.state.database, roots[0].id)
     return _summary(session, request_id)
