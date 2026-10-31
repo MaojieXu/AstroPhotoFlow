@@ -17,7 +17,7 @@ import { createImageViewport } from './mediaViewport'
 import type { ImageScreenBounds, ImageViewportSnapshot } from './mediaViewport'
 
 const { request } = defineProps<{ request: MediaViewerRequest }>()
-const emit = defineEmits<{ close: []; index: [index: number] }>()
+const emit = defineEmits<{ close: []; index: [index: number]; selection: [state: MediaState] }>()
 const { t } = useI18n()
 const stage = useTemplateRef<HTMLDivElement>('stage')
 const video = useTemplateRef<HTMLVideoElement>('video')
@@ -151,6 +151,7 @@ async function load(next: number, selection: Partial<MediaSelection> = {}) {
     settled = true
     state.value = result
     form.value = result.selection
+    emit('selection', result)
     displayLow.value = result.selection.display_range?.[0] ?? 0
     displayHigh.value = result.selection.display_range?.[1] ?? 1
     chooseArray.value = result.needs_selection

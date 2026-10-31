@@ -24,6 +24,7 @@ import LibraryCanvasSource from './LibraryCanvasSource.vue'
 import MediaViewer from './MediaViewer.vue'
 
 const toast = useToast()
+const props = defineProps<{ project?: boolean }>()
 const settingsDialog = useSettingsDialog()
 const importToasts = new Set<ReturnType<typeof toast.success>>()
 
@@ -31,7 +32,7 @@ const controls = { formItem: FormItem, button: Button, input: Input, dialog: Lib
 
 const workspace = ref<InstanceType<typeof Workspace>>()
 const tabs = useSidebarTabStore()
-const tab = tabs.sidebarTabs.find((item) => item.id === 'library')!
+const tab = tabs.sidebarTabs.find((item) => item.id === (props.project ? 'projects' : 'library'))!
 
 onMounted(() => {
   tab.canClose = () => workspace.value!.leavePage()
@@ -44,14 +45,15 @@ onBeforeUnmount(() => {
 
 <template>
   <SidebarTabTemplate
-    :title="$t('astrophotoflow.library')"
-    data-testid="library-sidebar"
+    :title="$t(props.project ? 'apfUi.project' : 'astrophotoflow.library')"
+    :data-testid="props.project ? 'projects-sidebar' : 'library-sidebar'"
   >
     <template #body>
       <Workspace
         ref="workspace"
         native
         sidebar
+        :initial-section="props.project ? 'projects' : 'library'"
         :controls="controls"
         @notify-success="message => importToasts.add(toast.success(message, { duration: 4000 }))"
         @notify-import="notice => importToasts.add(toast[notice.kind](notice.title, { description: notice.description, duration: notice.kind==='success'?4000:Infinity, action: notice.kind==='success'?undefined:{label:$t('apfUi.view_reason'),onClick:()=>workspace?.showImportIssue(notice.taskId,notice.category)} }))"

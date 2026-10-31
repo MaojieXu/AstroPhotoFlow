@@ -45,7 +45,7 @@ type WorkspaceArea = 'library' | 'nodes' | 'software' | 'agent' | 'settings'
 type SetupSortField = 'created_at' | 'name' | 'camera' | 'telescope' | 'mount' | 'filter' | 'accessory'
 
 const store = useWorkspaceStore()
-const props = defineProps<{ native?: boolean; sidebar?: boolean; controls?: LibraryControls }>()
+const props = defineProps<{ native?: boolean; sidebar?: boolean; initialSection?: 'library' | 'projects'; controls?: LibraryControls }>()
 provide(libraryControlsKey, props.controls)
 const emit = defineEmits<{ 'manage-equipment': []; 'back-to-library': []; 'notify-success': [message: string]; 'notify-import': [notice: ImportNotice]; 'open-workbench-settings': [] }>()
 
@@ -65,12 +65,12 @@ function canvasSource(row: RecordData): CanvasDataRequest | undefined {
 }
 
 if (props.sidebar) {
-  store.selectSection('library')
+  store.selectSection(props.initialSection ?? 'library')
   store.setQuery('')
   store.activeProjectId = null
   store.activeProjectRevision = null
 }
-const activeArea = ref<WorkspaceArea>('library')
+const activeArea = ref<WorkspaceArea>(props.initialSection === 'projects' ? 'settings' : 'library')
 const isEquipmentManagement = computed(() => activeArea.value === 'settings' && ['equipment', 'equipment-setups'].includes(store.section))
 const recordPageSize = computed(() => isEquipmentManagement.value ? 50 : store.pageSize)
 const setupManager = ref<InstanceType<typeof EquipmentSetupManager>>()
@@ -1814,8 +1814,8 @@ onBeforeUnmount(() => {
             <div class="apf-heading">
               <button v-if="activeDataset" type="button" @click="closeDataset">{{ $t('apfUi.back_to_library') }}</button>
               <button v-else-if="viewingProjectAssets || viewingProjectDatasets" type="button" @click="leaveProjectAssets">{{ $t('apfUi.back_to_project') }}</button>
-              <LibraryButton v-else-if="props.native && activeArea === 'settings'" type="button" class="apf-equipment-back" :aria-label="$t('apfUi.back_to_library_8979db')" :tooltip="$t('apfUi.back_to_library_8979db')" @click="emit('back-to-library')"><i class="pi pi-arrow-left" aria-hidden="true"></i></LibraryButton>
-              <h1 v-if="!props.sidebar || activeDataset || activeArea !== 'library'">{{ activeDataset ? $t('apfUi.library_968e00')+activeDataset.name : activeArea === 'library' ? $t('apfUi.library') : (viewingProjectAssets ? $t('apfUi.project_assets') : viewingProjectDatasets ? $t('apfUi.project_image_groups') : $t('apfUi.equipment_manager')) }}</h1>
+              <LibraryButton v-else-if="props.native && activeArea === 'settings' && store.section !== 'projects'" type="button" class="apf-equipment-back" :aria-label="$t('apfUi.back_to_library_8979db')" :tooltip="$t('apfUi.back_to_library_8979db')" @click="emit('back-to-library')"><i class="pi pi-arrow-left" aria-hidden="true"></i></LibraryButton>
+              <h1 v-if="!props.sidebar || activeDataset || activeArea !== 'library'">{{ activeDataset ? $t('apfUi.library_968e00')+activeDataset.name : activeArea === 'library' ? $t('apfUi.library') : (viewingProjectAssets ? $t('apfUi.project_assets') : viewingProjectDatasets ? $t('apfUi.project_image_groups') : store.section === 'projects' ? $t('apfUi.project') : $t('apfUi.equipment_manager')) }}</h1>
               <span v-if="activeDataset" class="apf-state">{{ $t('apfUi.image_group_photos_value', { p0: (activeDataset.version?.members?.length??activeDataset.member_count??0) }) }}</span>
               <div v-if="isLibraryTableView" class="apf-heading-actions">
                 <template v-if="bulkSelectMode">
@@ -1835,7 +1835,7 @@ onBeforeUnmount(() => {
               </div>
             </div>
             <LibraryTabs v-if="activeArea==='library'&&!activeDataset" class="apf-library-categories" :value="libraryCategory" :options="[{value:'all',label:$t('apfUi.all_assets')},{value:'light',label:$t('apfUi.light')},{value:'calibration',label:$t('apfUi.calibration_library')}]" :label="$t('apfUi.asset_use')" @change="selectLibraryCategory($event as 'all'|'light'|'calibration')" />
-            <LibraryTabs v-if="activeArea === 'settings' && !viewingProjectAssets && !viewingProjectDatasets" class="apf-management-tabs" :value="store.section" :options="[{value:'equipment-setups',label:$t('apfUi.equipment_setup')},{value:'equipment',label:$t('apfUi.my_equipment')}]" :label="props.native?$t('apfUi.equipment_and_metadata_categories'):$t('apfUi.settings_category')" @change="selectSection($event as WorkspaceSection)" />
+            <LibraryTabs v-if="activeArea === 'settings' && store.section !== 'projects' && !viewingProjectAssets && !viewingProjectDatasets" class="apf-management-tabs" :value="store.section" :options="[{value:'equipment-setups',label:$t('apfUi.equipment_setup')},{value:'equipment',label:$t('apfUi.my_equipment')}]" :label="props.native?$t('apfUi.equipment_and_metadata_categories'):$t('apfUi.settings_category')" @change="selectSection($event as WorkspaceSection)" />
             <label class="apf-search">
               <i class="pi pi-search" aria-hidden="true"></i>
               <input :value="store.query" :aria-label="$t('apfUi.search')" :placeholder="$t('apfUi.search_names')" :disabled="bulkDeleteBusy||setupDirty" @input="setQuery" />
@@ -1866,7 +1866,7 @@ onBeforeUnmount(() => {
             </template>
             <template v-if="activeArea==='settings' && store.section==='projects' && !viewingProjectAssets && !viewingProjectDatasets">
               <template v-if="managementSelectMode">
-                <button type="button" :disabled="!managementSelection.size||managementArchiveBusy" @click="requestSelectedEquipmentDelete">{{ $t('apfUi.delete_value', { p0: (managementSelection.size) }) }}</button>
+                <button type="button" :disabled="!managementSelection.size||managementArchiveBusy" @click="pendingManagementArchive={section:'projects',row:{}}">{{ $t('apfUi.move_to_trash') }}</button>
                 <button type="button" :disabled="managementArchiveBusy" @click="leaveManagementSelectMode">{{ $t('apfUi.cancel') }}</button>
               </template>
               <template v-else>

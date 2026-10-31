@@ -392,6 +392,11 @@ def retry_asset_task(task_id: UUID, body: RetryCreate, request: Request, backgro
         }, error=None, created_at=shared._now(), updated_at=shared._now(),
     )
     session.add(retry_task)
+    if (original.report or {}).get('agent_batch'):
+        batch = original.report['agent_batch']
+        retry_task.report = {**retry_task.report, 'agent_batch': {
+            **batch, 'root_task_id': batch.get('root_task_id') or original.id,
+        }}
     session.flush()
     for position, item in enumerate(items):
         source_item = session.get(AssetTaskItem, item.retry_of_item_id) if item.retry_of_item_id else item

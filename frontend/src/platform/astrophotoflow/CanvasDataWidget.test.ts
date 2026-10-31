@@ -5,14 +5,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { CanvasInspect } from '@astrophotoflow/ui'
 import { mediaStateSchema } from '@astrophotoflow/ui'
-import { LGraph, LGraphNode } from '@/lib/litegraph/src/litegraph'
+import { LGraph, LGraphNode, LGraphEventMode } from '@/lib/litegraph/src/litegraph'
 import { api as nativeApi } from '@/scripts/api'
 import type { ComponentWidget } from '@/scripts/domWidget'
 
 import CanvasDataWidget from './CanvasDataWidget.vue'
 
+const graphState = vi.hoisted(() => ({ root: undefined as unknown }))
 const api = vi.hoisted(() => ({ importPath: vi.fn(), prepare: vi.fn(), inspect: vi.fn(), getBlob: vi.fn(), display: vi.fn(), displayStatus: vi.fn(), mediaPrepare: vi.fn(), mediaStatus: vi.fn() }))
-vi.mock('@/scripts/appInstance', () => ({ useApp: () => ({ canvas: { emitBeforeChange: vi.fn(), emitAfterChange: vi.fn(), setDirty: vi.fn() } }) }))
+vi.mock('@/scripts/appInstance', () => ({ useApp: () => ({ rootGraph: graphState.root, canvas: { emitBeforeChange: vi.fn(), emitAfterChange: vi.fn(), setDirty: vi.fn() } }) }))
+vi.mock('./DataRunWidget.vue', async () => {
+  const { defineComponent } = await import('vue')
+  return { default: defineComponent({ props: { bindings: { type: Object, required: true } }, template: '<output data-testid="data-bindings">{{ JSON.stringify(bindings) }}</output>' }) }
+})
+vi.mock('@/stores/nodeOutputStore', () => ({ useNodeOutputStore: () => ({ getNodeOutputs: () => undefined }) }))
 vi.mock(import('@astrophotoflow/ui'), async original => ({ ...await original(), createCanvasDataClient: () => api, createMediaClient: () => ({ prepare: api.mediaPrepare, status: api.mediaStatus }) }))
 vi.mock('vue-i18n', async original => ({ ...await original<typeof import('vue-i18n')>(), useI18n: () => ({ t: (key: string) => key }) }))
 vi.mock('@/renderer/extensions/vueNodes/components/ImagePreview.vue', async () => {
@@ -157,4 +163,32 @@ describe('scientific image component widget', () => {
     expect(fetch).toHaveBeenCalledWith(expect.stringContaining('/viewer/consumer/'), expect.objectContaining({ method: 'DELETE' }))
   })
 
+})
+
+
+it('matches native resolved IMAGE bindings through bypass and hides results after rewiring', async () => {
+  const graph = new LGraph()
+  graphState.root = graph
+  const source = new LGraphNode('Source')
+  source.addOutput('IMAGE', 'IMAGE')
+  const bypass = new LGraphNode('Bypass')
+  bypass.addInput('images', 'IMAGE')
+  bypass.addOutput('IMAGE', 'IMAGE')
+  bypass.mode = LGraphEventMode.BYPASS
+  const data = new LGraphNode('Data')
+  data.comfyClass = 'APF_DATA_REFERENCE'
+  data.addInput('images', 'IMAGE')
+  for (const node of [source, bypass, data]) graph.add(node)
+  source.connect(0, bypass, 0)
+  bypass.connect(0, data, 0)
+  const before = graph.serialize()
+  const widget = fromPartial<ComponentWidget<string | object>>({ node: data, name: 'display', value: '', options: {} })
+  const view = render(CanvasDataWidget, { props: { widget } })
+  expect(JSON.parse(screen.getByTestId('data-bindings').textContent ?? '{}')).toEqual({ images: [String(source.id), 0] })
+  expect(graph.serialize()).toEqual(before)
+  bypass.mode = LGraphEventMode.ALWAYS
+  nativeApi.dispatchCustomEvent('graphChanged', null)
+  await waitFor(() => expect(JSON.parse(screen.getByTestId('data-bindings').textContent ?? '{}')).toEqual({ images: [String(bypass.id), 0] }))
+  expect(JSON.parse(screen.getByTestId('data-bindings').textContent ?? '{}')).toEqual({ images: [String(bypass.id), 0] })
+  view.unmount()
 })

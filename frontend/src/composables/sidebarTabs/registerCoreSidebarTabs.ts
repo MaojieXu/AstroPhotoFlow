@@ -4,6 +4,7 @@ import { useJobHistorySidebarTab } from '@/composables/sidebarTabs/useJobHistory
 import { useNodeLibrarySidebarTab } from '@/composables/sidebarTabs/useNodeLibrarySidebarTab'
 import {
   useLibrarySidebarTab,
+  useProjectSidebarTab,
   useSoftwareSidebarTab
 } from '@/platform/astrophotoflow'
 import { useSettingStore } from '@/platform/settings/settingStore'
@@ -36,6 +37,7 @@ export function registerCoreSidebarTabs() {
 
   sidebarTabStore.registerSidebarTab(useNodeLibrarySidebarTab())
   sidebarTabStore.registerSidebarTab(useLibrarySidebarTab())
+  sidebarTabStore.registerSidebarTab(useProjectSidebarTab())
   sidebarTabStore.registerSidebarTab(useWorkflowsSidebarTab())
   sidebarTabStore.registerSidebarTab(useSoftwareSidebarTab())
 

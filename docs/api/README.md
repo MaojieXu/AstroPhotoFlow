@@ -31,7 +31,7 @@ uv run --locked --no-sync pytest tests/modules/data/test_service.py -k openapi_s
 | Python跨模块调用 | 各模块`public.py`和`contracts`，从 [源码导航](../architecture/module-map.md) 进入 |
 | CLI | `apf --help`、`apf <分组> --help`，不在文档复制完整命令树 |
 | MCP | 服务`tools/list`返回的实际注册和输入schema；[现有用法与Skill](../development/library-agent-tools.md)补充业务流程 |
-| 节点参数／就绪 | 平台`list_nodes/get_node`或对应HTTP目录，完整定义按需读取 |
+| 节点参数／就绪 | `node_canvas_management` 的 `nodes.search/get/get_many` 或对应HTTP目录，完整定义按需读取 |
 | 原生页面消息 | `interfaces`及宿主桥接的实际类型；此协议不属于OpenAPI |
 
 网页经`/astrophotoflow/api/v1`同源代理，CLI／MCP访问领域服务`/api/v1`；保留workspace认证和来源检查。内部维护、原生调用及页面确认不因此公开为任意执行接口。

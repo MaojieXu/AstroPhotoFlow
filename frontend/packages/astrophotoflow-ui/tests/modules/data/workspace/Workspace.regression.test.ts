@@ -275,7 +275,7 @@ describe('first-stage regression fixes', () => {
     wrapper=mount(App,{global:{plugins:[pinia]}})
     await flushPromises()
     await openSettings()
-    await wrapper.findAll('.apf-management-tabs button')[1].trigger('click')
+    await wrapper.findComponent(Workspace).vm.selectArea('settings', 'equipment')
     await flushPromises()
     await wrapper.get('.apf-record').trigger('click')
     await flushPromises()
@@ -615,7 +615,7 @@ describe('first-stage regression fixes', () => {
     await openSettings()
     expect(wrapper.findAll('.apf-record')).toHaveLength(1)
 
-    await wrapper.findAll('.apf-management-tabs button')[1].trigger('click')
+    await wrapper.findComponent(Workspace).vm.selectArea('settings', 'equipment')
     await flushPromises()
 
     expect(wrapper.text()).toContain('请求失败')

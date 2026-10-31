@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { createCanvasDataClient, createMediaClient, scienceReferenceSchema } from '@astrophotoflow/ui'
+import { createCanvasDataClient, createMediaClient, scienceReferenceSchema, dataResultSchema } from '@astrophotoflow/ui'
 import type { CanvasInspect, MediaState, MediaViewerRequest } from '@astrophotoflow/ui'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -17,6 +17,10 @@ import type { ComponentWidget } from '@/scripts/domWidget'
 import { api } from '@/scripts/api'
 import { useApp } from '@/scripts/appInstance'
 import MediaViewer from './MediaViewer.vue'
+import DataRunWidget from './DataRunWidget.vue'
+import { useNodeOutputStore } from '@/stores/nodeOutputStore'
+import { createExecutableNodeMap } from '@/utils/executionUtil'
+import { getExecutionIdByNode } from '@/utils/graphTraversalUtil'
 
 const { widget } = defineProps<{ widget: ComponentWidget<string | object> }>()
 const { t } = useI18n()
@@ -25,6 +29,31 @@ const graphChanged = () => { revision.value++ }
 api.addEventListener('graphChanged', graphChanged)
 onBeforeUnmount(() => api.removeEventListener('graphChanged', graphChanged))
 const referenceText = computed(() => { void revision.value; return widget.node.widgets?.find(item => item.name === 'reference')?.value })
+const nodeOutputs = useNodeOutputStore()
+const bindings = computed(() => {
+  void revision.value
+  const result: Record<string, (string | number)[]> = {}
+  if (!widget.node.inputs?.some(input => ['science', 'images'].includes(input.name) && input.link != null)) return result
+  const root = useApp().rootGraph
+  const id = getExecutionIdByNode(root, widget.node)
+  const dto = id ? createExecutableNodeMap(root).get(id) : undefined
+  for (const [slot, input] of (dto?.inputs ?? []).entries()) {
+    if (!['science', 'images'].includes(input.name)) continue
+    const link = dto?.resolveInput(slot)
+    if (link && !link.widgetInfo) result[input.name] = [link.origin_id, link.origin_slot]
+  }
+  return result
+})
+const connected = computed(() => Object.keys(bindings.value).length > 0)
+const runtime = computed(() => {
+  if (widget.node.comfyClass !== 'APF_DATA_REFERENCE') return false
+  if (connected.value) return true
+  const entries = nodeOutputs.getNodeOutputs(widget.node)?.apf_data
+  if (!Array.isArray(entries)) return false
+  const parsed = dataResultSchema.safeParse(entries.at(-1))
+  try { return parsed.success && parsed.data.workflow_id === useApp().rootGraph.id && JSON.stringify(parsed.data.reference) === JSON.stringify(JSON.parse(String(referenceText.value))) }
+  catch { return false }
+})
 const index = ref(0)
 const data = ref<CanvasInspect>()
 const fileReference = computed(() => widget.node.comfyClass === 'APF_FILE_REFERENCE' || data.value?.format === 'other')
@@ -139,6 +168,7 @@ async function load() {
   const client = createCanvasDataClient((path, init) => fetch(path, { ...init, signal }))
   let waiting = false
   try {
+    if (runtime.value) { loading.value = false; return }
     if (typeof referenceText.value !== 'string' || !referenceText.value) {
       failure.value = t('astrophotoflow.chooseLibraryImage')
       loading.value = false
@@ -225,7 +255,7 @@ function openViewer() {
 }
 
 watch(referenceText, () => { index.value = 0; details.value = false; mediaRequest.value = undefined })
-watch([referenceText, index], () => void load(), { immediate: true })
+watch([referenceText, index, runtime], () => void load(), { immediate: true })
 onBeforeUnmount(() => {
   importController.abort()
   generation++
@@ -239,10 +269,12 @@ onBeforeUnmount(() => {
 <template>
   <div class="flex h-full w-full min-w-0 flex-col gap-2 px-2 py-1" @pointerdown.stop @pointermove.stop @pointerup.stop @keydown.stop @wheel.stop>
     <div class="flex shrink-0 items-center gap-1">
-      <Input v-model="importPath" class="min-w-0 flex-1" :aria-label="t('astrophotoflow.imagePath')" :placeholder="t('astrophotoflow.imagePath')" :disabled="importing" @keydown.enter.prevent="importImage" />
-      <Button size="sm" variant="secondary" :disabled="importing || !importPath.trim()" @click="importImage">{{ t(importing ? 'astrophotoflow.importingImage' : 'astrophotoflow.importImage') }}</Button>
+      <Input v-model="importPath" class="min-w-0 flex-1" :aria-label="t('astrophotoflow.imagePath')" :placeholder="t('astrophotoflow.imagePath')" :disabled="importing || connected" @keydown.enter.prevent="!connected && importImage()" />
+      <Button size="sm" variant="secondary" :disabled="importing || connected || !importPath.trim()" @click="importImage">{{ t(importing ? 'astrophotoflow.importingImage' : 'astrophotoflow.importImage') }}</Button>
     </div>
     <span v-if="importFailure" role="alert" class="text-error">{{ importFailure }}</span>
+    <DataRunWidget v-if="runtime" :widget="widget" :reference="referenceText" :bindings="bindings" />
+    <template v-else>
     <strong class="shrink-0 truncate text-base-foreground" :title="data?.name">{{ data?.name ?? t('astrophotoflow.libraryImage') }}</strong>
     <div v-if="fileReference" class="flex min-h-20 items-center gap-2 rounded-sm bg-component-node-widget-background p-3"><i class="icon-[lucide--file-text] size-6" aria-hidden="true" /><span class="break-words">{{ failure || t('astrophotoflow.results.fixedFile') }}</span></div>
     <div v-else class="group relative h-56 min-h-56 w-full overflow-hidden rounded-sm bg-component-node-widget-background" role="button" tabindex="0" :aria-label="t('astrophotoflow.media.open')" @click="openViewer" @keydown.enter.prevent="openViewer" @keydown.space.prevent="openViewer">
@@ -278,5 +310,6 @@ onBeforeUnmount(() => {
       </DialogContent></DialogPortal>
     </Dialog>
     <MediaViewer v-if="mediaRequest" :request="mediaRequest" @close="mediaRequest = undefined" @index="index = $event" />
+    </template>
   </div>
 </template>

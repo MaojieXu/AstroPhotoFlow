@@ -75,4 +75,5 @@ class MediaState(StrictModel):
     frame_count: int | None = None
     duration: float | None = None
     note: str | None = None
+    display_recipe: dict | None = None
     error: PreviewIssue | None = None
