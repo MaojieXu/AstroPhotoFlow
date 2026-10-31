@@ -13,6 +13,7 @@ import CanvasDataWidget from './CanvasDataWidget.vue'
 
 const api = vi.hoisted(() => ({ importPath: vi.fn(), prepare: vi.fn(), inspect: vi.fn(), getBlob: vi.fn(), display: vi.fn(), displayStatus: vi.fn(), mediaPrepare: vi.fn(), mediaStatus: vi.fn() }))
 vi.mock('@/scripts/appInstance', () => ({ useApp: () => ({ canvas: { emitBeforeChange: vi.fn(), emitAfterChange: vi.fn(), setDirty: vi.fn() } }) }))
+vi.mock('@/stores/nodeOutputStore', () => ({ useNodeOutputStore: () => ({ getNodeOutputs: () => undefined }) }))
 vi.mock(import('@astrophotoflow/ui'), async original => ({ ...await original(), createCanvasDataClient: () => api, createMediaClient: () => ({ prepare: api.mediaPrepare, status: api.mediaStatus }) }))
 vi.mock('vue-i18n', async original => ({ ...await original<typeof import('vue-i18n')>(), useI18n: () => ({ t: (key: string) => key }) }))
 vi.mock('@/renderer/extensions/vueNodes/components/ImagePreview.vue', async () => {

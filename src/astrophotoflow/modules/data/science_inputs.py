@@ -503,6 +503,7 @@ def check_output(settings: Settings, *, run_directory: Path, path: Path, expecte
         try:
             inspected = inspect_fits(resolved, colour_layout=colour_layout, verify_span=True)
             scientific_metadata.update(selected_hdu=inspected["selected_hdu"], hdu_count=len(inspected["hdus"]))
+            scientific_metadata['observed_parameters'] = inspected['parsed_parameters']
             scientific_metadata['frame_count'] = _fits_frame_count(inspected)
             selected = next((row for row in inspected['hdus'] if row['is_selected']), None)
             if selected is not None:
@@ -617,7 +618,7 @@ def _output_registration(session: Session, task: AssetTask, created: bool) -> Ou
 
 
 def register_output(database: Database, settings: Settings, *, task_id: UUID, output: CheckedOutput,
-                    name: str | None) -> OutputRegistration:
+                    name: str | None, provenance: dict | None = None) -> OutputRegistration:
     try:
         relative = output.path.resolve(strict=False).relative_to(output.run_directory.resolve(strict=False)).as_posix()
     except ValueError as exc:
@@ -653,6 +654,7 @@ def register_output(database: Database, settings: Settings, *, task_id: UUID, ou
         now = datetime.now(timezone.utc)
         report = {
             "output_registration": True, "output_identity": identity, "output_name": effective_name,
+            'output_provenance': provenance,
             'output_colour_layout': (current.scientific_metadata or {}).get('colour_layout'),
             "upload_source_task_id": task_id_text,
             "upload_files": [{"name": effective_name, "size": current.byte_size, "received": current.byte_size,

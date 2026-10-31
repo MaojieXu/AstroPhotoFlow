@@ -164,11 +164,19 @@ def _tool_data(result, service: dict) -> dict:
     return result.structured_content
 
 
+async def _call_operation(session, name, arguments, **kwargs):
+    # Exercise migrated operations through the actual public domain gateways.
+    from astrophotoflow.interfaces.mcp.registry import DATA_NAMES, CANVAS_NAMES
+    mapping = DATA_NAMES if name in DATA_NAMES else CANVAS_NAMES
+    domain = 'data_management' if name in DATA_NAMES else 'node_canvas_management'
+    return await session.call_tool(domain, {'operation': mapping[name], 'arguments': arguments}, **kwargs)
+
+
 async def _wait_mcp_task(session: ClientSession, service: dict, task_id: str) -> dict:
     deadline = time.monotonic() + 30
     while time.monotonic() < deadline:
         try:
-            result = await session.call_tool("get_import_task", {"task_id": task_id}, read_timeout_seconds=5)
+            result = await _call_operation(session, "get_import_task", {"task_id": task_id}, read_timeout_seconds=5)
         except TimeoutError as exc:
             pytest.fail(f"Reading import task {task_id} timed out: {exc}\nService log:\n{_service_logs(service)}")
         task = _tool_data(result, service)
@@ -186,31 +194,31 @@ def test_apf_mcp_stdio_tools_and_parameter_patch_protocol(service, tmp_path):
             async with ClientSession(read_stream, write_stream) as session:
                 await session.initialize()
                 listed_tools = await session.list_tools()
-                assert {tool.name for tool in listed_tools.tools} >= {
-                    "import_photo", "get_import_task", "list_assets", "get_asset", "update_asset_parameters",
-                    "prepare_canvas_data", "list_canvas_pages", "add_canvas_data", "get_canvas_request", "get_canvas", "edit_canvas",
-                }
-                canvas_tool = next(tool for tool in listed_tools.tools if tool.name == 'edit_canvas')
-                assert 'control_token' not in json.dumps(canvas_tool.model_dump(mode='json', by_alias=True))
-                assert 'delete_node' in json.dumps(canvas_tool.model_dump(mode='json', by_alias=True))
+                assert {tool.name for tool in listed_tools.tools} == {'data_management', 'node_canvas_management'}
+                assert all('$defs' not in tool.input_schema for tool in listed_tools.tools)
+                definition = _tool_data(await session.call_tool('node_canvas_management', {
+                    'operation': 'describe', 'arguments': {'operations': ['canvas.edit']}
+                }), service)
+                assert 'control_token' not in json.dumps(definition)
+                assert 'delete_node' in json.dumps(definition)
 
                 photo = tmp_path / "mcp-synthetic.png"
                 _write_png(photo)
-                accepted = _tool_data(await session.call_tool("import_photo", {"path": str(photo)}, read_timeout_seconds=10), service)
+                accepted = _tool_data(await _call_operation(session, "import_photo", {"path": str(photo)}, read_timeout_seconds=10), service)
                 task = await _wait_mcp_task(session, service, accepted["task_id"])
                 asset_id = str(task["items"][0]["asset_id"])
 
-                assets = _tool_data(await session.call_tool("list_assets", {"limit": 50, "offset": 0}, read_timeout_seconds=5), service)
+                assets = _tool_data(await _call_operation(session, "list_assets", {"limit": 50, "offset": 0}, read_timeout_seconds=5), service)
                 assert asset_id in {str(item["id"]) for item in assets["items"]}
-                asset = _tool_data(await session.call_tool("get_asset", {"asset_id": asset_id}, read_timeout_seconds=5), service)
+                asset = _tool_data(await _call_operation(session, "get_asset", {"asset_id": asset_id}, read_timeout_seconds=5), service)
                 assert asset["revision"] == 1
 
-                prepared = _tool_data(await session.call_tool("prepare_canvas_data", {"body": {"entry_type": "asset", "id": asset_id, "version_id": asset["current_version_id"]}}, read_timeout_seconds=5), service)
+                prepared = _tool_data(await _call_operation(session, "prepare_canvas_data", {"body": {"entry_type": "asset", "id": asset_id, "version_id": asset["current_version_id"]}}, read_timeout_seconds=5), service)
                 assert prepared["native_type"] == "APF_DATA_REFERENCE"
                 assert prepared["reference"]["asset_version_id"] == asset["current_version_id"]
 
                 first = _tool_data(
-                    await session.call_tool(
+                    await _call_operation(session,
                         "update_asset_parameters",
                         {"asset_id": asset_id, "base_revision": 1, "parameters": {"gain": 0, "exposure_seconds": 0}},
                         read_timeout_seconds=5,
@@ -221,7 +229,7 @@ def test_apf_mcp_stdio_tools_and_parameter_patch_protocol(service, tmp_path):
                 assert first["parameters"]["exposure_seconds"] == 0
 
                 cleared = _tool_data(
-                    await session.call_tool(
+                    await _call_operation(session,
                         "update_asset_parameters",
                         {"asset_id": asset_id, "base_revision": 2, "parameters": {"gain": None}},
                         read_timeout_seconds=5,
@@ -231,14 +239,14 @@ def test_apf_mcp_stdio_tools_and_parameter_patch_protocol(service, tmp_path):
                 assert cleared["parameters"]["gain"] is None
                 assert cleared["parameters"]["exposure_seconds"] == 0
 
-                stale = await session.call_tool(
+                stale = await _call_operation(session,
                     "update_asset_parameters",
                     {"asset_id": asset_id, "base_revision": 2, "parameters": {"exposure_seconds": 12}},
                     read_timeout_seconds=5,
                 )
                 assert stale.is_error
                 assert "REVISION_CONFLICT" in _result_text(stale)
-                current = _tool_data(await session.call_tool("get_asset", {"asset_id": asset_id}, read_timeout_seconds=5), service)
+                current = _tool_data(await _call_operation(session, "get_asset", {"asset_id": asset_id}, read_timeout_seconds=5), service)
                 assert current["revision"] == 3
                 assert current["parameters"]["exposure_seconds"] == 0
 
@@ -253,7 +261,7 @@ def test_apf_mcp_business_domains_protocol(service, tmp_path):
                 await session.initialize()
 
                 async def call(name, **arguments):
-                    return _tool_data(await session.call_tool(name, arguments, read_timeout_seconds=10), service)
+                    return _tool_data(await _call_operation(session, name, arguments, read_timeout_seconds=10), service)
 
                 # Real discriminated equipment schemas, registered refs and inline snapshots.
                 equipment = {}
@@ -383,7 +391,7 @@ def test_apf_mcp_business_domains_protocol(service, tmp_path):
                     assert repaired["items"][0]["asset_id"] == broken["asset_id"]
                 assert (night / "good.png").is_file()
                 for tool_name in ("cancel_import_task", "resume_import_task"):
-                    rejected = await session.call_tool(tool_name, {"task_id": task["id"]})
+                    rejected = await _call_operation(session, tool_name, {"task_id": task["id"]})
                     assert rejected.is_error and "TASK_STATE_CONFLICT" in _result_text(rejected)
                     assert "request_id=" in _result_text(rejected)
 
@@ -479,31 +487,31 @@ def test_apf_display_preview_stdio_image_and_cli_export(service, tmp_path):
         async with stdio_client(params) as streams:
             async with ClientSession(*streams) as session:
                 await session.initialize()
-                initial = _tool_data(await session.call_tool("get_display_preview_status", {
+                initial = _tool_data(await _call_operation(session, "get_display_preview_status", {
                     "asset_id": asset_id, "version_id": version_id,
                 }), service)
                 assert initial["status"] == "not_ready" and initial["error"]["code"] == "DISPLAY_NOT_GENERATED"
-                scheduled = _tool_data(await session.call_tool("schedule_display_preview", {
+                scheduled = _tool_data(await _call_operation(session, "schedule_display_preview", {
                     "asset_id": asset_id, "version_id": version_id,
                 }), service)
                 assert scheduled["status"] in {"generating", "available"}
                 deadline = time.monotonic() + 10
                 while time.monotonic() < deadline:
-                    state = _tool_data(await session.call_tool("get_display_preview_status", {
+                    state = _tool_data(await _call_operation(session, "get_display_preview_status", {
                         "asset_id": asset_id, "version_id": version_id,
                     }), service)
                     if state["status"] != "generating":
                         break
                     await asyncio.sleep(0.1)
                 assert state["status"] == "available" and (state["width"], state["height"]) == (1080, 540), state
-                result = await session.call_tool("read_display_preview", {"asset_id": asset_id, "version_id": version_id})
+                result = await _call_operation(session, "read_display_preview", {"asset_id": asset_id, "version_id": version_id})
                 assert not result.is_error and result.structured_content is None
                 assert len(result.content) == 1 and result.content[0].type == "image"
                 assert result.content[0].mime_type == "image/jpeg"
                 jpeg = b64decode(result.content[0].data)
                 with Image.open(BytesIO(jpeg)) as image:
                     assert image.format == "JPEG" and image.size == (1080, 540)
-                assert _tool_data(await session.call_tool("schedule_display_preview", {
+                assert _tool_data(await _call_operation(session, "schedule_display_preview", {
                     "asset_id": asset_id, "version_id": version_id,
                 }), service)["status"] == "available"
                 return jpeg

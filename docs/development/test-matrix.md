@@ -2,6 +2,34 @@
 
 本页保留各日期、候选和范围的历史证据；段落中的“当前／尚未实现／未合并”只指当时，最新状态见 [当前上下文](current-context.md)。按具体条目查询，不作为每次任务的必读清单。
 
+<a id="database-mcp-domains-feature"></a>
+
+<a id="data-node-input-export-feature"></a>
+
+## 2026-10-30 Data节点输入与完整结果导出：Feature静态验证
+
+分支 `codex/database-mcp-optimization`，基点 `711bd850b122ca64e1f147c645ba6fc0015c42ab`，候选为保留已有MCP／导入改动的未提交工作区；未合并、推送或发布。
+
+- 原生节点：Data保留ID／reference／science输出，新增互斥science与images输入及输出节点声明，复用原生执行上下文、队列、输出Store和图序列化。恢复旧图时通过原生API补缺失端口，不改节点ID、已有引用或连线。File保持原输入／输出契约。
+- 后端：新增独立Data执行记录和运行结果解析，IMAGE批次固定为完整FITS（float16提升float32，float32／64保留），不伪造Bundle调用或拍摄资料，不自动登记素材。新增共享HTTP／MCP `exports.*`，选定成员可保存素材库或导出本机，任务回执防重复、保留部分结果、明确取消／中断；既有上游不重跑。新增tifffile 2026.10.15、PyPNG 0.20220715.0，锁文件同步，依赖安装在Feature私有环境。
+- 格式与数据：实现FITS／XISF／TIFF／PNG／JPEG及各自精度组合；默认原格式／原精度复制完整容器。数值转换不自动裁切、归一化或显影；显示转换固定完整查看器参数，按完整分辨率处理。高精度TIFF／PNG读取同步更新。多HDU／视频转换需选定平面／帧；复杂TIFF、多图XISF和RAW数值开发明确要求上游处理或原样复制。入库保留来源及转换依据，本机同名文件不覆盖。
+- 已完成：Python源码与新增测试文件编译；UI包及原生前端类型检查；完整网页构建；OpenAPI快照生成；独立双服务启动。首轮构建暴露新增测试mock缺少方法及引用未安装测试辅助包，定向修正后构建通过，未为此新增测试依赖。
+- 页面展示：浏览器已重新加载最终构建，从节点库放置空Data展示节点，确认science／images真实输入、science输出及原生输出节点菜单。未执行图、未操作真实素材、未实际保存／导出文件。撤销展示节点的Ctrl+Z清理动作被自动审批拒绝，因此保留当前展示画布。截图 `.artifacts/reports/data-node/data-node-preview.png`。
+- 已编写未执行：`tests/modules/data/test_image_exports.py`（格式精度回读、灰度／RGB、数值决策与NaN/Inf、多HDU、IMAGE固定与科学下游解析、显式入库／本机导出、防重、部分失败）；`tests/interfaces/comfyui/test_data_node.py`（原生端口、互斥和File契约）；`DataRunWidget.test.ts`、`DataExportDialog.test.ts`（真实结果／来源匹配、失败运行隔离、格式精度联动、取消选择器及未知受理恢复），同步原控件测试。测试套件、实际Data→Siril、原生队列／缓存／图保存重载、取消恢复及各格式跨软件科学验证留Manager集成阶段，未宣称通过。
+- 预览与版本：网页 `http://127.0.0.1:32688`，服务 `http://127.0.0.1:32690`。构建manifest为上述基点SHA，回执 `dirty=true`；最终启动 `completed=true`、`ready=true`。回执副本 `.artifacts/reports/database-mcp/data-node-prepare.json`，最新回执 `.artifacts/dev-prepare.json`，阶段日志由回执引用。正常dev、默认workspace、全局MCP及独立Siril仓库未修改。
+
+## 2026-10-30 数据库与MCP分层：Feature实现及静态验证
+
+分支 `codex/database-mcp-optimization`，基点 `711bd850b122ca64e1f147c645ba6fc0015c42ab`；候选仍为未提交工作区，不是已合入dev或用户验收通过的版本。
+
+- 实现：仅注册 `data_management`、`node_canvas_management`，通过固定注册表执行具名操作，按需发现／读取契约；既有69项能力迁移，旧扁平MCP名不再注册。节点摘要分页、指定定义批量读取、MCP原生图片与错误回执保留。更新仓库Skill与操作参考；已有客户端需要重连，不修改全局注册。
+- 导入：递归只读检查来源及分组依据，扫描清单留在workspace；文件头优先、名称为待确认线索。用户确认后批量受理，保留原件与固定来源范围、请求ID防重复、各阶段独立事实及项目关联结果。聚合等待有20秒上限，重试项目关联不重新导入。沿用既有任务、项目、设备、校准及版本模型，无数据库迁移或新增依赖。
+- 网页：素材库后增加项目入口，复用项目资料和固定素材／组引用界面；不包含项目与原生图文件保存联动。独立网页 `http://127.0.0.1:32688`，平台服务 `http://127.0.0.1:32690`。
+- 已完成：Python编译、MCP注册／契约静态装载、OpenAPI快照生成、UI包与原生前端类型检查及网页构建。构建版本为上述基点SHA加未提交修改，构建manifest非unknown。浏览器确认工作台和项目空态实际渲染，未创建项目或导入真实素材。
+- 静态体积对比：等价69项扁平工具的输入schema合计87,762字节，两个领域入口合计513字节（JSON序列化，仅输入schema，不代表全部上下文或总延迟）。实际批量导入调用次数、返回体积及耗时尚未实测，不能据此宣称端到端加速通过。
+- 已编写未执行：`tests/integration/test_mcp_domains.py`、`tests/modules/data/test_import_batches.py`；同步迁移既有stdio／原生图片协议测试与侧栏注册测试。覆盖发现直达、范围／来源变化、请求ID冲突、部分失败、项目revision冲突与关联重试、取消／恢复、分页及等待边界。测试套件与综合验收留Manager集成阶段，不把编译或页面展示当作功能验证。
+- 证据：本Feature的 `.artifacts/reports/database-mcp/build-prepare.json` 保存带build阶段的回执，`.artifacts/dev-prepare.json` 为最终启动回执；对应阶段日志由回执引用。项目截图在 `.artifacts/reports/database-mcp/projects-preview.png`。正常dev、默认workspace、全局MCP和真实素材未操作；未提交、推送、合并或发布。
+
 ## 2026-10-30 Siril完整Bundle候选：Feature静态验证
 
 候选分支`codex/siril-full-bundle`，平台基线`2a6053eb3e8351156d7fb2b4b1ed208e6e628bc0`；独立私有Bundle基线`12fd2d1d55daeadf7acb3972385d5c2bfcb52d4d`，候选`0.2.0-dev.1`／Siril 1.4.4／SDK v2。以下是未提交源码的Feature记录，不表示已发布、原生加载或用户验收。

@@ -380,6 +380,21 @@ def _save_preview(database: Database, settings: Settings, version_id: str, hdu_i
 
 
 def _ordinary_image(path: Path, stretch: tuple[float, float] | None = None, max_edge: int = 100, *, auto: bool = False, auto_stretch: dict | None = None) -> tuple[Image.Image, dict | None]:
+    if path.suffix.lower() in {'.tif', '.tiff', '.png'}:
+        from .image_formats import read_raster, valid_image
+        pixels = valid_image(read_raster(path))
+        values = sample_pixels(pixels, max_edge * 2)
+        if auto:
+            recipe = auto_stretch if auto_stretch is not None else calculate_stretch(pixels)
+            preview = render_stretch(values, recipe)
+            display = {'auto_stretch': recipe, 'statistics': 'stratified-random-1'}
+        elif pixels.dtype != np.uint8:
+            low, high = stretch if stretch is not None else stretch_bounds(values)
+            preview, display = _display(values, (low, high)), {'stretch_low': low, 'stretch_high': high}
+        else:
+            preview, display = Image.fromarray(np.asarray(values, dtype=np.uint8)).convert('RGB'), None
+        preview.thumbnail((max_edge, max_edge), Image.Resampling.LANCZOS)
+        return preview, display
     with Image.open(path) as source:
         source.seek(0)
         image = ImageOps.exif_transpose(source)
@@ -699,6 +714,7 @@ def _register_asset(database: Database, settings: Settings, task_data: dict, ite
                 "defaults_snapshot": deepcopy(defaults),
             }},
             scientific_metadata={"format": category, "metadata_status": metadata_status,
+                                 **({'export_provenance': task_data['output_provenance']} if task_data.get('output_provenance') is not None else {}),
                                  **({'colour_layout': task_data['output_colour_layout']} if task_data.get('output_colour_layout') is not None else {}),
                                  "parse_error": parse_error, "observed_parameters": parsed,
                                  "registration_source_stamp": source_stamp},
@@ -1121,6 +1137,7 @@ def process_task(database: Database, settings: Settings, task_id: str, workers=N
                 "output_registration": bool((task.report or {}).get("output_registration")),
                 "output_name": (task.report or {}).get("output_name"),
                 'output_colour_layout': (task.report or {}).get('output_colour_layout'),
+                'output_provenance': (task.report or {}).get('output_provenance'),
             }
         if not task_data["retry_of_task_id"]:
             _enumerate_task(database, settings, task_id, task_data)
@@ -1241,6 +1258,12 @@ def process_task(database: Database, settings: Settings, task_id: str, workers=N
                 task.updated_at = datetime.now(timezone.utc)
 
 
+    finally:
+        # Batch project association is part of intake, not an Agent polling side effect.
+        from .import_batches import finalize_task_batch
+        finalize_task_batch(database, task_id)
+
+
 def mark_interrupted_tasks(database: Database, *, locale='en') -> int:
     count = 0
     with database.write_session() as session:
@@ -1254,4 +1277,6 @@ def mark_interrupted_tasks(database: Database, *, locale='en') -> int:
         for item in running_items:
             item.status = "interrupted"
             item.updated_at = datetime.now(timezone.utc)
+    from .import_batches import recover_batch_links
+    recover_batch_links(database)
     return count

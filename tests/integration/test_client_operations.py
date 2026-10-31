@@ -239,8 +239,8 @@ def test_mcp_display_image_uses_sdk_content_conversion(monkeypatch):
     api = AssetClient.__new__(AssetClient)
     api.client = httpx.Client(base_url="http://service/api/v1", transport=httpx.MockTransport(lambda request: httpx.Response(200, content=jpeg, headers={"Content-Type": "image/jpeg"})))
     monkeypatch.setattr(mcp_server, "AssetClient", lambda: api)
-    tool = mcp_server.server._tool_manager.get_tool("read_display_preview")
-    result = asyncio.run(tool.run({"asset_id": "asset", "version_id": "version"}, None, convert_result=True))
+    tool = mcp_server.server._tool_manager.get_tool("data_management")
+    result = asyncio.run(tool.run({"operation":"previews.read", "arguments":{"asset_id": "asset", "version_id": "version"}}, None, convert_result=True))
     assert result.structured_content is None and len(result.content) == 1
     assert result.content[0].type == "image" and result.content[0].mime_type == "image/jpeg"
     assert b64decode(result.content[0].data) == jpeg

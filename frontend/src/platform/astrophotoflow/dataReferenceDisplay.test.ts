@@ -36,6 +36,7 @@ describe('Nodes 2.0 data reference display', () => {
     expect(display?.visibility && isWidgetVisibleOnSurface(display.visibility, 'vueNode', { showAdvanced: false })).toBe(true)
     expect(node.serialize().widgets_values).toEqual([value])
     expect(node.widgets?.filter(widget => widget.name === 'apf_data_display')).toHaveLength(1)
+    expect(node.inputs.map(input => [input.name, input.type])).toEqual([['science', 'APF_SCIENCE'], ['images', 'IMAGE']])
   })
 
   it('registers the preview in the native DOM layer when added and releases it when removed', () => {

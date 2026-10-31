@@ -64,7 +64,7 @@ def _cancel(process, desktop):
             desktop.restore_owner()
 
 
-def select_local_paths(mode: str, initial_path: Path, cancelled: Event | None = None) -> list[Path]:
+def select_local_paths(mode: str, initial_path: Path, cancelled: Event | None = None, suggested_name: str | None = None) -> list[Path]:
     if os.name != "nt":
         raise ConfigurationError("系统文件选择窗口目前仅支持Windows。")
     if not _selection_lock.acquire(blocking=False):
@@ -73,12 +73,12 @@ def select_local_paths(mode: str, initial_path: Path, cancelled: Event | None = 
         if cancelled is not None and cancelled.is_set():
             return []
         desktop = _Desktop()
-        return _choose(mode, initial_path, desktop, cancelled)
+        return _choose(mode, initial_path, desktop, cancelled, suggested_name) if suggested_name is not None else _choose(mode, initial_path, desktop, cancelled)
     finally:
         _selection_lock.release()
 
 
-def _selection_script(mode, initial_path, owner):
+def _selection_script(mode, initial_path, owner, suggested_name=None):
     encoded = base64.b64encode(str(initial_path).encode("utf-8")).decode("ascii")
     patterns = ";".join("*" + extension for extension in SUPPORTED_EXTENSIONS)
     script = """
@@ -199,6 +199,17 @@ $dialog.Title = '选择本机素材文件夹'
 $dialog.SelectedPath = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('""" + encoded + """'))
 """
         selected = "@($dialog.SelectedPath)"
+    elif mode == 'save':
+        filename = base64.b64encode((suggested_name or 'image.fits').encode('utf-8')).decode('ascii')
+        script += """
+$dialog = New-Object Windows.Forms.SaveFileDialog
+$dialog.Title = '导出完整图像'
+$dialog.OverwritePrompt = $false
+$dialog.AddExtension = $false
+$dialog.FileName = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('""" + filename + """'))
+$dialog.InitialDirectory = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('""" + encoded + """'))
+"""
+        selected = '@($dialog.FileName)'
     else:
         script += """
 $dialog = New-Object Windows.Forms.OpenFileDialog
@@ -225,8 +236,8 @@ try {
     return script
 
 
-def _choose(mode, initial_path, desktop, cancelled):
-    script = _selection_script(mode, initial_path, desktop.owner)
+def _choose(mode, initial_path, desktop, cancelled, suggested_name=None):
+    script = _selection_script(mode, initial_path, desktop.owner, suggested_name)
     command = base64.b64encode(script.encode("utf-16-le")).decode("ascii")
     args = ["powershell.exe", "-NoProfile", "-STA", "-EncodedCommand", command]
     process = subprocess.Popen(args, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE, creationflags=subprocess.CREATE_NO_WINDOW)

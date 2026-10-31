@@ -1,6 +1,6 @@
 # Library agent tools
 
-The Python `AssetClient`, `apf` CLI and `apf mcp` stdio server share explicit domain operations over the authenticated local HTTP service. They use the same workspace config/token and business rules as the UI. They do not open SQLite or change workspace activation/MCP registration. Existing `client.py` imports, transport/context manager, `ServiceApiError`, `apf`/`apf-service` entrypoints, workbench flags and five original MCP names remain compatible.
+The Python `AssetClient`, `apf` CLI and `apf mcp` stdio server share explicit domain operations over the authenticated local HTTP service. They use the same workspace config/token and business rules as the UI. They do not open SQLite or change workspace activation/MCP registration. Existing `client.py` imports, transport/context manager, `ServiceApiError`, `apf`/`apf-service` entrypoints and workbench flags remain compatible. MCP clients must reconnect to use the two domain tools; flat names have been replaced.
 
 ## Structure and request contracts
 
@@ -9,7 +9,7 @@ The Python `AssetClient`, `apf` CLI and `apf mcp` stdio server share explicit do
 - `interfaces/cli/commands.py` maps named CLI commands to those methods; `interfaces/mcp/tools/` contains explicit typed MCP functions over the same methods.
 - Pydantic request models from `contracts/` are reused directly; the old backend schema paths are retired. `PhotoImportOptions` describes upload metadata only; file names and sizes are built from supplied local paths and validated by `UploadImportCreate`.
 
-Complex CLI requests use `--data '<JSON>'` or `--data '@request.json'` for UTF-8 JSON. MCP requests use a typed `body` object, except `import_photo`/`import_photos` use optional `options`, and the original `update_asset_parameters` retains `asset_id`, `base_revision`, `parameters`. Published MCP schemas contain the full nested backend contracts, including equipment discriminators and revision fields. Unknown fields fail validation before HTTP.
+Complex CLI requests use `--data '<JSON>'` or `--data '@request.json'` for UTF-8 JSON. MCP requests use a typed `body` object, except `imports.upload_one`/`imports.upload` use optional `options`, and the original `assets.update_parameters` retains `asset_id`, `base_revision`, `parameters`. Operation describe results contain the full nested backend contracts, including equipment discriminators and revision fields; top-level tool schemas do not embed them. Unknown fields fail validation before HTTP.
 
 Serialization uses `model_dump(mode="json", exclude_unset=True)` recursively. Omitted fields remain omitted; explicit null and numeric zero survive. A stale revision fails with the backend's `REVISION_CONFLICT`, HTTP status, field details and request ID. The CLI prints a failure to stderr and exits 1; MCP returns a tool error preserving that information. No blind conflict retries or fallback values are introduced.
 
@@ -25,37 +25,35 @@ There is no arbitrary-HTTP MCP tool. Legacy capture-profile endpoints, FITS HDU/
 
 ## Active canvas editing
 
-Read `list_canvas_pages` and `get_canvas` to locate the user's exact active graph. On an explicit user edit request, use `edit_canvas` or `add_canvas_data` directly with the current target and content; no handoff or control marker is required. CLI equivalents are `apf canvas pages`, `get`, `edit`, `add-data` and `result`. Discover processing nodes with `list_nodes` / `get_node` before adding or configuring them. Canvas editing does not execute the workflow.
+Read `canvas.pages` and `canvas.get` to locate the user's exact active graph. On an explicit user edit request, use `canvas.edit` or `canvas.add_data` directly with the current target and content; no handoff or control marker is required. CLI equivalents are `apf canvas pages`, `get`, `edit`, `add-data` and `result`. Discover processing nodes with `nodes.search` / `nodes.get` before adding or configuring them. Canvas editing does not execute the workflow.
 
-`edit_canvas` supports `delete_node` for one explicit node. It removes that node and attached links through the native change/undo lifecycle, retaining other nodes and source assets. Missing nodes and native deletion-protected nodes fail without changing the graph.
+`canvas.edit` supports `delete_node` for one explicit node. It removes that node and attached links through the native change/undo lifecycle, retaining other nodes and source assets. Missing nodes and native deletion-protected nodes fail without changing the graph.
 
-Stop if the page, graph or content changes; do not automatically follow a new graph or overwrite manual changes after rereading. For an unknown result, query `get_canvas_request` with the original operation ID instead of replaying. Request fields and schemas remain defined by the published contracts.
+Stop if the page, graph or content changes; do not automatically follow a new graph or overwrite manual changes after rereading. For an unknown result, query `receipts.get` with the original operation ID instead of replaying. Request fields and schemas remain defined by the published contracts.
 
 ## Command and tool inventory
 
 List commands accept `--limit/--offset`. Searchable registries accept `--q/--status/--sort-by/--order`; asset lists additionally accept `--frame-type/--role`; equipment accepts `--kind`; presets accept `--equipment-setup-id`. `apf <group> <command> --help` lists the actual supported flags. `tasks get` has `--items-limit/--items-offset` for member paging. `library list` offers `--frame-class` in addition to frame type/role/name/order. Reference lists, version lists, calibration targets and trash retain their own paging scope.
 
-| CLI commands | MCP tools |
-|---|---|
-| `import-photo`, `import-photos` | `import_photo`, `import_photos` |
-| `imports roots/browse/local` | `list_import_roots`, `browse_import_root`, `import_local` |
-| `task`, `tasks list/get/cancel/resume/retry` | `get_import_task`, `list_import_tasks`, `cancel_import_task`, `resume_import_task`, `retry_import_items` |
-| `assets list/get/parameters/patch/versions/version` | `list_assets`, `get_asset`, `update_asset_parameters`, `update_asset`, `list_asset_versions`, `get_asset_version` |
-| `library list/remove` | `list_library_items`, `remove_library_items` |
-| `datasets create/list/get/patch/archive/versions/version/publish/member-parameters` | `create_dataset`, `list_datasets`, `get_dataset`, `update_dataset`, `list_dataset_versions`, `get_dataset_version`, `publish_dataset_version`, `update_dataset_members` |
-| `projects create/list/get/patch/archive` | `create_project`, `list_projects`, `get_project`, `update_project` |
-| `projects assets/asset/add-asset/remove-asset` | `list_project_assets`, `get_project_asset`, `add_project_asset`, `remove_project_asset` |
-| `projects datasets/dataset/add-dataset/remove-dataset` | `list_project_datasets`, `get_project_dataset`, `add_project_dataset`, `remove_project_dataset` |
-| `equipment create/list/get/patch/archive` | `create_equipment`, `list_equipment`, `get_equipment`, `update_equipment` |
-| `setups create/list/get/patch/archive` | `create_equipment_setup`, `list_equipment_setups`, `get_equipment_setup`, `update_equipment_setup` |
-| `presets create/list/get/patch/archive` | `create_capture_preset`, `list_capture_presets`, `get_capture_preset`, `update_capture_preset` |
-| `calibration targets` | `list_calibration_targets` |
-| `previews schedule/status/export` | `schedule_display_preview`, `get_display_preview_status`, `read_display_preview` |
-| `trash list/restore/delete-preview/delete` | `list_trash`, `restore_trash`, `preview_trash_delete`, `delete_trash` |
+MCP exposes only `data_management(operation, arguments)` and `node_canvas_management(operation, arguments)`. Existing flat MCP names are removed; reconnect clients to refresh their tool lists. HTTP and CLI commands retain their existing contracts.
 
-There are 58 tools. All five original names remain: `import_photo`, `get_import_task`, `list_assets`, `get_asset`, `update_asset_parameters`. `read_display_preview` is an explicit native MCP `ImageContent` response; ordinary import/task/asset responses contain metadata without embedded base64 JPEGs. The CLI export exclusively creates the requested local output file and returns its absolute path and byte count. An existing destination fails clearly without changing its bytes; choose a new output path on collision.
+Data groups: `imports`, `import_tasks`, `library`, `assets`, `datasets`, `projects`, `equipment`, `calibration`, `previews`, `trash`. Node/canvas groups: `nodes`, `canvas`, `receipts`, `runs`. Call known operations directly. `discover` accepts `query`, `group`, `limit` (1–10) and `offset`; exact matches include the full definition. `describe` accepts `operations: [names]` (1–10). Definitions, examples and validation come from the fixed Python registry and existing contracts, not this document. There are no empty Skill/feedback tools and no arbitrary HTTP/SQL/code gateway.
+
+For a user-confirmed night import, call data `imports.inspect` with `body: {paths: [absolute paths], recursive: true}`; retain the returned `scan_id` and suggested group IDs. Header facts take priority over filename clues. Show source/date range, group counts, unknowns/conflicts/exclusions and ask for confirmation before importing. Read additional groups with `imports.entries(kind="groups")`; file details and exclusions are paged only as needed.
+
+Submit once through `imports.submit`: `body: {scan_id, request_id, groups: [{name, group_id}]}`. Explicit ordered `member_ids` replace `group_id` when reorganizing. Only confirmed manual metadata goes into `options`; no guessed values are written automatically. Optional project association requires `project_id` and current `project_revision`. All source stamps are checked before acceptance; registration/copy checks retain the inspected stamps. This flow makes managed copies; direct `imports.local` folder scope and configured-root reference semantics are unchanged.
+
+Retain `request_id` before submitting. The same ID/body returns the accepted mapping; changed content conflicts. Query unknown acceptance by that ID; do not submit a new ID blindly. `import_tasks.wait(body={request_id, wait_seconds:20})` observes the whole batch, returns early on completion and otherwise reports `next_poll_seconds`. Registration, original/metadata/preview states and project linking remain separate. `projects.retry_import_links(request_id, body={base_revision})` retries only project association after reconciling the current project, never re-imports. Manifests live in workspace data; accepted batch mappings live in existing task reports. Service restart does not discard them.
+
+`nodes.search` returns at most ten summaries; `nodes.get/get_many` reads explicit full definitions. `previews.read` returns native MCP image content; routine data operations return structured metadata without embedded images. Existing CLI preview exports continue to create files exclusively and preserve an existing destination.
 
 ## Night import and automatic/manual classification
+
+Data nodes also accept either an upstream `APF_SCIENCE` reference or a native floating `IMAGE` batch. Connected inputs take precedence over local reference controls; conflicting inputs fail. Native IMAGE is fixed to complete FITS members in its native run directory (float16 promoted to float32, float32/64 retained), without registering assets. Only Data becomes a native output/preview node; File retains its original contract. Execution does not save to the library or export to the computer automatically.
+
+For an actual Data execution, `data_management` operation `exports.inspect` takes `run_id` and `execution_id`. `exports.submit` accepts `body` with a stable `request_id`, `source:{run_id,execution_id}`, ordered `member_indexes`, and `target:"library"|"local"`; local exports additionally require an absolute `destination` (a file for one member, a directory for several). `exports.status/cancel` observes/cancels the existing request. Unknown acceptance must be queried/recovered with the same ID and unchanged body, never by re-running the graph. Receipts retain each member's outcome, destination or registration task ID, and conversion facts; cancellation preserves completed members. Interrupted jobs are observed, not automatically replayed.
+
+The default is complete original-file copying. Explicit conversion supports FITS, XISF, TIFF, PNG and JPEG with only their advertised precisions. Integer conversions do not implicitly normalize, clip, develop RAW or use thumbnail JPEGs. Fractional/out-of-range/nonfinite values require an explicit conversion decision; normalization requires an explicit finite range and display rendering requires a frozen recipe. Multi-HDU/video conversion requires the selected HDU/frame. Multi-image XISF, complex TIFF layouts and sensor RAW numerical conversion require upstream explicit selection/development; original copying preserves those complete containers. Export settings affect copies, never the Data science output. Use `describe(exports.submit)` for exact fields and valid format/precision combinations rather than copying a second schema table here.
 
 ```powershell
 apf import-photo 'C:/Photos/one.fits'
@@ -88,7 +86,7 @@ The old single-photo client no longer hardcodes Light/subframe. Omitted classifi
 {"classification":{"frame_class":"subframe","frame_type":"light"},"parameters":{"gain":0,"exposure_seconds":120},"dataset_name":"Manually classified night"}
 ```
 
-Unknown stays unknown; filenames are not classification evidence. Parameter priority is manual non-null, observed file, frozen preset, unknown. The service freezes preset/setup facts when accepting the task and retries retain that snapshot. The client does not resolve mutable live presets. Multiple uploads create a logical dataset according to the existing backend rule, even when `create_dataset` is omitted.
+Unknown stays unknown; filename hints in inspection are proposals and only become manual classification when the user confirms the corresponding values. Parameter priority is manual non-null, observed file, frozen preset, unknown. The service freezes preset/setup facts when accepting the task and retries retain that snapshot. The client does not resolve mutable live presets. Multiple uploads create a logical dataset according to the existing backend rule, even when `create_dataset` is omitted.
 
 ## Revision edits, groups and project references
 

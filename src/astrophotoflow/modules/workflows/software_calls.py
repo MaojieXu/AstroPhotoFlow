@@ -48,6 +48,12 @@ def _record_ports(record):
 
 
 def _checked_file(settings, prompt_id, call_id, output_index, member_index, *, full=False):
+    from .data_nodes import result_directory, read_result, checked_member
+    if (result_directory(settings, prompt_id, call_id) / 'result.json').is_file():
+        record = read_result(settings, prompt_id, call_id)
+        if output_index != 0: raise ApiError(422, 'INVALID_REFERENCE', 'Data has one science output.')
+        checked = checked_member(settings, record, member_index)
+        return checked, {'output_display': record['members'][member_index]['display']}, {'type': 'APF_SCIENCE'}
     record = _read(settings, prompt_id, call_id)
     if record['state'] != 'completed':
         raise ApiError(409, 'OUTPUT_NOT_READY', '该调用尚未完成完整输出检查。', message_key='complete_output_validation_has_not_finished_for_this_invocation')
@@ -118,6 +124,19 @@ def _resolve_previous(settings, body: NativeBundleCall, locator: OutputLocator, 
     expected_type = expected.type
     if locator.run_id != body.prompt_id:
         raise ApiError(422, "INVALID_REFERENCE", "只接受同次原生运行内已检查的科学输出。", message_key='only_validated_scientific_outputs_from_the_same_native_run_are_accepted')
+    if locator.node_execution_id.startswith('data:'):
+        from .data_nodes import read_result, checked_member
+        record = read_result(settings, locator.run_id, locator.node_execution_id.removeprefix('data:'))
+        if expected_type != 'APF_SCIENCE' or locator.output_index != 0:
+            raise ApiError(422, 'INVALID_REFERENCE', 'Data output is APF_SCIENCE only.')
+        indexes = [locator.member_index] if locator.member_index is not None else list(range(len(record['members'])))
+        result = []
+        for index in indexes:
+            checked = checked_member(settings, record, index)
+            result.append(ResolvedOutputInput(kind='run_output', reference_index=0, locator=locator.model_copy(update={'member_index': index}),
+                read_path=checked.path, format=checked.format, selection={'kind': 'whole_file'}, byte_size=checked.byte_size,
+                content_hash=checked.content_hash, mtime_ns=checked.path.stat().st_mtime_ns, scientific_metadata=checked.scientific_metadata))
+        return result, []
     directory = settings.workspace / "runs" / str(body.prompt_id) / "siril"
     matches = [json.loads(path.read_text(encoding="utf-8")) for path in directory.glob("*.json")]
     matches = [record for record in matches if record["request"]["node_id"] == locator.node_execution_id and record["state"] == "completed"]
@@ -337,7 +356,7 @@ def register_siril_calls(app, settings):
 
     @app.delete(output_route + '/viewer/consumer/{consumer_id}', status_code=204, dependencies=[Depends(authenticate)])
     def release_output_view(prompt_id: UUID, call_id: UUID, output_index: int, member_index: int, consumer_id: UUID):
-        _read(settings, prompt_id, call_id)
+        _checked_file(settings, prompt_id, call_id, output_index, member_index)
         app.state.media_views.cancel_consumer(str(consumer_id))
         return Response(status_code=204)
 
