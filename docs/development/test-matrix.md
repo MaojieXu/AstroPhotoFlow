@@ -884,3 +884,20 @@
 - 真实升级／回退：通过网页单下拉与原生确认，完成dev.2恢复、dev.1回退、dev.2再次升级，各次固定tag／commit并达到160节点ready；dev.1无翻译时返回原文，dev.2恢复双语。服务PID `110752`、网页PID `31936`全程未变。官方列表排除历史v0.1.0／v0.1.1，dev.2为最新兼容开发版；选择／刷新／语言切换不自动安装、tag移动与失败缓存保留由定向回归覆盖。
 - 限制：未验收全新无缓存机器、冷CPU runtime、Linux／WSL、真实GitHub凭据失效／断网全过程或所有160节点科学处理。5个显式跳过用例与全面用户验收仍未完成；构建保留非阻塞上游告警。
 - 清理授权：通过后普通推送两个dev，远端包含候选后删除Feature workspace、私有runtime、分支和Worktree及其内部日志数据，不额外归档副本；本节已提交证据摘要留在Git。完整运行日志原在Feature `.artifacts/manager-integration/i18n/`，按用户要求随空间删除，历史日志路径不代表仍存在。
+
+
+<a id="database-mcp-data-export-integration"></a>
+
+## 数据库＋MCP优化与Data完整结果导出集成（2026-10-30，Git Manager）
+
+- 授权与版本：用户确认独立审查、必要测试、最小修复，通过后本地合并、普通推送dev并删除本Feature空间和归档原Chat。平台Base `711bd850b122ca64e1f147c645ba6fc0015c42ab`，原候选 `55484461b2f9cbccfe404a3b9f9f58d903f3ce71`，分支 `codex/database-mcp-optimization`。产品修复提交 `1925d394301a7bfe6e77776c8ae43460e82b0632`；准确前端构建、私有双服务和下述实际队列验证对应此SHA。其后仅补充Siril集成测试夹具及本验证记录，不再修改产品源码。
+- 最终范围：仅两个公开MCP工具 `data_management`／`node_canvas_management`；已知操作直调，陌生操作按需发现和读取定义。递归检查→分组／疑义→明确确认后批量受理→聚合等待，保留来源变化、防重复、部分失败、取消恢复与项目关联独立重试。独立项目管理与固定引用；Data互斥science／images输入、science单输出；执行和预览不自动入库，用户选择完整成员后保存素材库或本机。FITS／XISF／TIFF／PNG／JPEG精度组合、原样复制默认、显式数值转换、不覆盖和失败不重跑上游。未重写数据库、未修改独立Bundle、未实现Skill管理／反馈或项目原生图生命周期联动。
+- 独立只读审查：三位Reviewer分别覆盖导入／项目、科学数据与格式导出、MCP／原生UI；不继承开发Chat历史、不改代码、不代替测试。修复后原Reviewer复审均未发现剩余可确认缺陷。修复包括：项目引用限定任务实际发布且包含本组完整成员的版本，不追随current；按既有失败后追加语义保留该固定版本成员顺序；归档及后台异常明确失败，避免永久running；FITS应用已确认颜色布局，interleaved转planar同步重映射轴与WCS字段；RAW display同样拒绝隐式显影；导出JSON回执恢复严格嵌套UUID；Data绑定复用原生DTO map及resolveInput，支持旁路和子图上下文而保留结果目标校验。
+- 缺陷证据：六条新增回归先在候选上失败后通过，覆盖无头标记planar FITS（宽3静默错轴及宽7失败）、interleaved通道轴／WCS、RAW display、项目版本漂移和归档后重试。复审补充前序成员登记失败后重试成功的真实恢复回归。新增旁路及取消旁路后绑定变化与图序列化不变用例。既有UI两处仅改为从公开入口进入设备管理，保留数字类型和失败时不得串项目行的断言；旧Data同步直通断言改为科学引用契约校验，真实异步Data由队列验证。Siril旧条件测试夹具补齐SDK v2 operation／hidden／准确commit／完整参数及成员输出目录，保留关键结果断言；独立复审确认无断言弱化。
+- 后端验证：`tests/modules/data tests/modules/workflows tests/interfaces tests/integration tests/architecture`最终完整运行 **583 passed／5 skipped**（265.76秒）；另真实stdio整夜导入 **1 passed**，启用私有CPU解释器及已核对Bundle源码的两项Siril测试 **2 passed**。按测试身份去重并用后者替换两个条件跳过，最终 **586 passed／3 skipped**。剩余跳过为完整Bundle安装编辑移除热加载及M1生命周期／启动失败排空的显式维护窗口用例，不计为通过。合成截断FITS与现有ORM环排序告警保留。一次并行回归误用默认pytest临时目录导致初始化冲突，改用各自独立basetemp后重跑；最终计数仅来自独立目录成功结果。
+- 前端验证：UI包 **37文件286 passed**；受影响原生桥接／侧栏及executionUtil、ExecutableNodeDTO **18文件122 passed**（115项成功及CanvasDataWidget最终7项成功合并，无失败）。UI和原生类型检查及完整生产构建通过，保留非阻塞上游打包告警；Git空白检查通过。构建后通过固定bootstrap仅重启本Feature，最终回执completed／ready=true、dirty=false，网页32688、服务32690；回执run `e7f8b8f251c747ab832a95c16e57ae6a`，交接不使用旧候选清单。浏览器实际看到素材库、画布、项目独立入口和项目页，不只HTTP探活。
+- 真实stdio MCP：独立新stdio进程绑定测试服务，仅2工具，schema合计 **513 B**。递归两份合成FITS，扫描后入库为0，按确认组提交，聚合完成2成员，项目固定引用成功，重复request_id不新增任务／素材。实测本机暖环境：扫描0.214秒、首次提交0.228秒、聚合等待0.216秒、定义读取0.006秒；其他已知调用约0.18–0.37秒。不是大规模冷环境性能结论，且固定组提交由测试明确确认，不假装真实用户已批准任意来源。
+- 真实原生队列：在准确修复双服务运行合成 `EmptyImage→Data.images→Data.science` 两次，每次2个24×32 RGB float32完整成员。第二次只缓存上游IMAGE，两个Data均生成新run引用；workflow、input_bindings和成员数一致，前后未自动入库。随后选完整成员导出TIFF，回读形状24×32×3、float32及像素一致；显式保存另一个成员后库内仅增加1项，相同request_id再提交不重复入库。运行ID `92f3c974-f92d-480e-9891-d50005373ea3`／`e8d01b4c-89f6-4e2d-9f5d-966bafc9cc43`。
+- 真实Siril：独立临时目录中的干净Bundle dev `8310d4da2e68b2c3434fee22ca3ee100e8eb6dae`，与已发布 `5d16fb6fc10b4ee57de428d6eba522c918b1b441` 产品树一致，Bundle0.2.0-dev.2／Siril1.4.4；未改原Bundle仓库。两份32×32浮点合成输入经Data物化与科学引用解析交真实AutoStretch，完成2输出、顺序固定、尺寸与有限像素检查通过，外部原件及Data实际输入哈希均未改变；原生v3 schema／独立aiohttp会话检查通过。该验证不等于全160节点验收，也未声称已在Feature网页安装Bundle。
+- 限制：未完成用户整体验收、大规模整夜真实素材／冷缓存／长期可靠性、Linux／WSL、所有科学节点、复杂TIFF／多图XISF／RAW开发或完整工作流保存重载视觉闭环。IMAGE仅灰度／RGB浮点批次，float16固定转float32，无IMAGE下游输出；本机选择器仅Windows，不覆盖已存在文件。旧宿主缓存的扁平MCP schema需重连，新stdio已验证两域入口；不修改全局注册或默认指针。正常dev配置哈希保持原基线，main与其他Feature不变。
+- 清理口径：普通推送成功且远端dev包含最终候选后，删除919e Feature workspace、私有runtime、依赖缓存、合成导入／导出与运行证据、分支及Worktree，不额外备份。Git内本节及回归源码继续保留。完整日志原在该Feature `.artifacts/reports/database-mcp`，按授权随空间删除；历史日志路径不表示仍存在。当前Git Manager及a09c Node UI Feature保留。
