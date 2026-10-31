@@ -68,7 +68,7 @@ export function useAutomaticResults() {
         enabled: !!capability?.automatic_result_preview && enabled,
         available: source || !!capability?.available,
         identity: capability ? [capability.node.content_token, capability.operation?.content_token, capability.implementation_token, capability.development_source?.fingerprint] : null,
-        required: source ? ['reference'] : capability?.operation?.inputs.filter(input => input.required).map(input => capability.node.definition.execution.inputs[input.name] ?? input.name) ?? [] }]
+        required: source ? (['science', 'images'].some(name => value.inputs[name] !== undefined) ? [] : ['reference']) : capability?.operation?.inputs.filter(input => input.required).map(input => capability.node.definition.execution.inputs[input.name] ?? input.name) ?? [] }]
     }))
   }
 
@@ -117,6 +117,7 @@ export function useAutomaticResults() {
         const old = automaticResultStates.get(key)
         if (old) automaticResultStates.set(key, { ...old, submitted: signatures[id], phase: 'queued', error: undefined })
       }
+      let receivedReceipt = false
       await app.queuePrompt(0, 1, {
         queueNodeIds: targets.flatMap(id => { const value = tryNormalizeNodeExecutionId(id); return value ? [value] : [] }),
         intent: { trigger_source: 'auto_queue' },
@@ -130,10 +131,10 @@ export function useAutomaticResults() {
             obsolete = !matches
             return matches
           },
-          queued: promptId => { active = { promptId, owner, signatures, completed: new Set() } }
+          queued: promptId => { receivedReceipt = true; active = { promptId, owner, signatures, completed: new Set() } }
         }
       })
-      if (!active) {
+      if (!receivedReceipt) {
         for (const id of required) {
           const key = `${owner}:${id}`
           const old = automaticResultStates.get(key)

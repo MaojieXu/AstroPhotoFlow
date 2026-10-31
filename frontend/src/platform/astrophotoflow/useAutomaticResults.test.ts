@@ -166,3 +166,36 @@ it('releases a deleted queued prompt after native status, without looping or tre
   await vi.waitFor(() => expect(view.queuePrompt).toHaveBeenCalledTimes(2))
   view.unmount()
 })
+
+
+it('keeps success when execution finishes before the host queue refresh resolves', async () => {
+  const view = setup()
+  view.queuePrompt.mockImplementationOnce(async (_number, _count, options) => {
+    if (!options || Array.isArray(options) || !options.automaticResult) return false
+    options.automaticResult.queued('automatic-prompt')
+    api.dispatchCustomEvent('execution_success', { prompt_id: 'automatic-prompt', timestamp: 0 })
+    await Promise.resolve()
+    return true
+  })
+  await vi.advanceTimersByTimeAsync(1000)
+  await vi.waitFor(() => expect(view.queuePrompt).toHaveBeenCalledTimes(1))
+  expect(automaticResultStates.get(`${view.graph.id}:${view.id}`)?.phase).toBe('completed')
+  view.unmount()
+})
+
+
+it('allows connected Data science without requiring a second library reference', async () => {
+  const view = setup()
+  const source = Object.keys(view.prompt).find(id => id !== view.id)!
+  const data = new LGraphNode('Forward science')
+  data.comfyClass = 'APF_DATA_REFERENCE'
+  view.graph.add(data)
+  const id = String(data.id)
+  view.prompt[id] = { class_type: 'APF_DATA_REFERENCE', inputs: { science: [source, 0], reference: '' } }
+  view.prompt[view.id].inputs.image = [id, 0]
+  await vi.advanceTimersByTimeAsync(1000)
+  await vi.waitFor(() => expect(view.queuePrompt).toHaveBeenCalledTimes(1))
+  const options = view.queuePrompt.mock.calls[0]?.[2]
+  expect(options && !Array.isArray(options) && options.automaticResult?.targets).toEqual([view.id])
+  view.unmount()
+})
