@@ -54,7 +54,7 @@ onBeforeUnmount(() => {
         sidebar
         :controls="controls"
         @notify-success="message => importToasts.add(toast.success(message, { duration: 4000 }))"
-        @notify-import="notice => importToasts.add(toast[notice.kind](notice.title, { description: notice.description, duration: notice.kind==='success'?4000:Infinity, action: notice.kind==='success'?undefined:{label:'查看原因',onClick:()=>workspace?.showImportIssue(notice.taskId,notice.category)} }))"
+        @notify-import="notice => importToasts.add(toast[notice.kind](notice.title, { description: notice.description, duration: notice.kind==='success'?4000:Infinity, action: notice.kind==='success'?undefined:{label:$t('apfUi.view_reason'),onClick:()=>workspace?.showImportIssue(notice.taskId,notice.category)} }))"
         @open-workbench-settings="settingsDialog.show('workbench')"
         @manage-equipment="workspace!.selectArea('settings', 'equipment-setups')"
         @back-to-library="workspace!.selectArea('library')"

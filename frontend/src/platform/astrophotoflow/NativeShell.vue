@@ -4,6 +4,9 @@ import { useRoute } from 'vue-router'
 
 import { setActiveLocale } from '@/i18n'
 import { getDefaultLocale } from '@/locales/localeConfig'
+import { getWorkspaceLocale } from '@astrophotoflow/ui'
+import { useToast } from '@/components/ui/toast/toastStore'
+import { t } from '@/i18n'
 import { useSettingStore } from '@/platform/settings/settingStore'
 import { useColorPaletteService } from '@/services/colorPaletteService'
 import { useSidebarTabStore } from '@/stores/workspace/sidebarTabStore'
@@ -24,6 +27,7 @@ const settings = useSettingStore()
 const paletteService = useColorPaletteService()
 const sidebarTabs = useSidebarTabStore()
 const route = useRoute()
+const toast = useToast()
 sidebarTabs.activeSidebarTabId = route.query.apf_panel === 'software' ? 'software' : 'library'
 
 watch(() => route.query.apf_panel, (panel) => {
@@ -36,8 +40,16 @@ onMounted(async () => {
     palette.colors.comfy_base,
     palette.light_theme === true
   )
-  await settings.load()
-  await setActiveLocale(settings.get('Comfy.Locale') ?? getDefaultLocale())
+  try {
+    await getWorkspaceLocale(fetch)
+    await settings.load()
+    const locale = await setActiveLocale(settings.get('Comfy.Locale') ?? getDefaultLocale())
+    if (!settings.exists('Comfy.Locale') || settings.get('Comfy.Locale') !== locale) {
+      await settings.set('Comfy.Locale', locale)
+    }
+  } catch (error) {
+    toast.error(t('apfUi.request_failed'), { description: error instanceof Error ? error.message : String(error) })
+  }
 })
 </script>
 

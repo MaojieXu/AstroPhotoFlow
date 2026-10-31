@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { uiT } from '../../../core/i18n'
+
 import { nextTick, ref, watch } from 'vue'
 
 type Choice={value:string;label:string;disabled?:boolean}
@@ -21,7 +23,7 @@ watch(()=>props.value,value=>{if(!editing.value)draft.value=[...value]},{deep:tr
 
 function displayValue(){
   const selected=props.value.map(value=>props.choices.find(choice=>choice.value===value)?.label??value.slice(0,8))
-  return selected.length?selected.join('、'):'未指定'
+  return selected.length?selected.join('、'):uiT('apfUi.not_specified')
 }
 function begin(){
   if(editing.value||saving.value)return
@@ -51,7 +53,7 @@ async function commit(){
   saving.value=true
   error.value=''
   try{await (saveAtEditStart.value??props.save)([...draft.value]);editing.value=false;editorFocused.value=false;saveAtEditStart.value=undefined}
-  catch(cause){error.value=cause instanceof Error?cause.message:'保存失败。';await nextTick();editor.value?.focus()}
+  catch(cause){error.value=cause instanceof Error?cause.message:uiT('apfUi.could_not_save');await nextTick();editor.value?.focus()}
   finally{saving.value=false}
 }
 function keydown(event:KeyboardEvent){
@@ -70,13 +72,13 @@ function focusin(event:FocusEvent){if(editing.value&&event.target===editor.value
 <template>
   <span class="apf-inline-multi-select" @focusin="focusin" @focusout="focusout">
     <template v-if="editing">
-      <select ref="editor" v-model="draft" multiple size="5" :disabled="saving" aria-label="拍摄设置" @keydown="keydown">
+      <select ref="editor" v-model="draft" multiple size="5" :disabled="saving" :aria-label="$t('apfUi.capture_settings')" @keydown="keydown">
         <option v-for="choice in choices" :key="choice.value" :value="choice.value" :disabled="choice.disabled">{{choice.label}}</option>
         <option v-if="choicesMessage" disabled value="__apf_choices_message__">{{choicesMessage}}</option>
       </select>
-      <small v-if="saving">保存中…</small><small v-if="error" class="apf-multi-error" role="alert">{{error}}</small>
+      <small v-if="saving">{{ $t('apfUi.saving') }}</small><small v-if="error" class="apf-multi-error" role="alert">{{error}}</small>
     </template>
-    <button v-else type="button" class="apf-inline-value" title="双击编辑" @dblclick.stop.prevent="begin">{{displayValue()}}</button>
+    <button v-else type="button" class="apf-inline-value" :title="$t('apfUi.double_click_to_edit')" @dblclick.stop.prevent="begin">{{displayValue()}}</button>
   </span>
 </template>
 

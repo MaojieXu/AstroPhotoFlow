@@ -418,7 +418,7 @@ def patch_asset(asset_id: UUID, body: AssetPatch, session: deps.WriteSession):
         try:
             classification = AssetClassification.model_validate(classification).model_dump(mode="json")
         except Exception as exc:
-            raise ApiError(422, "VALIDATION_ERROR", "分类资料无效。", [{"path": "classification", "message": "请同时提供有效的素材形态和帧用途。"}]) from exc
+            raise ApiError(422, "VALIDATION_ERROR", "分类资料无效。", [{"path": "classification", "message": "请同时提供有效的素材形态和帧用途。"}], message_key='invalid_classification_metadata', field_message_keys={'classification': 'field_classification_required'}) from exc
         for key in patch:
             value_sources[f"classification.{key}"] = "manual"
         changes["classification"] = classification
@@ -429,7 +429,7 @@ def patch_asset(asset_id: UUID, body: AssetPatch, session: deps.WriteSession):
         try:
             parameters = AssetParameters.model_validate(parameters).model_dump(mode="json")
         except Exception as exc:
-            raise ApiError(422, "VALIDATION_ERROR", "拍摄参数无效。", [{"path": "parameters", "message": "请检查参数值及设备 ID。"}]) from exc
+            raise ApiError(422, "VALIDATION_ERROR", "拍摄参数无效。", [{"path": "parameters", "message": "请检查参数值及设备 ID。"}], message_key='invalid_capture_parameters', field_message_keys={'parameters': 'field_capture_parameters'}) from exc
         for key in patch:
             value_sources[key] = "manual"
         for key, kind in (("camera_id", "camera"), ("optical_system_id", "optical_system"), ("filter_id", "filter")):

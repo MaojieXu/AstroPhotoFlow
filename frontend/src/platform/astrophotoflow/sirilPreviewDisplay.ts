@@ -13,6 +13,8 @@ import { useNodeDefStore } from '@/stores/nodeDefStore'
 import SirilPreviewWidget from './SirilPreviewWidget.vue'
 
 import { bundleCapabilities } from './bundleCatalog'
+import { mergeBundleNodeI18n } from '@/i18n'
+import { escapeI18nMessage, normalizeI18nKey } from '@/utils/formatUtil'
 
 const registered = new WeakSet<ComfyApp>()
 const disposers = new Set<() => void>()
@@ -50,6 +52,24 @@ export function registerSirilPreviewDisplay(app: ComfyApp) {
   }
   async function refreshCatalog() {
     const capabilities = await createNodeClient(fetch).list()
+    const translations: Partial<Record<'en' | 'zh', Record<string, unknown>>> = {}
+    for (const locale of ['en', 'zh'] as const) {
+      const definitions: Record<string, unknown> = {}
+      for (const capability of capabilities) {
+        const display = capability.display[locale]
+        if (!display) continue
+        definitions[normalizeI18nKey(capability.node.native_type)] = {
+          display_name: escapeI18nMessage(display.name),
+          description: escapeI18nMessage(display.description),
+          inputs: Object.fromEntries(Object.entries({ ...display.inputs, ...display.parameters }).map(([name, label]) =>
+            [normalizeI18nKey(name), { name: escapeI18nMessage(label.label), tooltip: label.description }])),
+          outputs: Object.fromEntries(capability.node.definition.outputs.map((port, index) =>
+            [String(index), { name: escapeI18nMessage(display.outputs[port.name]?.label ?? port.name), tooltip: display.outputs[port.name]?.description ?? '' }]))
+        }
+      }
+      translations[locale] = definitions
+    }
+    mergeBundleNodeI18n(translations)
     const previous = [...bundleCapabilities.keys()]
     bundleCapabilities.clear()
     for (const capability of capabilities) bundleCapabilities.set(capability.node.native_type, capability)

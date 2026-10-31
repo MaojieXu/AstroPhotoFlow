@@ -1,5 +1,6 @@
 """Lazy display JPEG generation on the service's existing preview executor."""
 from __future__ import annotations
+from astrophotoflow.core.localization import error_message, workspace_locale
 from astrophotoflow.contracts.previews import DisplayPreviewState, PreviewIssue
 
 import logging
@@ -51,11 +52,11 @@ def assert_no_preview_jobs(session, version_ids) -> None:
     if session.scalar(select(Preview.id).where(
         Preview.asset_version_id.in_(version_ids), Preview.status == "generating",
     ).limit(1)):
-        raise ApiError(409, "PREVIEW_ACTIVE", "大图预览仍在生成，请完成后重新预览清理范围。")
+        raise ApiError(409, "PREVIEW_ACTIVE", "大图预览仍在生成，请完成后重新预览清理范围。", message_key='the_full_size_preview_is_still_being_generated_preview_cleanup_again_after_')
 
 
-def _issue(status, code, message):
-    return {"status": status, "error": {"code": code, "message": message}}
+def _issue(settings, status, code, message_key):
+    return {"status": status, "error": {"code": code, "message": error_message(workspace_locale(settings.workspace), code, message_key)}}
 
 
 class DisplayPreviews:
@@ -63,7 +64,7 @@ class DisplayPreviews:
         self.database, self.settings, self.executor = database, settings, executor
         with database.write_session() as session:
             for row in session.scalars(select(Preview).where(Preview.size == "display", Preview.status == "generating")).all():
-                row.status, row.error = "failed", "服务中断，大图预览尚未完成，请重试。"
+                row.status, row.error = 'failed', error_message(workspace_locale(self.settings.workspace), '', 'preview_interrupted')
 
     def _resolve(self, session, version_id, *, refresh=False):
         version = session.get(AssetVersion, version_id)
@@ -82,24 +83,24 @@ class DisplayPreviews:
             if display.status == "generating":
                 return display, None, {"status": "generating", "error": None}
         if category not in {"fits", "xisf", "image", "raw", "video"} or category == "fits" and (hdu is None or hdu.supported_kind in {"xtrans", "quad_bayer"}):
-            return display, None, _issue("unsupported", "PREVIEW_UNSUPPORTED", "此图像布局暂不支持大图预览。")
+            return display, None, _issue(self.settings, "unsupported", "PREVIEW_UNSUPPORTED", 'preview_layout_unsupported')
         if version.availability != "available":
-            return display, None, _issue("not_ready", "SOURCE_NOT_READY", "原件托管或散列尚未完成，请稍后重试。")
+            return display, None, _issue(self.settings, "not_ready", "SOURCE_NOT_READY", 'preview_original_not_ready')
         if category in {"fits", "xisf"} and (version.scientific_metadata or {}).get("metadata_status") == "failed":
-            return display, None, _issue("not_ready", "METADATA_NOT_READY", "文件元数据尚未解析完成，请重试导入后再生成大图。")
+            return display, None, _issue(self.settings, "not_ready", "METADATA_NOT_READY", 'preview_metadata_not_ready')
         # Removed originals may be in a confirmed cleanup transaction. The same
         # BEGIN IMMEDIATE lock serializes job ownership with permanent deletion.
         removals = session.scalars(select(LibraryEntryRemoval)).all()
         if any(row.cleanup_status != "trash" and (
                row.entry_type == "asset" and row.entry_id == version.asset_id or
                row.entry_type == "dataset" and version.asset_id in (row.member_asset_ids or [])) for row in removals):
-            return display, None, _issue("not_ready", "SOURCE_CLEANUP_ACTIVE", "原件正在清理，暂不能生成大图。")
+            return display, None, _issue(self.settings, "not_ready", "SOURCE_CLEANUP_ACTIVE", 'preview_cleanup_active')
         thumbnail = session.scalar(select(Preview).where(*key, Preview.size == "thumbnail", Preview.status == "available"))
         if thumbnail is None:
-            return display, None, _issue("not_ready", "RECIPE_NOT_READY", "缩略图及其显示参数尚未就绪，请稍后重试。")
+            return display, None, _issue(self.settings, "not_ready", "RECIPE_NOT_READY", 'preview_recipe_not_ready')
         recipe = dict(thumbnail.display_parameters or {})
         if category in {"fits", "xisf"} and "auto_stretch" not in recipe and not {"stretch_low", "stretch_high"} <= recipe.keys():
-            return display, None, _issue("not_ready", "STRETCH_NOT_READY", "固定拉伸参数尚未就绪，请稍后重试。")
+            return display, None, _issue(self.settings, "not_ready", "STRETCH_NOT_READY", 'preview_stretch_not_ready')
         if version.storage_mode == "managed":
             path = self.settings.data_dir / version.storage_location
         else:
@@ -110,8 +111,8 @@ class DisplayPreviews:
                "category": category, "path": path, "recipe": recipe,
                "parameters": {**dict(version.capture_snapshot or {}), 'colour_layout': (version.scientific_metadata or {}).get('colour_layout')}}
         if display is not None:
-            return display, job, _issue("failed", "PREVIEW_FAILED", display.error or "大图缓存不可用，请重试。")
-        return None, job, _issue("not_ready", "DISPLAY_NOT_GENERATED", "点击生成大图预览。")
+            return display, job, ({'status': 'failed', 'error': {'code': 'PREVIEW_FAILED', 'message': display.error}} if display.error else _issue(self.settings, 'failed', 'PREVIEW_FAILED', 'preview_cache_unavailable'))
+        return None, job, _issue(self.settings, "not_ready", "DISPLAY_NOT_GENERATED", 'preview_not_generated')
 
     def status(self, version_id):
         with self.database.read_session() as session:
@@ -146,7 +147,7 @@ class DisplayPreviews:
             self.executor.submit(self._generate, preview_id, job)
         except Exception:
             logger.exception("display preview could not be queued version_id=%s", version_id)
-            self._fail(preview_id, "无法排队生成大图，请重试。")
+            self._fail(preview_id, error_message(workspace_locale(self.settings.workspace), '', 'preview_queue_failed'))
         return self.status(version_id)
 
     def _fail(self, preview_id, message):
@@ -259,7 +260,8 @@ class DisplayPreviews:
             for path in created:
                 path.unlink(missing_ok=True)
             logger.exception("display preview failed version_id=%s", job["version_id"])
-            self._fail(preview_id, f"大图预览生成失败：{exc}")
+            self._fail(preview_id, error_message(workspace_locale(self.settings.workspace), '',
+                       'preview_generation_diagnostic', {'diagnostic': str(exc)}))
             return
         for path in replaced:
             path.unlink(missing_ok=True)

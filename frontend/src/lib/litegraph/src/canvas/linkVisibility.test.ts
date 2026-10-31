@@ -76,8 +76,8 @@ describe('link visibility mutations', () => {
     const event = fromPartial<CanvasPointerEvent>({})
     const originalLocale = i18n.global.locale.value
 
-    await loadLocale('fr')
-    i18n.global.locale.value = 'fr'
+    await loadLocale('zh')
+    i18n.global.locale.value = 'zh'
     try {
       useLinkPresentationStore().patch(scope, link.id, {
         label: 'Existing name'
@@ -85,7 +85,7 @@ describe('link visibility mutations', () => {
       promptRenameLinkBadge(host, scope, link.id, event)
 
       expect(host.prompt).toHaveBeenCalledWith(
-        'Renommer',
+        '重命名',
         'Existing name',
         expect.any(Function),
         event
@@ -103,7 +103,7 @@ describe('link visibility mutations', () => {
       promptRenameLinkBadge(host, scope, link.id, event)
 
       expect(host.prompt).toHaveBeenCalledWith(
-        'Renommer',
+        '重命名',
         '',
         expect.any(Function),
         event

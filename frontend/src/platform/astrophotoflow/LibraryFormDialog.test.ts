@@ -1,6 +1,6 @@
 import userEvent from '@testing-library/user-event'
 import { render, screen, waitFor } from '@testing-library/vue'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { defineComponent, ref } from 'vue'
 
 import LibraryFormDialog from './LibraryFormDialog.vue'
@@ -8,6 +8,15 @@ import LibraryFormDialog from './LibraryFormDialog.vue'
 vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }))
 
 describe('library native form dialog', () => {
+  it('does not focus a closed dialog when its translated title changes', async () => {
+    const focus = vi.spyOn(HTMLElement.prototype, 'focus')
+    onTestFinished(() => focus.mockRestore())
+    const { rerender } = render(LibraryFormDialog, { props: { open: false, title: '设备' } })
+    await rerender({ title: 'Equipment' })
+    expect(focus).not.toHaveBeenCalled()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
   it('keeps one dialog and focuses the new view when its content changes', async () => {
     const Harness = defineComponent({
       components: { LibraryFormDialog },

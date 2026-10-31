@@ -22,6 +22,103 @@ from astrophotoflow.modules.software.public import (
 TOKEN = "test-token"
 
 
+@pytest.mark.parametrize('locale', ['en', 'zh'])
+def test_expired_page_and_missing_handler_return_localized_errors(tmp_path, locale):
+    import json
+    from astrophotoflow.core.localization import error_message
+    settings = Settings('127.0.0.1', 8190, tmp_path / 'data', (), workspace=tmp_path)
+    path = tmp_path / 'comfyui-user/default/comfy.settings.json'
+    path.parent.mkdir(parents=True)
+    path.write_text(json.dumps({'Comfy.Locale': locale}), encoding='utf-8')
+    app = create_app(settings, TOKEN)
+    route = next(route for route in app.routes if getattr(route, 'path', None) == '/internal/native/page')
+    event = TypeAdapter(NativePageEvent).validate_python({
+        'action': 'confirm_software', 'event_id': str(uuid4()), 'page_id': str(uuid4()),
+        'page_token': 'page-token', 'payload': {'operation_id': str(uuid4())},
+    })
+    async def scenario():
+        expired = await route.endpoint(event)
+        assert expired.error.code == 'NATIVE_PAGE_EXPIRED'
+        assert expired.error.message == error_message(locale, '', 'confirmation_page_expired')
+        app.state.software_page_tokens[event.page_id] = event.page_token
+        del app.state.confirm_software_action
+        missing = await route.endpoint(event)
+        assert missing.error.code == 'SOFTWARE_ACTION_EXPIRED'
+        assert missing.error.message == error_message(locale, '', 'no_pending_software_action')
+        assert not app.state.software_tasks
+    try:
+        asyncio.run(scenario())
+    finally:
+        app.state.database.close()
+
+
+@pytest.mark.parametrize('locale', ['en', 'zh'])
+def test_changed_package_expires_plan_without_starting_install(tmp_path, monkeypatch, locale):
+    import json
+    import astrophotoflow.interfaces.http.app as app_module
+    from astrophotoflow.core.localization import error_message
+    ready = SimpleNamespace(ready=True, web_url='http://127.0.0.1:8188')
+    monkeypatch.setattr(app_module, 'workbench_status', lambda _path: ready)
+    settings = Settings('127.0.0.1', 8190, tmp_path / 'data', (), workspace=tmp_path)
+    path = tmp_path / 'comfyui-user/default/comfy.settings.json'
+    path.parent.mkdir(parents=True)
+    path.write_text(json.dumps({'Comfy.Locale': locale}), encoding='utf-8')
+    app = create_app(settings, TOKEN)
+    try:
+        package = list_packages(settings)[0]
+        pending = app.state.request_software_action('siril', SoftwareInstallRequest(version='1.4.4', package_token=package.package_token))
+        page = uuid4()
+        app.state.software_page_tokens[page] = 'page-token'
+        monkeypatch.setattr(app_module, 'get_package', lambda *args: package.model_copy(update={'package_token': 'changed'}))
+        with pytest.raises(ApiError):
+            app.state.start_software_action(pending, page_id=page, page_token='page-token', workbench=ready)
+        expired = app.state.software_actions['siril']
+        assert expired.state == 'expired'
+        assert expired.error.message == error_message(locale, '', 'action_package_changed')
+        assert not app.state.software_tasks
+    finally:
+        app.state.database.close()
+
+
+@pytest.mark.parametrize('locale', ['en', 'zh'])
+def test_background_install_error_localizes_outer_message_and_nested_reason(tmp_path, monkeypatch, locale):
+    import json
+    import astrophotoflow.interfaces.http.app as app_module
+    from astrophotoflow.core.localization import error_message
+
+    ready = SimpleNamespace(ready=True, web_url='http://127.0.0.1:8188')
+    monkeypatch.setattr(app_module, 'workbench_status', lambda _path: ready)
+    settings = Settings('127.0.0.1', 8190, tmp_path / 'data', (), workspace=tmp_path)
+    path = tmp_path / 'comfyui-user/default/comfy.settings.json'
+    path.parent.mkdir(parents=True)
+    path.write_text(json.dumps({'Comfy.Locale': locale}), encoding='utf-8')
+    reason = ApiError(409, 'BUNDLE_VERSION_CHANGED', '原始中文错误',
+                      message_key='bundle_reference_data_does_not_match_the_confirmed_snapshot_nothing_was_ins')
+    failure = ApiError(503, 'SOFTWARE_NOT_READY', 'Bundle 安装失败：原始中文错误',
+                       fields=[{'path': 'git', 'message': 'raw diagnostic 原文'}],
+                       message_key='bundle_installation_failed_p0', message_params={'p0': reason})
+    async def install(*args, **kwargs):
+        raise failure
+    monkeypatch.setattr(app_module, 'install_package', install)
+    app = create_app(settings, TOKEN)
+    async def scenario():
+        package = list_packages(settings)[0]
+        pending = app.state.request_software_action('siril', SoftwareInstallRequest(version='1.4.4', package_token=package.package_token))
+        page = uuid4()
+        app.state.software_page_tokens[page] = 'page-token'
+        app.state.start_software_action(pending, page_id=page, page_token='page-token', workbench=ready)
+        await app.state.software_tasks['siril']
+        details = app.state.get_software_package_details('siril')
+        expected = error_message(locale, failure.code, failure.message_key, failure.message_params)
+        assert details.current_action.state == 'failed'
+        assert details.current_action.error.message == details.result.error.message == expected
+        assert details.result.error.code == failure.code and details.result.error.fields == failure.fields
+    try:
+        asyncio.run(scenario())
+    finally:
+        app.state.database.close()
+
+
 def test_siril_command_catalog_matches_its_source_manifest():
     from importlib.resources import files
 
@@ -215,6 +312,10 @@ def test_bundle_update_plan_is_available_during_active_calls(tmp_path, monkeypat
     monkeypatch.setattr(app_module, 'get_usage', lambda _package: [object()])
     settings = Settings('127.0.0.1', 8190, tmp_path/'data', (), workspace=tmp_path)
     bundle_install(settings)
+    from astrophotoflow.modules.software import bundles
+    original = bundles.release('siril')
+    newer = {**original, 'manifest': {**original['manifest'], 'bundle_version': '0.1.2-dev.2'}}
+    monkeypatch.setattr(bundles, 'release', lambda package_id: newer)
     app = create_app(settings, TOKEN)
     try:
         package = list_packages(settings)[0]

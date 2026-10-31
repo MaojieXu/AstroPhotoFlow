@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { uiT } from '../../../core/i18n'
+
 import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'
 import { z } from 'zod'
 import {
@@ -194,9 +196,9 @@ const dirty = computed(() => setupDirty.value || calibrationDirty.value || (edit
 const equipmentMenuItems = computed(() => {
   const current=selected.value
   return [
-  {label:'刷新',disabled:managementFilterBlocked.value||loading.value,command:refreshEquipment},
-  ...(!managementSelectMode.value?[{label:'批量管理',disabled:managementFilterBlocked.value||loading.value,command:enterManagementSelectMode}]:[]),
-  ...(store.section==='equipment-setups'&&current?[{label:'删除组合',disabled:managementFilterBlocked.value||loading.value,command:()=>requestEquipmentDelete(current)}]:[])
+  {get label() { return uiT('apfUi.refresh') },disabled:managementFilterBlocked.value||loading.value,command:refreshEquipment},
+  ...(!managementSelectMode.value?[{get label() { return uiT('apfUi.manage_in_bulk') },disabled:managementFilterBlocked.value||loading.value,command:enterManagementSelectMode}]:[]),
+  ...(store.section==='equipment-setups'&&current?[{get label() { return uiT('apfUi.delete_setup') },disabled:managementFilterBlocked.value||loading.value,command:()=>requestEquipmentDelete(current)}]:[])
   ]
 })
 const isAssetSection = computed(() =>
@@ -211,18 +213,18 @@ const isLibraryTableView = computed(() => activeArea.value === 'library' && !vie
 const isDatasetMembersView = computed(() => activeArea.value === 'library' && store.section === 'library' && Boolean(activeDataset.value) && !viewingProjectAssets.value && !viewingProjectDatasets.value)
 const libraryToolbarBlocked = computed(() => bulkDeleteBusy.value || savingInline.value > 0 || Boolean(inlineSaveFailure.value) || setupDirty.value)
 const libraryMenuItems = computed<LibraryMenuItem[]>(() => [
-  { label: '刷新', disabled: libraryToolbarBlocked.value || loading.value, command: refreshLibrary },
+  { get label() { return uiT('apfUi.refresh') }, disabled: libraryToolbarBlocked.value || loading.value, command: refreshLibrary },
   ...(isLibraryItemsView.value ? [
-    { label: '批量管理', disabled: libraryToolbarBlocked.value || loading.value, command: enterBulkSelectMode },
-    { label: '回收站', disabled: libraryToolbarBlocked.value, command: () => { trashOpen.value = true } }
+    { get label() { return uiT('apfUi.manage_in_bulk') }, disabled: libraryToolbarBlocked.value || loading.value, command: enterBulkSelectMode },
+    { get label() { return uiT('apfUi.trash_ba35dc') }, disabled: libraryToolbarBlocked.value, command: () => { trashOpen.value = true } }
   ] : []),
-  { label: '显示方式', disabled: libraryToolbarBlocked.value, radioGroup: {
+  { get label() { return uiT('apfUi.display_mode') }, disabled: libraryToolbarBlocked.value, radioGroup: {
     value: libraryViewMode.value,
-    options: ([['simple', '简约'], ['detail', '细节']] as const).map(([value, label]) => ({ value, label, command: () => { libraryViewMode.value = value } }))
+    options: ([['simple', uiT('apfUi.compact')], ['detail', uiT('apfUi.details')]] as const).map(([value, label]) => ({ value, label, command: () => { libraryViewMode.value = value } }))
   } },
-  { label: '每页数量', disabled: libraryToolbarBlocked.value || loading.value, radioGroup: {
+  { get label() { return uiT('apfUi.items_per_page') }, disabled: libraryToolbarBlocked.value || loading.value, radioGroup: {
     value: String(store.pageSize),
-    options: ([10, 20, 50, 'all'] as const).map(value => ({ value: String(value), label: value === 'all' ? '全部' : String(value), command: () => store.setPageSize(value) }))
+    options: ([10, 20, 50, 'all'] as const).map(value => ({ value: String(value), label: value === 'all' ? uiT('apfUi.all') : String(value), command: () => store.setPageSize(value) }))
   } }
 ])
 function notifyImportSuccess(message: string) { emit('notify-success', message) }
@@ -231,68 +233,68 @@ const pageSelectionKeys = computed(() => rows.value.map(row => bulkKey(row)))
 const pageAllSelected = computed(() => pageSelectionKeys.value.length > 0 && pageSelectionKeys.value.every(key => bulkSelection.value.has(key)))
 const pagePartiallySelected = computed(() => pageSelectionKeys.value.some(key => bulkSelection.value.has(key)) && !pageAllSelected.value)
 const areaTitles: Record<WorkspaceArea, string> = {
-  library: '素材库',
-  nodes: '节点仓库',
-  software: '可安装软件',
-  agent: 'Agent 聊天',
-  settings: '设备管理'
+  get library() { return uiT('apfUi.library') },
+  get nodes() { return uiT('apfUi.node_repository') },
+  get software() { return uiT('apfUi.available_software') },
+  get agent() { return uiT('apfUi.agent_chat') },
+  get settings() { return uiT('apfUi.equipment_manager') }
 }
 const areaMessages: Partial<Record<WorkspaceArea, string>> = {
-  nodes: '节点仓库区域已预留，目录功能尚未接入。',
-  software: '可安装软件区域已预留，软件目录和安装功能尚未接入。',
-  agent: 'Agent 聊天区域已预留，聊天功能尚未接入。'
+  get nodes() { return uiT('apfUi.this_area_is_reserved_for_the_node_repository_the_catalog_is_not_conne') },
+  get software() { return uiT('apfUi.this_area_is_reserved_for_available_software_catalog_and_installation_') },
+  get agent() { return uiT('apfUi.this_area_is_reserved_for_agent_chat_chat_is_not_connected_yet') }
 }
 let loadGeneration = 0
 let datasetRefreshGeneration = 0
 
 const specFields: Record<string, InputField[]> = {
   camera: [
-    { key: 'sensor_mode', label: '传感器类型', options: ['mono', 'color'] },
-    { key: 'sensor_width_px', label: '宽度（px）', type: 'number', integer: true },
-    { key: 'sensor_height_px', label: '高度（px）', type: 'number', integer: true },
-    { key: 'pixel_size_um', label: '像元尺寸（μm）', type: 'number' },
-    { key: 'cfa_pattern', label: 'CFA 排列' }
+    { key: 'sensor_mode', get label() { return uiT('apfUi.sensor_type') }, options: ['mono', 'color'] },
+    { key: 'sensor_width_px', get label() { return uiT('apfUi.width_px') }, type: 'number', integer: true },
+    { key: 'sensor_height_px', get label() { return uiT('apfUi.height_px') }, type: 'number', integer: true },
+    { key: 'pixel_size_um', get label() { return uiT('apfUi.pixel_size_m') }, type: 'number' },
+    { key: 'cfa_pattern', get label() { return uiT('apfUi.cfa_pattern') } }
   ],
   optical_system: [
-    { key: 'aperture_mm', label: '口径（mm）', type: 'number' },
-    { key: 'native_focal_length_mm', label: '基础焦距（mm）', type: 'number' },
-    { key: 'effective_focal_length_mm', label: '使用减焦／增距镜后的焦距（mm）', type: 'number' },
-    { key: 'focal_adjustment_note', label: '减焦镜／增距镜说明（可选）' }
+    { key: 'aperture_mm', get label() { return uiT('apfUi.aperture_mm') }, type: 'number' },
+    { key: 'native_focal_length_mm', get label() { return uiT('apfUi.base_focal_length_mm') }, type: 'number' },
+    { key: 'effective_focal_length_mm', get label() { return uiT('apfUi.focal_length_with_reducer_barlow_mm') }, type: 'number' },
+    { key: 'focal_adjustment_note', get label() { return uiT('apfUi.reducer_barlow_description_optional') } }
   ],
   filter: [
-    { key: 'bandwidth_nm', label: '带宽（nm）', type: 'number' },
+    { key: 'bandwidth_nm', get label() { return uiT('apfUi.bandwidth_nm') }, type: 'number' },
   ],
   mount: [
-    {key:'mount_type',label:'赤道仪类型'},
-    {key:'payload_kg',label:'载重（kg）',type:'number'},
-    {key:'connection_note',label:'连接说明'}
+    {key:'mount_type',get label() { return uiT('apfUi.mount_type') }},
+    {key:'payload_kg',get label() { return uiT('apfUi.payload_kg') },type:'number'},
+    {key:'connection_note',get label() { return uiT('apfUi.connection_description') }}
   ],
   accessory: [
-    {key:'accessory_type',label:'配件类型'},
-    {key:'connection_note',label:'连接说明'}
+    {key:'accessory_type',get label() { return uiT('apfUi.accessory_type') }},
+    {key:'connection_note',get label() { return uiT('apfUi.connection_description') }}
   ]
 }
 specFields.telescope = specFields.optical_system
 const frameTypes = ['light', 'bias', 'dark', 'flat', 'dark_flat']
 const frameClasses = ['subframe', 'masterframe', 'video']
 const cfaChoices=[
-  {value:'',label:'未指定'},{value:'MONO',label:'无 CFA（单色）'},
+  {value:'',get label() { return uiT('apfUi.not_specified') }},{value:'MONO',get label() { return uiT('apfUi.no_cfa_monochrome') }},
   {value:'RGGB',label:'RGGB'},{value:'BGGR',label:'BGGR'},{value:'GRBG',label:'GRBG'},{value:'GBRG',label:'GBRG'},
   {value:'XTRANS',label:'X-Trans 6×6'},{value:'QUAD_BAYER',label:'Quad Bayer'}
 ]
 const equipmentKinds = ['camera', 'telescope', 'filter', 'mount', 'accessory'] as const
-const equipmentKindLabels:Record<string,string> = {camera:'相机',telescope:'望远镜',filter:'滤镜',mount:'赤道仪',accessory:'配件',optical_system:'成像系统（既有）'}
+const equipmentKindLabels:Record<string,string> = {get camera() { return uiT('apfUi.camera_dacf07') },get telescope() { return uiT('apfUi.telescope') },get filter() { return uiT('apfUi.filter') },get mount() { return uiT('apfUi.mount') },get accessory() { return uiT('apfUi.accessory') },get optical_system() { return uiT('apfUi.imaging_system_existing') }}
 const equipmentKindIcons:Record<string,string> = {camera:'icon-[lucide--camera]',telescope:'icon-[lucide--telescope]',filter:'icon-[lucide--filter]',mount:'icon-[lucide--compass]',accessory:'icon-[lucide--wrench]',optical_system:'icon-[lucide--telescope]'}
 function specKind(field:InputField):'number'|'select'|'text'{
   return field.key==='cfa_pattern'||field.options?'select':field.type==='number'?'number':'text'
 }
 function specChoices(field:InputField){
   if(field.key==='cfa_pattern')return cfaChoices
-  if(field.options)return [{value:'',label:'未指定'},...field.options.map(value=>({value,label:field.key==='sensor_mode'?({mono:'单色',color:'彩色'} as Record<string,string>)[value]??value:value}))]
+  if(field.options)return [{value:'',get label() { return uiT('apfUi.not_specified') }},...field.options.map(value=>({value,label:field.key==='sensor_mode'?({get mono() { return uiT('apfUi.monochrome') },get color() { return uiT('apfUi.color') }} as Record<string,string>)[value]??value:value}))]
   return []
 }
 function specDisplay(field:InputField,value:unknown){
-  if(value===null||value===undefined||value==='')return '未指定'
+  if(value===null||value===undefined||value==='')return uiT('apfUi.not_specified')
   if(field.key==='cfa_pattern')return cfaLabel(value)
   if(field.options)return specChoices(field).find(choice=>choice.value===String(value))?.label??String(value)
   return String(value)
@@ -381,20 +383,20 @@ async function loadRelatedEquipment(force=false) {
 }
 
 function equipmentChoiceMessage(kind:string){
-  if(relatedEquipmentLoading.value)return '正在读取设备列表…'
+  if(relatedEquipmentLoading.value)return uiT('apfUi.reading_equipment_list')
   if(relatedEquipmentError.value)return relatedEquipmentError.value
-  const names:Record<string,string>={camera:'相机',optical_system:'成像系统',filter:'滤镜'}
-  return relatedEquipment.value.some(item=>item.kind===kind)?'':'尚未登记'+(names[kind]??'设备')+'。请先在设置→设备中添加。'
+  const names:Record<string,string>={get camera() { return uiT('apfUi.camera_dacf07') },get optical_system() { return uiT('apfUi.imaging_system') },get filter() { return uiT('apfUi.filter') }}
+  return relatedEquipment.value.some(item=>item.kind===kind)?'':uiT('apfUi.not_registered_yet')+(names[kind]??uiT('apfUi.equipment'))+uiT('apfUi.add_it_in_settings_equipment_first')
 }
 
 function equipmentChoices(kind:string){
   const current=relatedEquipment.value.filter(item=>item.kind===kind).map(item=>({
-    value:item.id,label:item.name+(item.status==='archived'?' · 回收站':''),disabled:item.status==='archived'||relatedEquipmentLoading.value||Boolean(relatedEquipmentError.value)
+    value:item.id,label:item.name+(item.status==='archived'?uiT('apfUi.trash'):''),disabled:item.status==='archived'||relatedEquipmentLoading.value||Boolean(relatedEquipmentError.value)
   }))
   const ids=new Set(current.map(item=>item.value))
   for(const snapshot of historicalEquipmentSnapshots()){
     if(snapshot.kind===kind&&typeof snapshot.id==='string'&&!ids.has(snapshot.id)){
-      current.push({value:snapshot.id,label:String(snapshot.name)+' · 已从设备库移除',disabled:true})
+      current.push({value:snapshot.id,label:String(snapshot.name)+uiT('apfUi.removed_from_equipment_library'),disabled:true})
       ids.add(snapshot.id)
     }
   }
@@ -584,7 +586,7 @@ async function openPhotoPreview(row: RecordData) {
         member: async (index, signal) => {
           if (signal.aborted) throw new DOMException('Aborted', 'AbortError')
           const member = members[index]
-          if (!member) throw new ApiClientError('组成员超出固定范围。', 'contract')
+          if (!member) throw new ApiClientError(uiT('apfUi.group_member_is_outside_the_fixed_selection'), 'contract')
           return member
         }
       }
@@ -633,7 +635,7 @@ async function previewMember(row: RecordData): Promise<{asset: Asset; version: R
 }
 function presentError(cause: unknown): ApiClientError {
   if (cause instanceof ApiClientError) return cause
-  return new ApiClientError('请求失败。', 'contract')
+  return new ApiClientError(uiT('apfUi.request_failed'), 'contract')
 }
 
 function managementEntryType(section:WorkspaceSection){
@@ -715,14 +717,14 @@ async function confirmSelectedManagementArchive(){
 }
 
 function errorText(value: ApiClientError) {
-  if (value.kind === 'network') return '资产服务未连接，请检查服务是否运行。'
+  if (value.kind === 'network') return uiT('apfUi.asset_service_is_disconnected_check_whether_it_is_running')
   if (value.kind === 'contract') return value.message
-  if (value.code === 'SERVICE_NOT_CONFIGURED') return '本机服务尚未配置访问凭据。'
-  if (value.code === 'SERVICE_UNAVAILABLE') return '资产服务当前不可用。'
-  if (value.code === 'SERVICE_TIMEOUT') return '资产服务响应超时。'
-  if (value.code === 'AUTHENTICATION_REQUIRED') return '本机服务认证失败。'
-  if (value.code === 'REVISION_CONFLICT') return '记录已被其他窗口修改。草稿仍保留，请重新读取后决定如何处理。'
-  return value.message + (value.requestId ? '（请求 ' + value.requestId + '）' : '')
+  if (value.code === 'SERVICE_NOT_CONFIGURED') return uiT('apfUi.local_service_credentials_are_not_configured')
+  if (value.code === 'SERVICE_UNAVAILABLE') return uiT('apfUi.asset_service_is_currently_unavailable')
+  if (value.code === 'SERVICE_TIMEOUT') return uiT('apfUi.asset_service_timed_out')
+  if (value.code === 'AUTHENTICATION_REQUIRED') return uiT('apfUi.local_service_authentication_failed')
+  if (value.code === 'REVISION_CONFLICT') return uiT('apfUi.another_window_modified_this_record_your_draft_is_retained_read_the_cu')
+  return value.message + (value.requestId ? uiT('apfUi.request') + value.requestId + '）' : '')
 }
 
 async function waitForInlineSave(){
@@ -731,7 +733,7 @@ async function waitForInlineSave(){
 }
 
 async function selectSection(section: WorkspaceSection) {
-  if (dirty.value && !window.confirm('当前表单有未保存修改。放弃修改并切换吗？')) return
+  if (dirty.value && !window.confirm(uiT('apfUi.this_form_has_unsaved_changes_discard_them_and_switch'))) return
   if(!await waitForInlineSave())return
   closeEquipmentMenu()
   leaveDatasetContext()
@@ -758,7 +760,7 @@ async function selectSection(section: WorkspaceSection) {
 
 async function selectLibraryCategory(category:'all'|'light'|'calibration'){
   if(category===libraryCategory.value)return
-  if(dirty.value&&!window.confirm('当前表单有未保存修改。放弃修改并切换吗？'))return
+  if(dirty.value&&!window.confirm(uiT('apfUi.this_form_has_unsaved_changes_discard_them_and_switch')))return
   if(!await waitForInlineSave())return
   leaveDatasetContext();selected.value=undefined
   store.query='';store.offset=0;activeFilters.value=emptyFilters()
@@ -767,7 +769,7 @@ async function selectLibraryCategory(category:'all'|'light'|'calibration'){
 }
 
 async function selectArea(area: WorkspaceArea, managementSection: WorkspaceSection = 'equipment-setups') {
-  if (dirty.value && !window.confirm('当前表单有未保存修改。放弃修改并切换吗？')) return false
+  if (dirty.value && !window.confirm(uiT('apfUi.this_form_has_unsaved_changes_discard_them_and_switch'))) return false
   if(!await waitForInlineSave())return false
   closeEquipmentMenu()
   leaveDatasetContext()
@@ -857,10 +859,10 @@ function importTaskCompleted(taskId: string) {
 }
 function materialReadiness(row:RecordData){
   const versions=row.entry_type==='dataset'?(row.version?.members??[]).map((member:RecordData)=>member.version):[row.current_version??row.version]
-  if(!versions.length||versions.some((version:RecordData)=>!version))return '尚无原件'
-  if(versions.some((version:RecordData)=>['changed','missing','unavailable'].includes(version.availability)))return '原件异常'
-  if(versions.some((version:RecordData)=>version.availability!=='available'))return row.import_issue?'原件异常':'原件导入中'
-  return previewUrls.value[row.id]?'原件已就绪 · 预览已就绪':'原件已就绪'
+  if(!versions.length||versions.some((version:RecordData)=>!version))return uiT('apfUi.no_original_yet')
+  if(versions.some((version:RecordData)=>['changed','missing','unavailable'].includes(version.availability)))return uiT('apfUi.original_error')
+  if(versions.some((version:RecordData)=>version.availability!=='available'))return row.import_issue?uiT('apfUi.original_error'):uiT('apfUi.importing_originals')
+  return previewUrls.value[row.id]?uiT('apfUi.original_ready_preview_ready'):uiT('apfUi.original_ready')
 }
 function refreshLibrary() {
   if(savingInline.value||inlineSaveFailure.value)return
@@ -881,7 +883,7 @@ async function saveInlineField(rowOrField: RecordData | string, fieldOrValue: st
   savingInline.value++
   clearInlineSaveFailure(failureKey)
   try { await performInlineFieldSave(row,field,value??null) }
-  catch(cause){setInlineSaveFailure(failureKey,cause instanceof Error?cause.message:'字段保存失败。');throw cause}
+  catch(cause){setInlineSaveFailure(failureKey,cause instanceof Error?cause.message:uiT('apfUi.could_not_save_the_field'));throw cause}
   finally { finishInlineSave() }
 }
 
@@ -923,19 +925,19 @@ function editorRow(){
 
 async function saveEditorInline(field:string,value:string|number|null){
   const row=editorRow()
-  if(!row)throw new Error('当前编辑记录已不存在。')
+  if(!row)throw new Error(uiT('apfUi.the_record_being_edited_no_longer_exists'))
   await saveInlineField(row,field,value)
 }
 
 async function saveEditorBin(value:string|number|null){
   const row=editorRow()
-  if(!row)throw new Error('当前编辑记录已不存在。')
+  if(!row)throw new Error(uiT('apfUi.the_record_being_edited_no_longer_exists'))
   await saveBin(row,value)
 }
 
 async function saveEditorParameterGroup(changes:RecordData){
   const row=editorRow()
-  if(!row)throw new Error('当前编辑记录已不存在。')
+  if(!row)throw new Error(uiT('apfUi.the_record_being_edited_no_longer_exists'))
   await saveParameterGroup(row,changes)
 }
 
@@ -1019,16 +1021,16 @@ async function saveParameterGroup(row:RecordData,parameters:RecordData){
       return
     }
 
-    throw new Error('当前记录不支持拍摄参数编辑。')
-  }catch(cause){setInlineSaveFailure(failureKey,cause instanceof Error?cause.message:'参数保存失败。');throw cause}
+    throw new Error(uiT('apfUi.capture_parameters_cannot_be_edited_for_this_record'))
+  }catch(cause){setInlineSaveFailure(failureKey,cause instanceof Error?cause.message:uiT('apfUi.could_not_save_parameters'));throw cause}
   finally{finishInlineSave()}
 }
 
 async function updateDatasetMembers(row:RecordData,changes:RecordData){
   const members:RecordData[]=row.version?.members??[]
-  if(!activeDataset.value&&row.matching_member_count<members.length)throw new Error('此筛选结果包含组内其他用途或条件的成员。请先打开图像组，在完整成员范围内编辑。')
+  if(!activeDataset.value&&row.matching_member_count<members.length)throw new Error(uiT('apfUi.these_results_include_group_members_with_other_frame_uses_or_propertie'))
   const dataset=row.dataset
-  if(!dataset?.id||!row.version?.id||!members.length)throw new Error('此图像组没有可修改的成员。')
+  if(!dataset?.id||!row.version?.id||!members.length)throw new Error(uiT('apfUi.this_image_group_has_no_editable_members'))
   const updated=await assetApi.send(
     '/astrophotoflow/api/v1/datasets/'+dataset.id+'/member-parameters',
     datasetMemberParametersUpdateSchema,'PATCH',{
@@ -1054,13 +1056,13 @@ function binEditValue(parameters:RecordData){
 }
 function binEditChoices(parameters:RecordData){
   const current=binEditValue(parameters)
-  return [{value:'',label:'未指定'},...Array.from({length:16},(_,i)=>({value:'Bin'+(i+1),label:'Bin'+(i+1)})),
-    ...(current.startsWith('legacy:')?[{value:current,label:binValue(parameters)+'（现有值）'}]:[])]
+  return [{value:'',get label() { return uiT('apfUi.not_specified') }},...Array.from({length:16},(_,i)=>({value:'Bin'+(i+1),label:'Bin'+(i+1)})),
+    ...(current.startsWith('legacy:')?[{value:current,label:binValue(parameters)+uiT('apfUi.current_value')}]:[])]
 }
 function datasetBinChoices(row:RecordData){
   const current=datasetRawValue(row,member=>binEditValue(member.asset?.parameters??{}))
-  return [{value:'',label:'未指定'},...(current==='mixed'?[{value:'mixed',label:'混合',disabled:true}]:[]),...Array.from({length:16},(_,i)=>({value:'Bin'+(i+1),label:'Bin'+(i+1)})),
-    ...(current.startsWith('legacy:')?[{value:current,label:current.replace(/^legacy:/,'Bin').replace('x','×')+'（现有值）'}]:[])]
+  return [{value:'',get label() { return uiT('apfUi.not_specified') }},...(current==='mixed'?[{value:'mixed',get label() { return uiT('apfUi.mixed') },disabled:true}]:[]),...Array.from({length:16},(_,i)=>({value:'Bin'+(i+1),label:'Bin'+(i+1)})),
+    ...(current.startsWith('legacy:')?[{value:current,label:current.replace(/^legacy:/,'Bin').replace('x','×')+uiT('apfUi.current_value')}]:[])]
 }
 function datasetRawValue(row:RecordData,getValue:(member:RecordData)=>unknown){
   const values=datasetMembers(row).map(getValue)
@@ -1112,10 +1114,10 @@ function displayTemperature(value:unknown){
 function datasetTemperature(row:RecordData){
   const members=datasetMembers(row)
   const known=members.map(member=>member.asset?.parameters?.sensor_temperature_c).filter((value):value is number=>value!==null&&value!==undefined)
-  if(!known.length)return '未指定'
+  if(!known.length)return uiT('apfUi.not_specified')
   const displayed=[...new Set(known.map(displayTemperature))]
-  if(displayed.length>1)return '混合'
-  return displayed[0]+(known.length<members.length?'（部分缺失）':'')+' °C'
+  if(displayed.length>1)return uiT('apfUi.mixed')
+  return displayed[0]+(known.length<members.length?uiT('apfUi.partially_missing_262385'):'')+' °C'
 }
 function inlineFailureKey(row:RecordData|undefined,field:string){return (row?.id??'unknown')+':'+field}
 function editorInlineFailureKey(field:string){return inlineFailureKey(editorRow(),field)}
@@ -1142,12 +1144,12 @@ async function saveBin(row: RecordData, value: string | number | null) {
   savingInline.value++
   clearInlineSaveFailure(failureKey)
   try { await performBinSave(row,value) }
-  catch(cause){setInlineSaveFailure(failureKey,cause instanceof Error?cause.message:'Bin 保存失败。');throw cause}
+  catch(cause){setInlineSaveFailure(failureKey,cause instanceof Error?cause.message:uiT('apfUi.could_not_save_binning'));throw cause}
   finally { finishInlineSave() }
 }
 async function performBinSave(row: RecordData, value: string | number | null) {
   const number=value==null||value===''?null:Number(String(value).replace(/^Bin/i,''))
-  if(number!==null&&(!Number.isInteger(number)||number<1||number>16))throw new Error('Bin 必须介于 Bin1 与 Bin16。')
+  if(number!==null&&(!Number.isInteger(number)||number<1||number>16))throw new Error(uiT('apfUi.binning_must_be_between_bin1_and_bin16'))
   const asset=row.asset??(row.scope==='shared'?row:undefined)
   if(asset){
     const updated=await assetApi.send('/astrophotoflow/api/v1/library/assets/'+asset.id,assetSchema,'PATCH',{
@@ -1193,8 +1195,8 @@ function leaveDatasetContext(){
   error.value=undefined
 }
 async function closeDataset(){
-  if(calibrationDirty.value&&!window.confirm('图像组说明或校准关联有未保存修改。放弃修改吗？'))return
-  if (dirty.value && !window.confirm('当前表单有未保存修改。放弃修改并返回吗？')) return
+  if(calibrationDirty.value&&!window.confirm(uiT('apfUi.the_group_description_or_calibration_bindings_have_unsaved_changes_dis')))return
+  if (dirty.value && !window.confirm(uiT('apfUi.this_form_has_unsaved_changes_discard_them_and_go_back'))) return
   if(!await waitForInlineSave())return
   datasetRefreshGeneration++
   loadGeneration++
@@ -1392,7 +1394,7 @@ async function confirmRemoveSelectedLibraryEntries(){
     if(store.offset>=total.value&&store.offset>0&&pageSize>0)store.offset=Math.max(0,Math.floor((total.value-1)/pageSize)*pageSize)
     bulkSelectMode.value=false
     clearBulkSelection()
-    bulkDeleteNotice.value='已移除'+result.removed_count+'条素材库记录，原始数据未删除。'
+    bulkDeleteNotice.value=uiT('apfUi.removed')+result.removed_count+uiT('apfUi.library_entries_original_data_retained')
     bulkConfirmRows.value=[]
     bulkDeleteBusy.value=false
     await loadRecords()
@@ -1412,7 +1414,7 @@ function onLibraryRowClick(row:RecordData,event:MouseEvent){
 
 async function selectRow(row: RecordData) {
   if(selected.value?.id===row.id)return
-  if(setupDirty.value&&!window.confirm('当前组合或预设有未保存修改。放弃修改吗？'))return
+  if(setupDirty.value&&!window.confirm(uiT('apfUi.this_setup_or_preset_has_unsaved_changes_discard_them')))return
   if(!await waitForInlineSave())return
   selected.value = row
   if(row.asset||row.scope==='shared'||row.entry_type==='dataset')
@@ -1553,7 +1555,7 @@ function beginEdit(type: EditorType, id: string) {
 
 function closeEditor() {
   if(saving.value||savingInline.value||inlineSaveFailure.value)return
-  if (dirty.value && !window.confirm('放弃未保存的修改吗？')) return
+  if (dirty.value && !window.confirm(uiT('apfUi.discard_unsaved_changes'))) return
   editorType.value = undefined
   editingId.value = undefined
   draft.value = {}
@@ -1619,25 +1621,25 @@ async function saveEditor() {
   }
 }
 
-const itemTitle = (row: RecordData) => row.asset?.name ?? row.dataset?.name ?? row.name ?? '未命名记录'
+const itemTitle = (row: RecordData) => row.asset?.name ?? row.dataset?.name ?? row.name ?? uiT('apfUi.unnamed_record')
 const itemSubtitle = (row: RecordData) => {
   if ('target_name' in row) return row.target_name || ''
-  if (row.dataset || row.entry_type === 'dataset') return datasetClassification(row) + ' · ' + (row.version?.members?.length ?? row.member_count ?? row.dataset?.member_count ?? 0) + ' 个成员'
-  if (row.version) return '固定版本 · ' + frameTypeLabel(rowClassification(row).frame_type)
+  if (row.dataset || row.entry_type === 'dataset') return datasetClassification(row) + ' · ' + (row.version?.members?.length ?? row.member_count ?? row.dataset?.member_count ?? 0) + uiT('apfUi.members')
+  if (row.version) return uiT('apfUi.fixed_version_f7e42b') + frameTypeLabel(rowClassification(row).frame_type)
   if (row.current_version) return frameTypeLabel(rowClassification(row).frame_type)
   if (row.kind) {
     const model = row.model?.trim()
     return equipmentKindLabels[row.kind] + (model && model.toLocaleLowerCase() !== row.name.trim().toLocaleLowerCase() ? ' · ' + model : '')
   }
-  if (row.components) return row.components.length + ' 个设备'
-  if (row.camera_id) return row.frame_type + ' · 相机 ' + row.camera_id
+  if (row.components) return row.components.length + uiT('apfUi.devices')
+  if (row.camera_id) return row.frame_type + uiT('apfUi.camera') + row.camera_id
   return ''
 }
 const rowAsset = (row: RecordData) => row.asset ?? row
 const rowParameters = (row: RecordData) => rowAsset(row).parameters ?? {}
 const rowClassification = (row: RecordData) => rowAsset(row).classification ?? {}
 function equipmentName(id: string | null | undefined) {
-  if (!id) return '未指定'
+  if (!id) return uiT('apfUi.not_specified')
   return relatedEquipment.value.find(item => item.id === id)?.name ?? id.slice(0, 8)
 }
 function materialEquipmentValue(row:RecordData,key:string,fixed=false):string|undefined {
@@ -1645,7 +1647,7 @@ function materialEquipmentValue(row:RecordData,key:string,fixed=false):string|un
   return snapshot?.[key]?.name
 }
 function materialEquipmentName(row:RecordData,key:string) {
-  return materialEquipmentValue(row,key)??'未指定'
+  return materialEquipmentValue(row,key)??uiT('apfUi.not_specified')
 }
 function historicalEquipmentSnapshots():RecordData[]{
   const snapshots:RecordData[]=[]
@@ -1665,16 +1667,16 @@ function datasetParameterMode(row:RecordData){
   return distinct.length>1?'mixed':distinct[0]==='standard'?'':distinct[0]??''
 }
 function cfaLabel(value:unknown){
-  if(value===null||value===undefined||value==='')return '未指定'
-  return ({MONO:'无 CFA（单色）',XTRANS:'X-Trans 6×6',QUAD_BAYER:'Quad Bayer'} as Record<string,string>)[String(value)]??String(value??'未指定')
+  if(value===null||value===undefined||value==='')return uiT('apfUi.not_specified')
+  return ({get MONO() { return uiT('apfUi.no_cfa_monochrome') },XTRANS:'X-Trans 6×6',QUAD_BAYER:'Quad Bayer'} as Record<string,string>)[String(value)]??String(value??uiT('apfUi.not_specified'))
 }
 function frameClassLabel(value:unknown){return displayLabel(value)}
 function frameTypeLabel(value:unknown){return displayLabel(value)}
 function rowFrame(row: RecordData) {
-  if (row.version?.members) return row.version.members.length + ' 个成员'
-  if (row.member_count != null || row.dataset_id) return row.member_count == null ? '图像组' : row.member_count + ' 个成员'
+  if (row.version?.members) return row.version.members.length + uiT('apfUi.members')
+  if (row.member_count != null || row.dataset_id) return row.member_count == null ? uiT('apfUi.image_group') : row.member_count + uiT('apfUi.members')
   const classification = rowClassification(row)
-  return [classification.frame_class, classification.frame_type].filter(Boolean).map(displayLabel).join(' / ') || '未分类'
+  return [classification.frame_class, classification.frame_type].filter(Boolean).map(displayLabel).join(' / ') || uiT('apfUi.unclassified')
 }
 function datasetMembers(row: RecordData): RecordData[] {
   return row.version?.members ?? []
@@ -1686,9 +1688,9 @@ function datasetValue(row: RecordData, getValue: (member: RecordData) => unknown
   const known = values.filter(value => value !== null && value !== undefined && value !== '')
   if (!known.length) return '—'
   const distinct = new Map(known.map(value => [JSON.stringify(value), value]))
-  if (distinct.size > 1) return '混合'
+  if (distinct.size > 1) return uiT('apfUi.mixed')
   const displayed = format(distinct.values().next().value)
-  return known.length < values.length ? displayed + '（部分缺失）' : displayed
+  return known.length < values.length ? displayed + uiT('apfUi.partially_missing_262385') : displayed
 }
 function datasetClassification(row: RecordData) {
   return datasetValue(row, member => {
@@ -1796,10 +1798,10 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <section class="apf-workspace" aria-label="AstroPhotoFlow 天文资产工作台"
+  <section class="apf-workspace" :aria-label="$t('apfUi.astrophotoflow_astronomy_library')"
     @pointerdown.stop @pointerup.stop @mousedown.stop @mouseup.stop
     @click.stop @contextmenu.stop @keydown.stop @keyup.stop>
-      <nav v-if="!props.native" class="apf-nav" aria-label="AstroPhotoFlow 模块">
+      <nav v-if="!props.native" class="apf-nav" :aria-label="$t('apfUi.astrophotoflow_modules')">
         <button v-for="(title, area) in areaTitles" :key="area" type="button"
           :aria-label="title" :title="title" :aria-current="activeArea === area ? 'page' : undefined"
           @click="selectArea(area as WorkspaceArea)">
@@ -1810,71 +1812,70 @@ onBeforeUnmount(() => {
       <template v-if="activeArea === 'library' || activeArea === 'settings'">
           <div class="apf-toolbar">
             <div class="apf-heading">
-              <button v-if="activeDataset" type="button" @click="closeDataset">← 返回素材库</button>
-              <button v-else-if="viewingProjectAssets || viewingProjectDatasets" type="button" @click="leaveProjectAssets">← 返回项目</button>
-              <LibraryButton v-else-if="props.native && activeArea === 'settings'" type="button" class="apf-equipment-back" aria-label="返回素材库" tooltip="返回素材库" @click="emit('back-to-library')"><i class="pi pi-arrow-left" aria-hidden="true"></i></LibraryButton>
-              <h1 v-if="!props.sidebar || activeDataset || activeArea !== 'library'">{{ activeDataset ? '素材库 / '+activeDataset.name : activeArea === 'library' ? '素材库' : (viewingProjectAssets ? '项目素材' : viewingProjectDatasets ? '项目图像组' : '设备管理') }}</h1>
-              <span v-if="activeDataset" class="apf-state">图像组 · {{activeDataset.version?.members?.length??activeDataset.member_count??0}} 张</span>
+              <button v-if="activeDataset" type="button" @click="closeDataset">{{ $t('apfUi.back_to_library') }}</button>
+              <button v-else-if="viewingProjectAssets || viewingProjectDatasets" type="button" @click="leaveProjectAssets">{{ $t('apfUi.back_to_project') }}</button>
+              <LibraryButton v-else-if="props.native && activeArea === 'settings'" type="button" class="apf-equipment-back" :aria-label="$t('apfUi.back_to_library_8979db')" :tooltip="$t('apfUi.back_to_library_8979db')" @click="emit('back-to-library')"><i class="pi pi-arrow-left" aria-hidden="true"></i></LibraryButton>
+              <h1 v-if="!props.sidebar || activeDataset || activeArea !== 'library'">{{ activeDataset ? $t('apfUi.library_968e00')+activeDataset.name : activeArea === 'library' ? $t('apfUi.library') : (viewingProjectAssets ? $t('apfUi.project_assets') : viewingProjectDatasets ? $t('apfUi.project_image_groups') : $t('apfUi.equipment_manager')) }}</h1>
+              <span v-if="activeDataset" class="apf-state">{{ $t('apfUi.image_group_photos_value', { p0: (activeDataset.version?.members?.length??activeDataset.member_count??0) }) }}</span>
               <div v-if="isLibraryTableView" class="apf-heading-actions">
                 <template v-if="bulkSelectMode">
-                  <span role="status">已选 {{bulkSelection.size}} 项</span>
-                  <LibraryButton :disabled="bulkDeleteBusy||bulkSelection.size===0||savingInline>0||Boolean(inlineSaveFailure)" @click="removeSelectedLibraryEntries">{{bulkDeleteBusy?'删除中…':'删除'}}</LibraryButton>
-                  <LibraryButton :disabled="bulkDeleteBusy" @click="leaveBulkSelectMode">完成</LibraryButton>
+                  <span role="status">{{ $t('apfUi.selected_value', { p0: (bulkSelection.size) }) }}</span>
+                  <LibraryButton :disabled="bulkDeleteBusy||bulkSelection.size===0||savingInline>0||Boolean(inlineSaveFailure)" @click="removeSelectedLibraryEntries">{{bulkDeleteBusy?$t('apfUi.deleting'):$t('apfUi.delete')}}</LibraryButton>
+                  <LibraryButton :disabled="bulkDeleteBusy" @click="leaveBulkSelectMode">{{ $t('apfUi.done') }}</LibraryButton>
                 </template>
                 <template v-else>
-                  <LibraryButton v-if="isLibraryItemsView" class="apf-import" variant="primary" :disabled="!capabilities?.asset_import" :aria-expanded="importMenuOpen" @click="importMenuOpen=!importMenuOpen" tooltip="选择文件或文件夹"><i class="icon-[lucide--upload] size-4" aria-hidden="true" /><span>导入</span></LibraryButton>
-                  <LibraryButton v-if="props.native&&isLibraryItemsView" class="apf-equipment" @click="emit('manage-equipment')">设备管理</LibraryButton>
+                  <LibraryButton v-if="isLibraryItemsView" class="apf-import" variant="primary" :disabled="!capabilities?.asset_import" :aria-expanded="importMenuOpen" @click="importMenuOpen=!importMenuOpen" :tooltip="$t('apfUi.select_files_or_folder')"><i class="icon-[lucide--upload] size-4" aria-hidden="true" /><span>{{ $t('apfUi.import') }}</span></LibraryButton>
+                  <LibraryButton v-if="props.native&&isLibraryItemsView" class="apf-equipment" @click="emit('manage-equipment')">{{ $t('apfUi.equipment_manager') }}</LibraryButton>
                   <LibraryMenu ref="libraryMenu" :items="libraryMenuItems" />
                   <div v-if="importMenuOpen&&isLibraryItemsView" class="apf-import-menu">
-                    <LibraryButton @click="startImport('files')">选择文件</LibraryButton>
-                    <LibraryButton @click="startImport('folder')">选择文件夹</LibraryButton>
+                    <LibraryButton @click="startImport('files')">{{ $t('apfUi.select_files') }}</LibraryButton>
+                    <LibraryButton @click="startImport('folder')">{{ $t('apfUi.select_folder') }}</LibraryButton>
                   </div>
                 </template>
               </div>
             </div>
-            <LibraryTabs v-if="activeArea==='library'&&!activeDataset" class="apf-library-categories" :value="libraryCategory" :options="[{value:'all',label:'全部素材'},{value:'light',label:'亮场'},{value:'calibration',label:'校准库'}]" label="素材用途" @change="selectLibraryCategory($event as 'all'|'light'|'calibration')" />
-            <LibraryTabs v-if="activeArea === 'settings' && !viewingProjectAssets && !viewingProjectDatasets" class="apf-management-tabs" :value="store.section" :options="[{value:'equipment-setups',label:'设备组合'},{value:'equipment',label:'我的设备'}]" :label="props.native?'设备与资料类别':'设置类别'" @change="selectSection($event as WorkspaceSection)" />
+            <LibraryTabs v-if="activeArea==='library'&&!activeDataset" class="apf-library-categories" :value="libraryCategory" :options="[{value:'all',label:$t('apfUi.all_assets')},{value:'light',label:$t('apfUi.light')},{value:'calibration',label:$t('apfUi.calibration_library')}]" :label="$t('apfUi.asset_use')" @change="selectLibraryCategory($event as 'all'|'light'|'calibration')" />
+            <LibraryTabs v-if="activeArea === 'settings' && !viewingProjectAssets && !viewingProjectDatasets" class="apf-management-tabs" :value="store.section" :options="[{value:'equipment-setups',label:$t('apfUi.equipment_setup')},{value:'equipment',label:$t('apfUi.my_equipment')}]" :label="props.native?$t('apfUi.equipment_and_metadata_categories'):$t('apfUi.settings_category')" @change="selectSection($event as WorkspaceSection)" />
             <label class="apf-search">
               <i class="pi pi-search" aria-hidden="true"></i>
-              <input :value="store.query" aria-label="搜索" placeholder="搜索名称" :disabled="bulkDeleteBusy||setupDirty" @input="setQuery" />
+              <input :value="store.query" :aria-label="$t('apfUi.search')" :placeholder="$t('apfUi.search_names')" :disabled="bulkDeleteBusy||setupDirty" @input="setQuery" />
             </label>
             <select v-if="activeArea !== 'settings' && (store.section === 'projects' || store.section === 'equipment' || store.section === 'equipment-setups')"
-              v-model="statusFilter" :disabled="setupDirty" aria-label="状态筛选">
-              <option value="active">启用</option><option value="archived">已归档</option><option value="all">全部</option>
+              v-model="statusFilter" :disabled="setupDirty" :aria-label="$t('apfUi.status_filter')">
+              <option value="active">{{ $t('apfUi.active') }}</option><option value="archived">{{ $t('apfUi.archived') }}</option><option value="all">{{ $t('apfUi.all') }}</option>
             </select>
-            <LibrarySelect v-if="isEquipmentManagement&&store.section==='equipment'" class="apf-equipment-kind-filter" :model-value="equipmentKindFilter" label="设备类别" :options="[{value:'',name:'全部设备'},...equipmentKinds.map(kind=>({value:kind,name:equipmentKindLabels[kind]}))]" :disabled="managementFilterBlocked" @update:model-value="filterEquipmentKind" />
+            <LibrarySelect v-if="isEquipmentManagement&&store.section==='equipment'" class="apf-equipment-kind-filter" :model-value="equipmentKindFilter" :label="$t('apfUi.equipment_category')" :options="[{value:'',name:$t('apfUi.all_equipment')},...equipmentKinds.map(kind=>({value:kind,name:equipmentKindLabels[kind]}))]" :disabled="managementFilterBlocked" @update:model-value="filterEquipmentKind" />
             <div v-if="activeArea==='settings' && store.section==='projects' && !viewingProjectAssets && !viewingProjectDatasets" class="apf-management-filter-control">
-              <button ref="managementFilterButton" type="button" :disabled="managementFilterBlocked" :aria-expanded="managementFilterOpen" @click="managementFilterOpen?managementFilterOpen=false:openManagementFilter()">筛选<span v-if="managementFilterCount">（{{managementFilterCount}}）</span></button>
+              <button ref="managementFilterButton" type="button" :disabled="managementFilterBlocked" :aria-expanded="managementFilterOpen" @click="managementFilterOpen?managementFilterOpen=false:openManagementFilter()">{{ $t('apfUi.filter_b5f154') }}<span v-if="managementFilterCount">（{{managementFilterCount}}）</span></button>
               <div v-if="managementFilterOpen" class="apf-management-filter-panel">
-                <label v-if="store.section==='projects'">拍摄目标<input v-model="projectTargetFilterDraft" placeholder="按目标筛选" /></label>
-                <div><button type="button" @click="clearManagementFilter">清除</button><button type="button" @click="applyManagementFilter" :disabled="managementFilterBlocked">应用</button></div>
+                <label v-if="store.section==='projects'">{{ $t('apfUi.target') }}<input v-model="projectTargetFilterDraft" :placeholder="$t('apfUi.filter_by_target')" /></label>
+                <div><button type="button" @click="clearManagementFilter">{{ $t('apfUi.clear') }}</button><button type="button" @click="applyManagementFilter" :disabled="managementFilterBlocked">{{ $t('apfUi.apply') }}</button></div>
               </div>
             </div>
-            <span v-if="isLibraryItemsView" ref="filterButton"><LibraryButton :disabled="bulkDeleteBusy" :aria-expanded="filterPanelOpen" @click="filterPanelOpen=!filterPanelOpen">
-              筛选<span v-if="activeFilterCount">（{{activeFilterCount}}）</span>
+            <span v-if="isLibraryItemsView" ref="filterButton"><LibraryButton :disabled="bulkDeleteBusy" :aria-expanded="filterPanelOpen" @click="filterPanelOpen=!filterPanelOpen">{{ $t('apfUi.filter_b5f154') }}<span v-if="activeFilterCount">（{{activeFilterCount}}）</span>
             </LibraryButton></span>
-            <button v-if="!isEquipmentManagement&&(activeArea !== 'library' || viewingProjectAssets || viewingProjectDatasets)" type="button" :disabled="setupDirty" @click="loadRecords"><i class="pi pi-refresh" aria-hidden="true"></i><span>刷新</span></button>
+            <button v-if="!isEquipmentManagement&&(activeArea !== 'library' || viewingProjectAssets || viewingProjectDatasets)" type="button" :disabled="setupDirty" @click="loadRecords"><i class="pi pi-refresh" aria-hidden="true"></i><span>{{ $t('apfUi.refresh') }}</span></button>
             <template v-if="isEquipmentManagement">
               <template v-if="managementSelectMode">
-                <span role="status">已选 {{managementSelection.size}} 项</span>
-                <LibraryButton type="button" :disabled="!managementSelection.size||managementArchiveBusy||managementFilterBlocked" @click="requestSelectedEquipmentDelete">删除所选（{{managementSelection.size}}）</LibraryButton>
-                <LibraryButton type="button" :disabled="managementArchiveBusy" @click="leaveManagementSelectMode">完成</LibraryButton>
+                <span role="status">{{ $t('apfUi.selected_value', { p0: (managementSelection.size) }) }}</span>
+                <LibraryButton type="button" :disabled="!managementSelection.size||managementArchiveBusy||managementFilterBlocked" @click="requestSelectedEquipmentDelete">{{ $t('apfUi.delete_selected_value', { p0: (managementSelection.size) }) }}</LibraryButton>
+                <LibraryButton type="button" :disabled="managementArchiveBusy" @click="leaveManagementSelectMode">{{ $t('apfUi.done') }}</LibraryButton>
               </template>
-              <LibraryButton v-else-if="statusFilter!=='archived'" type="button" variant="primary" :disabled="managementFilterBlocked||loading" @click="store.section==='equipment-setups'?setupManager?.beginSetup(null):openCreate('equipment')"><i class="pi pi-plus" aria-hidden="true"></i>{{store.section==='equipment-setups'?'新建设备组合':'新建设备'}}</LibraryButton>
+              <LibraryButton v-else-if="statusFilter!=='archived'" type="button" variant="primary" :disabled="managementFilterBlocked||loading" @click="store.section==='equipment-setups'?setupManager?.beginSetup(null):openCreate('equipment')"><i class="pi pi-plus" aria-hidden="true"></i>{{store.section==='equipment-setups'?$t('apfUi.new_equipment_setup'):$t('apfUi.new_equipment')}}</LibraryButton>
               <LibraryMenu ref="equipmentMenu" :items="equipmentMenuItems" />
             </template>
             <template v-if="activeArea==='settings' && store.section==='projects' && !viewingProjectAssets && !viewingProjectDatasets">
               <template v-if="managementSelectMode">
-                <button type="button" :disabled="!managementSelection.size||managementArchiveBusy" @click="requestSelectedEquipmentDelete">删除（{{managementSelection.size}}）</button>
-                <button type="button" :disabled="managementArchiveBusy" @click="leaveManagementSelectMode">取消</button>
+                <button type="button" :disabled="!managementSelection.size||managementArchiveBusy" @click="requestSelectedEquipmentDelete">{{ $t('apfUi.delete_value', { p0: (managementSelection.size) }) }}</button>
+                <button type="button" :disabled="managementArchiveBusy" @click="leaveManagementSelectMode">{{ $t('apfUi.cancel') }}</button>
               </template>
               <template v-else>
-                <button type="button" :disabled="loading||savingInline>0||Boolean(inlineSaveFailure)" @click="enterManagementSelectMode">批量删除</button>
+                <button type="button" :disabled="loading||savingInline>0||Boolean(inlineSaveFailure)" @click="enterManagementSelectMode">{{ $t('apfUi.delete_in_bulk') }}</button>
               </template>
             </template>
-            <button v-if="store.section === 'projects' && statusFilter!=='archived' && !managementSelectMode && !viewingProjectAssets && !viewingProjectDatasets" type="button" @click="openCreate('project')">新建项目</button>
-            <button v-if="store.section==='projects' && viewingProjectAssets" type="button" @click="toggleProjectAssetMode">{{addingProjectAssets?'查看已选素材':'添加素材'}}</button>
-            <button v-if="store.section==='projects' && viewingProjectDatasets" type="button" @click="toggleProjectDatasetMode">{{addingProjectDatasets?'查看已选图像组':'添加图像组'}}</button>
+            <button v-if="store.section === 'projects' && statusFilter!=='archived' && !managementSelectMode && !viewingProjectAssets && !viewingProjectDatasets" type="button" @click="openCreate('project')">{{ $t('apfUi.new_project') }}</button>
+            <button v-if="store.section==='projects' && viewingProjectAssets" type="button" @click="toggleProjectAssetMode">{{addingProjectAssets?$t('apfUi.view_selected_asset'):$t('apfUi.add_asset')}}</button>
+            <button v-if="store.section==='projects' && viewingProjectDatasets" type="button" @click="toggleProjectDatasetMode">{{addingProjectDatasets?$t('apfUi.view_selected_image_group'):$t('apfUi.add_image_group')}}</button>
           </div>
         <LibraryPage v-if="activeArea === 'library'" />
         <EquipmentSetupManager v-else-if="store.section==='equipment-setups'" ref="setupManager" />
@@ -1891,19 +1892,19 @@ onBeforeUnmount(() => {
       <EquipmentDeleteDialog :items="equipmentDeleteItems" @close="equipmentDeleteItems=undefined" @deleted="equipmentDeleted" />
       <div v-if="bulkConfirmOpen" class="apf-trash-confirm-backdrop" role="presentation" @click.self="bulkConfirmOpen=false">
         <section class="apf-trash-confirm" role="alertdialog" aria-modal="true" aria-labelledby="bulk-trash-confirm-title">
-          <h2 id="bulk-trash-confirm-title">确认移入回收站</h2>
-          <p>将移入回收站 {{bulkConfirmRows.length}} 条素材库记录。原文件保留，可恢复。</p>
-          <ul><li v-for="row in bulkConfirmRows" :key="row.entry_type+':'+row.id">{{itemTitle(row)}}<span v-if="row.entry_type==='dataset'">（图像组，{{row.version?.members?.length??row.dataset?.member_count??0}} 张照片）</span><span v-else>（照片）</span></li></ul>
-          <button type="button" @click="bulkConfirmOpen=false">取消</button><button type="button" @click="confirmRemoveSelectedLibraryEntries">移入回收站</button>
+          <h2 id="bulk-trash-confirm-title">{{ $t('apfUi.confirm_move_to_trash') }}</h2>
+          <p>{{ $t('apfUi.move_value_library_entries_to_trash_original_files_are_retained_and_en', { p0: (bulkConfirmRows.length) }) }}</p>
+          <ul><li v-for="row in bulkConfirmRows" :key="row.entry_type+':'+row.id">{{itemTitle(row)}}<span v-if="row.entry_type==='dataset'">{{ $t('apfUi.image_group_value_photos', { p0: (row.version?.members?.length??row.dataset?.member_count??0) }) }}</span><span v-else>{{ $t('apfUi.photo_95be49') }}</span></li></ul>
+          <button type="button" @click="bulkConfirmOpen=false">{{ $t('apfUi.cancel') }}</button><button type="button" @click="confirmRemoveSelectedLibraryEntries">{{ $t('apfUi.move_to_trash') }}</button>
         </section>
       </div>
       <div v-if="pendingManagementArchive" class="apf-trash-confirm-backdrop" role="presentation" @click.self="pendingManagementArchive=undefined">
         <section class="apf-trash-confirm" role="alertdialog" aria-modal="true" aria-labelledby="management-archive-title">
-          <h2 id="management-archive-title">移入回收站</h2>
-          <p v-if="managementSelectMode">将 {{managementSelection.size}} 条设置移入回收站。关联素材及其设备快照会保留，可在回收站恢复。</p>
-          <p v-else>将“{{itemTitle(pendingManagementArchive.row)}}”移入回收站。记录、关联素材和历史预设会保留，可随时恢复。</p>
-          <button type="button" :disabled="managementArchiveBusy" @click="pendingManagementArchive=undefined">取消</button>
-          <button type="button" :disabled="managementArchiveBusy" @click="confirmManagementArchive">{{managementArchiveBusy?'处理中…':'确认移入回收站'}}</button>
+          <h2 id="management-archive-title">{{ $t('apfUi.move_to_trash') }}</h2>
+          <p v-if="managementSelectMode">{{ $t('apfUi.move_value_settings_to_trash_linked_assets_and_equipment_snapshots_are', { p0: (managementSelection.size) }) }}</p>
+          <p v-else>{{ $t('apfUi.move_value_to_trash_records_linked_assets_and_historical_presets_are_r', { p0: (itemTitle(pendingManagementArchive.row)) }) }}</p>
+          <button type="button" :disabled="managementArchiveBusy" @click="pendingManagementArchive=undefined">{{ $t('apfUi.cancel') }}</button>
+          <button type="button" :disabled="managementArchiveBusy" @click="confirmManagementArchive">{{managementArchiveBusy?$t('apfUi.processing'):$t('apfUi.confirm_move_to_trash')}}</button>
         </section>
       </div>
       <LocalImportPicker :open="!!localPickerMode" :mode="localPickerMode??'files'" @close="localPickerMode=undefined" @selected="localFilesSelected" />

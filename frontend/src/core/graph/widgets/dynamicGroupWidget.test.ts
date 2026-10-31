@@ -665,7 +665,7 @@ describe('DynamicGroup widgets', () => {
   })
 
   it.for([
-    { label: 'LoRA #2 strength', expected: 'LoRA 1행 strength' },
+    { label: 'LoRA #2 strength', expected: 'LoRA 第 1 行 strength' },
     { label: 'My strength', expected: 'My strength' }
   ])(
     'renumbers $label after restoring in another language',
@@ -676,22 +676,22 @@ describe('DynamicGroup widgets', () => {
       node.inputs[node.findInputSlot('loras.1.strength')].label = label
       const saved = node.serialize()
       const locale = i18n.global.locale.value
-      const messages = cloneDeep(i18n.global.getLocaleMessage('ko'))
+      const messages = cloneDeep(i18n.global.getLocaleMessage('zh'))
       onTestFinished(() => {
         i18n.global.locale.value = locale
-        i18n.global.setLocaleMessage('ko', messages)
+        i18n.global.setLocaleMessage('zh', messages)
       })
-      i18n.global.mergeLocaleMessage('ko', {
-        dynamicGroup: { row: '{group} {index}행' }
+      i18n.global.mergeLocaleMessage('zh', {
+        dynamicGroup: { row: '{group} 第 {index} 行' }
       })
-      i18n.global.locale.value = 'ko'
+      i18n.global.locale.value = 'zh'
       const restored = setup()
       restored.node.configure(saved)
 
       restored.widget('loras.0').callback?.(undefined)
 
       expect(restored.widget('loras.0.strength').label).toBe(expected)
-      expect(restored.widget('loras.0').label).toBe('LoRA 1행')
+      expect(restored.widget('loras.0').label).toBe('LoRA 第 1 行')
     }
   )
 

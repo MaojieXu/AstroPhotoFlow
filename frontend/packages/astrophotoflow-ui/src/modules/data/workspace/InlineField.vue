@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { uiT } from '../../../core/i18n'
+
 import { nextTick, ref, watch } from 'vue'
 
 const props = withDefaults(defineProps<{
@@ -36,7 +38,7 @@ function begin() {
     editor.value?.focus()
     if(props.kind==='select'&&editor.value instanceof HTMLSelectElement&&'showPicker' in editor.value){
       try{editor.value.showPicker()}
-      catch{error.value='下拉选项未能展开，请使用键盘打开。'}
+      catch{error.value=uiT('apfUi.could_not_expand_the_options_open_the_list_with_the_keyboard')}
     }
   })
 }
@@ -67,7 +69,7 @@ async function commit() {
   if(props.kind!=='number'&&draft.value===initialDraft.value){editing.value=false;editorFocused.value=false;saveAtEditStart.value=undefined;emit('cancelled');return}
   saving.value=true;error.value=''
   try{await (saveAtEditStart.value??props.save)(next);editing.value=false;editorFocused.value=false;saveAtEditStart.value=undefined}
-  catch(cause){error.value=cause instanceof Error?cause.message:'保存失败。';await nextTick();editor.value?.focus()}
+  catch(cause){error.value=cause instanceof Error?cause.message:uiT('apfUi.could_not_save');await nextTick();editor.value?.focus()}
   finally{saving.value=false}
 }
 function keydown(event:KeyboardEvent){
@@ -95,9 +97,9 @@ function focusin(event:FocusEvent){if(editing.value&&event.target===editor.value
         <option v-if="choicesMessage" disabled value="__apf_choices_message__">{{choicesMessage}}</option>
       </select>
       <input v-else ref="editor" v-model="draft" :type="kind==='number'?'number':'text'" :step="kind==='number'?(integer?'1':step):undefined" :disabled="saving" @keydown="keydown" />
-      <small v-if="saving">保存中…</small><small v-if="error" class="apf-inline-error" role="alert">{{error}}</small>
+      <small v-if="saving">{{ $t('apfUi.saving') }}</small><small v-if="error" class="apf-inline-error" role="alert">{{error}}</small>
     </template>
-    <button v-else type="button" class="apf-inline-value" :title="title ?? (activation==='doubleclick'?'双击或按 Enter 编辑':undefined)" @click="activate" @dblclick.stop.prevent="activateDoubleClick" @keydown.enter.stop.prevent="begin" @keydown.space.stop.prevent="begin">{{display ?? (value===null||value===undefined||value===''?'未设置':value)}}<i aria-hidden="true" class="pi pi-pencil apf-edit-icon" /></button>
+    <button v-else type="button" class="apf-inline-value" :title="title ?? (activation==='doubleclick'?$t('apfUi.double_click_or_press_enter_to_edit'):undefined)" @click="activate" @dblclick.stop.prevent="activateDoubleClick" @keydown.enter.stop.prevent="begin" @keydown.space.stop.prevent="begin">{{display ?? (value===null||value===undefined||value===''?$t('apfUi.not_set'):value)}}<i aria-hidden="true" class="pi pi-pencil apf-edit-icon" /></button>
   </span>
 </template>
 

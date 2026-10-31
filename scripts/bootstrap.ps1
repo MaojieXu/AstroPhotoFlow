@@ -7,17 +7,56 @@ if ($apfArguments -contains '--help') {
     Write-Output 'Quickstart: --workspace .artifacts/workspaces/dev --build --start'
     exit 0
 }
+$apfRoot = Split-Path -Parent $PSScriptRoot
+$apfArtifacts = Join-Path $apfRoot '.artifacts'
+$apfWatch = $apfArguments -contains '--watch'
+$apfRunId = [Guid]::NewGuid().ToString('N')
+$apfStarted = [DateTimeOffset]::UtcNow
+$apfClock = [Diagnostics.Stopwatch]::StartNew()
+$apfLogs = Join-Path $apfArtifacts "logs/dev-prepare/$apfRunId"
+$apfReceipt = Join-Path $apfArtifacts 'dev-prepare.json'
+New-Item -ItemType Directory -Force -Path $apfLogs | Out-Null
+$apfStage = [ordered]@{ name = 'bootstrap'; log = (Join-Path $apfLogs 'bootstrap.log'); exit_code = $null }
+$apfReport = [ordered]@{ run_id = $apfRunId; started_at = $apfStarted.ToString('o'); arguments = $apfArguments;
+    completed = $false; ready = $false; stages = @($apfStage) }
+$apfExitCode = 1
+$apfTranscript = $false
+
+function Write-ApfReceipt {
+    if ($apfWatch) { return }
+    $apfJson = $apfReport | ConvertTo-Json -Depth 20
+    [IO.File]::WriteAllText(($apfReceipt + '.pending'), $apfJson, (New-Object Text.UTF8Encoding($false)))
+    Move-Item -LiteralPath ($apfReceipt + '.pending') -Destination $apfReceipt -Force
+}
+
+try {
+Write-ApfReceipt
+Start-Transcript -LiteralPath $apfStage.log | Out-Null
+$apfTranscript = $true
 if ($env:OS -ne 'Windows_NT' -or -not [Environment]::Is64BitOperatingSystem) {
     throw 'This bootstrap supports Windows x64. Other platforms are not validated.'
 }
-$apfRoot = Split-Path -Parent $PSScriptRoot
 Set-Location -LiteralPath $apfRoot
-$apfArtifacts = Join-Path $apfRoot '.artifacts'
 $apfTools = Join-Path $apfArtifacts 'toolchains'
 $apfCache = Join-Path $apfArtifacts 'cache'
 if ($env:ASTROPHOTOFLOW_DEV_CACHE) { $apfCache = [IO.Path]::GetFullPath($env:ASTROPHOTOFLOW_DEV_CACHE) }
+for ($apfIndex = 0; $apfIndex -lt $apfArguments.Count; $apfIndex++) {
+    if ($apfArguments[$apfIndex] -eq '--cache-dir') {
+        if ($apfIndex + 1 -ge $apfArguments.Count -or $apfArguments[$apfIndex + 1].StartsWith('--')) {
+            throw '--cache-dir requires a directory'
+        }
+        $apfCache = [IO.Path]::GetFullPath($apfArguments[++$apfIndex])
+    } elseif ($apfArguments[$apfIndex].StartsWith('--cache-dir=')) {
+        $apfCacheValue = $apfArguments[$apfIndex].Substring('--cache-dir='.Length)
+        if (-not $apfCacheValue) { throw '--cache-dir requires a directory' }
+        $apfCache = [IO.Path]::GetFullPath($apfCacheValue)
+    }
+}
+$env:ASTROPHOTOFLOW_DEV_CACHE = $apfCache
+$apfReport['cache_dir'] = $apfCache
+Write-ApfReceipt
 $env:UV_CACHE_DIR = Join-Path $apfCache 'uv'
-$env:UV_PYTHON_INSTALL_DIR = Join-Path $apfArtifacts 'python'
+$env:UV_PYTHON_INSTALL_DIR = Join-Path $apfArtifacts 'managed-python'
 $env:UV_PYTHON_BIN_DIR = Join-Path $apfArtifacts 'python-bin'
 $env:UV_PYTHON_INSTALL_REGISTRY = '0'
 $env:LOCALAPPDATA = Join-Path $apfArtifacts 'local-app-data'
@@ -75,7 +114,6 @@ function Expand-ApfTool([string]$File, [string]$Uri, [string]$Sha256, [string]$D
     Expand-Archive -LiteralPath $apfArchive -DestinationPath $Destination -Force
 }
 
-try {
     $apfUvDirectory = Join-Path $apfTools 'uv'
     $apfUvFiles = @()
     if (Test-Path -LiteralPath $apfUvDirectory) {
@@ -138,9 +176,35 @@ try {
         $apfArguments = @($apfArguments | Where-Object { $_ -ne '--watch' })
         $apfEntry = Join-Path $PSScriptRoot 'dev_frontend.py'
     }
+    $apfStage['elapsed_seconds'] = [Math]::Round($apfClock.Elapsed.TotalSeconds, 3)
+    $apfStage['exit_code'] = 0
+    Write-ApfReceipt
+    if (-not $apfWatch) { $env:ASTROPHOTOFLOW_DEV_PREPARE_RUN_ID = $apfRunId }
     & $apfPython $apfEntry @apfArguments
-    exit $LASTEXITCODE
+    $apfExitCode = $LASTEXITCODE
+    if (-not $apfWatch) {
+        $apfChildReport = Get-Content -LiteralPath $apfReceipt -Raw -Encoding UTF8 | ConvertFrom-Json
+        if ($apfChildReport.run_id -ne $apfRunId -or -not $apfChildReport.finished_at) {
+            throw 'Preparation did not return a receipt for this invocation'
+        }
+        $apfReport = [ordered]@{}
+        foreach ($apfProperty in $apfChildReport.PSObject.Properties) { $apfReport[$apfProperty.Name] = $apfProperty.Value }
+        if ($apfExitCode -ne 0) { $apfReport['completed'] = $false }
+    }
 } catch {
+    $apfReport['completed'] = $false
+    $apfReport['ready'] = $false
+    $apfReport['error'] = $_.Exception.Message
+    $apfExitCode = 1
     Write-Error $_.Exception.Message -ErrorAction Continue
-    exit 1
+} finally {
+    if ($null -eq $apfStage.exit_code) {
+        $apfStage['exit_code'] = $apfExitCode
+        $apfStage['elapsed_seconds'] = [Math]::Round($apfClock.Elapsed.TotalSeconds, 3)
+    }
+    $apfReport['finished_at'] = [DateTimeOffset]::UtcNow.ToString('o')
+    $apfReport['elapsed_seconds'] = [Math]::Round($apfClock.Elapsed.TotalSeconds, 3)
+    Write-ApfReceipt
+    if ($apfTranscript) { Stop-Transcript | Out-Null }
 }
+exit $apfExitCode

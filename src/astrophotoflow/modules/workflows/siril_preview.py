@@ -36,7 +36,7 @@ class SirilPreviews:
     async def render(self, body: SirilPreviewRequest):
         consumer = body.consumer_id
         if body.generation <= self.generations.get(consumer, -1):
-            raise ApiError(409, "STALE_VIEW", "该实时预览请求已过期。")
+            raise ApiError(409, "STALE_VIEW", "该实时预览请求已过期。", message_key='this_live_preview_request_has_expired')
         self.generations[consumer] = body.generation
         old = self.active.get(consumer)
         if old is not None:
@@ -44,7 +44,7 @@ class SirilPreviews:
                 old.cancel()
             await asyncio.gather(old, return_exceptions=True)
         if self.generations.get(consumer) != body.generation:
-            raise ApiError(409, "STALE_VIEW", "该实时预览请求已被更新。")
+            raise ApiError(409, "STALE_VIEW", "该实时预览请求已被更新。", message_key='a_newer_request_replaced_this_live_preview_request')
         task = asyncio.create_task(self._render(body))
         self.active[consumer] = task
         try:
@@ -133,12 +133,12 @@ class SirilPreviews:
 async def preview(body: BundlePreviewRequest, request: Request):
     package = get_package(request.app.state.settings, body.package_id)
     if package.availability != "ready":
-        raise ApiError(503, "SOFTWARE_NOT_READY", package.reason or "请先安装 Siril。")
+        raise ApiError(503, "SOFTWARE_NOT_READY", package.reason or "请先安装 Siril。", message_key='siril_install_required', fields=[{'path': 'diagnostic', 'message': package.reason or "请先安装 Siril。"}])
     validate_parameters(request.app.state.settings, body.package_id, body.operation_id, body.parameters)
     manager = request.app.state.siril_previews
     async with request.app.state.maintenance_lock:
         if request.app.state.maintenance or request.app.state.shutdown_started:
-            raise ApiError(409, "WORKBENCH_MAINTENANCE", "工作台正在维护。")
+            raise ApiError(409, "WORKBENCH_MAINTENANCE", "工作台正在维护。", message_key='the_workbench_is_undergoing_maintenance')
         operation = manager.start(body)
     try:
         while not operation.done():
@@ -146,7 +146,7 @@ async def preview(body: BundlePreviewRequest, request: Request):
             if await request.is_disconnected():
                 operation.cancel()
                 await asyncio.gather(operation, return_exceptions=True)
-                raise ApiError(409, "PREVIEW_CANCELLED", "实时预览请求已关闭。")
+                raise ApiError(409, "PREVIEW_CANCELLED", "实时预览请求已关闭。", message_key='this_live_preview_request_is_closed')
         return Response(await operation, media_type="image/png", headers={"Cache-Control": "no-store"})
     except asyncio.CancelledError:
         operation.cancel()

@@ -17,9 +17,9 @@ function changed(event:Event){
 </script>
 <template>
   <span class="apf-binding-select"><select :aria-label="label" :value="value" :disabled="disabled" @change="changed">
-    <option value="inherit">{{inherit?'继承组默认':'未设置默认值'}}</option>
-    <option value="none">不使用</option>
-    <option v-if="historical" :value="value">已固定的历史版本</option>
-    <option v-for="target in choices" :key="token(target.target)" :value="token(target.target)">{{target.name}} · {{target.target.kind==='asset_version'?'Master':'校准组'}} v{{target.version_number}}</option>
-  </select><LibraryInfo v-if="modelValue" :label="label+'固定引用'" :text="modelValue.id" /></span>
+    <option value="inherit">{{inherit?$t('apfUi.inherit_group_default'):$t('apfUi.no_default_set')}}</option>
+    <option value="none">{{ $t('apfUi.do_not_use') }}</option>
+    <option v-if="historical" :value="value">{{ $t('apfUi.pinned_historical_version') }}</option>
+    <option v-for="target in choices" :key="token(target.target)" :value="token(target.target)">{{target.name}} · {{target.target.kind==='asset_version'?'Master':$t('apfUi.calibration_group')}} v{{target.version_number}}</option>
+  </select><LibraryInfo v-if="modelValue" :label="label+$t('apfUi.fixed_reference')" :text="modelValue.id" /></span>
 </template>

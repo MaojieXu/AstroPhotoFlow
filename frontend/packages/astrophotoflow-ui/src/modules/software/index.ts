@@ -9,5 +9,7 @@ export type {
   SoftwarePackage,
   SoftwarePackageDetails,
   SoftwarePreparation,
+  SoftwareRelease,
+  SoftwareReleaseListing,
   SirilCommand
 } from './api/contracts'

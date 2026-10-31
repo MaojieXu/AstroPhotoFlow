@@ -1,4 +1,5 @@
 from __future__ import annotations
+from astrophotoflow.core.localization import error_message, workspace_locale
 
 from concurrent.futures import CancelledError, Future
 from contextlib import contextmanager
@@ -63,7 +64,7 @@ class MediaViews:
         self.output_jobs = {}
         with database.write_session() as session:
             for row in session.scalars(select(Preview).where(Preview.size.in_({"viewer", "playback", "siril-live"}), Preview.status == "generating")).all():
-                row.status, row.error = "failed", "查看准备被中断，请显式重试。"
+                row.status, row.error = "failed", error_message(workspace_locale(self.settings.workspace), '', 'media_interrupted')
         for folder in self.cache.folders():
             for part in folder.glob("*.part*"):
                 part.unlink(missing_ok=True)
@@ -73,14 +74,14 @@ class MediaViews:
         if version is None:
             raise not_found()
         if version.availability != "available":
-            raise ApiError(409, "SOURCE_UNAVAILABLE", "原件尚未就绪或已经变化。")
+            raise ApiError(409, "SOURCE_UNAVAILABLE", "原件尚未就绪或已经变化。", message_key='the_original_is_not_ready_or_has_changed')
         removals = session.scalars(select(LibraryEntryRemoval)).all()
         if any(row.cleanup_status != "trash" and (row.entry_type == "asset" and row.entry_id == version.asset_id or
             row.entry_type == "dataset" and version.asset_id in (row.member_asset_ids or [])) for row in removals):
-            raise ApiError(409, "SOURCE_CLEANUP_ACTIVE", "原件正在清理，不能准备或读取查看缓存。")
+            raise ApiError(409, "SOURCE_CLEANUP_ACTIVE", "原件正在清理，不能准备或读取查看缓存。", message_key='the_original_is_being_cleaned_up_viewer_cache_preparation_and_reads_are_blo')
         path = _asset_path(self.settings, version)
         if version.byte_size is not None and path.stat().st_size != version.byte_size:
-            raise ApiError(409, "SOURCE_CHANGED", "原件大小与固定版本不同，请先检查内容变化。")
+            raise ApiError(409, "SOURCE_CHANGED", "原件大小与固定版本不同，请先检查内容变化。", message_key='the_original_size_differs_from_the_fixed_version_check_content_changes_firs')
         return version, session.get(Asset, version.asset_id), path
 
     def prepare(self, version_id, selection):
@@ -89,7 +90,7 @@ class MediaViews:
             if selection.consumer_id:
                 observed = self.consumers.get(selection.consumer_id, (-1, 0))
                 if selection.generation < observed[0]:
-                    raise ApiError(409, "STALE_VIEW", "已切换到更新的查看请求。")
+                    raise ApiError(409, "STALE_VIEW", "已切换到更新的查看请求。", message_key='a_newer_viewer_request_has_replaced_this_request')
                 self.consumers[selection.consumer_id] = (selection.generation, time.monotonic())
                 active_consumers = {consumer for interests in self.interests.values() for consumer, _ in interests}
                 self.consumers = {consumer: value for consumer, value in self.consumers.items()
@@ -105,16 +106,16 @@ class MediaViews:
             stamp = path.stat()
             previous = session.scalars(select(Preview).where(Preview.asset_version_id == version_id, Preview.size.in_({"viewer", "playback"}))).all()
             if any(row.display_parameters.get("source_stamp") not in (None, [stamp.st_size, stamp.st_mtime_ns]) for row in previous):
-                raise ApiError(409, "SOURCE_CHANGED", "原件自上次查看后已经变化，请先检查内容变化。")
+                raise ApiError(409, "SOURCE_CHANGED", "原件自上次查看后已经变化，请先检查内容变化。", message_key='the_original_has_changed_since_it_was_viewed_check_content_changes_first')
             if category not in {"fits", "xisf", "image", "raw", "numpy", "video"}:
-                raise ApiError(422, "MEDIA_UNSUPPORTED", "当前素材不是受支持的可查看媒体。")
+                raise ApiError(422, "MEDIA_UNSUPPORTED", "当前素材不是受支持的可查看媒体。", message_key='this_asset_is_not_a_supported_viewable_media_type')
             if category == "video" and selection.media_time is not None and selection.playback_key:
                 old = self._row(session, version_id, selection.playback_key)
                 folder = (self.settings.data_dir / old.storage_path).parent
                 mapping = json.loads((folder / "frames.json").read_text(encoding="utf-8"))
                 match = min(mapping, key=lambda frame: abs(frame["time"] - selection.media_time))
                 if abs(match["time"] - selection.media_time) > 0.003:
-                    raise ApiError(422, "FRAME_NOT_MATCHED", "暂停帧时间戳没有对应的原始帧。")
+                    raise ApiError(422, "FRAME_NOT_MATCHED", "暂停帧时间戳没有对应的原始帧。", message_key='no_original_frame_matches_the_paused_frame_timestamp')
                 selection.media_time = None
                 selection.frame_index = match["index"]
             playback = category == "video" and selection.media_time is None and selection.frame_index is None
@@ -155,13 +156,13 @@ class MediaViews:
                         if self.preparing.get(key) is not completed:
                             return
                         if completed.cancelled():
-                            self._fail(job, "无人继续查看，已取消高清准备。")
+                            self._fail(job, error_message(workspace_locale(self.settings.workspace), '', 'media_not_watched'))
                         self.preparing.pop(key, None)
                         self.interests.pop(key, None)
                 future.add_done_callback(complete)
             except RuntimeError:
                 self.interests.pop(key, None)
-                self._fail(job, "预览执行器正在关闭，请稍后重试。")
+                self._fail(job, error_message(workspace_locale(self.settings.workspace), '', 'media_executor_closing'))
         return state
 
     def _row(self, session, version_id, key):
@@ -198,7 +199,7 @@ class MediaViews:
     def _checkpoint(self, key):
         with self.lock:
             if not self._wanted(key):
-                raise CancelledError("无人继续查看，已取消高清准备。")
+                raise CancelledError(error_message(workspace_locale(self.settings.workspace), '', 'media_not_watched'))
 
     def _fail(self, job, message, state=None):
         if job.get('output_source'):
@@ -323,7 +324,7 @@ class MediaViews:
                         row.width, row.height, row.status = state.width, state.height, "available"
                         row.display_parameters = {**job["recipe"], "source_stamp": list(job["stamp"]), "state": state.model_dump(mode="json")}
         except Exception as exc:
-            self._fail(job, str(exc), state)
+            self._fail(job, error_message(workspace_locale(self.settings.workspace), '', 'media_failure_diagnostic', {'diagnostic': str(exc)}), state)
 
     def _stretch(self, job, source, context):
         if not context.get("group_key"):
@@ -374,11 +375,11 @@ class MediaViews:
             row = self._row(session, version_id, key)
             folder = (self.settings.data_dir / row.storage_path).parent
             if row.error or not (folder / "manifest.json").is_file():
-                raise ApiError(409, "MEDIA_NOT_READY", row.error or "缓存已被回收，请重新打开查看器。")
+                raise ApiError(409, "MEDIA_NOT_READY", row.error or "缓存已被回收，请重新打开查看器。", message_key='media_reopen_required', fields=[{'path': 'diagnostic', 'message': row.error or "缓存已被回收，请重新打开查看器。"}])
             job = json.loads((folder / "manifest.json").read_text(encoding="utf-8"))
             stat = path.stat()
             if [stat.st_size, stat.st_mtime_ns] != job["stamp"]:
-                raise ApiError(409, "SOURCE_CHANGED", "原件已经变化，请重新检查素材内容。")
+                raise ApiError(409, "SOURCE_CHANGED", "原件已经变化，请重新检查素材内容。", message_key='the_original_has_changed_check_the_asset_content_again')
             job["path"], job["folder"], job["selection"] = path, folder, MediaSelection.model_validate(job["selection"])
             self.using[key] = self.using.get(key, 0) + 1
             row.status = "generating"
@@ -403,7 +404,7 @@ class MediaViews:
         path = checked.path
         stamp = path.stat()
         if checked.format not in {'fits', 'xisf', 'image', 'raw', 'numpy', 'video'}:
-            raise ApiError(422, 'MEDIA_UNSUPPORTED', '该输出不是可查看的科学图像或视频。')
+            raise ApiError(422, 'MEDIA_UNSUPPORTED', '该输出不是可查看的科学图像或视频。', message_key='this_output_is_not_a_viewable_scientific_image_or_video')
         if selection.hdu_index is None:
             selection = selection.model_copy(update={'hdu_index': (checked.scientific_metadata or {}).get('selected_hdu')})
         if checked.format == 'video' and selection.media_time is not None and selection.playback_key:
@@ -413,11 +414,11 @@ class MediaViews:
             previous = self.settings.data_dir / 'previews' / 'run-outputs' / 'media' / playback_key
             job = json.loads((previous / 'manifest.json').read_text(encoding='utf-8'))
             if Path(job['path']).resolve() != path.resolve() or job['stamp'] != [stamp.st_size, stamp.st_mtime_ns]:
-                raise ApiError(409, 'SOURCE_CHANGED', '视频播放缓存不属于当前完整结果。')
+                raise ApiError(409, 'SOURCE_CHANGED', '视频播放缓存不属于当前完整结果。', message_key='the_video_playback_cache_does_not_belong_to_the_current_complete_result')
             mapping = json.loads((previous / 'frames.json').read_text(encoding='utf-8'))
             match = min(mapping, key=lambda frame: abs(frame['time'] - selection.media_time))
             if abs(match['time'] - selection.media_time) > 0.003:
-                raise ApiError(422, 'FRAME_NOT_MATCHED', '暂停帧时间戳没有对应的原始帧。')
+                raise ApiError(422, 'FRAME_NOT_MATCHED', '暂停帧时间戳没有对应的原始帧。', message_key='no_original_frame_matches_the_paused_frame_timestamp')
             selection = selection.model_copy(update={'media_time': None, 'frame_index': match['index']})
         interest = selection.consumer_id, selection.generation
         identity_selection = selection.model_dump(mode='json', exclude={'consumer_id', 'generation'})
@@ -428,7 +429,7 @@ class MediaViews:
             if selection.consumer_id:
                 old = self.consumers.get(selection.consumer_id, (-1, 0))
                 if selection.generation < old[0]:
-                    raise ApiError(409, 'STALE_VIEW', '已切换到更新的查看请求。')
+                    raise ApiError(409, 'STALE_VIEW', '已切换到更新的查看请求。', message_key='a_newer_viewer_request_has_replaced_this_request')
                 self.consumers[selection.consumer_id] = selection.generation, time.monotonic()
                 self._cancel_unused()
             self.interests.setdefault(key, set()).add(interest)
@@ -439,7 +440,7 @@ class MediaViews:
             if manifest.is_file():
                 previous = json.loads(manifest.read_text(encoding='utf-8'))
                 if previous['stamp'] != [stamp.st_size, stamp.st_mtime_ns]:
-                    raise ApiError(409, 'SOURCE_CHANGED', '完整结果在查看准备后发生变化。')
+                    raise ApiError(409, 'SOURCE_CHANGED', '完整结果在查看准备后发生变化。', message_key='the_complete_result_changed_after_viewer_preparation')
                 self.output_jobs[key] = previous
                 return MediaState.model_validate(previous['state'])
             state = MediaState(key=key, status='generating', phase='queued', selection=selection)
@@ -453,7 +454,7 @@ class MediaViews:
             def complete(completed):
                 with self.lock:
                     if completed.cancelled():
-                        self._fail(job, '无人继续查看，已取消高清准备。')
+                        self._fail(job, error_message(workspace_locale(self.settings.workspace), '', 'media_not_watched'))
                     self.preparing.pop(key, None)
                     self.interests.pop(key, None)
             future.add_done_callback(complete)
@@ -463,10 +464,10 @@ class MediaViews:
         with self.lock:
             job = self.output_jobs.get(key)
             if job is None:
-                raise ApiError(409, 'MEDIA_NOT_READY', '显示缓存已失效，请重新打开查看器。')
+                raise ApiError(409, 'MEDIA_NOT_READY', '显示缓存已失效，请重新打开查看器。', message_key='the_display_cache_is_stale_reopen_the_viewer')
             stamp = checked.path.stat()
             if Path(job['path']).resolve() != checked.path.resolve() or tuple(job['stamp']) != (stamp.st_size, stamp.st_mtime_ns):
-                raise ApiError(409, 'SOURCE_CHANGED', '显示状态不属于该完整结果。')
+                raise ApiError(409, 'SOURCE_CHANGED', '显示状态不属于该完整结果。', message_key='the_display_state_does_not_belong_to_this_complete_result')
             return MediaState.model_validate(job['state'])
 
     def thumbnail_output(self, checked, *, direct):
@@ -495,11 +496,11 @@ class MediaViews:
         with self.lock:
             manifest = folder / 'manifest.json'
             if not manifest.is_file():
-                raise ApiError(409, 'MEDIA_NOT_READY', '显示缓存已被回收，请重新打开查看器。')
+                raise ApiError(409, 'MEDIA_NOT_READY', '显示缓存已被回收，请重新打开查看器。', message_key='the_display_cache_has_been_removed_reopen_the_viewer')
             job = json.loads(manifest.read_text(encoding='utf-8'))
             stamp = checked.path.stat()
             if Path(job['path']).resolve() != checked.path.resolve() or job['stamp'] != [stamp.st_size, stamp.st_mtime_ns]:
-                raise ApiError(409, 'SOURCE_CHANGED', '显示缓存与当前完整结果不匹配。')
+                raise ApiError(409, 'SOURCE_CHANGED', '显示缓存与当前完整结果不匹配。', message_key='the_display_cache_does_not_match_the_current_complete_result')
             job['path'], job['folder'], job['selection'] = checked.path, folder, MediaSelection.model_validate(job['selection'])
             self.using[key] = self.using.get(key, 0) + 1
             hold = self.cache.hold(folder)
@@ -514,10 +515,10 @@ class MediaViews:
     def tile_future(self, job, level, x, y, *, tracked=False):
         state = job["state"]
         if state["kind"] != "image":
-            raise ApiError(422, "MEDIA_NOT_IMAGE", "请先暂停视频并准备原件帧。")
+            raise ApiError(422, "MEDIA_NOT_IMAGE", "请先暂停视频并准备原件帧。", message_key='pause_the_video_and_prepare_the_original_frame_first')
         factor = 2 ** (state["max_level"] - level) if 0 <= level <= state["max_level"] else 0
         if not factor or x < 0 or y < 0 or x * 512 * factor >= state["width"] or y * 512 * factor >= state["height"]:
-            raise ApiError(422, "INVALID_TILE", "瓦片坐标超出图像范围。")
+            raise ApiError(422, "INVALID_TILE", "瓦片坐标超出图像范围。", message_key='tile_coordinates_are_outside_the_image_bounds')
         token = (job["key"], level, x, y)
         cached = self.cache.get(token)
         if cached is not None:

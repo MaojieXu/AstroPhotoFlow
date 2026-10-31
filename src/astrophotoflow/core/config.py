@@ -228,7 +228,7 @@ def get_configuration(config_path: Path | None = None) -> ConfigState:
                 running = _settings_from_raw(_raw_from_values(effective), config_path)
                 restart_required = saved_settings != running
         except (OSError, KeyError, TypeError, ValueError, ConfigurationError) as exc:
-            raise ApiError(503, "RUNNING_CONFIGURATION_UNAVAILABLE", str(exc)) from exc
+            raise ApiError(503, 'RUNNING_CONFIGURATION_UNAVAILABLE', str(exc), message_key='running_configuration_unavailable', fields=[{'path': 'configuration', 'message': str(exc)}]) from exc
     return ConfigState(
         config_path=str(config_path), default_workspace=str(default) if default is not None else None,
         data_dir_absolute=str(saved_settings.data_dir),
@@ -327,21 +327,21 @@ def save_configuration(config_path: Path, values: ConfigValues, config_token: st
         if default_workspace is not None and not str(default_workspace).strip():
             raise ValueError("默认 workspace 必须为非空路径。")
     except (ValidationError, ConfigurationError, ValueError) as exc:
-        raise ApiError(422, "INVALID_CONFIGURATION", str(exc)) from exc
+        raise ApiError(422, 'INVALID_CONFIGURATION', str(exc), message_key='configuration_invalid', fields=[{'path': 'configuration', 'message': str(exc)}]) from exc
     CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
     try:
         with FileLock(str(CONFIG_PATH) + ".lock", timeout=0):
             if get_configuration(config_path).config_token != config_token:
-                raise ApiError(409, "CONFIGURATION_CONFLICT", "配置已被修改，请重新读取。")
+                raise ApiError(409, "CONFIGURATION_CONFLICT", "配置已被修改，请重新读取。", message_key='configuration_has_changed_read_it_again')
             _write_configuration_file(config_path, _configuration_text(values))
             if default_workspace is not None:
                 try:
                     _write_default_workspace(default_workspace.expanduser().resolve())
                 except OSError as exc:
-                    raise ApiError(503, "CONFIGURATION_PARTIALLY_SAVED", "workspace 配置已保存，但默认位置保存失败；请重新读取。") from exc
+                    raise ApiError(503, "CONFIGURATION_PARTIALLY_SAVED", "workspace 配置已保存，但默认位置保存失败；请重新读取。", message_key='workspace_configuration_was_saved_but_the_default_location_could_not_be_sav') from exc
             return get_configuration(config_path)
     except Timeout as exc:
-        raise ApiError(409, "CONFIGURATION_BUSY", "配置正在保存，请重新读取后再提交。") from exc
+        raise ApiError(409, "CONFIGURATION_BUSY", "配置正在保存，请重新读取后再提交。", message_key='configuration_is_being_saved_read_it_again_before_submitting') from exc
 
 
 def ensure_data_dir(settings: Settings) -> None:

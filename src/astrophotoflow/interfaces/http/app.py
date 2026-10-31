@@ -13,6 +13,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from astrophotoflow.core.database.db import Database
 from astrophotoflow.core.errors import ApiError
+from astrophotoflow.core.localization import error_message, workspace_locale, localized_error, exception_error, error_fields
 from astrophotoflow.core.http import authenticate
 from astrophotoflow.core.config import Settings, ConfigurationError, _update_running_state
 from astrophotoflow.core.workbench import status as workbench_status
@@ -30,6 +31,7 @@ from astrophotoflow.modules.nodes.public import list_definitions
 from astrophotoflow.modules.software.public import (
     get_bundled_definitions, get_package, get_package_source, install_package,
     maintain_package, set_package_node_definition_ids, uninstall_package, get_usage, list_packages,
+    resolve_release,
 )
 from sqlalchemy.exc import SQLAlchemyError
 from typing import Literal
@@ -88,7 +90,7 @@ def create_app(settings: Settings, token: str) -> FastAPI:
         app.state.maintenance_owner = owner
         app.state.maintenance = owner is not None
 
-    def bundle_definition_plan(package_id, version, *, uninstall=False):
+    def bundle_definition_plan(package_id, version, *, uninstall=False, selected_release=None):
         current = list_definitions(settings.workspace)
         current_by_id = {item.definition.definition_id: item for item in current}
         package_current = {
@@ -102,13 +104,14 @@ def create_app(settings: Settings, token: str) -> FastAPI:
             ) for item in package_current.values()]
             changes.sort(key=lambda item: str(item.definition_id))
             return changes
-        bundled = [NodeDefinition.model_validate(item) for item in get_bundled_definitions(settings, package_id, version)]
+        options = {'selected_release': selected_release} if selected_release is not None else {}
+        bundled = [NodeDefinition.model_validate(item) for item in get_bundled_definitions(settings, package_id, version, **options)]
         changes = []
         definitions_by_id = {}
         for definition in bundled:
             saved = current_by_id.get(definition.definition_id)
             if saved is not None and (saved.definition.source != "package" or saved.definition.execution.package_id != package_id):
-                raise ApiError(409, "NODE_CONTENT_CONFLICT", "软件包配套节点ID已属于其他定义。")
+                raise ApiError(409, "NODE_CONTENT_CONFLICT", "软件包配套节点ID已属于其他定义。", message_key='a_bundled_node_id_already_belongs_to_another_definition')
             token = definition_content_token(definition)
             changes.append(SoftwarePlanNodeChange(
                 definition_id=definition.definition_id,
@@ -134,18 +137,18 @@ def create_app(settings: Settings, token: str) -> FastAPI:
     def validate_install_request(package, body: SoftwareInstallRequest | SoftwareUninstallRequest) -> None:
         if isinstance(body, SoftwareUninstallRequest):
             if package.package_token != body.package_token:
-                raise ApiError(409, "SOFTWARE_CONTENT_CONFLICT", "软件包状态已变化，请重新读取后卸载。")
+                raise ApiError(409, "SOFTWARE_CONTENT_CONFLICT", "软件包状态已变化，请重新读取后卸载。", message_key='the_package_state_has_changed_read_it_again_before_uninstalling')
             if package.install_path is None or package.operation_state in {"running", "unknown"}:
-                raise ApiError(409, "SOFTWARE_BUSY", "当前安装或操作状态不能确认，无法卸载。")
+                raise ApiError(409, "SOFTWARE_BUSY", "当前安装或操作状态不能确认，无法卸载。", message_key='the_installation_or_operation_state_is_unknown_uninstallation_is_blocked')
             return
-        if body.version not in package.available_versions:
-            raise ApiError(422, "VALIDATION_ERROR", "请求的版本不在软件维护清单中。")
+        if body.bundle_version is None and body.version not in package.available_versions:
+            raise ApiError(422, "VALIDATION_ERROR", "请求的版本不在软件维护清单中。", message_key='the_requested_version_is_not_in_the_maintained_software_catalog')
         if package.package_token != body.package_token:
-            raise ApiError(409, "SOFTWARE_CONTENT_CONFLICT", "软件包状态已变化，请重新读取后请求安装。")
+            raise ApiError(409, "SOFTWARE_CONTENT_CONFLICT", "软件包状态已变化，请重新读取后请求安装。", message_key='the_package_state_has_changed_read_it_again_before_requesting_installation')
         if package.operation_state == "running":
-            raise ApiError(409, "SOFTWARE_BUSY", "软件包已有动作正在执行。")
+            raise ApiError(409, "SOFTWARE_BUSY", "软件包已有动作正在执行。", message_key='a_software_action_is_already_running_for_this_package')
         if package.availability not in {"not_installed", "ready", "not_ready"} and not package.migration_required:
-            raise ApiError(503, "SOFTWARE_NOT_READY", package.reason or "当前软件状态不允许重新安装。")
+            raise ApiError(503, "SOFTWARE_NOT_READY", package.reason or "当前软件状态不允许重新安装。", message_key='software_install_not_allowed', fields=[{'path': 'software', 'message': package.reason}] if package.reason else [])
 
     def request_software_action(package_id: str, body: SoftwareInstallRequest | SoftwareUninstallRequest) -> PendingSoftwareAction:
         package = get_package(settings, package_id)
@@ -153,18 +156,23 @@ def create_app(settings: Settings, token: str) -> FastAPI:
         try:
             workbench = workbench_status(settings.workspace / "config.toml")
         except (OSError, ConfigurationError, ValueError) as exc:
-            raise ApiError(503, "WORKBENCH_NOT_READY", "无法确认工作台网页已就绪。") from exc
+            raise ApiError(503, "WORKBENCH_NOT_READY", "无法确认工作台网页已就绪。", message_key='could_not_confirm_that_the_workbench_webpage_is_ready') from exc
         if not workbench.ready or not workbench.web_url:
-            raise ApiError(503, "WORKBENCH_NOT_READY", "必须从已就绪的工作台网页确认软件安装。")
+            raise ApiError(503, "WORKBENCH_NOT_READY", "必须从已就绪的工作台网页确认软件安装。", message_key='confirm_installation_from_the_ready_workbench_webpage')
         uninstall = isinstance(body, SoftwareUninstallRequest)
-        node_changes = bundle_definition_plan(package_id, body.version if not uninstall else package.installed_version, uninstall=uninstall)
+        target = None if uninstall else resolve_release(settings, package_id, body.bundle_version, body.release_token)
+        if target is not None and target['manifest']['software_version'] != body.version:
+            raise ApiError(409, 'BUNDLE_RELEASE_CHANGED', 'The selected software version does not match the release.', message_key='release_changed')
+        selected = target if not uninstall and body.bundle_version is not None else None
+        node_changes = bundle_definition_plan(package_id, body.version if not uninstall else package.installed_version,
+                                              uninstall=uninstall, selected_release=selected)
         operation_id = uuid4()
         plan = SoftwarePlanSummary(
             action="uninstall" if uninstall else "update" if package.installed_version and not package.migration_required else "install",
             package_id=package_id,
             current_version=package.installed_version,
             target_version=None if uninstall else body.version,
-            source=None if uninstall else get_package_source(package_id, body.version),
+            source=None if uninstall else get_package_source(package_id, body.version, **({'selected_release': selected} if selected is not None else {})),
             install_path=settings.workspace / "software" / package_id / "bundle" / "app",
             package_token=body.package_token,
             impact_token=None,
@@ -172,6 +180,11 @@ def create_app(settings: Settings, token: str) -> FastAPI:
             restart_reason=None,
             node_changes=node_changes,
             workflow_impacts=[],
+            current_bundle_version=package.bundle_version,
+            target_bundle_version=target['manifest']['bundle_version'] if target else None,
+            target_tag=target['tag'] if target else None,
+            target_commit=target['commit'] if target else None,
+            release_token=body.release_token if not uninstall else None,
         )
         confirmation_url = (
             f"{workbench.web_url.rstrip('/')}/#/workflows?apf_panel=software&"
@@ -184,7 +197,7 @@ def create_app(settings: Settings, token: str) -> FastAPI:
         with app.state.software_action_lock:
             previous = app.state.software_actions.get(package_id)
             if previous is not None and previous.state == "running":
-                raise ApiError(409, "SOFTWARE_BUSY", "软件包已有动作正在执行。")
+                raise ApiError(409, "SOFTWARE_BUSY", "软件包已有动作正在执行。", message_key='a_software_action_is_already_running_for_this_package')
             package = get_package(settings, package_id)
             validate_install_request(package, body)
             if previous is not None:
@@ -197,7 +210,7 @@ def create_app(settings: Settings, token: str) -> FastAPI:
         with app.state.software_action_lock:
             current_action = app.state.software_actions.get(package_id)
             if operation_id is not None and (current_action is None or current_action.operation_id != operation_id):
-                raise ApiError(409, "SOFTWARE_ACTION_EXPIRED", "该软件动作已被替换或服务重启后失效。")
+                raise ApiError(409, "SOFTWARE_ACTION_EXPIRED", "该软件动作已被替换或服务重启后失效。", message_key='this_software_action_was_replaced_or_invalidated_by_a_service_restart')
             result = app.state.software_results.get(current_action.operation_id) if current_action is not None else None
         return SoftwarePackageDetails(package=package, current_action=current_action, result=result)
 
@@ -205,15 +218,17 @@ def create_app(settings: Settings, token: str) -> FastAPI:
         definition_results = []
         error = None
         try:
+            selected = await asyncio.to_thread(resolve_plan_release, pending)
             async with maintain_package(pending.plan.package_id):
                 package = get_package(settings, pending.plan.package_id)
                 if package.package_token != pending.plan.package_token:
-                    raise ApiError(409, "SOFTWARE_CONTENT_CONFLICT", "确认后软件包状态发生变化，未开始安装。")
+                    raise ApiError(409, "SOFTWARE_CONTENT_CONFLICT", "确认后软件包状态发生变化，未开始安装。", message_key='the_package_state_changed_after_confirmation_installation_was_not_started')
                 if pending.plan.action == "uninstall":
                     installed = await uninstall_package(settings, pending.plan.package_id, pending.plan.package_token)
                 else:
                     installed = await install_package(
                         settings, pending.plan.package_id, pending.plan.target_version, pending.plan.package_token,
+                        **({'selected_release': selected} if selected is not None else {}),
                     )
                 try:
                     async with httpx.AsyncClient(timeout=60) as client:
@@ -221,10 +236,10 @@ def create_app(settings: Settings, token: str) -> FastAPI:
                             headers={"Authorization": f"Bearer {token}"})
                         response.raise_for_status()
                 except httpx.HTTPError as exc:
-                    raise ApiError(503, "BUNDLE_LOAD_FAILED", "Bundle 文件已更新，但无法确认节点热加载；请查询软件状态。") from exc
+                    raise ApiError(503, "BUNDLE_LOAD_FAILED", "Bundle 文件已更新，但无法确认节点热加载；请查询软件状态。", message_key='bundle_files_were_updated_but_node_hot_loading_could_not_be_confirmed_query') from exc
                 installed = get_package(settings, pending.plan.package_id)
                 if pending.plan.action != "uninstall" and installed.availability != "ready":
-                    raise ApiError(503, "BUNDLE_LOAD_FAILED", installed.reason or "Bundle 节点热加载失败。")
+                    raise ApiError(503, "BUNDLE_LOAD_FAILED", installed.reason or "Bundle 节点热加载失败。", message_key='bundle_load_failed', fields=[{'path': 'software', 'message': installed.reason}] if installed.reason else [])
                 if pending.plan.action != "uninstall":
                     actual = {item.definition.definition_id: item for item in list_definitions(settings.workspace)
                               if item.definition.source == "package" and item.definition.execution.package_id == pending.plan.package_id}
@@ -236,7 +251,7 @@ def create_app(settings: Settings, token: str) -> FastAPI:
                         applied = saved is not None and saved.content_token == change.after_content_token
                         definition_results.append(DefinitionWriteResult(definition_id=change.definition_id,
                             action=change.action, applied=applied, content=saved,
-                            error=None if applied else ErrorDetail(code="BUNDLE_LOAD_FAILED", message="Bundle 节点定义未采用确认的内容。", fields=[])))
+                            error=None if applied else localized_error(workspace_locale(settings.workspace), 'BUNDLE_LOAD_FAILED', 'bundle_node_definition_not_confirmed')))
                 write_error = next((item.error for item in definition_results if not item.applied), None)
                 if write_error is not None:
                     error = write_error
@@ -248,14 +263,14 @@ def create_app(settings: Settings, token: str) -> FastAPI:
             result = PackageMutationResult(
                 package=get_package(settings, pending.plan.package_id), definition_results=definition_results,
                 loads=[], workflow_results=[],
-                error=ErrorDetail(code=exc.code, message=exc.message, fields=exc.fields),
+                error=exception_error(workspace_locale(settings.workspace), exc, code='INTERNAL_ERROR', message_key='software_install_or_definition_write_failed'),
             )
             final_state = "failed"
         except Exception as exc:
             logger.exception("software install failed package=%s operation=%s", pending.plan.package_id, pending.operation_id)
             result = PackageMutationResult(
                 package=get_package(settings, pending.plan.package_id), definition_results=definition_results,
-                loads=[], workflow_results=[], error=ErrorDetail(code="INTERNAL_ERROR", message="软件安装或配套定义写入失败。", fields=[]),
+                loads=[], workflow_results=[], error=exception_error(workspace_locale(settings.workspace), exc, code='INTERNAL_ERROR', message_key='software_install_or_definition_write_failed'),
             )
             final_state = "failed"
         with app.state.software_action_lock:
@@ -269,35 +284,46 @@ def create_app(settings: Settings, token: str) -> FastAPI:
         async with app.state.maintenance_lock:
             return await _confirm_software_action_locked(body, page_id=page_id, page_token=page_token)
 
+    def resolve_plan_release(pending):
+        if pending.plan.release_token is None:
+            return None
+        selected = resolve_release(settings, pending.plan.package_id, pending.plan.target_bundle_version, pending.plan.release_token)
+        if selected['commit'] != pending.plan.target_commit or selected['tag'] != pending.plan.target_tag:
+            raise ApiError(409, 'BUNDLE_RELEASE_CHANGED', 'The confirmed release target changed.', message_key='release_changed')
+        return selected
+
     def start_software_action(pending: PendingSoftwareAction, *, page_id: UUID, page_token: str,
-                              workbench) -> PendingSoftwareAction:
+                              workbench, selected_release=None) -> PendingSoftwareAction:
         expected_base = pending.confirmation_url.split("/#/", 1)[0]
         if not workbench.ready or workbench.web_url != expected_base:
-            raise ApiError(409, "SOFTWARE_ACTION_EXPIRED", "工作台网页地址已变化，请重新查看安装计划。")
+            raise ApiError(409, "SOFTWARE_ACTION_EXPIRED", "工作台网页地址已变化，请重新查看安装计划。", message_key='the_workbench_webpage_address_has_changed_review_the_installation_plan_agai')
         package = get_package(settings, pending.plan.package_id)
-        node_changes = bundle_definition_plan(pending.plan.package_id, pending.plan.target_version, uninstall=pending.plan.action == "uninstall")
+        if pending.plan.release_token is not None and selected_release is None:
+            raise ApiError(409, 'BUNDLE_RELEASE_CHANGED', 'Release validation is required before confirmation.', message_key='release_changed')
+        node_changes = bundle_definition_plan(pending.plan.package_id, pending.plan.target_version,
+                                              uninstall=pending.plan.action == "uninstall", selected_release=selected_release)
         with app.state.software_action_lock:
             if app.state.software_page_tokens.get(page_id) != page_token:
-                raise ApiError(409, "SOFTWARE_ACTION_EXPIRED", "软件确认页面连接已改变。")
+                raise ApiError(409, "SOFTWARE_ACTION_EXPIRED", "软件确认页面连接已改变。", message_key='the_software_confirmation_page_connection_has_changed')
             current = app.state.software_actions.get(pending.plan.package_id)
             if current is None or current.operation_id != pending.operation_id or current.state != "awaiting_confirmation":
-                raise ApiError(409, "SOFTWARE_ACTION_EXPIRED", "该软件动作已被替换或失效。")
+                raise ApiError(409, "SOFTWARE_ACTION_EXPIRED", "该软件动作已被替换或失效。", message_key='this_software_action_was_replaced_or_has_expired')
             if app.state.maintenance or app.state.shutdown_started:
-                raise ApiError(409, "WORKBENCH_MAINTENANCE", "工作台正在维护，无法确认软件安装。")
+                raise ApiError(409, "WORKBENCH_MAINTENANCE", "工作台正在维护，无法确认软件安装。", message_key='the_workbench_is_undergoing_maintenance_installation_cannot_be_confirmed')
             if package.package_token != pending.plan.package_token:
                 expired = current.model_copy(update={
                     "state": "expired",
-                    "error": ErrorDetail(code="SOFTWARE_ACTION_EXPIRED", message="软件包状态已变化，请重新查看安装计划。", fields=[]),
+                    "error": localized_error(workspace_locale(settings.workspace), 'SOFTWARE_ACTION_EXPIRED', 'action_package_changed'),
                 })
                 app.state.software_actions[pending.plan.package_id] = expired
-                raise ApiError(409, "SOFTWARE_ACTION_EXPIRED", "软件包状态已变化，请重新查看安装计划。")
+                raise ApiError(409, "SOFTWARE_ACTION_EXPIRED", "软件包状态已变化，请重新查看安装计划。", message_key='the_package_state_has_changed_review_the_installation_plan_again')
             if node_changes != pending.plan.node_changes:
                 expired = current.model_copy(update={
                     "state": "expired",
-                    "error": ErrorDetail(code="SOFTWARE_ACTION_EXPIRED", message="配套节点定义已变化，请重新查看安装计划。", fields=[]),
+                    "error": localized_error(workspace_locale(settings.workspace), 'SOFTWARE_ACTION_EXPIRED', 'action_nodes_changed'),
                 })
                 app.state.software_actions[pending.plan.package_id] = expired
-                raise ApiError(409, "SOFTWARE_ACTION_EXPIRED", "配套节点定义已变化，请重新查看安装计划。")
+                raise ApiError(409, "SOFTWARE_ACTION_EXPIRED", "配套节点定义已变化，请重新查看安装计划。", message_key='bundled_node_definitions_have_changed_review_the_installation_plan_again')
             running = current.model_copy(update={"state": "running"})
             app.state.software_actions[pending.plan.package_id] = running
             task = asyncio.create_task(execute_software_action(running))
@@ -308,16 +334,17 @@ def create_app(settings: Settings, token: str) -> FastAPI:
                                               page_token: str) -> PendingSoftwareAction:
         with app.state.software_action_lock:
             if app.state.software_page_tokens.get(page_id) != page_token:
-                raise ApiError(409, "SOFTWARE_ACTION_EXPIRED", "软件确认页面连接已改变。")
+                raise ApiError(409, "SOFTWARE_ACTION_EXPIRED", "软件确认页面连接已改变。", message_key='the_software_confirmation_page_connection_has_changed')
             pending = next((item for item in app.state.software_actions.values() if item.operation_id == body.operation_id), None)
             if pending is None or pending.operation_id != body.operation_id:
-                raise ApiError(409, "SOFTWARE_ACTION_EXPIRED", "该软件动作已被替换或失效。")
+                raise ApiError(409, "SOFTWARE_ACTION_EXPIRED", "该软件动作已被替换或失效。", message_key='this_software_action_was_replaced_or_has_expired')
             if pending.state != "awaiting_confirmation":
                 return pending
             if app.state.maintenance or app.state.shutdown_started:
-                raise ApiError(409, "WORKBENCH_MAINTENANCE", "工作台正在维护，无法确认软件安装。")
+                raise ApiError(409, "WORKBENCH_MAINTENANCE", "工作台正在维护，无法确认软件安装。", message_key='the_workbench_is_undergoing_maintenance_installation_cannot_be_confirmed')
         workbench = await asyncio.to_thread(workbench_status, settings.workspace / "config.toml")
-        return start_software_action(pending, page_id=page_id, page_token=page_token, workbench=workbench)
+        selected = await asyncio.to_thread(resolve_plan_release, pending)
+        return start_software_action(pending, page_id=page_id, page_token=page_token, workbench=workbench, selected_release=selected)
 
     app.state.request_software_action = request_software_action
     app.state.get_software_package_details = get_software_package_details
@@ -407,20 +434,20 @@ def create_app(settings: Settings, token: str) -> FastAPI:
         if not page_is_current:
             return NativePageReply(
                 event_id=body.event_id, page_id=body.page_id, page_token=body.page_token, result=None,
-                error=ErrorDetail(code="NATIVE_PAGE_EXPIRED", message="软件确认页面连接已过期。", fields=[]),
+                error=localized_error(workspace_locale(settings.workspace), 'NATIVE_PAGE_EXPIRED', 'confirmation_page_expired'),
             )
         handler = getattr(app.state, "confirm_software_action", None)
         if handler is None:
             return NativePageReply(
                 event_id=body.event_id, page_id=body.page_id, page_token=body.page_token, result=None,
-                error=ErrorDetail(code="SOFTWARE_ACTION_EXPIRED", message="当前没有待确认的软件动作。", fields=[]),
+                error=localized_error(workspace_locale(settings.workspace), 'SOFTWARE_ACTION_EXPIRED', 'no_pending_software_action'),
             )
         try:
             result = await handler(body.payload, page_id=body.page_id, page_token=body.page_token)
         except ApiError as exc:
             return NativePageReply(
                 event_id=body.event_id, page_id=body.page_id, page_token=body.page_token, result=None,
-                error=ErrorDetail(code=exc.code, message=exc.message, fields=exc.fields),
+                error=exception_error(workspace_locale(settings.workspace), exc, code='INTERNAL_ERROR', message_key='software_install_or_definition_write_failed'),
             )
         return NativePageReply(
             event_id=body.event_id, page_id=body.page_id, page_token=body.page_token, result=result, error=None,
@@ -438,7 +465,9 @@ def create_app(settings: Settings, token: str) -> FastAPI:
 
     @app.exception_handler(ApiError)
     async def api_error_handler(request: Request, exc: ApiError):
-        return _error_response(request, exc.status_code, exc.code, exc.message, exc.fields)
+        fields = error_fields(_response_locale(request), exc) if exc.message_key else [*error_fields(_response_locale(request), exc), {'path': '', 'message': exc.message}]
+        return _error_response(request, exc.status_code, exc.code, exc.message, fields,
+                               message_key=exc.message_key, message_params=exc.message_params)
 
     @app.exception_handler(RequestValidationError)
     async def validation_error_handler(request: Request, exc: RequestValidationError):
@@ -447,19 +476,21 @@ def create_app(settings: Settings, token: str) -> FastAPI:
             path = ".".join(str(part) for part in error.get("loc", ()) if part not in ("body", "query", "path"))
             if error.get("loc", (None,))[0] == "query":
                 path = "query." + path
-            fields.append({"path": path, "message": "请求字段无效。"})
-        return _error_response(request, 422, "VALIDATION_ERROR", "请求数据不符合接口契约。", fields)
+            from astrophotoflow.core.localization import error_message
+            fields.append({"path": path, "message": error_message(_response_locale(request), 'VALIDATION_ERROR', 'invalid_field')})
+        return _error_response(request, 422, "VALIDATION_ERROR", "请求数据不符合接口契约。", fields, message_key='validation_error')
 
     @app.exception_handler(StarletteHTTPException)
     async def http_error_handler(request: Request, exc: StarletteHTTPException):
         code = "RESOURCE_NOT_FOUND" if exc.status_code == 404 else "METHOD_NOT_ALLOWED" if exc.status_code == 405 else "INTERNAL_ERROR"
         message = "未找到请求的资源。" if exc.status_code == 404 else "该资源不支持此 HTTP 方法。" if exc.status_code == 405 else "请求失败。"
-        return _error_response(request, exc.status_code, code, message, [])
+        key = 'the_requested_resource_was_not_found' if exc.status_code == 404 else 'method_not_allowed' if exc.status_code == 405 else 'request_failed'
+        return _error_response(request, exc.status_code, code, message, [], message_key=key)
 
     @app.exception_handler(Exception)
     async def internal_error_handler(request: Request, exc: Exception):
         logger.exception("request failed request_id=%s", getattr(request.state, "request_id", "unknown"))
-        return _error_response(request, 500, "INTERNAL_ERROR", "服务发生未预期错误。", [])
+        return _error_response(request, 500, "INTERNAL_ERROR", "服务发生未预期错误。", [], message_key='internal_error')
 
     app.include_router(system.router)
     app.include_router(data_router)
@@ -468,8 +499,20 @@ def create_app(settings: Settings, token: str) -> FastAPI:
     return app
 
 
-def _error_response(request: Request, status_code: int, code: str, message: str, fields: list[dict[str, str]]):
-    from fastapi.responses import JSONResponse
+def _response_locale(request: Request):
+    from astrophotoflow.core.localization import workspace_locale
+    from astrophotoflow.core.config import ConfigurationError
+    try:
+        return workspace_locale(request.app.state.settings.workspace)
+    except ConfigurationError:
+        return 'en'
 
+
+def _error_response(request: Request, status_code: int, code: str, message: str, fields: list[dict[str, str]],
+                    *, message_key: str | None = None, message_params: dict | None = None):
+    from fastapi.responses import JSONResponse
+    from astrophotoflow.core.localization import error_message
+
+    message = error_message(_response_locale(request), code, message_key, message_params)
     rid = getattr(request.state, "request_id", uuid4())
     return JSONResponse(status_code=status_code, content={"error": {"code": code, "message": message, "fields": fields}, "request_id": str(rid)}, headers={"X-Request-ID": str(rid)})

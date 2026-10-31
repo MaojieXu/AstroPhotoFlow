@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { uiT } from '../../../core/i18n'
+
 import { computed, ref, watch } from 'vue'
 import { assetApi } from '../api/index'
 import { equipmentSchema, importAcceptedSchema, pageSchema } from '../api/contracts'
@@ -30,16 +32,16 @@ const parameters = ref<Record<string,string>>({
 })
 const equipment = ref<Array<Record<string,any>>>([])
 const fields: Field[] = [
-  {key:'exposure_seconds',title:'单帧曝光（秒）',nonnegative:true},
-  {key:'integration_seconds',title:'累计曝光（秒）',nonnegative:true},
-  {key:'sensor_temperature_c',title:'传感器实测温度（°C）'}
+  {key:'exposure_seconds',get title() { return uiT('apfUi.exposure_per_frame_seconds') },nonnegative:true},
+  {key:'integration_seconds',get title() { return uiT('apfUi.total_exposure_seconds') },nonnegative:true},
+  {key:'sensor_temperature_c',get title() { return uiT('apfUi.measured_sensor_temperature_c') }}
 ]
 const isDataset = computed(() => Boolean(props.createDataset) || props.files.length > 1)
 const cameraOptions = computed(() => equipment.value.filter(item => item.kind === 'camera'))
 const opticalOptions = computed(() => equipment.value.filter(item => item.kind === 'optical_system'))
 const filterOptions = computed(() => equipment.value.filter(item => item.kind === 'filter'))
 function clientError(cause: unknown) {
-  return cause instanceof ApiClientError ? cause.message : '请求失败。'
+  return cause instanceof ApiClientError ? cause.message : uiT('apfUi.request_failed')
 }
 async function loadEquipment() {
   const result:Record<string,any>[]=[]
@@ -102,30 +104,30 @@ watch(()=>props.open,open=>{if(open){
 </script>
 
 <template>
-  <div v-if="open" class="apf-import-overlay" role="dialog" aria-modal="true" aria-label="导入天文素材">
+  <div v-if="open" class="apf-import-overlay" role="dialog" aria-modal="true" :aria-label="$t('apfUi.import_astronomy_assets')">
     <section class="apf-import-dialog">
-      <header><h2>确认素材信息</h2><LibraryButton type="button" @click="emit('close')">关闭</LibraryButton></header>
+      <header><h2>{{ $t('apfUi.confirm_asset_details') }}</h2><LibraryButton type="button" @click="emit('close')">{{ $t('apfUi.close') }}</LibraryButton></header>
       <form @submit.prevent="submitImport">
-        <p>已选择 {{ files.length }} 个文件<LibraryInfo label="选中文件" :text="files.map(file=>file.root_id?file.root_id+':/'+file.path:file.path).join('\n')" /></p>
-        <p class="apf-optional-note">本机文件将复制并托管到工作台数据目录。以下资料均为可选。</p>
-        <p class="apf-optional-note">{{(files.reduce((sum,file)=>sum+file.size,0)/1024/1024).toFixed(1)}} MiB · 仅本次选择的文件</p>
+        <p>{{ $t('apfUi.selected_files_value', { p0: (files.length) }) }}<LibraryInfo :label="$t('apfUi.selected_files')" :text="files.map(file=>file.root_id?file.root_id+':/'+file.path:file.path).join('\n')" /></p>
+        <p class="apf-optional-note">{{ $t('apfUi.local_files_will_be_copied_into_the_workbench_data_directory_as_manage') }}</p>
+        <p class="apf-optional-note">{{ $t('apfUi.value_mib_files_selected_for_this_import_only', { p0: ((files.reduce((sum,file)=>sum+file.size,0)/1024/1024).toFixed(1)) }) }}</p>
         <CapturePresetPicker v-model="capturePresetId" :disabled="submitting" />
-        <LibraryTextField v-if="isDataset" id="import-dataset-name" v-model="datasetName" name="图像组名称（可选）" hint="留空使用来源名称。" />
-        <label><span><input v-model="manualClassification" type="checkbox" /> 手动指定整批分类<LibraryInfo label="整批分类" text="默认按每个文件内的拍摄信息分类；缺少资料时保留未知。手动指定时对本批次全部文件生效。" /></span></label><small v-if="!manualClassification">自动识别文件拍摄信息</small>
-        <label v-if="manualClassification">素材形态<select v-model="frameClass"><option value="">未指定</option><option value="subframe">单帧</option><option value="masterframe">合成帧</option><option value="video">视频</option></select></label>
-        <label v-if="manualClassification&&frameClass!==''&&frameClass!=='video'">帧用途<select v-model="frameType"><option value="">未指定</option><option value="light">亮场</option><option value="bias">偏置场</option><option value="dark">暗场</option><option value="flat">平场</option><option value="dark_flat">暗平场</option></select></label>
-        <label>相机<select v-model="parameters.camera_id"><option value="">未指定</option><option v-for="item in cameraOptions" :key="item.id" :value="item.id">{{item.name}}</option></select></label>
-        <label v-if="['light','flat'].includes(frameType)">成像系统<select v-model="parameters.optical_system_id"><option value="">未指定</option><option v-for="item in opticalOptions" :key="item.id" :value="item.id">{{item.name}}</option></select></label>
-        <label v-if="['light','flat'].includes(frameType)">滤镜<select v-model="parameters.filter_id"><option value="">未指定</option><option v-for="item in filterOptions" :key="item.id" :value="item.id">{{item.name}}</option></select></label>
-        <label>增益模式<select v-model="parameterMode"><option value="">未指定</option><option value="iso">ISO</option><option value="gain">Gain／Offset</option></select></label>
+        <LibraryTextField v-if="isDataset" id="import-dataset-name" v-model="datasetName" :name="$t('apfUi.image_group_name_optional')" :hint="$t('apfUi.leave_blank_to_use_the_source_name')" />
+        <label><span><input v-model="manualClassification" type="checkbox" />{{ $t('apfUi.set_classification_for_the_whole_batch') }}<LibraryInfo :label="$t('apfUi.batch_classification')" :text="$t('apfUi.classify_each_file_using_its_capture_metadata_by_default_retain_unknow')" /></span></label><small v-if="!manualClassification">{{ $t('apfUi.read_capture_metadata_from_each_file') }}</small>
+        <label v-if="manualClassification">{{ $t('apfUi.asset_form') }}<select v-model="frameClass"><option value="">{{ $t('apfUi.not_specified') }}</option><option value="subframe">{{ $t('apfUi.subframe') }}</option><option value="masterframe">{{ $t('apfUi.master_frame') }}</option><option value="video">{{ $t('apfUi.video') }}</option></select></label>
+        <label v-if="manualClassification&&frameClass!==''&&frameClass!=='video'">{{ $t('apfUi.frame_use') }}<select v-model="frameType"><option value="">{{ $t('apfUi.not_specified') }}</option><option value="light">{{ $t('apfUi.light') }}</option><option value="bias">{{ $t('apfUi.bias') }}</option><option value="dark">{{ $t('apfUi.dark') }}</option><option value="flat">{{ $t('apfUi.flat') }}</option><option value="dark_flat">{{ $t('apfUi.dark_flat') }}</option></select></label>
+        <label>{{ $t('apfUi.camera_dacf07') }}<select v-model="parameters.camera_id"><option value="">{{ $t('apfUi.not_specified') }}</option><option v-for="item in cameraOptions" :key="item.id" :value="item.id">{{item.name}}</option></select></label>
+        <label v-if="['light','flat'].includes(frameType)">{{ $t('apfUi.imaging_system') }}<select v-model="parameters.optical_system_id"><option value="">{{ $t('apfUi.not_specified') }}</option><option v-for="item in opticalOptions" :key="item.id" :value="item.id">{{item.name}}</option></select></label>
+        <label v-if="['light','flat'].includes(frameType)">{{ $t('apfUi.filter') }}<select v-model="parameters.filter_id"><option value="">{{ $t('apfUi.not_specified') }}</option><option v-for="item in filterOptions" :key="item.id" :value="item.id">{{item.name}}</option></select></label>
+        <label>{{ $t('apfUi.gain_mode') }}<select v-model="parameterMode"><option value="">{{ $t('apfUi.not_specified') }}</option><option value="iso">ISO</option><option value="gain">Gain／Offset</option></select></label>
         <label v-if="parameterMode==='iso'">ISO<LibraryInput v-model="parameters.iso" type="number" step="1" /></label>
         <template v-else-if="parameterMode==='gain'"><label>Gain<LibraryInput v-model="parameters.gain" type="number" step="any" /></label><label>Offset<LibraryInput v-model="parameters.offset" type="number" step="any" /></label></template>
         <label v-for="field in fields" :key="field.key" v-show="field.key!=='integration_seconds'||frameClass==='masterframe'">{{field.title}}<input v-model="parameters[field.key]" type="number" :step="field.integer?'1':'any'" /></label>
-        <label>Bin<select v-model="parameters.binning"><option value="">未指定</option><option v-for="value in 16" :key="value" :value="String(value)">Bin{{value}}</option></select></label>
-        <label>CFA 排列<select v-model="parameters.cfa_pattern"><option value="">未指定</option><option value="MONO">无 CFA（单色）</option><option value="RGGB">RGGB</option><option value="BGGR">BGGR</option><option value="GRBG">GRBG</option><option value="GBRG">GBRG</option><option value="XTRANS">X-Trans 6×6</option><option value="QUAD_BAYER">Quad Bayer</option></select></label>
-        <label>{{isDataset?'图像组备注（可选）':'素材备注（可选）'}}<LibraryInfo v-if="isDataset" label="备注" text="多文件备注写入图像组；成员仍分别保留自己的分类及参数。" /><textarea v-model="notes" rows="3" /></label>
+        <label>Bin<select v-model="parameters.binning"><option value="">{{ $t('apfUi.not_specified') }}</option><option v-for="value in 16" :key="value" :value="String(value)">Bin{{value}}</option></select></label>
+        <label>{{ $t('apfUi.cfa_pattern') }}<select v-model="parameters.cfa_pattern"><option value="">{{ $t('apfUi.not_specified') }}</option><option value="MONO">{{ $t('apfUi.no_cfa_monochrome') }}</option><option value="RGGB">RGGB</option><option value="BGGR">BGGR</option><option value="GRBG">GRBG</option><option value="GBRG">GBRG</option><option value="XTRANS">X-Trans 6×6</option><option value="QUAD_BAYER">Quad Bayer</option></select></label>
+        <label>{{isDataset?$t('apfUi.image_group_notes_optional'):$t('apfUi.asset_notes_optional')}}<LibraryInfo v-if="isDataset" :label="$t('apfUi.notes')" :text="$t('apfUi.notes_for_a_multiple_file_import_are_saved_on_the_image_group_members_')" /><textarea v-model="notes" rows="3" /></label>
         <p v-if="error" class="apf-error" role="alert">{{ error }}</p>
-        <footer class="apf-import-actions"><LibraryButton type="button" :disabled="submitting" @click="emit('close')">取消</LibraryButton><LibraryButton type="submit" variant="primary" :disabled="submitting">{{submitting?'创建批次…':'开始导入'}}</LibraryButton></footer>
+        <footer class="apf-import-actions"><LibraryButton type="button" :disabled="submitting" @click="emit('close')">{{ $t('apfUi.cancel') }}</LibraryButton><LibraryButton type="submit" variant="primary" :disabled="submitting">{{submitting?$t('apfUi.creating_batch'):$t('apfUi.start_import')}}</LibraryButton></footer>
       </form>
     </section>
   </div>

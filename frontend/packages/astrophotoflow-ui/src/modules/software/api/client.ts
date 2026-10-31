@@ -8,6 +8,8 @@ import {
   softwarePreparationSchema,
   sirilCommandSchema
 } from './contracts'
+import { softwareReleaseListingSchema } from './contracts'
+import type { SoftwareReleaseListing } from './contracts'
 import type {
   PendingSoftwareAction,
   SoftwareInstallRequest,
@@ -20,6 +22,7 @@ import type {
 export { ApiClientError } from '../../../core/client'
 
 export interface SoftwareClient {
+  listReleases(packageId: string): Promise<SoftwareReleaseListing>
   listPackages(): Promise<SoftwarePackage[]>
   listCommands(packageId: string, version: string): Promise<SirilCommand[]>
   getPackage(
@@ -39,6 +42,7 @@ const basePath = '/astrophotoflow/api/v1/software/packages'
 export function createSoftwareClient(fetchApi: FetchApi): SoftwareClient {
   const api = createApiClient(fetchApi)
   return {
+    listReleases: (packageId) => api.get(`${basePath}/${encodeURIComponent(packageId)}/releases`, softwareReleaseListingSchema),
     listPackages: () => api.get(basePath, softwarePackageSchema.array()),
     listCommands: (packageId, version) =>
       api.get(

@@ -1,3 +1,4 @@
+from astrophotoflow.core.localization import workspace_locale
 import argparse
 from contextlib import contextmanager
 import sys
@@ -64,7 +65,7 @@ def main() -> None:
         with hold_database_lock(settings):
             ensure_schema_for_serve(settings)
             app = create_app(settings, token)
-            interrupted = mark_interrupted_tasks(app.state.database)
+            interrupted = mark_interrupted_tasks(app.state.database, locale=workspace_locale(settings.workspace))
             if interrupted:
                 print(f"interrupted_tasks: {interrupted}")
             server = uvicorn.Server(uvicorn.Config(app, host=settings.host, port=settings.port, log_level="info"))

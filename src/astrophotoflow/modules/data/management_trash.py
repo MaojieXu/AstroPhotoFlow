@@ -40,14 +40,14 @@ def _resolve_selection(session, body, expected_status: str | None):
     for item in body.items:
         key = (item.entry_type, str(item.id))
         if key in seen:
-            raise ApiError(422, "VALIDATION_ERROR", "所选列表包含重复记录。")
+            raise ApiError(422, "VALIDATION_ERROR", "所选列表包含重复记录。", message_key='the_selection_contains_duplicate_records')
         seen.add(key)
         model = _MODELS[item.entry_type]
         row = session.get(model, key[1])
         if row is None:
             raise not_found()
         if (expected_status is not None and row.status != expected_status) or row.revision != item.revision:
-            raise ApiError(409, "REVISION_CONFLICT", "记录已变化，请重新读取后重试。")
+            raise ApiError(409, "REVISION_CONFLICT", "记录已变化，请重新读取后重试。", message_key='the_record_has_changed_read_it_again_before_retrying')
         resolved.append((item.entry_type, row))
     return resolved
 
@@ -165,10 +165,10 @@ def preview_management_delete(body: ManagementTrashSelection, session: ReadSessi
 def delete_management_entries(body: ManagementTrashDelete, session: WriteSession):
     resolved, _, dependencies, fingerprint = _preview(session, body)
     if fingerprint != body.preview_fingerprint:
-        raise ApiError(409, "PREVIEW_STALE", "引用状态已变化，请重新预览永久删除。")
+        raise ApiError(409, "PREVIEW_STALE", "引用状态已变化，请重新预览永久删除。", message_key='references_have_changed_preview_permanent_deletion_again')
     if any(item.blocks_delete for item in dependencies):
         raise ApiError(409, "REFERENCES_EXIST", "部分设置仍有项目内素材，请先处理引用。",
-                       [{"path": item.kind, "message": f"{item.name}：{item.count} 项"} for item in dependencies if item.blocks_delete])
+                       [{"path": item.kind, "message": f"{item.name}：{item.count} 项"} for item in dependencies if item.blocks_delete], message_key='some_settings_still_have_project_assets_resolve_their_references_first')
     return _delete_entries(session, resolved)
 
 
@@ -260,5 +260,5 @@ def preview_equipment_delete(body: EquipmentDeleteSelection, session: ReadSessio
 def delete_equipment_entries(body: EquipmentDelete, session: WriteSession):
     resolved, _, _, fingerprint = _preview(session, body, direct=True)
     if fingerprint != body.preview_fingerprint:
-        raise ApiError(409, "PREVIEW_STALE", "关联记录已变化，请重新查看删除影响。")
+        raise ApiError(409, "PREVIEW_STALE", "关联记录已变化，请重新查看删除影响。", message_key='linked_records_have_changed_review_deletion_impact_again')
     return _delete_entries(session, resolved, direct=True)

@@ -1,3 +1,4 @@
+from astrophotoflow.core.localization import error_message, workspace_locale
 import asyncio
 import os
 import json
@@ -154,7 +155,7 @@ def _bundle_files(workspace):
             manifest = BundleManifest.model_validate_json((root / "bundle.json").read_text(encoding="utf-8"))
         except (OSError, ValueError):
             continue
-        for name in [*manifest.operations, *manifest.nodes, manifest.adapter]:
+        for name in [*manifest.operations, *manifest.nodes, *manifest.locales.values(), manifest.adapter]:
             path = (root / name).resolve()
             if not path.is_relative_to(root.resolve()):
                 raise ValueError("Bundle path escapes its checkout.")
@@ -228,7 +229,7 @@ def _collect_bundle_nodes():
             classes.update(package_classes)
             names.update(package_names)
         except (OSError, KeyError, ValueError, ImportError, RuntimeError, ApiError, subprocess.SubprocessError) as exc:
-            observation.update(ready=False, reason=str(exc))
+            observation.update(ready=False, reason=error_message(workspace_locale(settings.workspace), '', 'bundle_load_diagnostic', {'diagnostic': str(exc)}))
         observation.update(pid=os.getpid(), create_time=psutil.Process().create_time())
         path = settings.workspace / "software" / package_id / "native-load.json"
         observations.append((path, observation))

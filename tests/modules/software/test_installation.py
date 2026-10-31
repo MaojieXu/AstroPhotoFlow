@@ -54,6 +54,58 @@ def test_checkout_rejects_tag_moving_before_loading_code(tmp_path, monkeypatch):
     assert release['tag'] in calls[0]
 
 
+@pytest.mark.parametrize('changed', [False, True])
+def test_reference_snapshot_allows_git_eol_conversion_but_rejects_content_changes(tmp_path, monkeypatch, changed):
+    from copy import deepcopy
+    from astrophotoflow.contracts.bundles import BundleManifest
+    selected = deepcopy(bundles.release('siril'))
+    manifest = BundleManifest.model_validate(selected['manifest'])
+    selected['reference_files'] = {}
+    for name in [manifest.commands, manifest.assessments]:
+        if name is None:
+            continue
+        selected['reference_files'][name] = '{\r\n  "value": 1\r\n}\r\n'
+        path = tmp_path / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b'{\n  "value": 2\n}\n' if changed else b'{\n  "value": 1\n}\n')
+    adapter = tmp_path / manifest.adapter
+    adapter.parent.mkdir(parents=True, exist_ok=True)
+    adapter.write_bytes(b'fixture')
+    monkeypatch.setattr(bundles, 'git', lambda args, **kwargs: selected['commit'] if args[0] == 'rev-parse' else '')
+    monkeypatch.setattr(bundles, 'read_bundle', lambda root: (manifest, selected['operations'], selected['nodes']))
+    monkeypatch.setattr(bundles, 'read_bundle_locales', lambda *args: selected.get('localizations', {}))
+    monkeypatch.setattr(bundles.subprocess, 'run', lambda *args, **kwargs: SimpleNamespace(returncode=0, stdout=manifest.version_output))
+    monkeypatch.setattr(bundles, '_adapter', lambda *args: SimpleNamespace(**{name: lambda: None for name in ['build_plan', 'parse_result', 'parse_progress', 'parse_failure']}))
+    if changed:
+        with pytest.raises(ApiError) as failure:
+            bundles.checkout('siril', tmp_path, release_record=selected)
+        assert failure.value.code == 'BUNDLE_VERSION_CHANGED'
+        assert failure.value.message_key == 'bundle_reference_data_does_not_match_the_confirmed_snapshot_nothing_was_ins'
+    else:
+        assert bundles.checkout('siril', tmp_path, release_record=selected) == (manifest, selected['commit'])
+
+
+@pytest.mark.parametrize('locale', ['en', 'zh'])
+def test_install_failure_saves_localized_reason_and_keeps_diagnostic_fields(tmp_path, monkeypatch, locale):
+    from astrophotoflow.core.localization import error_message
+    settings = Settings('127.0.0.1', 8190, tmp_path / 'data', (), workspace=tmp_path)
+    path = tmp_path / 'comfyui-user/default/comfy.settings.json'
+    path.parent.mkdir(parents=True)
+    path.write_text(json.dumps({'Comfy.Locale': locale}), encoding='utf-8')
+    error = ApiError(409, 'BUNDLE_VERSION_CHANGED', '原始中文错误', fields=[{'path': 'reference/assessments.json', 'message': 'original diagnostic'}],
+                     message_key='bundle_reference_data_does_not_match_the_confirmed_snapshot_nothing_was_ins')
+    def fail(*args, **kwargs):
+        raise error
+    monkeypatch.setattr(bundles, 'checkout', fail)
+    package = public.get_package(settings, 'siril')
+    with pytest.raises(ApiError) as failure:
+        asyncio.run(public.install_package(settings, 'siril', '1.4.4', package.package_token))
+    reason = error_message(locale, error.code, error.message_key)
+    saved = public.get_package(settings, 'siril').last_error
+    assert saved.message == reason and saved.fields == error.fields
+    assert error_message(locale, failure.value.code, failure.value.message_key, failure.value.message_params) == error_message(locale, '', 'bundle_installation_failed_p0', {'p0': reason})
+
+
 @pytest.mark.parametrize('partial',[False,True])
 def test_failed_clone_keeps_previous_state_and_removes_staging(tmp_path,monkeypatch,partial):
     settings=Settings('127.0.0.1',8190,tmp_path/'data',(),workspace=tmp_path)
@@ -176,7 +228,8 @@ def test_remove_checkout_handles_git_readonly_pack_files_and_keeps_siblings(tmp_
         bundles.remove_checkout(tmp_path,tmp_path)
 
 
-def test_update_switches_installed_metadata_and_adapter_without_touching_user_files(tmp_path, monkeypatch, bundle_install):
+@pytest.mark.parametrize('transient_lock', [False, True])
+def test_update_switches_installed_metadata_and_adapter_without_touching_user_files(tmp_path, monkeypatch, bundle_install, transient_lock):
     settings = Settings('127.0.0.1', 8190, tmp_path/'workspace/data', (), workspace=tmp_path/'workspace')
     root = bundle_install(settings)
     adapter = root/'adapter/siril.py'
@@ -207,6 +260,17 @@ def test_update_switches_installed_metadata_and_adapter_without_touching_user_fi
     workflow.write_text('{}', encoding='utf-8')
     before = public.get_package(settings, 'siril')
     assert before.update_available
+    rename = Path.rename
+    locked_attempts = []
+    if transient_lock:
+        def briefly_locked(path, target):
+            if path == root and Path(target).name == 'previous-bundle' and len(locked_attempts) < 2:
+                locked_attempts.append(path)
+                error = OSError(13, 'Bundle temporarily held by a Windows version probe')
+                error.winerror = 5
+                raise error
+            return rename(path, target)
+        monkeypatch.setattr(Path, 'rename', briefly_locked)
     after = asyncio.run(public.install_package(settings, 'siril', '1.4.4', before.package_token))
     second = bundles.adapter_plan(settings.workspace, 'siril', 'autostretch', [], {}, tmp_path/'runs/after')
     assert first.arguments == ['before'] and second.arguments == ['after']
@@ -217,3 +281,55 @@ def test_update_switches_installed_metadata_and_adapter_without_touching_user_fi
     removed = asyncio.run(public.uninstall_package(settings, 'siril', after.package_token))
     assert removed.availability == 'not_installed' and not root.exists()
     assert original.read_bytes() == b'protected original' and workflow.read_text(encoding='utf-8') == '{}'
+
+
+@pytest.mark.parametrize('winerror', [5, 32, 33, None])
+def test_bundle_rename_persistent_lock_is_bounded_and_preserves_files(tmp_path, monkeypatch, winerror):
+    source = tmp_path / 'bundle'
+    source.mkdir()
+    (source / 'original.fit').write_bytes(b'original')
+    target = tmp_path / 'previous-bundle'
+    attempts, waits = [], []
+    failure = OSError(13, 'locked')
+    if winerror is not None:
+        failure.winerror = winerror
+    def locked(path, destination):
+        attempts.append((path, destination))
+        raise failure
+    monkeypatch.setattr(Path, 'rename', locked)
+    monkeypatch.setattr(public.time, 'sleep', waits.append)
+    with pytest.raises(OSError) as caught:
+        public._rename_bundle(source, target)
+    assert caught.value is failure
+    assert len(attempts) == (6 if winerror is not None else 1)
+    assert sum(waits) <= 1.55 + 1e-9
+    assert (source / 'original.fit').read_bytes() == b'original'
+    assert not target.exists()
+
+
+def test_failed_stage_activation_restores_original_bundle(tmp_path, monkeypatch, bundle_install):
+    settings = Settings('127.0.0.1', 8190, tmp_path / 'data', (), workspace=tmp_path)
+    root = bundle_install(settings)
+    original_manifest = (root / 'bundle.json').read_bytes()
+    original_lock = (root.parent / 'bundle-lock.json').read_bytes()
+    def checkout(package_id, destination, **kwargs):
+        shutil.copytree(root, destination)
+        return bundles.read_bundle(destination)[0], 'staged'
+    monkeypatch.setattr(bundles, 'checkout', checkout)
+    rename = Path.rename
+    def locked_stage(path, destination):
+        if path.name == 'bundle' and path.parent.name.startswith('.bundle-install-'):
+            failure = OSError(13, 'stage locked')
+            failure.winerror = 32
+            raise failure
+        return rename(path, destination)
+    monkeypatch.setattr(Path, 'rename', locked_stage)
+    monkeypatch.setattr(public.time, 'sleep', lambda delay: None)
+    package = public.get_package(settings, 'siril')
+    with pytest.raises(ApiError) as failure:
+        asyncio.run(public.install_package(settings, 'siril', '1.4.4', package.package_token))
+    assert failure.value.code == 'SOFTWARE_NOT_READY'
+    assert (root / 'bundle.json').read_bytes() == original_manifest
+    assert (root.parent / 'bundle-lock.json').read_bytes() == original_lock
+    assert not (root.parent / 'previous-bundle').exists()
+    assert public.get_package(settings, 'siril').operation_state == 'failed'

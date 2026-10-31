@@ -39,7 +39,7 @@ def preview_library_removal(database: Database, body: LibraryEntriesRemove) -> L
                 if asset.revision != item.revision:
                     shared._conflict_or_missing(session, Asset, record_id)
                 if asset.current_version_id != (shared._id(item.current_version_id) if item.current_version_id else None):
-                    raise ApiError(409, "REVISION_CONFLICT", "素材当前版本已变化，请重新读取后预览移除范围。")
+                    raise ApiError(409, "REVISION_CONFLICT", "素材当前版本已变化，请重新读取后预览移除范围。", message_key='the_current_asset_version_has_changed_read_it_again_before_previewing_remov')
                 asset_ids.append(asset.id)
                 if asset.current_version_id:
                     asset_version_ids.append(asset.current_version_id)
@@ -50,7 +50,7 @@ def preview_library_removal(database: Database, body: LibraryEntriesRemove) -> L
                 if dataset.revision != item.revision:
                     shared._conflict_or_missing(session, Dataset, record_id)
                 if dataset.current_version_id != (shared._id(item.current_version_id) if item.current_version_id else None):
-                    raise ApiError(409, "REVISION_CONFLICT", "素材组成员版本已变化，请重新读取后预览移除范围。")
+                    raise ApiError(409, "REVISION_CONFLICT", "素材组成员版本已变化，请重新读取后预览移除范围。", message_key='asset_group_member_versions_have_changed_read_them_again_before_previewing_')
                 dataset_ids.append(dataset.id)
                 if dataset.current_version_id:
                     dataset_version_ids.append(dataset.current_version_id)
@@ -96,7 +96,7 @@ def remove_library_entries(body: LibraryEntriesRemove, session: deps.WriteSessio
             if record.revision != item.revision:
                 shared._conflict_or_missing(session, Dataset, record_id)
             if record.current_version_id != (shared._id(item.current_version_id) if item.current_version_id else None):
-                raise ApiError(409, "REVISION_CONFLICT", "数据集成员版本已变化，请重新读取后删除。")
+                raise ApiError(409, "REVISION_CONFLICT", "数据集成员版本已变化，请重新读取后删除。", message_key='dataset_member_versions_have_changed_read_them_again_before_deletion')
         checked.append((item.entry_type, record_id, record.current_version_id if item.entry_type == "dataset" else None))
 
     added = 0
@@ -198,18 +198,18 @@ def restore_library_trash(body: LibraryTrashSelection, session: deps.WriteSessio
                 cleanup_status="trash", member_asset_ids=[], pending_paths=[], cleaned_paths=[], cleaned_asset_ids=[])
             removal.source_dataset_id = source_dataset_id
         if removal is None or _trash_cleanup_status(session, removal) != "trash":
-            raise ApiError(409, "TRASH_STATE_CONFLICT", "该记录已清理或状态已变化，不能恢复。")
+            raise ApiError(409, "TRASH_STATE_CONFLICT", "该记录已清理或状态已变化，不能恢复。", message_key='this_record_was_cleaned_up_or_its_state_has_changed_and_cannot_be_restored')
         row = session.get(Asset if item.entry_type == "asset" else Dataset, removal.entry_id)
         if row is None or row.revision != item.revision or shared._utc(removal.removed_at) != shared._utc(item.removed_at):
-            raise ApiError(409, "REVISION_CONFLICT", "垃圾桶记录已变化，请重新读取。")
+            raise ApiError(409, "REVISION_CONFLICT", "垃圾桶记录已变化，请重新读取。", message_key='trash_records_have_changed_read_them_again')
         if isinstance(row, Asset) and row.current_version_id != (shared._id(item.current_version_id) if item.current_version_id else None):
-            raise ApiError(409, "REVISION_CONFLICT", "照片版本已变化，请重新读取。")
+            raise ApiError(409, "REVISION_CONFLICT", "照片版本已变化，请重新读取。", message_key='photo_versions_have_changed_read_them_again')
         if isinstance(row, Dataset) and row.current_version_id != (shared._id(item.current_version_id) if item.current_version_id else None):
-            raise ApiError(409, "REVISION_CONFLICT", "数据集版本已变化，请重新读取。")
+            raise ApiError(409, "REVISION_CONFLICT", "数据集版本已变化，请重新读取。", message_key='dataset_versions_have_changed_read_them_again')
         if source_dataset_id and item.entry_type == "asset":
             source_group = session.get(LibraryEntryRemoval, ("dataset", source_dataset_id))
             if source_group is None or removal.entry_id not in (source_group.member_asset_ids or []):
-                raise ApiError(409, "TRASH_STATE_CONFLICT", "照片已不属于该组的待清理范围。")
+                raise ApiError(409, "TRASH_STATE_CONFLICT", "照片已不属于该组的待清理范围。", message_key='the_photo_no_longer_belongs_to_this_group_s_cleanup_selection')
             source_group.member_asset_ids = [asset_id for asset_id in source_group.member_asset_ids if asset_id != removal.entry_id]
             if session.get(LibraryEntryRemoval, ("asset", removal.entry_id)) is not None:
                 session.delete(session.get(LibraryEntryRemoval, ("asset", removal.entry_id)))
@@ -247,16 +247,16 @@ def _selected_trash(session, body):
         elif removal is not None and source_dataset_id:
             parent = session.get(LibraryEntryRemoval, ("dataset", source_dataset_id))
             if parent is None or shared._id(item.id) not in (parent.member_asset_ids or []):
-                raise ApiError(409, "TRASH_STATE_CONFLICT", "照片已不属于该组的待清理范围。")
+                raise ApiError(409, "TRASH_STATE_CONFLICT", "照片已不属于该组的待清理范围。", message_key='the_photo_no_longer_belongs_to_this_group_s_cleanup_selection')
             removal.source_dataset_id = source_dataset_id
         if removal is None or row is None or removal.cleanup_status not in {"trash", "partial", "failed"}:
-            raise ApiError(409, "TRASH_STATE_CONFLICT", "只能永久删除仍在垃圾桶中的内容。")
+            raise ApiError(409, "TRASH_STATE_CONFLICT", "只能永久删除仍在垃圾桶中的内容。", message_key='only_content_still_in_trash_can_be_permanently_deleted')
         if shared._utc(removal.removed_at) != shared._utc(item.removed_at) or row.revision != item.revision:
-            raise ApiError(409, "REVISION_CONFLICT", "垃圾桶记录已变化，请重新预览。")
+            raise ApiError(409, "REVISION_CONFLICT", "垃圾桶记录已变化，请重新预览。", message_key='trash_records_have_changed_preview_them_again')
         if isinstance(row, Asset) and row.current_version_id != (shared._id(item.current_version_id) if item.current_version_id else None):
-            raise ApiError(409, "REVISION_CONFLICT", "照片版本已变化，请重新预览。")
+            raise ApiError(409, "REVISION_CONFLICT", "照片版本已变化，请重新预览。", message_key='photo_versions_have_changed_preview_them_again')
         if isinstance(row, Dataset) and row.current_version_id != (shared._id(item.current_version_id) if item.current_version_id else None):
-            raise ApiError(409, "REVISION_CONFLICT", "数据集版本已变化，请重新预览。")
+            raise ApiError(409, "REVISION_CONFLICT", "数据集版本已变化，请重新预览。", message_key='dataset_versions_have_changed_preview_them_again')
         records.append((removal, row))
     return records
 
@@ -322,14 +322,14 @@ def _trash_scope(session, settings, records):
         if version.storage_mode == "managed":
             path = (settings.data_dir / version.storage_location).resolve()
             if not path.is_relative_to(settings.data_dir.resolve()):
-                raise ApiError(409, "FILE_SCOPE_INVALID", "托管文件路径不在服务数据目录中，已阻止清理。")
+                raise ApiError(409, "FILE_SCOPE_INVALID", "托管文件路径不在服务数据目录中，已阻止清理。", message_key='the_managed_file_is_outside_the_service_data_directory_cleanup_is_blocked')
             paths[str(path)] = path
     previews = session.scalars(select(Preview).where(Preview.asset_version_id.in_(version_ids))).all() if version_ids else []
     for preview in previews:
         for location in owned_preview_locations(preview, settings):
             path = (settings.data_dir / location).resolve()
             if not path.is_relative_to(settings.data_dir.resolve()):
-                raise ApiError(409, "FILE_SCOPE_INVALID", "预览文件路径不在服务数据目录中，已阻止清理。")
+                raise ApiError(409, "FILE_SCOPE_INVALID", "预览文件路径不在服务数据目录中，已阻止清理。", message_key='the_preview_file_is_outside_the_service_data_directory_cleanup_is_blocked')
             paths[str(path)] = path
     managed_locations = [version.storage_location for version in versions if version.storage_mode == "managed"]
     if managed_locations:
@@ -377,9 +377,9 @@ def library_trash_delete(body: LibraryTrashDelete, request: Request, session: de
     settings = request.app.state.settings
     asset_ids, versions, previews, refs, tasks, paths, managed_bytes = _trash_scope(session, settings, records)
     if any(ref["kind"] == "calibration" for ref in refs):
-        raise ApiError(409, "CALIBRATION_IN_USE", "仍有其他图像组版本使用所选校准目标，请先移除引用组。")
+        raise ApiError(409, "CALIBRATION_IN_USE", "仍有其他图像组版本使用所选校准目标，请先移除引用组。", message_key='other_image_group_versions_still_reference_the_selected_calibration_target_')
     if tasks:
-        raise ApiError(409, "IMPORT_ACTIVE", "正在执行或可恢复的导入任务仍占用所选内容，请先取消任务。")
+        raise ApiError(409, "IMPORT_ACTIVE", "正在执行或可恢复的导入任务仍占用所选内容，请先取消任务。", message_key='an_active_or_resumable_import_task_still_holds_the_selected_content_cancel_')
     expected_references = {str(ref["id"]) for ref in refs}
     deleting_dataset_ids = {row.id for removal, row in records if removal.entry_type == "dataset"}
     expected_group_references = {group_id: set(session.scalars(select(ProjectDatasetReference.id).where(
@@ -423,9 +423,9 @@ def library_trash_delete(body: LibraryTrashDelete, request: Request, session: de
         current_records = _selected_trash(write, body)
         current_preview = library_trash_delete_preview(body, request, write)
         if current_preview["preview_fingerprint"] != body.preview_fingerprint:
-            raise ApiError(409, "TRASH_PREVIEW_STALE", "清理范围已变化，请重新预览。")
+            raise ApiError(409, "TRASH_PREVIEW_STALE", "清理范围已变化，请重新预览。", message_key='the_cleanup_scope_has_changed_preview_it_again')
         if any(ref["kind"] == "calibration" for ref in current_preview["references"]):
-            raise ApiError(409, "CALIBRATION_IN_USE", "校准引用已变化，请先移除引用组。")
+            raise ApiError(409, "CALIBRATION_IN_USE", "校准引用已变化，请先移除引用组。", message_key='calibration_references_have_changed_remove_the_referencing_groups_first')
         asset_records = {}
         for asset_id in asset_ids:
             removal = write.get(LibraryEntryRemoval, ("asset", asset_id))
@@ -460,17 +460,17 @@ def library_trash_delete(body: LibraryTrashDelete, request: Request, session: de
             with request.app.state.database.write_session() as write:
                 current_removal = write.get(LibraryEntryRemoval, ("asset", asset_id))
                 if current_removal is None or shared._utc(current_removal.removed_at) != shared._utc(removal_times[asset_id]):
-                    raise ApiError(409, "TRASH_PREVIEW_STALE", "照片已恢复或垃圾桶范围已变化，请重新预览。")
+                    raise ApiError(409, "TRASH_PREVIEW_STALE", "照片已恢复或垃圾桶范围已变化，请重新预览。", message_key='the_photo_was_restored_or_the_trash_scope_has_changed_preview_it_again')
                 asset = write.get(Asset, asset_id)
                 if asset is not None and (asset.revision, asset.current_version_id) != asset_states[asset_id]:
-                    raise ApiError(409, "TRASH_PREVIEW_STALE", "照片资料或版本已变化，请重新预览。")
+                    raise ApiError(409, "TRASH_PREVIEW_STALE", "照片资料或版本已变化，请重新预览。", message_key='photo_metadata_or_versions_have_changed_preview_them_again')
                 original = next(row for row in body.items if row.entry_type == "asset" and shared._id(row.id) == asset_id) if any(
                     row.entry_type == "asset" and shared._id(row.id) == asset_id for row in body.items) else None
                 if asset is not None and original is not None and (asset.revision != original.revision or asset.current_version_id != (shared._id(original.current_version_id) if original.current_version_id else None)):
-                    raise ApiError(409, "TRASH_PREVIEW_STALE", "照片版本已变化，请重新预览。")
+                    raise ApiError(409, "TRASH_PREVIEW_STALE", "照片版本已变化，请重新预览。", message_key='photo_versions_have_changed_preview_them_again')
                 current_versions = write.scalars(select(AssetVersion).where(AssetVersion.asset_id == asset_id)).all()
                 if {version.id for version in current_versions} != expected_versions:
-                    raise ApiError(409, "TRASH_PREVIEW_STALE", "照片版本已变化，请重新预览。")
+                    raise ApiError(409, "TRASH_PREVIEW_STALE", "照片版本已变化，请重新预览。", message_key='photo_versions_have_changed_preview_them_again')
                 version_ids = expected_versions
                 assert_no_preview_jobs(write, version_ids)
                 current_refs = set(write.scalars(select(ProjectAssetReference.id).where(
@@ -486,36 +486,36 @@ def library_trash_delete(body: LibraryTrashDelete, request: Request, session: de
                     ProjectDatasetReference.dataset_version_id.in_(member_dataset_version_ids)
                 )).all()) if member_dataset_version_ids else set()
                 if not current_group_project_refs.issubset(expected_references):
-                    raise ApiError(409, "TRASH_PREVIEW_STALE", "项目组关联已变化，请重新预览。")
+                    raise ApiError(409, "TRASH_PREVIEW_STALE", "项目组关联已变化，请重新预览。", message_key='project_group_references_have_changed_preview_them_again')
                 # Recheck selected containers before touching this member; new group-level
                 # references, tasks, or membership changes must invalidate the confirmed range.
                 for group_id, (initial_revision, initial_version_id, initial_members, initial_live_members) in selected_group_states.items():
                     group = write.get(Dataset, group_id)
                     expected_revision = initial_revision + dataset_revision_deltas.get(group_id, 0)
                     if group is None or group.revision != expected_revision or group.current_version_id != initial_version_id:
-                        raise ApiError(409, "TRASH_PREVIEW_STALE", "组资料或版本已变化，请重新预览。")
+                        raise ApiError(409, "TRASH_PREVIEW_STALE", "组资料或版本已变化，请重新预览。", message_key='group_metadata_or_versions_have_changed_preview_them_again')
                     current_group_removal = write.get(LibraryEntryRemoval, ("dataset", group_id))
                     expected_group_members = initial_members - success_assets
                     if current_group_removal is None or set(current_group_removal.member_asset_ids or []) != expected_group_members:
-                        raise ApiError(409, "TRASH_PREVIEW_STALE", "组内待清理范围已变化，请重新预览。")
+                        raise ApiError(409, "TRASH_PREVIEW_STALE", "组内待清理范围已变化，请重新预览。", message_key='the_group_s_cleanup_scope_has_changed_preview_it_again')
                     live_group_members = set(write.scalars(select(AssetVersion.asset_id).join(
                         DatasetMember, DatasetMember.asset_version_id == AssetVersion.id
                     ).where(DatasetMember.dataset_version_id == initial_version_id)).all()) if initial_version_id else set()
                     if live_group_members != initial_live_members - success_assets:
-                        raise ApiError(409, "TRASH_PREVIEW_STALE", "组内成员已变化，请重新预览。")
+                        raise ApiError(409, "TRASH_PREVIEW_STALE", "组内成员已变化，请重新预览。", message_key='group_membership_has_changed_preview_it_again')
                     group_version_ids = set(write.scalars(select(DatasetVersion.id).where(DatasetVersion.dataset_id == group_id)).all())
                     group_refs = set(write.scalars(select(ProjectDatasetReference.id).where(
                         ProjectDatasetReference.dataset_version_id.in_(group_version_ids))).all()) if group_version_ids else set()
                     if group_refs != expected_group_references[group_id]:
-                        raise ApiError(409, "TRASH_PREVIEW_STALE", "项目组关联已变化，请重新预览。")
+                        raise ApiError(409, "TRASH_PREVIEW_STALE", "项目组关联已变化，请重新预览。", message_key='project_group_references_have_changed_preview_them_again')
                     group_tasks = set(write.scalars(select(AssetTask.id).where(
                         AssetTask.dataset_id == group_id,
                         AssetTask.status.in_({"queued", "running", "cancelling", "interrupted"}),
                     )).all())
                     if not group_tasks.issubset(expected_tasks):
-                        raise ApiError(409, "TRASH_PREVIEW_STALE", "组导入任务占用已变化，请重新预览。")
+                        raise ApiError(409, "TRASH_PREVIEW_STALE", "组导入任务占用已变化，请重新预览。", message_key='group_import_task_usage_has_changed_preview_it_again')
                 if not current_refs.issubset(expected_references):
-                    raise ApiError(409, "TRASH_PREVIEW_STALE", "项目或组关联已变化，请重新预览。")
+                    raise ApiError(409, "TRASH_PREVIEW_STALE", "项目或组关联已变化，请重新预览。", message_key='project_or_group_references_have_changed_preview_them_again')
                 owned_paths = {str(path) for path in paths_by_asset.get(asset_id, [])}
                 calibration_version_ids = version_ids | {version.id for version in versions if version.storage_mode == "managed"
                     and str((settings.data_dir / version.storage_location).resolve()) in owned_paths}
@@ -531,7 +531,7 @@ def library_trash_delete(body: LibraryTrashDelete, request: Request, session: de
                 ).where(AssetTask.status.in_({"queued", "running", "cancelling", "interrupted"}),
                         AssetTaskItem.asset_id == asset_id)).all())
                 if not active_task_ids.issubset(expected_tasks):
-                    raise ApiError(409, "TRASH_PREVIEW_STALE", "导入任务占用已变化，请重新预览。")
+                    raise ApiError(409, "TRASH_PREVIEW_STALE", "导入任务占用已变化，请重新预览。", message_key='import_task_usage_has_changed_preview_it_again')
                 current_removals = write.scalars(select(LibraryEntryRemoval)).all()
                 affected_removals = [removal for removal in current_removals if
                     removal.entry_type == "asset" and removal.entry_id == asset_id or
@@ -630,20 +630,20 @@ def library_trash_delete(body: LibraryTrashDelete, request: Request, session: de
                     if dataset_removal is None or shared._utc(dataset_removal.removed_at) != shared._utc(original.removed_at) or set(
                         dataset_removal.member_asset_ids or []
                     ) != remaining:
-                        raise ApiError(409, "TRASH_PREVIEW_STALE", "组已恢复或垃圾桶范围已变化，请重新预览。")
+                        raise ApiError(409, "TRASH_PREVIEW_STALE", "组已恢复或垃圾桶范围已变化，请重新预览。", message_key='the_group_was_restored_or_the_trash_scope_has_changed_preview_it_again')
                     if dataset and (dataset.revision != original.revision + dataset_revision_deltas.get(row.id, 0) or
                                     dataset.current_version_id != (shared._id(original.current_version_id) if original.current_version_id else None)):
-                        raise ApiError(409, "TRASH_PREVIEW_STALE", "组版本已变化，请重新预览。")
+                        raise ApiError(409, "TRASH_PREVIEW_STALE", "组版本已变化，请重新预览。", message_key='group_versions_have_changed_preview_them_again')
                     version_rows = write.scalars(select(DatasetVersion).where(DatasetVersion.dataset_id == row.id)).all() if dataset else []
                     current_refs = set(write.scalars(select(ProjectDatasetReference.id).where(ProjectDatasetReference.dataset_id == row.id)).all())
                     if not current_refs.issubset(expected_references):
-                        raise ApiError(409, "TRASH_PREVIEW_STALE", "项目关联已变化，请重新预览。")
+                        raise ApiError(409, "TRASH_PREVIEW_STALE", "项目关联已变化，请重新预览。", message_key='project_references_have_changed_preview_them_again')
                     active_task_ids = set(write.scalars(select(AssetTask.id).where(
                         AssetTask.dataset_id == row.id,
                         AssetTask.status.in_({"queued", "running", "cancelling", "interrupted"}),
                     )).all())
                     if not active_task_ids.issubset(expected_tasks):
-                        raise ApiError(409, "TRASH_PREVIEW_STALE", "导入任务占用已变化，请重新预览。")
+                        raise ApiError(409, "TRASH_PREVIEW_STALE", "导入任务占用已变化，请重新预览。", message_key='import_task_usage_has_changed_preview_it_again')
                     if dataset:
                         version_ids = [v.id for v in version_rows]
                         protect_calibration_targets(write, set(), set(version_ids), {row.id})

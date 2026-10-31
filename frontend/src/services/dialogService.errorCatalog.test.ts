@@ -304,17 +304,17 @@ describe('legacy error dialog catalog', () => {
     onTestFinished(() => {
       i18n.global.locale.value = originalLocale
     })
-    await loadLocale('ko')
+    await loadLocale('zh')
     useDialogService().showErrorDialog(
       new PromptExecutionError(sam3ValidationResponse())
     )
     renderOpenedDialog()
 
-    i18n.global.locale.value = 'ko'
+    i18n.global.locale.value = 'zh'
 
     expect(
       await screen.findByText(
-        /SAM3_Detect \(#6\)에 필수 입력이 누락되었습니다: image/
+        /SAM3_Detect \(#6\) 缺少必需的输入：image/
       )
     ).toBeVisible()
   })

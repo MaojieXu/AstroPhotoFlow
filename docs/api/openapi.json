@@ -1821,6 +1821,119 @@
         }
       }
     },
+    "/api/v1/settings/locale": {
+      "get": {
+        "summary": "Get Workspace Locale",
+        "operationId": "get_workspace_locale_api_v1_settings_locale_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceLocale"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Origin not allowed by the ComfyUI proxy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found or outside the requested scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Method not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Revision conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error or invalid reference",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service not configured or unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Service timeout",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/settings/workbench": {
       "get": {
         "summary": "Get Workbench Configuration",
@@ -17175,6 +17288,130 @@
         ]
       }
     },
+    "/api/v1/software/packages/{package_id}/releases": {
+      "get": {
+        "summary": "Get Software Releases",
+        "operationId": "get_software_releases_api_v1_software_packages__package_id__releases_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "package_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Package Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SoftwareReleaseListing"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Origin not allowed by the ComfyUI proxy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found or outside the requested scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Method not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Revision conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error or invalid reference",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service not configured or unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Service timeout",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/software/packages/{package_id}/versions/{version}/commands": {
       "get": {
         "summary": "Get Software Commands",
@@ -20954,6 +21191,51 @@
         ],
         "title": "CanvasSetParameter"
       },
+      "CapabilityDisplay": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "help": {
+            "type": "string",
+            "title": "Help"
+          },
+          "parameters": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/DisplayLabel"
+            },
+            "type": "object",
+            "title": "Parameters"
+          },
+          "inputs": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/DisplayLabel"
+            },
+            "type": "object",
+            "title": "Inputs"
+          },
+          "outputs": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/DisplayLabel"
+            },
+            "type": "object",
+            "title": "Outputs"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name",
+          "description",
+          "help"
+        ],
+        "title": "CapabilityDisplay"
+      },
       "CapturePresetCreate": {
         "properties": {
           "name": {
@@ -21990,6 +22272,25 @@
           "path"
         ],
         "title": "DirectorySelectionResult"
+      },
+      "DisplayLabel": {
+        "properties": {
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description",
+            "default": ""
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "label"
+        ],
+        "title": "DisplayLabel"
       },
       "DisplayPreviewState": {
         "properties": {
@@ -25185,6 +25486,19 @@
             },
             "type": "array",
             "title": "Examples"
+          },
+          "display": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/CapabilityDisplay"
+            },
+            "propertyNames": {
+              "enum": [
+                "en",
+                "zh"
+              ]
+            },
+            "type": "object",
+            "title": "Display"
           }
         },
         "additionalProperties": false,
@@ -26868,6 +27182,28 @@
           "package_token": {
             "type": "string",
             "title": "Package Token"
+          },
+          "bundle_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bundle Version"
+          },
+          "release_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Release Token"
           }
         },
         "additionalProperties": false,
@@ -27569,6 +27905,61 @@
             },
             "type": "array",
             "title": "Workflow Impacts"
+          },
+          "current_bundle_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Bundle Version"
+          },
+          "target_bundle_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Bundle Version"
+          },
+          "target_tag": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Tag"
+          },
+          "target_commit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Commit"
+          },
+          "release_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Release Token"
           }
         },
         "additionalProperties": false,
@@ -27641,6 +28032,147 @@
           "ui_target"
         ],
         "title": "SoftwarePreparation"
+      },
+      "SoftwareRelease": {
+        "properties": {
+          "bundle_version": {
+            "type": "string",
+            "title": "Bundle Version"
+          },
+          "software_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Software Version"
+          },
+          "channel": {
+            "type": "string",
+            "enum": [
+              "stable",
+              "dev"
+            ],
+            "title": "Channel"
+          },
+          "tag": {
+            "type": "string",
+            "title": "Tag"
+          },
+          "commit": {
+            "type": "string",
+            "title": "Commit"
+          },
+          "is_latest": {
+            "type": "boolean",
+            "title": "Is Latest",
+            "default": false
+          },
+          "compatible": {
+            "type": "boolean",
+            "title": "Compatible"
+          },
+          "reason_code": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "invalid_metadata",
+                  "unsupported_platform",
+                  "unsupported_sdk",
+                  "unsupported_schema",
+                  "missing_resources"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason Code"
+          },
+          "reason_parameters": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Reason Parameters"
+          },
+          "release_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Release Token"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "bundle_version",
+          "software_version",
+          "channel",
+          "tag",
+          "commit",
+          "compatible"
+        ],
+        "title": "SoftwareRelease"
+      },
+      "SoftwareReleaseListing": {
+        "properties": {
+          "package_id": {
+            "type": "string",
+            "title": "Package Id"
+          },
+          "releases": {
+            "items": {
+              "$ref": "#/components/schemas/SoftwareRelease"
+            },
+            "type": "array",
+            "title": "Releases"
+          },
+          "checked_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Checked At"
+          },
+          "stale": {
+            "type": "boolean",
+            "title": "Stale",
+            "default": false
+          },
+          "error": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ErrorDetail"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "package_id",
+          "releases",
+          "checked_at"
+        ],
+        "title": "SoftwareReleaseListing"
       },
       "SoftwareUninstallRequest": {
         "properties": {
@@ -28293,6 +28825,24 @@
           "unsaved_pages"
         ],
         "title": "WorkflowImpact"
+      },
+      "WorkspaceLocale": {
+        "properties": {
+          "locale": {
+            "type": "string",
+            "enum": [
+              "en",
+              "zh"
+            ],
+            "title": "Locale"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "locale"
+        ],
+        "title": "WorkspaceLocale"
       }
     },
     "securitySchemes": {

@@ -47,7 +47,7 @@ def validate_bindings(session, bindings: dict, previous: dict) -> None:
             version = session.get(DatasetVersion, target["id"])
             valid = version is not None and dataset_frame_type(session, version) == frame_type
         if not valid:
-            raise invalid_reference(f"{frame_type} 必须引用同用途的固定校准数据集版本或 Master 校准资产版本。")
+            raise invalid_reference(f"{frame_type} 必须引用同用途的固定校准数据集版本或 Master 校准资产版本。", message_key='p0_must_reference_a_fixed_calibration_dataset_version_or_a_master_calibrati', message_params={'p0': frame_type})
 
 
 def calibration_references(session, asset_version_ids: set[str], dataset_version_ids: set[str],
@@ -75,7 +75,7 @@ def calibration_references(session, asset_version_ids: set[str], dataset_version
 def protect_calibration_targets(session, asset_version_ids: set[str], dataset_version_ids: set[str],
                                 excluded_dataset_ids: set[str] = frozenset(), excluded_member_versions: set[str] = frozenset()) -> None:
     if calibration_references(session, asset_version_ids, dataset_version_ids, excluded_dataset_ids, excluded_member_versions):
-        raise ApiError(409, "CALIBRATION_IN_USE", "仍有图像组版本使用所选校准目标；请先移除引用组，再重试清理校准目标。")
+        raise ApiError(409, "CALIBRATION_IN_USE", "仍有图像组版本使用所选校准目标；请先移除引用组，再重试清理校准目标。", message_key='image_group_versions_still_reference_the_selected_calibration_target_remove')
 
 
 @router.get("/calibration/targets", response_model=CalibrationTargetPage, dependencies=[Depends(deps.authenticate)])

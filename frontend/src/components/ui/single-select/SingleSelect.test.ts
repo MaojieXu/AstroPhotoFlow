@@ -101,6 +101,21 @@ afterEach(() => {
 })
 
 describe('SingleSelect', () => {
+  it('refreshes the selected display label without changing its value', async () => {
+    const updates: Array<string | number | undefined> = []
+    const { rerender } = render(SingleSelect, {
+      props: {
+        modelValue: 'a', options: [{ name: '中文标签', value: 'a' }],
+        'onUpdate:modelValue': (value: string | number | undefined) => updates.push(value)
+      },
+      global: { plugins: [i18n] }
+    })
+    expect(screen.getByRole('combobox')).toHaveTextContent('中文标签')
+    await rerender({ options: [{ name: 'English label', value: 'a' }] })
+    expect(screen.getByRole('combobox')).toHaveTextContent('English label')
+    expect(updates).toEqual([])
+  })
+
   it('filters searchable options', async () => {
     const user = userEvent.setup()
     const { unmount } = renderInParent(undefined, { searchable: true })

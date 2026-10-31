@@ -13,7 +13,7 @@ function requestClose(){if(!busy)emit('close')}
   <component :is="controls.dialog" v-if="controls" :open="open" :title="title" :label="label" :busy="busy" @close="requestClose"><slot /></component>
   <div v-else-if="open" class="apf-equipment-modal-backdrop" @click.self="requestClose" @keydown.esc.stop="requestClose">
     <section class="apf-equipment-dialog" role="dialog" aria-modal="true" :aria-label="label??title">
-      <header class="apf-equipment-dialog-header"><h2>{{title}}</h2><LibraryButton type="button" aria-label="关闭表单" :disabled="busy" @click="requestClose">×</LibraryButton></header>
+      <header class="apf-equipment-dialog-header"><h2>{{title}}</h2><LibraryButton type="button" :aria-label="$t('apfUi.close_form')" :disabled="busy" @click="requestClose">×</LibraryButton></header>
       <slot />
     </section>
   </div>

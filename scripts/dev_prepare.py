@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from datetime import datetime, timezone
 import hashlib
 import json
 import os
@@ -9,6 +10,7 @@ import shutil
 import subprocess
 import sys
 import time
+from uuid import uuid4
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -18,7 +20,7 @@ def environment(workspace: Path, cache: Path | None = None) -> dict[str, str]:
     artifacts = ROOT / ".artifacts"
     cache = cache or Path(os.environ.get("ASTROPHOTOFLOW_DEV_CACHE", artifacts / "cache"))
     env = {**os.environ, "UV_PROJECT_ENVIRONMENT": str(artifacts / "venvs/dev"),
-           "UV_CACHE_DIR": str(cache / "uv"), "UV_PYTHON_INSTALL_DIR": str(artifacts / "python"),
+           "UV_CACHE_DIR": str(cache / "uv"), "UV_PYTHON_INSTALL_DIR": str(artifacts / "managed-python"),
            "UV_PYTHON_BIN_DIR": str(artifacts / "python-bin"), "UV_PYTHON_INSTALL_REGISTRY": "0",
            "LOCALAPPDATA": str(artifacts / "local-app-data"), "APPDATA": str(artifacts / "app-data"),
            "TEMP": str(artifacts / "tmp"), "TMP": str(artifacts / "tmp"),
@@ -64,7 +66,7 @@ def frontend_matches(source: Path, installed: Path) -> bool:
     )
 
 
-def main() -> int:
+def prepare(report: dict) -> int:
     parser = argparse.ArgumentParser(description="Prepare this Worktree; build and start only when requested.")
     parser.add_argument("--workspace", type=Path, required=True)
     parser.add_argument("--cache-dir", type=Path)
@@ -92,24 +94,30 @@ def main() -> int:
         env["UV_OFFLINE"] = "1"
     for name in ("LOCALAPPDATA", "APPDATA", "TEMP", "UV_PYTHON_BIN_DIR"):
         Path(env[name]).mkdir(parents=True, exist_ok=True)
-    report = {"workspace": str(workspace), "config_path": env["ASTROPHOTOFLOW_CONFIG"],
+    report.update({"workspace": str(workspace), "config_path": env["ASTROPHOTOFLOW_CONFIG"],
               "runtime_path": env["ASTROPHOTOFLOW_RUNTIME"],
               "python": str(Path(env["UV_PROJECT_ENVIRONMENT"]) / ("Scripts/python.exe" if os.name == "nt" else "bin/python")),
-              "cache_dir": str(Path(env["UV_CACHE_DIR"]).parent), "stages": [], "ready": False}
-    receipt = ROOT / ".artifacts/dev-prepare.json"
-    logs = ROOT / ".artifacts/logs/dev-prepare"
+              "cache_dir": str(Path(env["UV_CACHE_DIR"]).parent)})
+    logs = ROOT / ".artifacts/logs/dev-prepare" / report["run_id"]
     logs.mkdir(parents=True, exist_ok=True)
-    started = time.perf_counter()
 
     def run(name: str, command: list[str]) -> str:
         stage = {"name": name, "log": str(logs / f"{name}.log")}
         report["stages"].append(stage)
         print(f"{name}…", file=sys.stderr, flush=True)
         clock = time.perf_counter()
-        with Path(stage["log"]).open("w", encoding="utf-8") as log:
-            result = subprocess.run(command, cwd=ROOT, env=env, stdout=subprocess.PIPE, stderr=log, text=True, encoding="utf-8")
-            log.write(result.stdout)
-        stage.update(elapsed_seconds=round(time.perf_counter() - clock, 3), exit_code=result.returncode)
+        try:
+            with Path(stage["log"]).open("w", encoding="utf-8") as log:
+                result = subprocess.run(command, cwd=ROOT, env=env, stdout=subprocess.PIPE,
+                                        stderr=log, text=True, encoding="utf-8")
+                log.write(result.stdout)
+            stage["exit_code"] = result.returncode
+        except OSError as exc:
+            Path(stage["log"]).write_text(str(exc), encoding="utf-8")
+            stage.update(exit_code=None, error=str(exc))
+            raise
+        finally:
+            stage["elapsed_seconds"] = round(time.perf_counter() - clock, 3)
         if result.returncode:
             raise RuntimeError(f"{name}失败（{result.returncode}），日志：{stage['log']}")
         return result.stdout
@@ -209,8 +217,38 @@ def main() -> int:
         report.update(completed=False, error=str(exc))
         print(str(exc), file=sys.stderr)
         return 1
+
+
+def main() -> int:
+    if any(argument in {"-h", "--help"} for argument in sys.argv[1:]):
+        return prepare({})
+    receipt = ROOT / ".artifacts/dev-prepare.json"
+    run_id = os.environ.get("ASTROPHOTOFLOW_DEV_PREPARE_RUN_ID")
+    report = {}
+    if run_id and receipt.is_file():
+        previous = json.loads(receipt.read_text(encoding="utf-8-sig"))
+        if previous.get("run_id") == run_id:
+            report = previous
+    report.update(run_id=report.get("run_id", uuid4().hex),
+                  started_at=report.get("started_at", datetime.now(timezone.utc).isoformat()),
+                  arguments=sys.argv[1:], completed=False, ready=False)
+    report.setdefault("stages", [])
+    write_json(receipt, report)
+    started = time.perf_counter()
+    try:
+        return prepare(report)
+    except SystemExit as exc:
+        report.update(completed=False, error=f"参数校验失败（{exc.code}）")
+        return int(exc.code or 0)
+    except (OSError, ValueError, KeyError, RuntimeError) as exc:
+        report.update(completed=False, error=str(exc))
+        print(str(exc), file=sys.stderr)
+        return 1
     finally:
-        report["elapsed_seconds"] = round(time.perf_counter() - started, 3)
+        finished = datetime.now(timezone.utc)
+        report.update(finished_at=finished.isoformat(),
+                      prepare_elapsed_seconds=round(time.perf_counter() - started, 3),
+                      elapsed_seconds=round((finished - datetime.fromisoformat(report["started_at"].replace("Z", "+00:00"))).total_seconds(), 3))
         write_json(receipt, report)
         print(json.dumps({**report, "receipt": str(receipt)}, ensure_ascii=False, indent=2))
 

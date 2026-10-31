@@ -137,17 +137,17 @@ describe('LGraphCanvas link visibility interactions', () => {
       .mockReturnValue(document.createElement('div'))
     const originalLocale = i18n.global.locale.value
 
-    await loadLocale('fr')
-    i18n.global.locale.value = 'fr'
+    await loadLocale('zh')
+    i18n.global.locale.value = 'zh'
     try {
       canvas.showLinkMenu(link, event)
       void menu.mock.calls[0][1]?.callback?.({
-        content: 'Renommer',
+        content: '重命名',
         value: 'Rename'
       })
 
       expect(prompt).toHaveBeenCalledWith(
-        'Renommer',
+        '重命名',
         'Checkpoint',
         expect.any(Function),
         event

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { uiT } from '../../../core/i18n'
+
 import { onBeforeUnmount, ref, watch } from 'vue'
 import LibraryButton from './LibraryButton.vue'
 import { assetApi } from '../api/index'
@@ -22,7 +24,7 @@ async function observe(){
     const result=await assetApi.send(`/astrophotoflow/api/v1/library/assets/${props.assetId}/content-observation`,assetContentObservationSchema,'POST',undefined)
     if(request===generation)observation.value=result
   }
-  catch(cause){if(request===generation)error.value=cause instanceof Error?cause.message:'检查素材内容失败。'}
+  catch(cause){if(request===generation)error.value=cause instanceof Error?cause.message:uiT('apfUi.could_not_check_asset_content')}
   finally{if(request===generation)busy.value=false}
 }
 
@@ -49,22 +51,22 @@ async function accept(){
       }
     }catch(readCause){queryError=readCause}
     if(request!==generation)return
-    const acceptMessage=cause instanceof Error?cause.message:'接纳新素材内容失败。'
-    error.value=queryError instanceof Error?`${acceptMessage}；读取当前素材核对时失败：${queryError.message}`:acceptMessage
+    const acceptMessage=cause instanceof Error?cause.message:uiT('apfUi.could_not_accept_the_new_asset_content')
+    error.value=queryError instanceof Error?uiT('apfUi.value_could_not_verify_the_current_asset_value', { p0: (acceptMessage), p1: (queryError.message) }):acceptMessage
   }
   finally{if(request===generation)busy.value=false}
 }
 </script>
 
 <template>
-  <section class="apf-content-change" aria-label="检查素材文件变化">
-    <LibraryButton type="button" :disabled="busy||!hasVersion" @click="observe">{{busy?'处理中…':'检查文件变化'}}</LibraryButton>
-    <p v-if="observation?.state==='unchanged'" role="status">文件内容与当前素材版本一致。</p>
+  <section class="apf-content-change" :aria-label="$t('apfUi.check_asset_file_changes')">
+    <LibraryButton type="button" :disabled="busy||!hasVersion" @click="observe">{{busy?$t('apfUi.processing'):$t('apfUi.check_file_changes')}}</LibraryButton>
+    <p v-if="observation?.state==='unchanged'" role="status">{{ $t('apfUi.file_content_matches_the_current_asset_version') }}</p>
     <div v-else-if="observation?.state==='changed'" role="status">
-      <p>检测到文件内容已变化。确认后会保留素材身份并新增一个内容记录；已有固定引用不会自动切换。</p>
-      <LibraryButton type="button" :disabled="busy" @click="accept">确认使用新内容</LibraryButton>
+      <p>{{ $t('apfUi.the_file_content_has_changed_confirm_to_retain_the_asset_identity_and_') }}</p>
+      <LibraryButton type="button" :disabled="busy" @click="accept">{{ $t('apfUi.confirm_new_content') }}</LibraryButton>
     </div>
-    <p v-else-if="observation?.state==='missing'" role="alert">素材文件当前不可访问。{{observation.error?.message}}</p>
+    <p v-else-if="observation?.state==='missing'" role="alert">{{ $t('apfUi.the_asset_file_is_currently_inaccessible_value', { p0: (observation.error?.message) }) }}</p>
     <p v-else-if="observation?.state==='unsupported'" role="alert">{{observation.error?.message}}</p>
     <p v-if="error" role="alert" class="apf-error">{{error}}</p>
   </section>

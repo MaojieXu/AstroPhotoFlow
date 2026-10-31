@@ -27,7 +27,7 @@ export function useExternalLink() {
   const locale = computed(() => i18n.global.locale.value)
 
   const isChinese = computed(() => {
-    return locale.value === 'zh' || locale.value === 'zh-TW'
+    return locale.value === 'zh'
   })
 
   const platform = computed(() => {

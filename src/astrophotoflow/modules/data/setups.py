@@ -38,7 +38,7 @@ def _preset_out(row: CapturePreset) -> dict:
 def _check_components(session, components: list[dict]) -> None:
     for component in components:
         if component["source"] == "registered" and session.get(Equipment, component["equipment_id"]) is None:
-            raise invalid_reference("使用组合必须引用现存的注册设备。")
+            raise invalid_reference("使用组合必须引用现存的注册设备。", message_key='the_equipment_setup_must_reference_existing_registered_equipment')
 
 
 @router.get("/equipment-setups", response_model=EquipmentSetupPage, dependencies=[Depends(authenticate)])

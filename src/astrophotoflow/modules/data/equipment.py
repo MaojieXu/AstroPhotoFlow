@@ -66,12 +66,12 @@ def patch_equipment(equipment_id: UUID, body: EquipmentPatch, session: WriteSess
     if row is None:
         raise not_found()
     if body.kind != row.kind:
-        raise ApiError(422, "VALIDATION_ERROR", "設備 kind 创建后不能修改。", [{"path": "kind", "message": "必须与现有设备类型一致。"}])
+        raise ApiError(422, "VALIDATION_ERROR", "設備 kind 创建后不能修改。", [{"path": "kind", "message": "必须与现有设备类型一致。"}], message_key='equipment_kind_cannot_be_changed_after_creation', field_message_keys={'kind': 'field_equipment_kind'})
     changes = body.model_dump(exclude_unset=True, exclude={"base_revision", "kind", "specs"})
     _assert_patch_values(changes, {"name", "status"})
     if "specs" in body.model_fields_set:
         if body.specs is None:
-            raise ApiError(422, "VALIDATION_ERROR", "specs 不能为 null。", [{"path": "specs", "message": "请提供类型化参数对象。"}])
+            raise ApiError(422, "VALIDATION_ERROR", "specs 不能为 null。", [{"path": "specs", "message": "请提供类型化参数对象。"}], message_key='specs_must_not_be_null', field_message_keys={'specs': 'field_typed_specs'})
         changes["specs"] = {**row.specs, **body.specs.model_dump(exclude_unset=True)}
     _update_config(session, Equipment, row_id, body.base_revision, changes)
     session.flush()

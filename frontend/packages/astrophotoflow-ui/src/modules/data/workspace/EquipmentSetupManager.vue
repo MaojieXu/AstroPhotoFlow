@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { uiT } from '../../../core/i18n'
+
 import { computed, inject, onBeforeUnmount, ref, watch } from 'vue'
 import { assetApi } from '../api/index'
 import { capturePresetSchema, equipmentSchema, equipmentSetupSchema, pageSchema, type CapturePreset, type EquipmentSetup, type SetupComponent } from '../api/contracts'
@@ -38,9 +40,9 @@ let presetGeneration = 0
 let setupSelectionGeneration = 0
 watch(() => selectedSetup.value?.id, () => {setupSelectionGeneration++}, {flush:'sync'})
 const numericParameters = [
-  {key:'exposure_seconds',label:'曝光（秒）',min:0},
-  {key:'sensor_temperature_c',label:'温度（°C）'},
-  {key:'iso',label:'ISO',integer:true,min:1}, {key:'gain',label:'增益（Gain）'},
+  {key:'exposure_seconds',get label() { return uiT('apfUi.exposure_seconds') },min:0},
+  {key:'sensor_temperature_c',get label() { return uiT('apfUi.temperature_c') }},
+  {key:'iso',label:'ISO',integer:true,min:1}, {key:'gain',get label() { return uiT('apfUi.gain_3b0865') }},
   {key:'offset',label:'Offset'}
 ] as const
 const visibleNumericParameters = computed(() => numericParameters.filter(field =>
@@ -52,14 +54,14 @@ const presetFilters = computed(() => (selectedSetup.value?.components ?? []).fla
   return equipment?.kind === 'filter' ? [{value:equipment.id,name:equipment.name}] : []
 }))
 const presetFilterOptions = computed(() => {
-  const options = [{value:'',name:'使用组合默认滤镜'},...presetFilters.value]
+  const options = [{value:'',get name() { return uiT('apfUi.use_setup_default_filter') }},...presetFilters.value]
   const filterId = presetDraft.value.parameters.filter_id
   if (filterId && !options.some(option => option.value === filterId)) {
-    options.push({value:filterId,name:'原预设滤镜：'+context.equipmentName(filterId)})
+    options.push({value:filterId,name:uiT('apfUi.original_preset_filter')+context.equipmentName(filterId)})
   }
   return options
 })
-const presetName = computed(() => [presetDraft.value.name.trim(),presetNameSuffix(presetDraft.value.parameters)].filter(Boolean).join(' ') || '拍摄预设')
+const presetName = computed(() => [presetDraft.value.name.trim(),presetNameSuffix(presetDraft.value.parameters)].filter(Boolean).join(' ') || uiT('apfUi.capture_preset'))
 const dirty = computed(() =>
   (editingSetup.value !== undefined && JSON.stringify(setupDraft.value) !== setupOriginal.value) ||
   (editingPreset.value !== undefined && JSON.stringify(presetDraft.value) !== presetOriginal.value) ||
@@ -69,7 +71,7 @@ onBeforeUnmount(() => {context.setupDirty.value = false; context.setupSaving.val
 
 function leaveDraft() {
   if (saving.value) return false
-  if (dirty.value && !window.confirm('当前组合或预设有未保存修改。放弃修改吗？')) return false
+  if (dirty.value && !window.confirm(uiT('apfUi.this_setup_or_preset_has_unsaved_changes_discard_them'))) return false
   editingSetup.value = undefined; editingPreset.value = undefined; deviceEditor.value = undefined; error.value = ''
   return true
 }
@@ -103,7 +105,7 @@ function editInline(index:number){
 }
 function returnToSetup(){
   if(saving.value)return
-  if(deviceEditor.value&&JSON.stringify(deviceEditor.value.equipment)!==equipmentOriginal.value&&!window.confirm('设备有未保存修改。放弃修改并返回组合吗？'))return
+  if(deviceEditor.value&&JSON.stringify(deviceEditor.value.equipment)!==equipmentOriginal.value&&!window.confirm(uiT('apfUi.this_device_has_unsaved_changes_discard_them_and_return_to_the_setup')))return
   deviceEditor.value=undefined;error.value=''
 }
 function closeSetup(){if(deviceEditor.value)returnToSetup();else leaveDraft()}
@@ -125,8 +127,8 @@ async function saveEquipment(){
     relatedEquipment.value=[...relatedEquipment.value,saved]
     setupDraft.value.components.push({source:'registered',equipment_id:saved.id})
     deviceEditor.value=undefined
-    equipmentNotice.value=`“${saved.name}”已保存到我的设备；取消组合仍会保留此设备。`
-  }catch(cause){error.value=cause instanceof Error?cause.message:'设备保存失败。'}
+    equipmentNotice.value=uiT('apfUi.saved_value_to_my_equipment_canceling_this_setup_will_retain_the_devic', { p0: (saved.name) })
+  }catch(cause){error.value=cause instanceof Error?cause.message:uiT('apfUi.could_not_save_the_equipment')}
   finally{saving.value=false}
 }
 async function saveSetup() {
@@ -147,7 +149,7 @@ async function saveSetup() {
     equipmentNotice.value = ''
     await loadRecords()
     if (currentView()) selected.value = saved
-  } catch (cause) {error.value = cause instanceof Error ? cause.message : '组合保存失败。'}
+  } catch (cause) {error.value = cause instanceof Error ? cause.message : uiT('apfUi.could_not_save_the_setup')}
   finally {saving.value = false}
 }
 async function loadPresets() {
@@ -164,7 +166,7 @@ async function loadPresets() {
       if (offset + page.limit >= page.total) break
     }
     if (generation === presetGeneration) presets.value = result
-  } catch (cause) {if (generation === presetGeneration) presetError.value = cause instanceof Error ? cause.message : '预设读取失败。'}
+  } catch (cause) {if (generation === presetGeneration) presetError.value = cause instanceof Error ? cause.message : uiT('apfUi.could_not_read_the_preset')}
   finally {if (generation === presetGeneration) presetLoading.value = false}
 }
 watch([() => selectedSetup.value?.id,presetStatus,() => context.managementChangeToken.value], () => {editingSetup.value=undefined; editingPreset.value=undefined; deviceEditor.value=undefined; void loadPresets()}, {immediate:true})
@@ -204,50 +206,50 @@ async function savePreset() {
       current ? {...payload,base_revision:current.revision} : {name:payload.name,notes:payload.notes,classification:payload.classification,parameters:payload.parameters})
     editingPreset.value = undefined
     await loadPresets()
-  } catch (cause) {error.value = cause instanceof Error ? cause.message : '预设保存失败。'}
+  } catch (cause) {error.value = cause instanceof Error ? cause.message : uiT('apfUi.could_not_save_the_preset')}
   finally {saving.value = false}
 }
 defineExpose({ beginSetup })
 </script>
 
 <template>
-  <section class="apf-setup-manager" aria-label="设备组合和拍摄预设">
+  <section class="apf-setup-manager" :aria-label="$t('apfUi.equipment_setups_and_capture_presets_4a11e8')">
     <WorkspaceRecords />
-    <section v-if="selectedSetup" class="apf-setup-presets" aria-label="组合拍摄预设">
-      <div class="flex flex-wrap gap-2" role="group" aria-label="组合操作">
-        <LibraryButton v-if="selectedSetup.status!=='archived'" type="button" :disabled="saving||context.loading.value" @click="beginPreset(null)">新建拍摄预设</LibraryButton>
-        <LibraryButton type="button" :disabled="saving||dirty||context.loading.value" @click="beginSetup(selectedSetup)">编辑设备组合</LibraryButton>
+    <section v-if="selectedSetup" class="apf-setup-presets" :aria-label="$t('apfUi.setup_capture_presets')">
+      <div class="flex flex-wrap gap-2" role="group" :aria-label="$t('apfUi.setup_actions')">
+        <LibraryButton v-if="selectedSetup.status!=='archived'" type="button" :disabled="saving||context.loading.value" @click="beginPreset(null)">{{ $t('apfUi.new_capture_preset') }}</LibraryButton>
+        <LibraryButton type="button" :disabled="saving||dirty||context.loading.value" @click="beginSetup(selectedSetup)">{{ $t('apfUi.edit_equipment_setup') }}</LibraryButton>
       </div>
-      <p v-if="presetLoading" role="status">正在读取预设…</p>
-      <p v-else-if="presetError" role="alert">{{presetError}} <LibraryButton type="button" @click="loadPresets">重试</LibraryButton></p>
+      <p v-if="presetLoading" role="status">{{ $t('apfUi.reading_presets') }}</p>
+      <p v-else-if="presetError" role="alert">{{presetError}} <LibraryButton type="button" @click="loadPresets">{{ $t('apfUi.retry') }}</LibraryButton></p>
       <ul v-else-if="presets.length"><li v-for="preset in presets" :key="preset.id">
-        <input v-model="selectedPresetIds" type="checkbox" :value="preset.id" :aria-label="'选择预设 '+preset.name" :disabled="saving||dirty" />
+        <input v-model="selectedPresetIds" type="checkbox" :value="preset.id" :aria-label="$t('apfUi.select_preset')+preset.name" :disabled="saving||dirty" />
         <LibraryButton type="button" class="apf-preset-name" :tooltip="preset.name" :disabled="saving||context.loading.value" @click="beginPreset(preset)"><span class="truncate">{{preset.name}}</span></LibraryButton>
-        <LibraryButton type="button" :disabled="saving||dirty||context.loading.value" @click="context.requestEquipmentDelete(preset,'capture_preset')">删除预设</LibraryButton>
+        <LibraryButton type="button" :disabled="saving||dirty||context.loading.value" @click="context.requestEquipmentDelete(preset,'capture_preset')">{{ $t('apfUi.delete_preset') }}</LibraryButton>
       </li></ul>
-      <LibraryButton v-if="selectedPresetIds.length" type="button" :disabled="saving||dirty" @click="context.requestEquipmentDeleteSelection(presets.filter(row=>selectedPresetIds.includes(row.id)).map(row=>({entry_type:'capture_preset',id:row.id,revision:row.revision})))">删除所选预设（{{selectedPresetIds.length}}）</LibraryButton>
+      <LibraryButton v-if="selectedPresetIds.length" type="button" :disabled="saving||dirty" @click="context.requestEquipmentDeleteSelection(presets.filter(row=>selectedPresetIds.includes(row.id)).map(row=>({entry_type:'capture_preset',id:row.id,revision:row.revision})))">{{ $t('apfUi.delete_selected_presets_value', { p0: (selectedPresetIds.length) }) }}</LibraryButton>
     </section>
-    <LibraryDialog :open="editingSetup!==undefined" :title="deviceEditor?(deviceEditor.source==='new'?'新建'+equipmentKindLabels[deviceEditor.equipment.kind]:'编辑组合内设备'):(editingSetup?'编辑':'新建')+'设备组合'" :label="deviceEditor?'设备表单':'设备组合表单'" :busy="saving" @close="closeSetup">
-      <form v-if="editingSetup!==undefined" class="apf-editor" :aria-label="deviceEditor?'新建设备表单':'设备组合表单'" @submit.prevent="deviceEditor?saveEquipment():saveSetup()">
+    <LibraryDialog :open="editingSetup!==undefined" :title="deviceEditor?(deviceEditor.source==='new'?$t('apfUi.new')+equipmentKindLabels[deviceEditor.equipment.kind]:$t('apfUi.edit_equipment_in_setup')):(editingSetup?$t('apfUi.edit'):$t('apfUi.new'))+$t('apfUi.equipment_setup')" :label="deviceEditor?$t('apfUi.equipment_form'):$t('apfUi.equipment_setup_form')" :busy="saving" @close="closeSetup">
+      <form v-if="editingSetup!==undefined" class="apf-editor" :aria-label="deviceEditor?$t('apfUi.new_equipment_form'):$t('apfUi.equipment_setup_form')" @submit.prevent="deviceEditor?saveEquipment():saveSetup()">
         <div class="apf-equipment-dialog-body">
           <template v-if="deviceEditor">
             <EquipmentFields v-model="deviceEditor.equipment" :kind-editable="deviceEditor.source==='inline'" />
           </template>
           <template v-else>
-            <LibraryTextField id="setup-name" v-model="setupDraft.name" class="apf-field-row" name="组合名称" required autofocus />
-            <label class="apf-field-row">组合说明<LibraryTextarea v-model="setupDraft.notes" /></label>
-            <div class="apf-combination-fields" aria-label="组合设备">
+            <LibraryTextField id="setup-name" v-model="setupDraft.name" class="apf-field-row" :name="$t('apfUi.setup_name')" required autofocus />
+            <label class="apf-field-row">{{ $t('apfUi.setup_description') }}<LibraryTextarea v-model="setupDraft.notes" /></label>
+            <div class="apf-combination-fields" :aria-label="$t('apfUi.setup_equipment')">
               <div v-for="kind in equipmentKinds" :key="kind" class="apf-combination-row">
                 <span>{{equipmentKindLabels[kind]}}</span>
-                <LibraryMultiSelect :model-value="registeredIds(kind)" :label="'选择'+equipmentKindLabels[kind]" :options="equipmentOptions(kind)" :disabled="saving||context.relatedEquipmentLoading.value" @update:model-value="setRegistered(kind,$event)" />
-                <LibraryButton type="button" :aria-label="'新建'+equipmentKindLabels[kind]" :tooltip="'新建'+equipmentKindLabels[kind]" :disabled="saving" @click="beginEquipment(kind)">+</LibraryButton>
+                <LibraryMultiSelect :model-value="registeredIds(kind)" :label="$t('apfUi.select')+equipmentKindLabels[kind]" :options="equipmentOptions(kind)" :disabled="saving||context.relatedEquipmentLoading.value" @update:model-value="setRegistered(kind,$event)" />
+                <LibraryButton type="button" :aria-label="$t('apfUi.new')+equipmentKindLabels[kind]" :tooltip="$t('apfUi.new')+equipmentKindLabels[kind]" :disabled="saving" @click="beginEquipment(kind)">+</LibraryButton>
               </div>
             </div>
             <div v-for="(component,index) in setupDraft.components" :key="index">
               <div v-if="component.source==='inline'||componentKind(component)==='optical_system'" class="apf-legacy-component">
-                <span>{{component.source==='inline'?component.equipment.name:context.equipmentName(component.equipment_id)}} · {{component.source==='inline'?'组合内设备':'成像系统'}}</span>
-                <LibraryButton v-if="component.source==='inline'" type="button" @click="editInline(index)">编辑</LibraryButton>
-                <LibraryButton type="button" @click="setupDraft.components.splice(index,1)">移除</LibraryButton>
+                <span>{{component.source==='inline'?component.equipment.name:context.equipmentName(component.equipment_id)}} · {{component.source==='inline'?$t('apfUi.equipment_in_setup'):$t('apfUi.imaging_system')}}</span>
+                <LibraryButton v-if="component.source==='inline'" type="button" @click="editInline(index)">{{ $t('apfUi.edit') }}</LibraryButton>
+                <LibraryButton type="button" @click="setupDraft.components.splice(index,1)">{{ $t('apfUi.remove') }}</LibraryButton>
               </div>
             </div>
             <p v-if="context.relatedEquipmentError.value" role="alert">{{context.relatedEquipmentError.value}}</p>
@@ -256,23 +258,23 @@ defineExpose({ beginSetup })
           <p v-if="error" role="alert" class="apf-error">{{error}}</p>
         </div>
         <footer class="apf-equipment-dialog-footer">
-          <LibraryButton type="button" :disabled="saving" @click="closeSetup">{{deviceEditor?'返回组合':'取消'}}</LibraryButton>
-          <LibraryButton type="submit" variant="primary" :disabled="saving">{{saving?'保存中…':deviceEditor?(deviceEditor.source==='new'?'保存设备并加入':'应用到组合草稿'):'保存设备组合'}}</LibraryButton>
+          <LibraryButton type="button" :disabled="saving" @click="closeSetup">{{deviceEditor?$t('apfUi.back_to_setup'):$t('apfUi.cancel')}}</LibraryButton>
+          <LibraryButton type="submit" variant="primary" :disabled="saving">{{saving?$t('apfUi.saving'):deviceEditor?(deviceEditor.source==='new'?$t('apfUi.save_and_add_device'):$t('apfUi.apply_to_setup_draft')):$t('apfUi.save_equipment_setup')}}</LibraryButton>
         </footer>
       </form>
     </LibraryDialog>
-    <LibraryDialog :open="editingPreset!==undefined" :title="(editingPreset?'编辑':'新建')+'拍摄预设'" label="拍摄预设表单" :busy="saving" @close="leaveDraft">
-      <form v-if="editingPreset!==undefined" class="apf-editor" aria-label="拍摄预设表单" @submit.prevent="savePreset">
+    <LibraryDialog :open="editingPreset!==undefined" :title="(editingPreset?$t('apfUi.edit'):$t('apfUi.new'))+$t('apfUi.capture_preset')" :label="$t('apfUi.capture_preset_form')" :busy="saving" @close="leaveDraft">
+      <form v-if="editingPreset!==undefined" class="apf-editor" :aria-label="$t('apfUi.capture_preset_form')" @submit.prevent="savePreset">
         <div class="apf-equipment-dialog-body">
-          <LibraryTextField id="preset-name" v-model="presetDraft.name" class="apf-field-row" name="名称前缀（可选）" autofocus />
-          <label class="apf-field-row">滤镜<LibrarySelect :model-value="presetDraft.parameters.filter_id??''" label="预设滤镜" :options="presetFilterOptions" :disabled="saving||context.relatedEquipmentLoading.value" @update:model-value="setParameter('filter_id',String($event??''))" /></label>
-          <label class="apf-field-row">ISO／增益<LibrarySelect :model-value="presetDraft.parameters.parameter_mode??''" label="ISO／增益" :options="[{value:'',name:'未设置'},{value:'standard',name:'常规'},{value:'iso',name:'ISO'},{value:'gain',name:'增益'}]" @update:model-value="setParameter('parameter_mode',String($event))" /></label>
+          <LibraryTextField id="preset-name" v-model="presetDraft.name" class="apf-field-row" :name="$t('apfUi.name_prefix_optional')" autofocus />
+          <label class="apf-field-row">{{ $t('apfUi.filter') }}<LibrarySelect :model-value="presetDraft.parameters.filter_id??''" :label="$t('apfUi.preset_filter')" :options="presetFilterOptions" :disabled="saving||context.relatedEquipmentLoading.value" @update:model-value="setParameter('filter_id',String($event??''))" /></label>
+          <label class="apf-field-row">{{ $t('apfUi.iso_gain') }}<LibrarySelect :model-value="presetDraft.parameters.parameter_mode??''" :label="$t('apfUi.iso_gain')" :options="[{value:'',name:$t('apfUi.not_set')},{value:'standard',name:$t('apfUi.general')},{value:'iso',name:'ISO'},{value:'gain',name:$t('apfUi.gain')}]" @update:model-value="setParameter('parameter_mode',String($event))" /></label>
           <label v-for="field in visibleNumericParameters" :key="field.key" class="apf-field-row">{{field.label}}<LibraryInput :model-value="presetDraft.parameters[field.key]??''" :aria-label="field.label" type="number" :step="'integer' in field?1:'any'" :min="'min' in field?field.min:undefined" @update:model-value="setParameter(field.key,String($event??''),true)" /></label>
-          <div class="apf-field-row"><span>完整名称</span><output aria-label="完整预设名称" class="min-w-0 break-words">{{presetName}}</output></div>
+          <div class="apf-field-row"><span>{{ $t('apfUi.full_name') }}</span><output :aria-label="$t('apfUi.full_preset_name')" class="min-w-0 break-words">{{presetName}}</output></div>
           <p v-if="context.relatedEquipmentError.value" role="alert">{{context.relatedEquipmentError.value}}</p>
           <p v-if="error" role="alert" class="apf-error">{{error}}</p>
         </div>
-        <footer class="apf-equipment-dialog-footer"><LibraryButton type="button" :disabled="saving" @click="leaveDraft">取消</LibraryButton><LibraryButton type="submit" variant="primary" :disabled="saving">保存拍摄预设</LibraryButton></footer>
+        <footer class="apf-equipment-dialog-footer"><LibraryButton type="button" :disabled="saving" @click="leaveDraft">{{ $t('apfUi.cancel') }}</LibraryButton><LibraryButton type="submit" variant="primary" :disabled="saving">{{ $t('apfUi.save_capture_preset') }}</LibraryButton></footer>
       </form>
     </LibraryDialog>
     <p v-if="equipmentNotice&&editingSetup===undefined" role="status">{{equipmentNotice}}</p>

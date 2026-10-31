@@ -1,6 +1,7 @@
 from astrophotoflow.contracts.nodes import NodeCapability
 from astrophotoflow.modules.nodes.public import list_definitions, get_definition
-from astrophotoflow.modules.software.public import get_package, list_operations, get_bundle_metadata
+from astrophotoflow.modules.software.public import get_package, list_operations, get_bundle_metadata, get_bundle_display
+from astrophotoflow.core.localization import error_message, workspace_locale
 
 
 def _package_context(settings, package_id):
@@ -10,6 +11,8 @@ def _package_context(settings, package_id):
         'declared': {value['definition_id'] for value in definitions},
         'package': get_package(settings, package_id),
         'operations': {operation.operation_id: operation for operation in list_operations(settings, package_id)},
+        'display': get_bundle_display(settings, package_id),
+        'locale': workspace_locale(settings.workspace),
     }
 
 
@@ -18,13 +21,15 @@ def _describe_node(node, context):
     entry = context['entries'].get(binding.operation_id)
     operation = context['operations'].get(binding.operation_id)
     if entry is None or operation is None:
-        return NodeCapability(node=node, operation=None, available=False, reason="Bundle 中的软件操作已缺失。",
+        return NodeCapability(node=node, operation=None, available=False, reason=error_message(context['locale'], '', 'bundle_operation_missing'),
             preview=None, help=node.definition.description, examples=[])
     package = context['package']
     missing = node.definition.source == 'package' and str(node.definition.definition_id) not in context['declared']
     return NodeCapability(node=node, operation=operation, available=package.availability == 'ready' and not missing,
-        reason="Bundle 中的节点已缺失。" if missing else package.reason, preview=entry.get('preview'), help=entry.get('help', operation.description),
-        examples=entry.get('examples', []))
+        reason=error_message(context['locale'], '', 'bundle_node_missing') if missing else package.reason, preview=entry.get('preview'), help=entry.get('help', operation.description),
+        examples=entry.get('examples', []), display={locale: values[binding.operation_id]
+            for locale, values in context['display'].items() if binding.operation_id in values}
+            if node.definition.source == 'package' else {})
 
 
 def describe_node(settings, definition_id):
@@ -42,5 +47,7 @@ def list_nodes(settings, query=None):
         values.append(_describe_node(node, contexts[package_id]))
     if query:
         text = query.casefold()
-        values = [value for value in values if text in (value.node.definition.name + ' ' + value.node.definition.description).casefold()]
+        values = [value for value in values if text in (' '.join([
+            value.node.definition.name, value.node.definition.description, value.node.definition.execution.operation_id,
+            *(display.name + ' ' + display.description for display in value.display.values())])).casefold()]
     return values

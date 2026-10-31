@@ -50,7 +50,7 @@ def _check_equipment_ref(session: Session, value: str | None, kind: str, path: s
         return
     equipment = session.get(Equipment, value)
     if equipment is None or equipment.kind != kind:
-        raise invalid_reference(f"{path} 必须引用现存的 {kind} 设备。")
+        raise invalid_reference(f"{path} 必须引用现存的 {kind} 设备。", message_key='p0_must_reference_an_existing_p1_device', message_params={'p0': path, 'p1': kind})
 
 
 
@@ -133,13 +133,13 @@ def _reference_out(session: Session, ref: ProjectAssetReference, asset: Asset, v
 def _conflict_or_missing(session: Session, model, record_id: str) -> None:
     if session.get(model, record_id) is None:
         raise not_found()
-    raise ApiError(409, "REVISION_CONFLICT", "配置已被其他窗口修改，请重新读取后保存。")
+    raise ApiError(409, "REVISION_CONFLICT", "配置已被其他窗口修改，请重新读取后保存。", message_key='another_window_changed_the_configuration_read_it_again_before_saving')
 
 
 def _assert_patch_values(changes: dict, non_nullable: set[str], path_prefix: str = "") -> None:
     fields = [{"path": f"{path_prefix}{key}", "message": "此字段不能为 null。"} for key in non_nullable if key in changes and changes[key] is None]
     if fields:
-        raise ApiError(422, "VALIDATION_ERROR", "请求字段无效。", fields)
+        raise ApiError(422, "VALIDATION_ERROR", "请求字段无效。", fields, message_key='invalid_request_fields', field_message_keys={item['path']: 'field_not_nullable' for item in fields})
 
 
 def _update_config(session: Session, model, record_id: str, base_revision: int, changes: dict) -> None:

@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from astrophotoflow.contracts.assets import AssetClassification, AssetContentAccept, AssetContentObservation, AssetParameters, OutputRegistration
 from astrophotoflow.contracts.common import ErrorDetail
+from astrophotoflow.core.localization import localized_error, exception_error, workspace_locale
 from astrophotoflow.contracts.inputs import CheckedOutput, InputReference, ReferenceObservation, ResolveInputsRequest, ResolvedAssetInput, ResolvedInputs, ScienceFormat, ScienceSelection
 from astrophotoflow.core.config import Settings
 from astrophotoflow.core.database.db import Database
@@ -26,12 +27,8 @@ from astrophotoflow.modules.data.video_preview import first_video_frame
 from astrophotoflow.modules.data.files import SUPPORTED_EXTENSIONS
 
 
-def _error(code: str, message: str) -> ErrorDetail:
-    return ErrorDetail(code=code, message=message, fields=[])
-
-
-def _raise(code: str, message: str, status_code: int = 422) -> None:
-    raise ApiError(status_code, code, message)
+def _raise(code: str, message: str, status_code: int = 422, *, message_key: str) -> None:
+    raise ApiError(status_code, code, message, message_key=message_key)
 
 
 def _hash(path: Path) -> tuple[str, int, int]:
@@ -45,9 +42,9 @@ def _hash(path: Path) -> tuple[str, int, int]:
                 size += len(chunk)
         after = path.stat()
     except OSError as exc:
-        raise ApiError(422, "SOURCE_UNAVAILABLE", "素材文件当前无法完整读取。") from exc
+        raise ApiError(422, "SOURCE_UNAVAILABLE", "素材文件当前无法完整读取。", message_key='the_asset_file_cannot_be_read_completely') from exc
     if (before.st_size, before.st_mtime_ns) != (after.st_size, after.st_mtime_ns) or size != after.st_size:
-        raise ApiError(409, "SOURCE_CHANGED", "素材文件在读取期间发生变化，请重新检查。")
+        raise ApiError(409, "SOURCE_CHANGED", "素材文件在读取期间发生变化，请重新检查。", message_key='the_asset_file_changed_while_it_was_being_read_check_it_again')
     return f"blake3:{hasher.hexdigest()}", size, after.st_mtime_ns
 
 
@@ -58,18 +55,18 @@ def _storage_path(settings: Settings, storage_mode: str, storage_location: str) 
             candidate = (root / storage_location).resolve(strict=True)
             candidate.relative_to(root)
         except OSError as exc:
-            raise ApiError(422, "SOURCE_UNAVAILABLE", "素材文件当前无法读取。") from exc
+            raise ApiError(422, "SOURCE_UNAVAILABLE", "素材文件当前无法读取。", message_key='the_asset_file_cannot_be_read') from exc
         except ValueError as exc:
-            raise ApiError(422, "SOURCE_UNAVAILABLE", "素材存储位置无效。") from exc
+            raise ApiError(422, "SOURCE_UNAVAILABLE", "素材存储位置无效。", message_key='invalid_asset_storage_location') from exc
         return candidate
     try:
         _, root_id, relative = storage_location.split("/", 2)
         _, root = find_root(settings, root_id)
         return resolve_relative(root, relative)
     except ApiError as exc:
-        raise ApiError(422, "SOURCE_UNAVAILABLE", "素材来源当前不可访问。") from exc
+        raise ApiError(422, "SOURCE_UNAVAILABLE", "素材来源当前不可访问。", message_key='the_asset_source_is_currently_inaccessible') from exc
     except (ValueError, OSError) as exc:
-        raise ApiError(422, "SOURCE_UNAVAILABLE", "素材来源当前不可访问。") from exc
+        raise ApiError(422, "SOURCE_UNAVAILABLE", "素材来源当前不可访问。", message_key='the_asset_source_is_currently_inaccessible') from exc
 
 
 def _asset_path(settings: Settings, version: AssetVersion) -> Path:
@@ -87,7 +84,7 @@ def _asset_reference(session: Session, project_id: UUID, version_id: UUID, *, th
     version = session.get(AssetVersion, _id(version_id))
     asset = session.get(Asset, version.asset_id) if version else None
     if asset is None or asset.status != "active" or version.availability != "available":
-        raise ApiError(404, "INVALID_REFERENCE", "固定素材版本不存在或当前不可用。")
+        raise ApiError(404, "INVALID_REFERENCE", "固定素材版本不存在或当前不可用。", message_key='the_fixed_asset_version_is_missing_or_unavailable')
     project_id_text = _id(project_id)
     if asset.scope == "project":
         allowed = asset.owner_project_id == project_id_text
@@ -99,53 +96,53 @@ def _asset_reference(session: Session, project_id: UUID, version_id: UUID, *, th
             ProjectAssetReference.asset_version_id == version.id,
         )) is not None
     if not allowed:
-        raise ApiError(404, "INVALID_REFERENCE", "项目未固定此素材版本。")
+        raise ApiError(404, "INVALID_REFERENCE", "项目未固定此素材版本。", message_key='the_project_does_not_reference_this_fixed_asset_version')
     return asset, version
 
 
 def _validate_selection(session: Session, version: AssetVersion, selection: ScienceSelection) -> None:
     if selection.kind == "whole_file":
         if selection.hdu_index is not None:
-            _raise("UNSUPPORTED_SELECTION", "whole_file 选择不能包含 HDU 索引。")
+            _raise("UNSUPPORTED_SELECTION", "whole_file 选择不能包含 HDU 索引。", message_key='whole_file_hdu_forbidden')
         return
     if selection.kind != "fits_hdu" or selection.hdu_index is None or selection.hdu_index < 0:
-        _raise("UNSUPPORTED_SELECTION", "FITS HDU 选择需要非负索引。")
+        _raise("UNSUPPORTED_SELECTION", "FITS HDU 选择需要非负索引。", message_key='fits_hdu_index_required')
     row = session.scalar(select(FitsHduMetadata).where(
         FitsHduMetadata.asset_version_id == version.id,
         FitsHduMetadata.hdu_index == selection.hdu_index,
     ))
     if version.scientific_metadata and version.scientific_metadata.get("format") != "fits":
-        _raise("UNSUPPORTED_SELECTION", "只有 FITS 文件支持 HDU 选择。")
+        _raise("UNSUPPORTED_SELECTION", "只有 FITS 文件支持 HDU 选择。", message_key='fits_selection_only')
     if row is None or row.supported_kind is None or row.parse_error:
-        _raise("UNSUPPORTED_SELECTION", "所选 HDU 不存在或当前不支持科学读取。")
+        _raise("UNSUPPORTED_SELECTION", "所选 HDU 不存在或当前不支持科学读取。", message_key='fits_hdu_unavailable')
 
 
 def _dataset_members(session: Session, project_id: UUID, dataset_version_id: UUID, requested):
     version = session.get(DatasetVersion, _id(dataset_version_id))
     dataset = session.get(Dataset, version.dataset_id) if version else None
     if version is None or dataset is None or dataset.status != "active":
-        raise ApiError(404, "INVALID_REFERENCE", "固定素材组版本不存在或当前不可用。")
+        raise ApiError(404, "INVALID_REFERENCE", "固定素材组版本不存在或当前不可用。", message_key='the_fixed_asset_group_version_is_missing_or_unavailable')
     project_ref = session.scalar(select(ProjectDatasetReference.id).where(
         ProjectDatasetReference.project_id == _id(project_id),
         ProjectDatasetReference.dataset_id == dataset.id,
         ProjectDatasetReference.dataset_version_id == version.id,
     ))
     if project_ref is None:
-        raise ApiError(404, "INVALID_REFERENCE", "项目未固定此素材组版本。")
+        raise ApiError(404, "INVALID_REFERENCE", "项目未固定此素材组版本。", message_key='the_project_does_not_reference_this_fixed_asset_group_version')
     members = session.scalars(select(DatasetMember).where(
         DatasetMember.dataset_version_id == version.id,
     ).order_by(DatasetMember.position)).all()
     by_position = {item.position: item for item in members}
     indexes = [item.member_index for item in requested]
     if len(indexes) != len(set(indexes)):
-        _raise("INVALID_REFERENCE", "素材组成员不能重复选择。")
+        _raise("INVALID_REFERENCE", "素材组成员不能重复选择。", message_key='group_members_duplicate')
     if indexes != sorted(indexes):
-        _raise("INVALID_REFERENCE", "素材组成员必须按固定原始顺序选择。")
+        _raise("INVALID_REFERENCE", "素材组成员必须按固定原始顺序选择。", message_key='group_member_order')
     result = []
     for item in requested:
         member = by_position.get(item.member_index)
         if member is None or member.asset_version_id != _id(item.asset_version_id):
-            _raise("INVALID_REFERENCE", "所选成员与固定素材组版本不匹配。")
+            _raise("INVALID_REFERENCE", "所选成员与固定素材组版本不匹配。", message_key='group_members_mismatch')
         asset, asset_version = _asset_reference(session, project_id, item.asset_version_id, through_dataset=True)
         _validate_selection(session, asset_version, item.selection)
         bindings = dict(version.calibration_defaults or {})
@@ -178,11 +175,11 @@ def validate_input_references(database: Database, project_id: UUID, references: 
 def _resolved_asset(settings: Settings, row, input_mode: str, run_directory: Path, *, colour_layout=None):
     reference_index, asset, version, member_index, dataset_version_id, calibration, selection = row
     if not version.content_hash or version.byte_size is None:
-        raise ApiError(422, "SOURCE_UNAVAILABLE", "固定素材版本尚未完成内容登记。")
+        raise ApiError(422, "SOURCE_UNAVAILABLE", "固定素材版本尚未完成内容登记。", message_key='content_registration_is_incomplete_for_this_fixed_asset_version')
     path = _asset_path(settings, version)
     content_hash, byte_size, mtime_ns = _hash(path)
     if content_hash != version.content_hash or byte_size != version.byte_size:
-        raise ApiError(409, "SOURCE_CHANGED", "固定素材内容与已登记版本不同；请先检查并确认内容变化。")
+        raise ApiError(409, "SOURCE_CHANGED", "固定素材内容与已登记版本不同；请先检查并确认内容变化。", message_key='the_fixed_asset_content_differs_from_the_registered_version_check_and_confi')
     preparation = "existing_managed" if version.storage_mode == "managed" else "reference"
     read_path = path
     if input_mode == "reproducible" and version.storage_mode == "reference":
@@ -192,27 +189,27 @@ def _resolved_asset(settings: Settings, row, input_mode: str, run_directory: Pat
         if read_path.exists():
             copied_hash, copied_size, _ = _hash(read_path)
             if copied_hash != content_hash or copied_size != byte_size:
-                raise ApiError(409, "SOURCE_CHANGED", "运行输入固定文件已存在但内容不同。")
+                raise ApiError(409, "SOURCE_CHANGED", "运行输入固定文件已存在但内容不同。", message_key='a_fixed_input_file_already_exists_with_different_content')
         else:
             part = read_path.with_name(read_path.name + ".part")
             part.unlink(missing_ok=True)
             copied_hash, copied_size = _read_hash_and_copy(path, part, lambda: False)
             if copied_hash != content_hash or copied_size != byte_size:
                 part.unlink(missing_ok=True)
-                raise ApiError(409, "SOURCE_CHANGED", "素材在固定输入期间发生变化。")
+                raise ApiError(409, "SOURCE_CHANGED", "素材在固定输入期间发生变化。", message_key='the_asset_changed_while_its_input_was_being_fixed')
             os.replace(part, read_path)
         preparation = "materialized"
         mtime_ns = read_path.stat().st_mtime_ns
     metadata = dict(version.scientific_metadata or {})
     if metadata.get('format') == 'fits':
         if colour_layout is not None and metadata.get('colour_layout') not in (None, colour_layout):
-            raise ApiError(422, 'UNSUPPORTED_SELECTION', '固定输入的颜色布局与操作要求不一致。')
+            raise ApiError(422, 'UNSUPPORTED_SELECTION', '固定输入的颜色布局与操作要求不一致。', message_key='the_fixed_input_color_layout_does_not_match_the_operation_requirements')
         if colour_layout is not None and metadata.get('colour_layout') is None:
             metadata.update(colour_layout=colour_layout, colour_layout_source='operation_input')
         try:
             inspected = inspect_fits(read_path, (asset.parameters or {}).get('cfa_pattern'), colour_layout=metadata.get('colour_layout'))
         except Exception as exc:
-            raise ApiError(422, 'UNSUPPORTED_SELECTION', '无法确定固定FITS输入的图像布局；未启动软件处理。') from exc
+            raise ApiError(422, 'UNSUPPORTED_SELECTION', '无法确定固定FITS输入的图像布局；未启动软件处理。', message_key='cannot_determine_the_fixed_fits_input_image_layout_software_processing_was_') from exc
         metadata.update(selected_hdu=inspected['selected_hdu'], hdu_count=len(inspected['hdus']), frame_count=_fits_frame_count(inspected))
     return ResolvedAssetInput(
         kind="asset_version", reference_index=reference_index, asset_id=UUID(asset.id),
@@ -236,7 +233,7 @@ def resolve_inputs(database: Database, settings: Settings, request: ResolveInput
     if required_copy_bytes:
         run_directory.mkdir(parents=True, exist_ok=True)
         if shutil.disk_usage(run_directory).free < required_copy_bytes:
-            raise ApiError(422, "INSUFFICIENT_STORAGE", "可用空间不足，无法固定本次科学输入。")
+            raise ApiError(422, "INSUFFICIENT_STORAGE", "可用空间不足，无法固定本次科学输入。", message_key='insufficient_available_space_to_fix_the_scientific_inputs_for_this_run')
     items = [_resolved_asset(settings, row, request.input_mode, run_directory) for row in rows]
     copied_bytes = sum(item.byte_size for item in items if item.preparation == "materialized")
     return ResolvedInputs(input_mode=request.input_mode, items=items,
@@ -254,7 +251,7 @@ def resolve_canvas_inputs(database: Database, settings: Settings, reference: Inp
             fixed = session.get(DatasetVersion, str(reference.dataset_version_id))
             dataset = session.get(Dataset, fixed.dataset_id) if fixed else None
             if dataset is None or dataset.status != "active":
-                raise ApiError(404, "INVALID_REFERENCE", "固定图像组不存在或已移除。")
+                raise ApiError(404, "INVALID_REFERENCE", "固定图像组不存在或已移除。", message_key='the_fixed_image_group_is_missing_or_has_been_removed')
             rows = session.scalars(select(DatasetMember).where(DatasetMember.dataset_version_id == fixed.id)).all()
             for member in rows:
                 calibrations[member.position] = dict(fixed.calibration_defaults or {})
@@ -262,7 +259,7 @@ def resolve_canvas_inputs(database: Database, settings: Settings, reference: Inp
             expected = {row.position: row.asset_version_id for row in rows}
             indexes = [item.member_index for item in reference.members]
             if indexes != sorted(set(indexes)) or any(expected.get(item.member_index) != str(item.asset_version_id) for item in reference.members):
-                raise ApiError(422, "INVALID_REFERENCE", "图像组固定成员或顺序不匹配。")
+                raise ApiError(422, "INVALID_REFERENCE", "图像组固定成员或顺序不匹配。", message_key='fixed_image_group_membership_or_order_does_not_match')
             members = [(item.member_index, str(item.asset_version_id), item.selection) for item in reference.members]
             dataset_version_id = str(fixed.id)
         rows = []
@@ -270,7 +267,7 @@ def resolve_canvas_inputs(database: Database, settings: Settings, reference: Inp
             version = session.get(AssetVersion, version_id)
             asset = session.get(Asset, version.asset_id) if version else None
             if asset is None or asset.scope != "shared" or asset.status != "active" or version.availability != "available":
-                raise ApiError(404, "INVALID_REFERENCE", "固定素材不存在或原件尚未就绪。")
+                raise ApiError(404, "INVALID_REFERENCE", "固定素材不存在或原件尚未就绪。", message_key='the_fixed_asset_is_missing_or_its_original_is_not_ready')
             _validate_selection(session, version, selection)
             calibration = {"bias": None, "dark": None, "flat": None, "dark_flat": None}
             calibration.update(calibrations.get(position, {}))
@@ -278,7 +275,7 @@ def resolve_canvas_inputs(database: Database, settings: Settings, reference: Inp
     required = sum(version.byte_size or 0 for _, _, version, _, _, _, _ in rows if version.storage_mode == "reference")
     run_directory.mkdir(parents=True, exist_ok=True)
     if required and shutil.disk_usage(run_directory).free < required:
-        raise ApiError(422, "INSUFFICIENT_STORAGE", "空间不足，无法固定本次科学输入。")
+        raise ApiError(422, "INSUFFICIENT_STORAGE", "空间不足，无法固定本次科学输入。", message_key='insufficient_space_to_fix_the_scientific_inputs_for_this_run')
     items = [_resolved_asset(settings, row, "reproducible", run_directory, colour_layout=colour_layout) for row in rows]
     return ResolvedInputs(input_mode="reproducible", items=items, required_copy_bytes=required,
                           copied_bytes=sum(item.byte_size for item in items if item.preparation == "materialized"))
@@ -300,7 +297,7 @@ def observe_reference_inputs(settings: Settings, inputs: ResolvedInputs) -> list
         except ApiError as exc:
             state = "missing" if exc.code == "SOURCE_UNAVAILABLE" else "unverified"
             results.append(ReferenceObservation(input_index=index, observed_at=datetime.now(timezone.utc),
-                state=state, error=_error(exc.code, exc.message)))
+                state=state, error=exception_error(workspace_locale(settings.workspace), exc, code='SOURCE_UNAVAILABLE', message_key='the_asset_source_is_currently_inaccessible')))
     return results
 
 
@@ -311,12 +308,12 @@ def observe_asset_content(database: Database, settings: Settings, asset_id: UUID
             raise not_found()
         version = session.get(AssetVersion, asset.current_version_id)
         if version is None or version.asset_id != asset.id or not version.content_hash:
-            raise ApiError(422, "SOURCE_UNAVAILABLE", "素材当前版本尚无已接受的完整内容记录。")
+            raise ApiError(422, "SOURCE_UNAVAILABLE", "素材当前版本尚无已接受的完整内容记录。", message_key='the_current_asset_version_has_no_accepted_complete_content_record')
         result = (asset.id, asset.revision, version.id, version.storage_mode, version.content_hash,
                   version.byte_size, version.storage_location, version.scientific_metadata or {})
     aid, revision, version_id, mode, stored_hash, stored_size, location, metadata = result
     if stored_size is None:
-        raise ApiError(422, "SOURCE_UNAVAILABLE", "素材当前版本尚无已接受的文件大小。")
+        raise ApiError(422, "SOURCE_UNAVAILABLE", "素材当前版本尚无已接受的文件大小。", message_key='the_current_asset_version_has_no_accepted_file_size')
     try:
         path = _storage_path(settings, mode, location)
         category = (metadata or {}).get("format") or format_for_path(path)
@@ -324,12 +321,12 @@ def observe_asset_content(database: Database, settings: Settings, asset_id: UUID
             with database.read_session() as session:
                 current = session.get(Asset, aid)
                 if current is None or current.current_version_id != version_id or current.revision != revision:
-                    raise ApiError(409, "REVISION_CONFLICT", "素材版本已变化，请重新检查。")
+                    raise ApiError(409, "REVISION_CONFLICT", "素材版本已变化，请重新检查。", message_key='the_asset_version_has_changed_check_it_again')
             return AssetContentObservation(
                 asset_id=UUID(aid), base_version_id=UUID(version_id), base_revision=revision,
                 storage_mode=mode, stored_hash=stored_hash, state="unsupported", observed_hash=None,
                 observed_byte_size=None, observed_mtime_ns=None,
-                error=_error("UNSUPPORTED_FORMAT", "当前文件格式不支持内容变化确认。"),
+                error=localized_error(workspace_locale(settings.workspace), 'UNSUPPORTED_FORMAT', 'content_confirmation_unsupported'),
             )
         observed_hash, byte_size, mtime_ns = _hash(path)
         state = "unchanged" if observed_hash == stored_hash and byte_size == stored_size else "changed"
@@ -338,13 +335,13 @@ def observe_asset_content(database: Database, settings: Settings, asset_id: UUID
         if exc.code == "SOURCE_UNAVAILABLE":
             state = "missing"
             observed_hash, byte_size, mtime_ns = None, None, None
-            error = _error(exc.code, exc.message)
+            error = exception_error(workspace_locale(settings.workspace), exc, code='SOURCE_UNAVAILABLE', message_key='the_asset_source_is_currently_inaccessible')
         else:
             raise
     with database.write_session() as session:
         current = session.get(Asset, aid)
         if current is None or current.current_version_id != version_id or current.revision != revision:
-            raise ApiError(409, "REVISION_CONFLICT", "素材版本已变化，请重新检查。")
+            raise ApiError(409, "REVISION_CONFLICT", "素材版本已变化，请重新检查。", message_key='the_asset_version_has_changed_check_it_again')
         current_version = session.get(AssetVersion, version_id)
         current_version.availability = {"unchanged": "available", "changed": "changed", "missing": "missing"}.get(state, current_version.availability)
     return AssetContentObservation(
@@ -372,13 +369,13 @@ def accept_asset_content(database: Database, settings: Settings, asset_id: UUID,
         if asset is None or version is None or version.asset_id != aid:
             raise not_found()
         if asset.revision != body.base_revision or asset.current_version_id != base_version_id:
-            raise ApiError(409, "REVISION_CONFLICT", "素材当前版本已变化，请重新读取并检查。")
+            raise ApiError(409, "REVISION_CONFLICT", "素材当前版本已变化，请重新读取并检查。", message_key='the_current_asset_version_has_changed_read_and_check_it_again')
         if not version.content_hash:
-            raise ApiError(422, "SOURCE_UNAVAILABLE", "素材当前版本尚无已接受的完整内容记录。")
+            raise ApiError(422, "SOURCE_UNAVAILABLE", "素材当前版本尚无已接受的完整内容记录。", message_key='the_current_asset_version_has_no_accepted_complete_content_record')
         if version.availability == "available":
-            raise ApiError(422, "VALIDATION_ERROR", "当前素材没有待确认的内容变化。")
+            raise ApiError(422, "VALIDATION_ERROR", "当前素材没有待确认的内容变化。", message_key='there_is_no_pending_content_change_to_confirm_for_this_asset')
         if version.availability != "changed":
-            raise ApiError(422, "SOURCE_UNAVAILABLE", "素材当前版本不可用于内容接纳。")
+            raise ApiError(422, "SOURCE_UNAVAILABLE", "素材当前版本不可用于内容接纳。", message_key='the_current_asset_version_cannot_be_used_to_accept_new_content')
         mode, location = version.storage_mode, version.storage_location
         current_parameters = dict(asset.parameters or {})
         current_sources = dict(asset.value_sources or {})
@@ -390,12 +387,12 @@ def accept_asset_content(database: Database, settings: Settings, asset_id: UUID,
     source = _storage_path(settings, mode, location)
     category = metadata.get("format") or format_for_path(source)
     if category not in {"fits", "xisf", "image", "raw", "video", "numpy"}:
-        raise ApiError(422, "UNSUPPORTED_FORMAT", "当前文件格式不支持内容变化确认。")
+        raise ApiError(422, "UNSUPPORTED_FORMAT", "当前文件格式不支持内容变化确认。", message_key='content_change_confirmation_is_not_supported_for_this_file_format')
     observed_hash, observed_size, observed_mtime = _hash(source)
     if observed_hash == version.content_hash:
-        raise ApiError(422, "VALIDATION_ERROR", "文件内容与当前素材版本一致，无需接纳新内容。")
+        raise ApiError(422, "VALIDATION_ERROR", "文件内容与当前素材版本一致，无需接纳新内容。", message_key='the_file_content_matches_the_current_asset_version_no_new_content_needs_to_')
     if observed_hash != body.expected_observed_hash:
-        raise ApiError(409, "SOURCE_CHANGED", "文件在确认后再次变化，请重新检查。")
+        raise ApiError(409, "SOURCE_CHANGED", "文件在确认后再次变化，请重新检查。", message_key='the_file_changed_again_after_confirmation_check_it_again')
     new_version_id = str(uuid4())
     suffix = "".join(source.suffixes[-2:]) if source.name.lower().endswith((".fits.fz", ".fit.fz", '.fts.fz')) else source.suffix
     object_location = (Path("objects") / new_version_id / f"source{suffix.lower()}").as_posix()
@@ -406,7 +403,7 @@ def accept_asset_content(database: Database, settings: Settings, asset_id: UUID,
         try:
             copied_hash, copied_size = _read_hash_and_copy(source, part, lambda: False)
             if copied_hash != body.expected_observed_hash or copied_size != observed_size:
-                raise ApiError(409, "SOURCE_CHANGED", "文件在准备新内容记录时再次变化，请重新检查。")
+                raise ApiError(409, "SOURCE_CHANGED", "文件在准备新内容记录时再次变化，请重新检查。", message_key='the_file_changed_again_while_preparing_a_content_record_check_it_again')
             target.parent.mkdir(parents=True, exist_ok=True)
             os.replace(part, target)
         except Exception:
@@ -438,11 +435,11 @@ def accept_asset_content(database: Database, settings: Settings, asset_id: UUID,
             current = session.get(Asset, aid)
             previous = session.get(AssetVersion, base_version_id)
             if current is None or previous is None or current.current_version_id != base_version_id or current.revision != body.base_revision:
-                raise ApiError(409, "REVISION_CONFLICT", "素材在内容接纳期间已被修改，请重新检查。")
+                raise ApiError(409, "REVISION_CONFLICT", "素材在内容接纳期间已被修改，请重新检查。", message_key='the_asset_was_modified_while_new_content_was_being_accepted_check_it_again')
             if mode == "reference":
                 confirmed_hash, confirmed_size, _ = _hash(source)
                 if confirmed_hash != body.expected_observed_hash or confirmed_size != observed_size:
-                    raise ApiError(409, "SOURCE_CHANGED", "引用文件在内容接纳期间再次变化，请重新检查。")
+                    raise ApiError(409, "SOURCE_CHANGED", "引用文件在内容接纳期间再次变化，请重新检查。", message_key='the_referenced_file_changed_again_during_content_acceptance_check_it_again')
             version = AssetVersion(
                 id=new_version_id, asset_id=aid, version_number=max_number + 1,
                 storage_mode=mode, storage_location=new_location, byte_size=observed_size,
@@ -488,20 +485,20 @@ def check_output(settings: Settings, *, run_directory: Path, path: Path, expecte
         resolved = path.resolve(strict=True)
         resolved.relative_to(root)
     except (OSError, ValueError) as exc:
-        raise ApiError(422, "OUTPUT_UNAVAILABLE", "输出文件不在本次运行目录内或当前无法读取。") from exc
+        raise ApiError(422, "OUTPUT_UNAVAILABLE", "输出文件不在本次运行目录内或当前无法读取。", message_key='the_output_file_is_outside_this_run_directory_or_cannot_be_read') from exc
     if not resolved.is_file():
-        raise ApiError(422, "OUTPUT_UNAVAILABLE", "输出位置不是完整文件。")
+        raise ApiError(422, "OUTPUT_UNAVAILABLE", "输出位置不是完整文件。", message_key='the_output_location_is_not_a_complete_file')
     actual_format = format_for_path(resolved) or "other"
     if actual_format != expected_format:
-        raise ApiError(422, "VALIDATION_ERROR", "输出格式与本次运行记录不一致。")
+        raise ApiError(422, "VALIDATION_ERROR", "输出格式与本次运行记录不一致。", message_key='the_output_format_does_not_match_this_run_s_record')
     content_hash, byte_size, mtime_ns = _hash(resolved)
     if allow_empty and actual_format != 'other':
-        raise ApiError(422, 'VALIDATION_ERROR', '科学输出不能声明为空文件。')
+        raise ApiError(422, 'VALIDATION_ERROR', '科学输出不能声明为空文件。', message_key='scientific_output_must_not_be_declared_as_an_empty_file')
     if byte_size == 0 and not allow_empty:
-        raise ApiError(422, "OUTPUT_UNAVAILABLE", "输出文件为空。")
+        raise ApiError(422, "OUTPUT_UNAVAILABLE", "输出文件为空。", message_key='the_output_file_is_empty')
     scientific_metadata = {"format": actual_format}
     if colour_layout not in {None, 'planar', 'interleaved'}:
-        raise ApiError(422, 'VALIDATION_ERROR', '未知的图像颜色布局。')
+        raise ApiError(422, 'VALIDATION_ERROR', '未知的图像颜色布局。', message_key='unknown_image_color_layout')
     if actual_format == "fits":
         try:
             inspected = inspect_fits(resolved, colour_layout=colour_layout, verify_span=True)
@@ -513,26 +510,26 @@ def check_output(settings: Settings, *, run_directory: Path, path: Path, expecte
             if colour_layout is not None:
                 scientific_metadata['colour_layout'] = colour_layout
         except Exception as exc:
-            raise ApiError(422, "OUTPUT_UNAVAILABLE", "FITS 输出无法完整解析。") from exc
+            raise ApiError(422, "OUTPUT_UNAVAILABLE", "FITS 输出无法完整解析。", message_key='the_fits_output_cannot_be_parsed_completely') from exc
     elif actual_format == "xisf":
         try:
             scientific_metadata.update(_inspect_xisf(resolved))
         except Exception as exc:
-            raise ApiError(422, "OUTPUT_UNAVAILABLE", "XISF 输出无法完整解析。") from exc
+            raise ApiError(422, "OUTPUT_UNAVAILABLE", "XISF 输出无法完整解析。", message_key='the_xisf_output_cannot_be_parsed_completely') from exc
     elif actual_format == 'video' and resolved.suffix.lower() == '.ser':
         from astrophotoflow.modules.data.media_sources import ser_info
         info = ser_info(resolved)
         scientific_metadata.update(frame_count=info['count'], width=info['width'], height=info['height'],
                                    channels=info['channels'], pixel_depth=info['pixel_depth'], pixel_type=str(info['dtype']))
     if expected_frames is not None and scientific_metadata.get('frame_count') != expected_frames:
-        raise ApiError(422, 'OUTPUT_UNAVAILABLE', '完整输出的实际帧数与软件结果不一致。')
+        raise ApiError(422, 'OUTPUT_UNAVAILABLE', '完整输出的实际帧数与软件结果不一致。', message_key='the_actual_frame_count_does_not_match_the_software_result')
     checked = CheckedOutput(run_directory=root, path=resolved, format=actual_format, byte_size=byte_size,
                            content_hash=content_hash, checked_at=datetime.now(timezone.utc),
                            scientific_metadata=scientific_metadata, mtime_ns=mtime_ns)
     # Catch a replacement made while any format metadata was being read.
     current_hash, current_size, current_mtime = _hash(resolved)
     if (current_hash, current_size, current_mtime) != (content_hash, byte_size, mtime_ns):
-        raise ApiError(409, "SOURCE_CHANGED", "输出文件在检查期间发生变化。")
+        raise ApiError(409, "SOURCE_CHANGED", "输出文件在检查期间发生变化。", message_key='the_output_file_changed_during_validation')
     return checked
 
 
@@ -542,14 +539,14 @@ def render_output_preview(checked: CheckedOutput, destination: Path, *, selectio
     from astrophotoflow.modules.data.ingestion import _ordinary_image, _raw_image, _xisf_image
 
     if max_edge < 1:
-        raise ApiError(422, "VALIDATION_ERROR", "预览尺寸必须是正整数。")
+        raise ApiError(422, "VALIDATION_ERROR", "预览尺寸必须是正整数。", message_key='preview_dimensions_must_be_positive_integers')
     source = checked.path.resolve(strict=True)
     content_hash, byte_size, _ = _hash(source)
     if content_hash != checked.content_hash or byte_size != checked.byte_size:
-        raise ApiError(409, "SOURCE_CHANGED", "输出文件在预览生成前发生变化。")
+        raise ApiError(409, "SOURCE_CHANGED", "输出文件在预览生成前发生变化。", message_key='the_output_file_changed_before_preview_generation')
     target = destination.resolve(strict=False)
     if source == target:
-        raise ApiError(422, "VALIDATION_ERROR", "预览不能覆盖科学输出文件。")
+        raise ApiError(422, "VALIDATION_ERROR", "预览不能覆盖科学输出文件。", message_key='a_preview_must_not_overwrite_the_scientific_output_file')
     try:
         if checked.format == "fits":
             layout = (checked.scientific_metadata or {}).get('colour_layout')
@@ -562,7 +559,7 @@ def render_output_preview(checked: CheckedOutput, destination: Path, *, selectio
                 hdu_index = None
             row = next((item for item in inspected["hdus"] if item["hdu_index"] == hdu_index), None)
             if row is None or row["supported_kind"] is None:
-                raise ApiError(422, "PREVIEW_UNSUPPORTED", "FITS 输出没有可预览的受支持 HDU。")
+                raise ApiError(422, "PREVIEW_UNSUPPORTED", "FITS 输出没有可预览的受支持 HDU。", message_key='the_fits_output_has_no_supported_hdu_for_preview')
             if auto_stretch:
                 image, _ = create_preview(source, hdu_index, row["supported_kind"], {"cfa_pattern": cfa_pattern, 'colour_layout': layout}, max_edge)
             else:
@@ -576,16 +573,16 @@ def render_output_preview(checked: CheckedOutput, destination: Path, *, selectio
             image, _ = _xisf_image(source, max_edge=max_edge)
         elif checked.format == "video":
             if source.suffix.lower() != ".ser" and shutil.which("ffmpeg") is None:
-                raise ApiError(422, "PREVIEW_DEPENDENCY_UNAVAILABLE", "资产服务未找到 FFmpeg，无法生成视频首帧预览。")
+                raise ApiError(422, "PREVIEW_DEPENDENCY_UNAVAILABLE", "资产服务未找到 FFmpeg，无法生成视频首帧预览。", message_key='the_asset_service_could_not_find_ffmpeg_to_generate_a_video_first_frame_pre')
             image, _ = first_video_frame(source, max_edge)
         else:
-            raise ApiError(422, "PREVIEW_UNSUPPORTED", f"{checked.format} 输出当前不支持生成预览。")
+            raise ApiError(422, "PREVIEW_UNSUPPORTED", f"{checked.format} 输出当前不支持生成预览。", message_key='preview_generation_is_not_supported_for_p0_output', message_params={'p0': checked.format})
     except ApiError:
         raise
     except ImportError as exc:
-        raise ApiError(422, "PREVIEW_DEPENDENCY_UNAVAILABLE", f"生成 {checked.format} 预览所需的解码依赖不可用。") from exc
+        raise ApiError(422, "PREVIEW_DEPENDENCY_UNAVAILABLE", f"生成 {checked.format} 预览所需的解码依赖不可用。", message_key='a_decoder_required_to_generate_a_p0_preview_is_unavailable', message_params={'p0': checked.format}) from exc
     except Exception as exc:
-        raise ApiError(422, "PREVIEW_FAILED", f"输出预览生成失败：{exc}") from exc
+        raise ApiError(422, "PREVIEW_FAILED", f"输出预览生成失败：{exc}", message_key='output_preview_generation_failed_p0', message_params={'p0': exc}) from exc
     image.thumbnail((max_edge, max_edge))
     part = target.with_name(target.name + '.' + str(uuid4()) + '.part')
     try:
@@ -593,12 +590,12 @@ def render_output_preview(checked: CheckedOutput, destination: Path, *, selectio
         image.save(part, format="JPEG")
         after_hash, after_size, _ = _hash(source)
         if (after_hash, after_size) != (checked.content_hash, checked.byte_size):
-            raise ApiError(409, "SOURCE_CHANGED", "输出文件在预览生成期间发生变化。")
+            raise ApiError(409, "SOURCE_CHANGED", "输出文件在预览生成期间发生变化。", message_key='the_output_file_changed_during_preview_generation')
         os.replace(part, target)
     except ApiError:
         raise
     except Exception as exc:
-        raise ApiError(422, "PREVIEW_FAILED", f"输出预览写入失败：{exc}") from exc
+        raise ApiError(422, "PREVIEW_FAILED", f"输出预览写入失败：{exc}", message_key='could_not_write_the_output_preview_p0', message_params={'p0': exc}) from exc
     finally:
         part.unlink(missing_ok=True)
 
@@ -608,7 +605,7 @@ def _output_registration(session: Session, task: AssetTask, created: bool) -> Ou
     asset_id = UUID(item.asset_id) if item and item.asset_id else None
     version_id = UUID(item.asset_version_id) if item and item.asset_version_id else None
     error = task.error or (item.error if item else None)
-    error_detail = ErrorDetail(code=str(error.get("code")), message=str(error.get("message")), fields=[]) if error else None
+    error_detail = ErrorDetail(code=str(error.get("code")), message=str(error.get("message")), fields=error.get('fields', [])) if error else None
     return OutputRegistration(
         task_id=UUID(task.id), created=created, task_status=task.status,
         asset_id=asset_id, asset_version_id=version_id,
@@ -624,13 +621,13 @@ def register_output(database: Database, settings: Settings, *, task_id: UUID, ou
     try:
         relative = output.path.resolve(strict=False).relative_to(output.run_directory.resolve(strict=False)).as_posix()
     except ValueError as exc:
-        raise ApiError(422, "OUTPUT_UNAVAILABLE", "输出文件不在本次运行目录内。") from exc
+        raise ApiError(422, "OUTPUT_UNAVAILABLE", "输出文件不在本次运行目录内。", message_key='the_output_file_is_outside_this_run_directory') from exc
     effective_name = name if name is not None else output.path.stem or output.path.name
     from astrophotoflow.contracts.common import check_name
     try:
         effective_name = check_name(effective_name)
     except ValueError as exc:
-        raise ApiError(422, "VALIDATION_ERROR", str(exc)) from exc
+        raise ApiError(422, 'VALIDATION_ERROR', str(exc), message_key='output_name_invalid', fields=[{'path': 'name', 'message': str(exc)}]) from exc
     task_id_text = str(task_id)
     identity = f"run-output:{relative}:{output.content_hash}"
     with database.read_session() as session:
@@ -638,12 +635,12 @@ def register_output(database: Database, settings: Settings, *, task_id: UUID, ou
         if existing is not None:
             report = existing.report or {}
             if not report.get("output_registration") or report.get("output_identity") != identity or report.get("output_name") != effective_name:
-                raise ApiError(409, "TASK_STATE_CONFLICT", "task_id 已用于不同的素材登记操作。")
+                raise ApiError(409, "TASK_STATE_CONFLICT", "task_id 已用于不同的素材登记操作。", message_key='task_id_is_already_used_for_a_different_asset_registration_operation')
             return _output_registration(session, existing, False)
     current = check_output(settings, run_directory=output.run_directory, path=output.path, expected_format=output.format,
                            colour_layout=(output.scientific_metadata or {}).get('colour_layout'))
     if (current.content_hash, current.byte_size) != (output.content_hash, output.byte_size):
-        raise ApiError(409, "SOURCE_CHANGED", "所选输出在检查后发生变化。")
+        raise ApiError(409, "SOURCE_CHANGED", "所选输出在检查后发生变化。", message_key='the_selected_output_changed_after_validation')
     suffix = "".join(current.path.suffixes[-2:]).lower() if current.path.name.lower().endswith((".fits.fz", ".fit.fz", '.fts.fz')) else current.path.suffix.lower()
     stored_name = f"0-{uuid4().hex}{suffix}"
     upload_root = settings.data_dir / "upload-staging" / task_id_text
@@ -652,7 +649,7 @@ def register_output(database: Database, settings: Settings, *, task_id: UUID, ou
     try:
         copied_hash, copied_size = _read_hash_and_copy(current.path, source_copy, lambda: False)
         if copied_hash != current.content_hash or copied_size != current.byte_size:
-            raise ApiError(409, "SOURCE_CHANGED", "输出在复制到素材登记暂存区时发生变化。")
+            raise ApiError(409, "SOURCE_CHANGED", "输出在复制到素材登记暂存区时发生变化。", message_key='the_output_changed_while_being_copied_to_asset_registration_staging')
         now = datetime.now(timezone.utc)
         report = {
             "output_registration": True, "output_identity": identity, "output_name": effective_name,
@@ -682,7 +679,7 @@ def register_output(database: Database, settings: Settings, *, task_id: UUID, ou
                 if report.get("output_registration") and report.get("output_identity") == identity and report.get("output_name") == effective_name:
                     source_copy.unlink(missing_ok=True)
                     return _output_registration(session, existing, False)
-                raise ApiError(409, "TASK_STATE_CONFLICT", "登记任务已由另一个请求创建，请查询任务状态。")
+                raise ApiError(409, "TASK_STATE_CONFLICT", "登记任务已由另一个请求创建，请查询任务状态。", message_key='another_request_created_the_registration_task_query_the_task_state')
             session.add(task)
             session.add(item)
             session.flush()

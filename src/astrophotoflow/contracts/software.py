@@ -155,6 +155,36 @@ class SoftwarePreparation(StrictModel):
 class SoftwareInstallRequest(StrictModel):
     version: str
     package_token: str
+    bundle_version: str | None = None
+    release_token: str | None = None
+
+    @model_validator(mode='after')
+    def selected_release(self):
+        provided = self.model_fields_set & {'bundle_version', 'release_token'}
+        if provided and (self.bundle_version is None or self.release_token is None):
+            raise ValueError('bundle_version and release_token must be provided together.')
+        return self
+
+
+class SoftwareRelease(StrictModel):
+    bundle_version: str
+    software_version: str | None
+    channel: Literal['stable', 'dev']
+    tag: str
+    commit: str
+    is_latest: bool = False
+    compatible: bool
+    reason_code: Literal['invalid_metadata', 'unsupported_platform', 'unsupported_sdk', 'unsupported_schema', 'missing_resources'] | None = None
+    reason_parameters: dict[str, str] = Field(default_factory=dict)
+    release_token: str | None = None
+
+
+class SoftwareReleaseListing(StrictModel):
+    package_id: str
+    releases: list[SoftwareRelease]
+    checked_at: datetime | None
+    stale: bool = False
+    error: ErrorDetail | None = None
 
 
 class SoftwareUninstallRequest(StrictModel):

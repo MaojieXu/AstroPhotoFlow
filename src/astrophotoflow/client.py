@@ -7,6 +7,7 @@ from typing import Any
 import httpx
 from pydantic import BaseModel
 from astrophotoflow.contracts.workbench import ConfigSave, ConfigState, DirectorySelectionResult
+from astrophotoflow.contracts.localization import WorkspaceLocale
 
 from astrophotoflow.interfaces.client.imports import ImportOperations
 from astrophotoflow.interfaces.client.library import LibraryOperations
@@ -56,6 +57,9 @@ class AssetClient(ImportOperations, LibraryOperations, OrganizationOperations, S
 
     def get_workbench_configuration(self) -> ConfigState:
         return ConfigState.model_validate(self.request("GET", "/settings/workbench"))
+
+    def get_workspace_locale(self) -> WorkspaceLocale:
+        return WorkspaceLocale.model_validate(self.request('GET', '/settings/locale'))
 
     def save_workbench_configuration(self, body: ConfigSave) -> ConfigState:
         return ConfigState.model_validate(self.request("PATCH", "/settings/workbench", json=body))

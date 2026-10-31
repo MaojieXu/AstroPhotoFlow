@@ -1,3 +1,4 @@
+import { resolveNodeDefText, setActiveLocale } from '@/i18n'
 import { fromPartial } from '@total-typescript/shoehorn'
 import { bundleCapabilities } from './bundleCatalog'
 import type { NodeCapability } from '@astrophotoflow/ui'
@@ -23,7 +24,10 @@ describe('Siril preview display', () => {
         description: '', source: 'package', inputs: [], outputs: [], parameters: [],
         execution: { package_id: 'siril', operation_id: 'autostretch' }
       } },
-      available: true, reason: null, preview: null, help: '', examples: [],
+      display: {
+        en: { name: 'Translated Bundle', description: 'English description', help: '', inputs: {}, outputs: {}, parameters: {} },
+        zh: { name: '中文节点', description: '中文说明', help: '', inputs: {}, outputs: {}, parameters: {} }
+      }, available: true, reason: null, preview: null, help: '', examples: [],
       operation: { package_id: 'siril', operation_id: 'autostretch', parameters: [] }
     }
     vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify([capability])))
@@ -50,12 +54,24 @@ describe('Siril preview display', () => {
     await waitFor(() => expect(bundleCapabilities.get(type)?.available).toBe(true))
     expect(definitions.visibleNodeDefs.map(definition => definition.name)).toEqual([type])
     expect(NativeFixtureNode.skip_list).toBe(true)
-    vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify([{ ...capability, available: false, reason: 'Removed' }])))
+    const persisted = JSON.stringify(graph.serialize())
+    await setActiveLocale('en')
+    expect(resolveNodeDefText('display_name', type, 'Backend name')).toBe('Translated Bundle')
+    await setActiveLocale('zh')
+    expect(resolveNodeDefText('display_name', type, 'Backend name')).toBe('中文节点')
+    await setActiveLocale('en')
+    expect(JSON.stringify(graph.serialize())).toBe(persisted)
+    vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify([{ ...capability, display: {}, available: false, reason: 'Removed' }])))
     api.dispatchCustomEvent('apf.bundles_changed', {})
     await waitFor(() => expect(bundleCapabilities.get(type)?.available).toBe(false))
     expect(LiteGraph.registered_node_types[type]).toBeUndefined()
     expect(definitions.visibleNodeDefs).toEqual([])
     expect(graph.nodes).toContain(node)
+    expect(resolveNodeDefText('display_name', type, 'Backend name')).toBe('Backend name')
+    await setActiveLocale('zh')
+    expect(resolveNodeDefText('display_name', type, 'Backend name')).toBe('Backend name')
+    expect(JSON.stringify(graph.serialize())).toBe(persisted)
+    await setActiveLocale('en')
   })
 
   it('adds one display-only component without changing persisted tool parameters', () => {

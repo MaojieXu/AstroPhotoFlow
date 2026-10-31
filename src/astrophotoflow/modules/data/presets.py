@@ -26,10 +26,10 @@ def _preset_snapshot(session, preset_id: UUID | None) -> dict:
         return {}
     preset = session.get(CapturePreset, str(preset_id))
     if preset is None:
-        raise invalid_reference("拍摄预设不存在。")
+        raise invalid_reference("拍摄预设不存在。", message_key='the_capture_preset_does_not_exist')
     setup = session.get(EquipmentSetup, preset.equipment_setup_id)
     if setup is None:
-        raise invalid_reference("拍摄预设的使用组合不存在。")
+        raise invalid_reference("拍摄预设的使用组合不存在。", message_key='the_capture_preset_s_equipment_setup_does_not_exist')
     components = []
     parameters = {key: deepcopy(value) for key, value in preset.parameters.items() if value is not None}
     for component in setup.components:
@@ -37,7 +37,7 @@ def _preset_snapshot(session, preset_id: UUID | None) -> dict:
         if component["source"] == "registered":
             equipment = session.get(Equipment, component["equipment_id"])
             if equipment is None:
-                raise invalid_reference("使用组合引用的设备不存在。")
+                raise invalid_reference("使用组合引用的设备不存在。", message_key='a_device_referenced_by_the_equipment_setup_does_not_exist')
             frozen["equipment"] = {
                 "id": equipment.id, "kind": equipment.kind, "name": equipment.name,
                 "model": equipment.model, "serial_number": equipment.serial_number,

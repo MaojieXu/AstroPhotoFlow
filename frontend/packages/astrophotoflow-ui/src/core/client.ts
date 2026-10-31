@@ -1,3 +1,4 @@
+import { uiT } from './i18n'
 import type { ZodType, z } from 'zod'
 import {
   configStateSchema,
@@ -5,9 +6,14 @@ import {
   errorSchema,
   workbenchResultSchema
 } from './contracts'
+import { workspaceLocaleSchema } from './contracts'
 import type { ConfigSave, ConfigState, WorkbenchResult } from './contracts'
 
 export type FetchApi = (path: string, init?: RequestInit) => Promise<Response>
+
+export function getWorkspaceLocale(fetchApi: FetchApi) {
+  return createApiClient(fetchApi).get('/astrophotoflow/api/v1/settings/locale', workspaceLocaleSchema)
+}
 
 export class ApiClientError extends Error {
   constructor(
@@ -40,13 +46,13 @@ export function createApiClient(fetchApi: FetchApi) {
           ? resolve()
           : reject(
               new ApiClientError(
-                '文件上传失败（HTTP ' + request.status + '）。',
+                uiT('apfUi.file_upload_failed_http') + request.status + '）。',
                 'service',
                 request.status
               )
             )
       request.onerror = () =>
-        reject(new ApiClientError('无法连接 AstroPhotoFlow 服务。', 'network'))
+        reject(new ApiClientError(uiT('apfUi.cannot_connect_to_the_astrophotoflow_service'), 'network'))
       request.send(file)
     })
   }
@@ -60,7 +66,7 @@ export function createApiClient(fetchApi: FetchApi) {
       response = await fetchApi(path, init)
     } catch (error) {
       if (error instanceof TypeError)
-        throw new ApiClientError('无法连接 AstroPhotoFlow 服务。', 'network')
+        throw new ApiClientError(uiT('apfUi.cannot_connect_to_the_astrophotoflow_service'), 'network')
       throw error
     }
 
@@ -69,7 +75,7 @@ export function createApiClient(fetchApi: FetchApi) {
       body = await response.json()
     } catch {
       throw new ApiClientError(
-        '服务响应不是有效 JSON。',
+        uiT('apfUi.the_service_response_is_not_valid_json'),
         'contract',
         response.status
       )
@@ -79,7 +85,7 @@ export function createApiClient(fetchApi: FetchApi) {
       const parsedError = errorSchema.safeParse(body)
       if (!parsedError.success)
         throw new ApiClientError(
-          '服务错误响应不符合接口契约。',
+          uiT('apfUi.the_service_error_response_does_not_match_the_api_contract'),
           'contract',
           response.status
         )
@@ -96,7 +102,7 @@ export function createApiClient(fetchApi: FetchApi) {
     const parsed = schema.safeParse(body)
     if (!parsed.success)
       throw new ApiClientError(
-        '服务成功响应不符合接口契约。',
+        uiT('apfUi.the_successful_service_response_does_not_match_the_api_contract'),
         'contract',
         response.status
       )
@@ -109,7 +115,7 @@ export function createApiClient(fetchApi: FetchApi) {
       response = await fetchApi(path, { cache: 'no-store' })
     } catch (error) {
       if (error instanceof TypeError)
-        throw new ApiClientError('无法连接 AstroPhotoFlow 服务。', 'network')
+        throw new ApiClientError(uiT('apfUi.cannot_connect_to_the_astrophotoflow_service'), 'network')
       throw error
     }
     if (!response.ok) {
@@ -118,7 +124,7 @@ export function createApiClient(fetchApi: FetchApi) {
         body = await response.json()
       } catch {
         throw new ApiClientError(
-          '服务响应不是有效 JSON。',
+          uiT('apfUi.the_service_response_is_not_valid_json'),
           'contract',
           response.status
         )
@@ -126,7 +132,7 @@ export function createApiClient(fetchApi: FetchApi) {
       const parsedError = errorSchema.safeParse(body)
       if (!parsedError.success)
         throw new ApiClientError(
-          '服务错误响应不符合接口契约。',
+          uiT('apfUi.the_service_error_response_does_not_match_the_api_contract'),
           'contract',
           response.status
         )
@@ -141,7 +147,7 @@ export function createApiClient(fetchApi: FetchApi) {
     }
     if (!response.headers.get('Content-Type')?.startsWith('image/jpeg')) {
       throw new ApiClientError(
-        '预览响应类型不符合接口契约。',
+        uiT('apfUi.the_preview_response_type_does_not_match_the_api_contract'),
         'contract',
         response.status
       )

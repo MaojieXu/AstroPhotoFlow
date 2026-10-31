@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { uiT } from '../../../core/i18n'
+
 import { computed, ref, watch } from 'vue'
 import { z } from 'zod'
 import { assetApi } from '../api/index'
@@ -37,7 +39,7 @@ async function load(){
     const result=await assetApi.get('/astrophotoflow/api/v1/settings/trash?'+params,pageSchema(entrySchema))
     if(current!==generation||!props.open)return
     rows.value=result.items;total.value=result.total
-  }catch(cause){if(current===generation&&props.open)error.value=cause instanceof Error?cause.message:'回收站读取失败。'}
+  }catch(cause){if(current===generation&&props.open)error.value=cause instanceof Error?cause.message:uiT('apfUi.could_not_read_trash')}
   finally{if(current===generation&&props.open)loading.value=false}
 }
 watch(()=>props.open,open=>{if(open){offset.value=0;notice.value='';void load()}else{generation++;loading.value=false;resetSelection()}},{immediate:true})
@@ -58,8 +60,8 @@ async function restore(){
   busy.value=true;error.value='';notice.value=''
   try{
     await assetApi.send('/astrophotoflow/api/v1/settings/trash/restore',z.object({restored_count:z.number().int()}).strict(),'POST',requestItems())
-    emit('changed');notice.value='已恢复所选记录。';await load()
-  }catch(cause){error.value=cause instanceof Error?cause.message:'恢复失败。'}
+    emit('changed');notice.value=uiT('apfUi.selected_records_restored');await load()
+  }catch(cause){error.value=cause instanceof Error?cause.message:uiT('apfUi.could_not_restore')}
   finally{busy.value=false}
 }
 async function requestPreview(){
@@ -70,7 +72,7 @@ async function requestPreview(){
     preview.value=await assetApi.send('/astrophotoflow/api/v1/settings/trash/delete-preview',previewSchema,'POST',selection)
     previewSelection.value=selection
     if(!preview.value.blocked)deleteConfirm.value=true
-  }catch(cause){error.value=cause instanceof Error?cause.message:'永久删除预览失败。'}
+  }catch(cause){error.value=cause instanceof Error?cause.message:uiT('apfUi.could_not_preview_permanent_deletion')}
   finally{busy.value=false}
 }
 async function permanentlyDelete(){
@@ -80,37 +82,37 @@ async function permanentlyDelete(){
     await assetApi.send('/astrophotoflow/api/v1/settings/trash/delete',z.object({deleted_count:z.number().int(),detached_material_count:z.number().int()}).strict(),'POST',{
       ...previewSelection.value,preview_fingerprint:preview.value.preview_fingerprint
     })
-    emit('changed');notice.value='已永久删除所选设置；素材中的设备快照仍保留。';await load()
-  }catch(cause){preview.value=undefined;error.value=cause instanceof Error?cause.message:'永久删除失败，请重新预览后重试。'}
+    emit('changed');notice.value=uiT('apfUi.selected_settings_permanently_deleted_asset_equipment_snapshots_are_re');await load()
+  }catch(cause){preview.value=undefined;error.value=cause instanceof Error?cause.message:uiT('apfUi.permanent_deletion_failed_generate_a_new_preview_before_retrying_c9e640')}
   finally{busy.value=false}
 }
-function typeName(type:string){return type==='project'?'项目':type==='equipment'?'设备':type==='equipment_setup'?'使用组合':'拍摄预设'}
+function typeName(type:string){return type==='project'?uiT('apfUi.project'):type==='equipment'?uiT('apfUi.equipment'):type==='equipment_setup'?uiT('apfUi.use_setup'):uiT('apfUi.capture_preset')}
 </script>
 
 <template>
   <div v-if="open" class="settings-trash-backdrop" role="presentation" @click.self="!busy&&emit('close')">
     <section class="settings-trash" role="dialog" aria-modal="true" aria-labelledby="settings-trash-title">
-      <header><h2 id="settings-trash-title">回收站</h2><button type="button" :disabled="busy" @click="emit('close')">关闭</button></header>
-      <p>可以恢复设置，或预览后永久删除。删除设备时，素材保留当时的设备信息。</p>
+      <header><h2 id="settings-trash-title">{{ $t('apfUi.trash_ba35dc') }}</h2><button type="button" :disabled="busy" @click="emit('close')">{{ $t('apfUi.close') }}</button></header>
+      <p>{{ $t('apfUi.restore_settings_or_preview_permanent_deletion_assets_retain_their_equ') }}</p>
       <p v-if="notice" role="status">{{notice}}</p><p v-if="error" role="alert" class="settings-trash-error">{{error}}</p>
-      <div class="settings-trash-tools"><input v-model="query" placeholder="搜索名称" aria-label="搜索回收站" :disabled="busy" />
-        <button type="button" :disabled="busy||!selected.size" @click="restore">恢复</button>
-        <button type="button" class="settings-trash-danger" :disabled="busy||!selected.size" @click="requestPreview">永久删除</button>
+      <div class="settings-trash-tools"><input v-model="query" :placeholder="$t('apfUi.search_names')" :aria-label="$t('apfUi.search_trash')" :disabled="busy" />
+        <button type="button" :disabled="busy||!selected.size" @click="restore">{{ $t('apfUi.restore') }}</button>
+        <button type="button" class="settings-trash-danger" :disabled="busy||!selected.size" @click="requestPreview">{{ $t('apfUi.permanently_delete') }}</button>
       </div>
-      <div class="settings-trash-table"><table><thead><tr><th><input type="checkbox" aria-label="全选当前页" :checked="allOnPage" :indeterminate="partiallyOnPage" :disabled="busy||!rows.length" @change="togglePage" /></th><th>名称</th><th>类型</th><th>移除时间</th></tr></thead>
+      <div class="settings-trash-table"><table><thead><tr><th><input type="checkbox" :aria-label="$t('apfUi.select_current_page')" :checked="allOnPage" :indeterminate="partiallyOnPage" :disabled="busy||!rows.length" @change="togglePage" /></th><th>{{ $t('apfUi.name') }}</th><th>{{ $t('apfUi.type') }}</th><th>{{ $t('apfUi.removed_at') }}</th></tr></thead>
         <tbody><tr v-for="row in rows" :key="row.entry_type+':'+row.id" :aria-selected="selected.has(row.entry_type+':'+row.id)" @click="toggle(row)">
-          <td><input type="checkbox" :aria-label="'选择 '+row.name" :checked="selected.has(row.entry_type+':'+row.id)" :disabled="busy" @click.stop @change="toggle(row)" /></td><td>{{row.name}}</td><td>{{typeName(row.entry_type)}}</td><td>{{new Date(row.updated_at).toLocaleString()}}</td>
-        </tr><tr v-if="!loading&&!rows.length"><td colspan="4">回收站为空。</td></tr></tbody>
+          <td><input type="checkbox" :aria-label="$t('apfUi.select_beb481')+row.name" :checked="selected.has(row.entry_type+':'+row.id)" :disabled="busy" @click.stop @change="toggle(row)" /></td><td>{{row.name}}</td><td>{{typeName(row.entry_type)}}</td><td>{{new Date(row.updated_at).toLocaleString()}}</td>
+        </tr><tr v-if="!loading&&!rows.length"><td colspan="4">{{ $t('apfUi.trash_is_empty') }}</td></tr></tbody>
       </table></div>
-      <footer><button type="button" :disabled="busy||offset===0" @click="offset=Math.max(0,offset-limit);load()">上一页</button><span>{{total?offset+1:0}}–{{Math.min(offset+limit,total)}} / {{total}}</span><button type="button" :disabled="busy||offset+limit>=total" @click="offset+=limit;load()">下一页</button></footer>
-      <section v-if="preview" class="settings-trash-preview" aria-label="永久删除预览"><h3>删除预览</h3>
-        <p>所选设置 {{preview.items.length}} 项；删除设备会保留素材中的设备快照。</p>
-        <ul><li v-for="dependency in preview.dependencies" :key="dependency.entry_type+dependency.id+dependency.kind">{{dependency.name}}：{{dependency.count}} 项 · {{dependency.kind}}<small v-if="dependency.references.length">（{{dependency.references.slice(0,8).join('、')}}<template v-if="dependency.references.length>8"> 等</template>）</small></li></ul>
-        <p v-if="preview.blocked" role="alert">有设置仍被引用，先处理引用后才能永久删除。</p>
+      <footer><button type="button" :disabled="busy||offset===0" @click="offset=Math.max(0,offset-limit);load()">{{ $t('apfUi.previous_page') }}</button><span>{{total?offset+1:0}}–{{Math.min(offset+limit,total)}} / {{total}}</span><button type="button" :disabled="busy||offset+limit>=total" @click="offset+=limit;load()">{{ $t('apfUi.next_page') }}</button></footer>
+      <section v-if="preview" class="settings-trash-preview" :aria-label="$t('apfUi.permanent_deletion_preview')"><h3>{{ $t('apfUi.preview_deletion') }}</h3>
+        <p>{{ $t('apfUi.selected_settings_value_deleting_equipment_retains_the_asset_equipment', { p0: (preview.items.length) }) }}</p>
+        <ul><li v-for="dependency in preview.dependencies" :key="dependency.entry_type+dependency.id+dependency.kind">{{ $t('apfUi.value_value_items_value', { p0: (dependency.name), p1: (dependency.count), p2: (dependency.kind) }) }}<small v-if="dependency.references.length">（{{dependency.references.slice(0,8).join('、')}}<template v-if="dependency.references.length>8">{{ $t('apfUi.and_others_385a84') }}</template>）</small></li></ul>
+        <p v-if="preview.blocked" role="alert">{{ $t('apfUi.some_settings_are_still_referenced_resolve_those_references_before_per') }}</p>
       </section>
       <div v-if="deleteConfirm" class="settings-trash-confirm" role="alertdialog" aria-modal="true" aria-labelledby="settings-trash-confirm-title">
-        <h3 id="settings-trash-confirm-title">确认永久删除</h3><p>此操作无法恢复。素材里已保存的设备快照会保留。</p>
-        <button type="button" :disabled="busy" @click="deleteConfirm=false">取消</button><button type="button" class="settings-trash-danger" :disabled="busy" @click="permanentlyDelete">确认永久删除</button>
+        <h3 id="settings-trash-confirm-title">{{ $t('apfUi.confirm_permanent_deletion') }}</h3><p>{{ $t('apfUi.this_cannot_be_undone_asset_equipment_snapshots_are_retained') }}</p>
+        <button type="button" :disabled="busy" @click="deleteConfirm=false">{{ $t('apfUi.cancel') }}</button><button type="button" class="settings-trash-danger" :disabled="busy" @click="permanentlyDelete">{{ $t('apfUi.confirm_permanent_deletion') }}</button>
       </div>
     </section>
   </div>

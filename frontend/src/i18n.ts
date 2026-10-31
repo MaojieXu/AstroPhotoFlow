@@ -1,4 +1,6 @@
+import { assert } from '@/base/assert'
 import { createI18n } from 'vue-i18n'
+import { uiMessages, configureUII18n } from '@astrophotoflow/ui'
 
 import {
   getDefaultLocale,
@@ -38,6 +40,8 @@ const loadingLocales = new Map<string, Promise<void>>()
 
 // Store custom nodes i18n data for merging when locales are lazily loaded
 const customNodesI18nData: Record<string, unknown> = {}
+let bundleNodeDefinitions: Partial<Record<SupportedLocale, Record<string, unknown>>> = {}
+const replacedBundleNodeDefinitions: Record<string, Record<string, unknown>> = {}
 
 /**
  * Dynamically load a shipped locale's bundles (nodeDefs, commands, settings).
@@ -76,12 +80,15 @@ export async function loadLocale(locale: SupportedLocale): Promise<void> {
         settings.default
       )
 
+      Object.assign(messages, uiMessages[locale])
+
       i18n.global.setLocaleMessage(locale, messages as LocaleMessages)
       loadedLocales.add(locale)
 
       if (customNodesI18nData[locale]) {
         i18n.global.mergeLocaleMessage(locale, customNodesI18nData[locale])
       }
+      applyBundleNodeI18n(locale)
     } catch (error) {
       console.error(`Failed to load locale "${locale}":`, error)
       throw error
@@ -133,6 +140,30 @@ export function mergeCustomNodesI18n(i18nData: Record<string, unknown>): void {
   }
 }
 
+function applyBundleNodeI18n(locale: SupportedLocale) {
+  const messages = i18n.global.getLocaleMessage(locale)
+  assert(messages, 'Bundle translations require loaded locale messages')
+  const nodeDefs = { ...(messages.nodeDefs as Record<string, unknown>) }
+  for (const [name, original] of Object.entries(replacedBundleNodeDefinitions[locale] ?? {})) {
+    if (original === undefined) delete nodeDefs[name]
+    else nodeDefs[name] = original
+  }
+  const originals: Record<string, unknown> = {}
+  for (const [name, definition] of Object.entries(bundleNodeDefinitions[locale] ?? {})) {
+    originals[name] = nodeDefs[name]
+    nodeDefs[name] = definition
+  }
+  replacedBundleNodeDefinitions[locale] = originals
+  i18n.global.setLocaleMessage(locale, { ...messages, nodeDefs } as LocaleMessages)
+}
+
+export function mergeBundleNodeI18n(nodeDefinitions: Partial<Record<SupportedLocale, Record<string, unknown>>>) {
+  bundleNodeDefinitions = nodeDefinitions
+  for (const locale of Object.keys(localeDefinitions) as SupportedLocale[]) {
+    if (loadedLocales.has(locale)) applyBundleNodeI18n(locale)
+  }
+}
+
 export type NodeDefTextField = 'display_name' | 'description'
 
 /**
@@ -168,10 +199,15 @@ export function setBackendNodeText(
 }
 
 function customNodesProvide(nodeName: string, path: string): boolean {
-  const data = customNodesI18nData[i18n.global.locale.value]
-  if (typeof data !== 'object' || data === null) return false
-  const nodeDefs = (data as Record<string, unknown>)['nodeDefs']
-  if (typeof nodeDefs !== 'object' || nodeDefs === null) return false
+  const locale = i18n.global.locale.value as SupportedLocale
+  const data = customNodesI18nData[locale]
+  const customDefinitions = typeof data === 'object' && data !== null
+    ? (data as Record<string, unknown>).nodeDefs : undefined
+  const nodeDefs = {
+    ...(typeof customDefinitions === 'object' && customDefinitions !== null
+      ? customDefinitions as Record<string, unknown> : {}),
+    ...bundleNodeDefinitions[locale]
+  }
 
   for (const candidate of nodeDefKeyCandidates(nodeName)) {
     let cursor: unknown = nodeDefs
@@ -286,6 +322,7 @@ export function resolveNodeDefSlotText(
 
 // Only include English in the initial bundle; other locales lazy-load.
 const enMessages = buildLocale(en, enNodes, enCommands, enSettings)
+Object.assign(enMessages, uiMessages.en)
 type LocaleMessages = typeof enMessages
 
 const messages: Partial<Record<SupportedLocale, LocaleMessages>> = {
@@ -306,6 +343,8 @@ export const i18n = createI18n({
   missingWarn: /^(?!settings\.Comfy_Locale\.options\.).+/,
   fallbackWarn: /^(?!settings\.Comfy_Locale\.options\.).+/
 })
+
+configureUII18n((key, values) => i18n.global.t(key, values))
 
 /** Convenience shorthand: i18n.global */
 export const t: (typeof i18n.global)['t'] = i18n.global.t

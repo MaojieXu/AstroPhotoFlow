@@ -3,6 +3,7 @@ import { computed, onMounted, onBeforeUnmount, ref } from 'vue'
 import { useRoute } from 'vue-router'
 
 import Button from '@/components/ui/button/Button.vue'
+import SingleSelect from '@/components/ui/single-select/SingleSelect.vue'
 import LibraryFormDialog from './LibraryFormDialog.vue'
 
 import SidebarTabTemplate from '@/components/sidebar/tabs/SidebarTabTemplate.vue'
@@ -32,7 +33,7 @@ const confirmationAvailable = computed(() => api.serverSupportsFeature('apf_page
         :package-id="packageId"
         :operation-id="operationId"
         :translate="$t"
-        :controls="{ button: Button, dialog: LibraryFormDialog }"
+        :controls="{ button: Button, dialog: LibraryFormDialog, select: SingleSelect }"
       />
     </template>
   </SidebarTabTemplate>

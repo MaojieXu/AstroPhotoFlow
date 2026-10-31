@@ -11,6 +11,7 @@ from aiohttp import web
 
 
 from astrophotoflow.core.config import ConfigurationError, load_settings, load_running_settings
+from astrophotoflow.core.localization import localized_error, workspace_locale
 BASE_PATH = "/astrophotoflow/api/v1"
 
 # Public route, corresponding API path, and method. No wildcard proxy route is registered.
@@ -19,6 +20,8 @@ ROUTES = [
     ("POST", "/library/canvas-data/inspect", "/library/canvas-data/inspect"),
     ("POST", "/library/canvas-data", "/library/canvas-data"),
     ("GET", "/settings/workbench", "/settings/workbench"),
+    ("GET", "/settings/locale", "/settings/locale"),
+    ('GET', '/software/packages/{package_id}/releases', '/software/packages/{package_id}/releases'),
     ("POST", "/settings/workbench/restart", "/settings/workbench/restart"),
     ("GET", "/settings/workbench/restart/{operation_id}", "/settings/workbench/restart/{operation_id}"),
     ("PATCH", "/settings/workbench", "/settings/workbench"),
@@ -128,10 +131,11 @@ ROUTES = [
 
 
 class ProxyError(Exception):
-    def __init__(self, status: int, code: str, message: str):
+    def __init__(self, status: int, code: str, message: str, *, message_key: str):
         self.status = status
         self.code = code
         self.message = message
+        self.message_key = message_key
 
 
 for _scope in ("/library/assets/{asset_id}/versions/{version_id}/previews", "/projects/{project_id}/asset-references/{reference_id}/previews"):
@@ -163,24 +167,26 @@ def _configuration(*, allow_missing_token: bool = False):
                 raise ValueError("服务令牌为空")
         return settings.service_url, set(settings.allowed_origins), token
     except (OSError, ConfigurationError, ValueError) as exc:
-        raise ProxyError(503, "SERVICE_NOT_CONFIGURED", "AstroPhotoFlow 本机服务配置或令牌不可用。") from exc
+        raise ProxyError(503, "SERVICE_NOT_CONFIGURED", "AstroPhotoFlow 本机服务配置或令牌不可用。", message_key='proxy_unconfigured') from exc
 
 
 def _deny_origin(request: web.Request, allowed: set[str]) -> None:
     origin = request.headers.get("Origin")
     if origin is not None:
         if origin not in allowed:
-            raise ProxyError(403, "ORIGIN_NOT_ALLOWED", "请求来源不在 AstroPhotoFlow 允许列表中。")
+            raise ProxyError(403, "ORIGIN_NOT_ALLOWED", "请求来源不在 AstroPhotoFlow 允许列表中。", message_key='proxy_origin_denied')
         return
     if request.headers.get("Sec-Fetch-Site") != "same-origin":
-        raise ProxyError(403, "ORIGIN_NOT_ALLOWED", "缺少 Origin 时只接受同源 Fetch 请求。")
+        raise ProxyError(403, "ORIGIN_NOT_ALLOWED", "缺少 Origin 时只接受同源 Fetch 请求。", message_key='proxy_same_origin_required')
     request_origin = f"{request.scheme}://{request.headers.get('Host', '')}"
     if request_origin not in allowed:
-        raise ProxyError(403, "ORIGIN_NOT_ALLOWED", "请求来源不在 AstroPhotoFlow 允许列表中。")
+        raise ProxyError(403, "ORIGIN_NOT_ALLOWED", "请求来源不在 AstroPhotoFlow 允许列表中。", message_key='proxy_origin_denied')
 
 
-def _error_response(request_id: str, status: int, code: str, message: str) -> web.Response:
-    body = {"error": {"code": code, "message": message, "fields": []}, "request_id": request_id}
+def _error_response(request_id: str, status: int, code: str, message_key: str) -> web.Response:
+    workspace = os.environ.get('APF_WORKSPACE')
+    locale = workspace_locale(Path(workspace)) if workspace else 'en'
+    body = {"error": localized_error(locale, code, message_key).model_dump(), "request_id": request_id}
     return web.json_response(body, status=status, headers={"X-Request-ID": request_id})
 
 
@@ -236,11 +242,11 @@ async def forward(request: web.Request, path_template: str) -> web.StreamRespons
                     pending.cancel()
                 await asyncio.gather(pending, return_exceptions=True)
     except ProxyError as exc:
-        return _error_response(request_id, exc.status, exc.code, exc.message)
+        return _error_response(request_id, exc.status, exc.code, exc.message_key)
     except (asyncio.TimeoutError, TimeoutError):
-        return _error_response(request_id, 504, "SERVICE_TIMEOUT", "等待 AstroPhotoFlow 服务超时。")
+        return _error_response(request_id, 504, "SERVICE_TIMEOUT", 'proxy_timeout')
     except aiohttp.ClientError:
-        return _error_response(request_id, 503, "SERVICE_UNAVAILABLE", "AstroPhotoFlow 服务当前不可用。")
+        return _error_response(request_id, 503, "SERVICE_UNAVAILABLE", 'proxy_unavailable')
 
 
 def register_proxy_routes(routes: web.RouteTableDef) -> None:
@@ -276,9 +282,9 @@ def native_admission_middleware():
                         control = json.loads(control_path.read_text(encoding="utf-8"))["result"]
                         closed = closed or control["state"] in {"in_progress", "unknown"}
                     if closed:
-                        return _error_response(str(uuid4()), 409, "WORKBENCH_MAINTENANCE", "工作台正在维护，暂不接受新运行。")
+                        return _error_response(str(uuid4()), 409, "WORKBENCH_MAINTENANCE", 'proxy_maintenance')
                 except (OSError, KeyError, TypeError, ValueError):
-                    return _error_response(str(uuid4()), 503, "WORKBENCH_STATE_UNKNOWN", "无法确认工作台维护状态。")
+                    return _error_response(str(uuid4()), 503, "WORKBENCH_STATE_UNKNOWN", 'proxy_state_unknown')
                 return await handler(request)
         if request.method == "GET" and request.path in {"/queue", "/api/queue"}:
             async with queue_admission:

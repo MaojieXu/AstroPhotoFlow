@@ -8,6 +8,7 @@ export default defineConfig({
   cacheDir: '../../../.artifacts/cache/vite/astrophotoflow-ui',
   test: {
     environment: 'jsdom',
+    setupFiles: ['./tests/setup.ts'],
     include: ['tests/**/*.test.ts']
   }
 })

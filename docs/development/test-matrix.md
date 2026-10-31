@@ -790,3 +790,69 @@
 - Manager自动验证：工作台、环境准备、引擎构建及CLI客户端契约共64项通过，包括新增未知／启动中／停止中保护、同SHA内容变更／新增／删除及真实网页同步回归。原损坏归档测试因继承Codex PowerShell 7模块路径失败，已在测试子进程清除`PSMODULEPATH`，恢复PowerShell 5.1默认模块后通过；未为此改bootstrap产品行为。
 - Manager实际验证：固定Quickstart入口离线复用已存在依赖2.848秒，不构建／安装runtime／启停服务；独立空workspace CLI创建0.505秒，runtime与网页未创建、默认配置哈希不变。耗时仅代表本机已有工具和缓存条件。原候选完整构建与33088预览证据仍有效，管理入口修复不涉及前端源码，未重复全量构建或功能验收。未推送、不清理Feature空间。
 - Manager证据：本Feature`.artifacts/manager-integration/environment-bootstrap/targeted-tests-final.log`、`prepare-smoke.log`与`empty-workspace-smoke.json`。全新无缓存机器首装、多Worktree共享缓存并发、Linux／WSL仍未验收。
+
+<a id="feature-full-preview-preparation"></a>
+## Feature完整准备与页面展示（2026-10-30，Feature实现检查）
+
+- 实现：Feature交接默认通过bootstrap传入`--build --start`，低等级准备仍显式保留。缓存按命令行、环境变量、本地目录选择并贯穿工具和依赖阶段；bootstrap开始即写入未完成回执，参数校验失败也覆盖旧成功状态。调用标识、参数、起止时间及包含工具阶段的耗时进入同一回执，阶段日志按调用标识隔离。页面打开及实际展示由Agent分别确认，脚本不自动打开系统浏览器。
+- 定向排查：本空间`.artifacts/toolchains`为指向`.artifacts/python`的Junction，Node／pnpm／uv和Python安装混放导致uv目录扫描警告。开发入口改用独立`.artifacts/managed-python`，未删除或搬迁既有工具／解释器。旧回执在成功启动后仍显示初次依赖准备的内容，实际写回来源未能归因；新实现以调用标识、参数和时间区分调用，bootstrap要求子进程返回对应标识的最终回执。
+- 实际构建／启动：平台基点`a53b32131862435cf19a3ad190560ca846563295`加本轮未提交变更，本Feature独立workspace `C:/Users/Administrator/.codex/worktrees/64b7/AstroPhotoFlow/.artifacts/workspaces/agent-i18n-bundle-cicd`。通过core准确停止该实例后，固定入口完整执行成功；调用`af99f27c271b4d53b0fd173eaf229ad8`，bootstrap 0.435秒、完整构建含类型检查34.747秒、runtime核对复用0.538秒、workspace 1.283秒、启动11.530秒，磁盘回执总耗时49.622秒。Python及前端依赖复用，runtime复用；这不是冷缓存首装耗时，也不包含停止旧实例或页面展示时间。
+- 页面展示：浏览器实际打开`http://127.0.0.1:32618/#/workflows`，确认越过加载页并渲染素材侧栏、工作流画布及运行控件，捕获的控制台error为空。服务端32620；没有操作真实素材或执行科学处理。CSS公共路径修正并补入既有GitHub SVG后，两项缺失资源构建警告消失；仍有上游SVG样式警告，不扩展为全量前端清理。
+- 已编写未执行：包装测试新增缓存参数两种形式及环境变量优先级、工具失败回执、参数失败替换旧成功、构建失败中止、完整流程顺序／启动失败、托管Python目录隔离；更新兼容工具复用测试以核对统一回执。Python／PowerShell语法检查及Git空白检查通过，未执行测试套件、综合验收或Manager独立审查。新版本冷缓存首装及冷runtime、离线失败自动回归留待集成验证；本轮实际验证覆盖已有依赖与私有runtime复用。
+- 证据：本Feature`.artifacts/dev-prepare.json`和`.artifacts/logs/dev-prepare/af99f27c271b4d53b0fd173eaf229ad8/`、`.artifacts/feature-preview.png`、`.artifacts/preview-resources.json`。预览保持运行，未提交、推送、合并或操作main，未修改默认workspace／全局MCP／正常dev。
+
+<a id="workspace-bilingual-feature"></a>
+## Workspace中英切换（2026-10-30，Feature实现与独立预览）
+
+- 源码版本：平台Base／HEAD均为`a53b32131862435cf19a3ad190560ca846563295`，私有Bundle Base／HEAD均为`ff6f63fe9d866cf34e3aa612157511ee81d9e89c`，均在`codex/agent-i18n-bundle-cicd`上有本轮未提交修改；保留前一项完整准备流程修改。Bundle候选声明`0.2.0-dev.2`，无新提交或开发tag，不将其冒充原HEAD对应的已发布版本。
+- 实现：只注册English／简体中文；沿用原生`Comfy.Locale`、浏览器首次偏好及保存机制，旧中文地区标签归并zh，其余不支持标签归并en。core只读原生workspace设置；新增认证语言查询，经AssetClient及同源白名单消费。UI包提供574条双语消息并注入宿主翻译函数，不反向依赖宿主单例。错误以稳定消息键与参数在HTTP边界展示，保留错误码、请求ID、字段路径及原始诊断，不改历史运行事实。OpenAPI已通过现有脚本生成。
+- Bundle：独立展示资源通过可选manifest声明加载，中英文各160项，参数和端口名称集合与真实操作声明一致，编写时已实际生成并通过Pydantic静态校验；生成脚本同时维护双语资源，翻译文件纳入原生目录变化观察。执行定义和科学参数未新增展示字段，节点内容标记与操作令牌计算保持原有输入；自定义用户节点名称不被Bundle展示名覆盖。中英搜索使用两套展示文案及稳定标识，旧Bundle缺译保留原文。
+- 构建：UI包和原生应用完整类型检查、引擎打包及Vite生产构建通过。最终调用`fd4e6cb796154397a958d1c44f44372e`，构建32.234秒、workspace同步1.050秒、双服务启动11.634秒，最终磁盘回执总耗时46.947秒；依赖及私有runtime复用。预览`http://127.0.0.1:32618`，服务32620，workspace为本Feature的`.artifacts/workspaces/agent-i18n-bundle-cicd`；网页清单记录平台基点SHA，源码脏状态另记，不声称是已提交发布产物。
+- 实际页面：菜单确认仅两个语言选项，素材侧栏／设置／原生控件即时更新，刷新后English保留，往返后恢复中文。切换修复前发现PrimeVue Toast未注入、原生下拉框选中标签缓存、关闭表单在标题翻译后仍聚焦三项实际问题，均做最小修复并重建；最终刷新及往返期间捕获的浏览器控制台error为0。未执行科学处理或编辑素材／图。
+- 实际只读联调：独立stdio MCP连接按workspace保存值分别返回中英文说明，各69个工具，实际输入schema一致；静态核对工具名、函数签名一致。相同不存在素材的404错误保留`RESOURCE_NOT_FOUND`及字段列表，消息随语言改变且各自保留请求ID。两次语言下两个在线页面的page／workflow／graph ID及content_token完全一致，软件package_token一致。软件详情客户端的严格Python校验曾拒绝JSON路径和UUID，已改为严格JSON契约解析，实际只读详情查询恢复。
+- 已编写未执行：core语言规范化、缺失／损坏／不可读文件、认证API、插值与诊断保留；MCP双语名称／schema／签名、展示投影与JSON路径／UUID；Bundle缺译回退、展示变更不改变操作令牌、参数映射及160项完整性；UI语言反应性、0／1／多项计数、资源键／插值对称；原生下拉文案更新不发值变更及关闭表单不聚焦。上游类型检查暴露的fr／ko／zh-TW引用及相关测试夹具已同步到中英规则。未运行测试套件、Manager独立审查或综合验收。
+- 待验证边界：当前预览安装的是旧Bundle `0.1.2-dev.1`／`12fd2d1d55daeadf7acb3972385d5c2bfcb52d4d`，缺译按原文展示。新Bundle候选尚未提交、固定tag或安装，160项新资源的真实安装、原生显示／参数提示及跨版本升级留待获准固定候选后的集成验证；不绕过干净tag／SHA安装规则。首次浏览器／旧设置迁移及全部表单逐项验收亦不从基本页面检查推定通过。
+- 证据：本Feature`.artifacts/dev-prepare.json`与对应run_id阶段目录，`.artifacts/mcp-languages.json`、`.artifacts/i18n-live-en.json`、`.artifacts/i18n-live-zh.json`、`.artifacts/i18n-live-comparison.json`、`.artifacts/i18n-preview-en.png`、`.artifacts/i18n-preview-zh.png`、`.artifacts/i18n-final-browser-errors.json`。初次浏览器错误保存在`.artifacts/i18n-initial-browser-errors.json`，类型构建失败日志保留于`69e79ff7cd414976acb140be5f69344a`目录。两个仓库均未提交、推送、合并或发布；默认workspace、全局MCP和正常dev未修改。
+
+
+## Bundle 安装快照及后台错误语言修复（2026-10-30，Feature）
+
+- 用户实际安装 `v0.2.0-dev.1` 失败后定向定位：commit `3f0f2a64c8b24cc8ca940d945139304cf871efed` 的 `reference/assessments.json` 原始 Git blob 使用 LF；元数据专用检出未带入完整目录的 Git 属性，在 `core.autocrlf=true` 下得到 4,990 处 CRLF。现有确认快照与完整检出逐字节比较误报；不是远端 tag 或参考内容改变。两个官方开发版本的四份参考文件核对后，仅该文件有字节差异，CRLF/LF 规范化后均与所选提交一致。
+- 修复：新快照规范化 CRLF，安装比较兼容既有缓存快照的 CRLF/LF 差异；其余内容、文件集合、tag、commit、manifest、操作、节点和翻译校验仍保留。无须删除缓存或重新解释 latest。
+- 错误：后台动作和确认失败按 workspace 语言生成消息；嵌套 ApiError 原因使用原有消息键及参数递归本地化，避免英文外层包含中文平台原因。安装状态保存本次本地化原因，外层响应和状态均保留诊断字段。原始程序日志及已保存历史失败记录不重写。
+- 定向回归用例已编写：换行等价／实际内容变化拒绝、中英安装失败状态、后台 pending/result 双重错误及诊断保留、嵌套原因本地化。未执行测试套件或综合安装验收，留待 Manager 集成验证。8 个涉及 Python 文件的语法解析通过；实际缓存证据及两种语言消息见 `.artifacts/bundle-install-fix-evidence.json`。
+
+- 构建与真实观察：调用 `7732686a9b194a63b6d6420d970fcd26` 完成类型检查／生产构建及双服务启动，构建 77.358 秒、启动 26.681 秒、总计 107.234 秒。预览32618、服务32620保持本 Feature workspace。用户重新确认安装后，实际 `v0.2.0-dev.1`／`3f0f2a64c8b24cc8ca940d945139304cf871efed` 安装完成，状态 completed、last_error=null，原生热加载 ready 且160节点；网页已显示完整 Siril 节点目录。该观察仅覆盖本次目标安装，不替代测试套件及综合版本切换验收。截图 `.artifacts/bundle-install-fixed.png`。
+
+
+## 平台错误双语补齐（2026-10-30，Feature实现）
+
+- 平台分支 `codex/agent-i18n-bundle-cicd`，Base／HEAD `a53b32131862435cf19a3ad190560ca846563295`，本轮未提交。保留此前完整准备、中英切换及官方版本选择修改；本轮不修改或重新发布 Siril Bundle。
+- core新增统一错误构造和异常表达，所有新增提示使用明确消息键及参数。ApiError保留具体原因和诊断字段；平台自有字段指导通过内部消息键本地化，公开 ErrorDetail 仍为 code／message／fields，HTTP请求标识不变。无消息键的外部旧异常使用调用位置指定的提示，原文进入诊断，不按错误码猜测业务分支。
+- 覆盖确认过期／状态冲突／无待确认动作、原生页面桥接、画布未知回执、同源代理、安装／卸载、软件执行与观察／结果记录、节点写入、素材内容检查、来源枚举、导入／上传和查看器准备失败。退出码使用插值，Siril日志和外部异常保留原文；已有落盘错误不重译，输出登记读取时保留历史诊断字段。不改数据库结构、执行／取消状态或重试行为。
+- 定向用例已编写：双语消息与插值完整性、错误构造位置检查、嵌套原因及字段指导、未知外部异常、确认过期／冲突不启动任务、桥接／代理／MCP错误、画布未知状态、非零退出与原始日志、观察／结果记录失败、素材检查、导入及历史回执。旧导入异常注入夹具补充明确消息键。测试套件及综合验收未执行，留待 Manager。
+- 静态验证：177个Python源码／测试文件编译，平台入口导入成功；424条消息中英插值集合对称，新增错误构造静态扫描无缺失消息键或直接字面错误对象；Git空白检查通过。证据 `.artifacts/platform-error-localization-check.json`。类型检查／构建及独立页面结果见本节后续回执。
+
+- 最终构建／展示：回执 `fac2ea3df3ea440a818ee20ceed2cfcf`，类型检查和生产构建通过；构建29.681秒、启动11.445秒，总耗时44.149秒。预览 `http://127.0.0.1:32618/#/workflows?apf_panel=software`、服务32620，私有runtime复用。浏览器实际加载工作台和软件包侧栏，Siril `0.2.0-dev.2` 就绪，捕获控制台error为空；截图 `.artifacts/platform-error-localization-preview.png`。未切换用户语言、执行工作流或操作素材；未提交、推送、合并平台或重新发布Bundle。页面加载不代替异常分支的Manager验收。
+
+
+## Bundle 官方版本管理与待审交接（2026-10-30，Feature）
+
+- 实现：认证版本查询、按提交缓存的官方Git元数据、数字版本排序、正式／开发两个最新标记、兼容状态及固定选择令牌；每包一行单下拉、显式安装计划确认、升级／回退、刷新与失败保留旧列表。旧安装请求仍使用固定目录，program version与Bundle version分开；语言切换只更新展示。两个历史实验标签不提供安装。
+- 实际观察：官方远端列表发现两个既有开发版本；选择0.2.0-dev.1的160项元数据，未提前检出完整程序。安装暴露CRLF／LF快照误判，修复后目标版本真实安装成功并热加载160节点。随后按用户单独授权发布双语Bundle `v0.2.0-dev.2`／`5d16fb6fc10b4ee57de428d6eba522c918b1b441`，远端接口识别为最新兼容开发版；当前独立预览已安装该提交并就绪。发布到Feature分支和开发tag，未合并Bundle dev，不代表正式稳定发布。
+- 定向用例已编写未执行：正式／开发混排、dev.9／dev.10、两个最新标记、正式优先、兼容禁用、旧安装与未列版本、失败保留缓存、批量仅取声明元数据、移动tag拒绝及固定目标不随新tag改变；前端刷新／语言切换保持选择和安装目标。综合安装／回退与异常验收由Manager组织，已有单次真实安装观察不能代替这些测试。
+- 待审交付包含本聊天完整准备流程、平台／Agent／Bundle双语与官方版本选择以及错误覆盖修复。平台保持本地待审，不推送、不合并；Siril沿用此前已授权发布的准确提交，不再次发布。最终平台Commit及同提交构建回执见聊天Brief，避免在提交内容内自引用提交SHA。
+
+
+<a id="agent-i18n-bundle-integration"></a>
+## 完整准备、Workspace中英切换与官方Bundle版本管理集成（2026-10-30，Manager）
+
+- 准确候选：平台原候选 `1e47a035d42564034985aa9f480015e2e108f35b`，基点 `a53b32131862435cf19a3ad190560ca846563295`；Manager最终功能源码 `30d6d947562d220f8629b0bc7b2591bc3219c538`，其后仅补验证记录与现状文档。Bundle候选保持 `5d16fb6fc10b4ee57de428d6eba522c918b1b441`，基点 `ff6f63fe9d866cf34e3aa612157511ee81d9e89c`，Bundle `0.2.0-dev.2`／既有tag `v0.2.0-dev.2`／Siril `1.4.4`；本轮不发布tag、PyPI或正式版。
+- 独立只读审查：三个不继承开发聊天历史的Reviewer分别检查语言与错误、官方版本与Bundle、准备流程。修复PS5.1对子回执UTF-8的读取、Bundle刷新后的旧翻译残留及双语整快照调用、官方发现缺失workspace受管Git路径、单个缺失或损坏manifest遮蔽全部版本。增量复审无剩余阻塞。
+- 真实安装发现并修复：回退dev.1成功后恢复dev.2遇Windows目录rename错误5，原版保留且动作明确failed；只对错误5/32/33同步有界重试，最多6次、累计等待1.55秒，不增加事务异步取消窗口。新增暂时／持久占用、激活失败恢复和原件保护回归；独立复审通过。永久占用仍明确失败，不能把有限重试视为任何外部占用都可解除。
+- 自动验证：首轮平台707项中695通过、7失败、5跳过；旧语言断言、取消注入签名、更新夹具和PS终端长路径断言按当前契约修正并复测。按唯一当前用例汇总712通过、5跳过；最终完整软件模块96项通过。新增安装锁回归先复现失败后通过，安装文件23项通过。跳过项为显式环境／维护窗口选择的5个真实进程或Siril集成用例，未记为通过。独立Bundle41项通过；UI包37文件286项通过；原生受影响21文件共311项经首轮及失败文件复测全部通过（包含双语往返图序列化、旧Bundle缺译回原文）。未运行全仓测试。
+- 最终构建／准备：UI包及完整原生应用类型检查、生产构建通过；网页清单对应 `30d6d947562d220f8629b0bc7b2591bc3219c538`。固定入口回执 `7472c38d3cb14194840c3a64f5cdfd8d`，依赖与私有runtime复用，完整准备47.394秒；不是冷机器首装基准。静态网页32618／服务32620仅属于Feature。
+- 实际网页与MCP：最终静态网页English→简体中文→English并恢复原语言，原生图序列化SHA保持不变，160节点双语，浏览器pageerror为空。两个绑定本workspace的新stdio MCP会话：69工具说明随语言变化，输入schema完全一致；160节点执行定义保持一致，帮助说明随语言变化。未修改全局MCP、默认workspace、正常dev配置或真实原始素材。
+- 真实升级／回退：通过网页单下拉与原生确认，完成dev.2恢复、dev.1回退、dev.2再次升级，各次固定tag／commit并达到160节点ready；dev.1无翻译时返回原文，dev.2恢复双语。服务PID `110752`、网页PID `31936`全程未变。官方列表排除历史v0.1.0／v0.1.1，dev.2为最新兼容开发版；选择／刷新／语言切换不自动安装、tag移动与失败缓存保留由定向回归覆盖。
+- 限制：未验收全新无缓存机器、冷CPU runtime、Linux／WSL、真实GitHub凭据失效／断网全过程或所有160节点科学处理。5个显式跳过用例与全面用户验收仍未完成；构建保留非阻塞上游告警。
+- 清理授权：通过后普通推送两个dev，远端包含候选后删除Feature workspace、私有runtime、分支和Worktree及其内部日志数据，不额外归档副本；本节已提交证据摘要留在Git。完整运行日志原在Feature `.artifacts/manager-integration/i18n/`，按用户要求随空间删除，历史日志路径不代表仍存在。

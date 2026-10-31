@@ -1,3 +1,4 @@
+import { uiT } from '../../../core/i18n'
 import { z } from 'zod'
 
 import { ApiClientError, createApiClient } from '../../../core/client'
@@ -73,7 +74,7 @@ export function createCanvasDataClient(fetchApi: FetchApi) {
         }
         if (!['queued', 'running'].includes(task.status)) {
           const detail = item?.error ?? task.error
-          throw new ApiClientError(typeof detail?.message === 'string' ? detail.message : '图像文件导入未完成，请查看素材导入记录。', 'service')
+          throw new ApiClientError(typeof detail?.message === 'string' ? detail.message : uiT('apfUi.image_import_is_incomplete_check_the_library_import_records'), 'service')
         }
         await new Promise<void>(resolve => setTimeout(resolve, 1000))
       }
