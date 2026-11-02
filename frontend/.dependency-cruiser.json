@@ -3,8 +3,10 @@
   "forbidden": [
     {
       "name": "no-circular",
-      "severity": "warn",
-      "from": {},
+      "severity": "error",
+      "from": {
+        "pathNot": "^packages/astrophotoflow-ui/src/generated/"
+      },
       "to": { "circular": true }
     },
     {

@@ -1,19 +1,11 @@
 <script setup lang="ts">
-import {
-  computed,
-  onMounted,
-  onBeforeUnmount,
-  ref,
-  shallowRef,
-  toRaw,
-  watch
-} from 'vue'
+import { computed } from 'vue'
+import { useWorkbenchSettings } from './workbench/useWorkbenchSettings'
 
 import type { Component } from 'vue'
 
 import { ApiClientError } from './client'
 import type { WorkbenchClient } from './client'
-import type { ConfigSave, ConfigState, ConfigValues } from './contracts'
 
 const { client, translate, controls } = defineProps<{
   client: WorkbenchClient
@@ -21,25 +13,23 @@ const { client, translate, controls } = defineProps<{
   translate: (key: string) => string
 }>()
 
-const phase = ref<'loading' | 'ready' | 'saving' | 'restarting' | 'selecting'>(
-  'loading'
+const {
+  configuration,
+  form,
+  defaultWorkspace,
+  saved,
+  hasUnsavedChanges,
+  phase,
+  error,
+  restartMessage,
+  reload,
+  save,
+  chooseDirectory,
+  restartWorkbench
+} = useWorkbenchSettings(
+  () => client,
+  (key) => translate(key)
 )
-const configuration = ref<ConfigState | null>(null)
-const form = ref<ConfigValues | null>(null)
-const defaultWorkspace = ref('')
-const error = shallowRef<unknown>(null)
-const saved = ref(false)
-const hasUnsavedChanges = computed(() =>
-  Boolean(
-    configuration.value &&
-    form.value &&
-    (JSON.stringify(form.value) !== JSON.stringify(configuration.value.saved) ||
-      defaultWorkspace.value !== (configuration.value.default_workspace ?? ''))
-  )
-)
-watch(hasUnsavedChanges, (changed) => {
-  if (changed) saved.value = false
-})
 const requestError = computed(() =>
   error.value instanceof ApiClientError ? error.value : null
 )
@@ -74,76 +64,6 @@ const dataDirectoryHint = computed(() => {
   return content.join('\n\n')
 })
 
-async function reload() {
-  phase.value = 'loading'
-  error.value = null
-  saved.value = false
-  try {
-    const current = await client.getConfiguration()
-    configuration.value = current
-    form.value = structuredClone(current.saved)
-    defaultWorkspace.value = current.default_workspace ?? ''
-  } catch (cause) {
-    error.value = cause
-  } finally {
-    phase.value = 'ready'
-  }
-}
-
-async function save() {
-  if (!configuration.value || !form.value) return
-  const body: ConfigSave = {
-    config_token: configuration.value.config_token,
-    values: structuredClone(toRaw(form.value))
-  }
-  if (
-    defaultWorkspace.value !== (configuration.value.default_workspace ?? '')
-  ) {
-    if (!defaultWorkspace.value.trim()) {
-      error.value = new Error(translate('apfWorkbench.defaultRequired'))
-      return
-    }
-    body.default_workspace = defaultWorkspace.value
-  }
-  phase.value = 'saving'
-  error.value = null
-  saved.value = false
-  try {
-    const current = await client.saveConfiguration(body)
-    configuration.value = current
-    form.value = structuredClone(current.saved)
-    defaultWorkspace.value = current.default_workspace ?? ''
-    saved.value = true
-  } catch (cause) {
-    error.value = cause
-  } finally {
-    phase.value = 'ready'
-  }
-}
-
-async function chooseDirectory(target: 'default_workspace' | 'data_dir') {
-  if (!form.value) return
-  phase.value = 'selecting'
-  error.value = null
-  try {
-    const selected = await client.selectDirectory(
-      target === 'default_workspace'
-        ? defaultWorkspace.value
-        : form.value.data_dir
-    )
-    if (selected !== null) {
-      if (target === 'default_workspace') defaultWorkspace.value = selected
-      else form.value.data_dir = selected
-      saved.value = false
-    }
-  } catch (cause) {
-    error.value = cause
-  } finally {
-    phase.value = 'ready'
-  }
-}
-
-const restartMessage = ref('')
 const restartAddress = computed(
   () => configuration.value?.saved.allowed_origins[0]
 )
@@ -151,61 +71,6 @@ const portChanges = computed(
   () =>
     restartAddress.value !== configuration.value?.effective?.allowed_origins[0]
 )
-let disposed = false
-onBeforeUnmount(() => {
-  disposed = true
-})
-
-async function restartWorkbench() {
-  phase.value = 'restarting'
-  error.value = null
-  restartMessage.value = translate('apfWorkbench.restarting')
-  const operationId = crypto.randomUUID()
-  try {
-    try {
-      await client.restart(operationId)
-    } catch (cause) {
-      if (
-        !(cause instanceof ApiClientError) ||
-        (cause.kind !== 'network' && cause.status !== 503)
-      )
-        throw cause
-    }
-    const deadline = Date.now() + 300_000
-    while (!disposed && Date.now() < deadline) {
-      await new Promise((resolve) => setTimeout(resolve, 1000))
-      if (disposed) return
-      try {
-        const result = await client.restartResult(operationId)
-        if (!result || result.state === 'in_progress') continue
-        if (result.state !== 'completed') {
-          throw new Error(
-            [result.detail, ...result.blockers].filter(Boolean).join(' · ') ||
-              translate('apfWorkbench.restartUnknown')
-          )
-        }
-        await reload()
-        restartMessage.value = translate('apfWorkbench.restarted')
-        return
-      } catch (cause) {
-        if (
-          cause instanceof ApiClientError &&
-          (cause.kind === 'network' || cause.status === 503)
-        )
-          continue
-        throw cause
-      }
-    }
-    if (!disposed) throw new Error(translate('apfWorkbench.restartUnknown'))
-  } catch (cause) {
-    error.value = cause
-    restartMessage.value = ''
-  } finally {
-    if (!disposed) phase.value = 'ready'
-  }
-}
-
-onMounted(reload)
 </script>
 
 <template>

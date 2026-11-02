@@ -1,6 +1,9 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
-import { defineComponent } from 'vue'
+import { defineComponent, h, shallowRef } from 'vue'
+import { configurationKey } from '@ui/core/workbench/keys'
+import { useQueryClient } from '@tanstack/vue-query'
+import type { QueryClient } from '@tanstack/vue-query'
 
 import WorkbenchSettings from '@ui/core/WorkbenchSettings.vue'
 import { ApiClientError, createWorkbenchClient } from '@ui/core/client'
@@ -96,7 +99,7 @@ describe('workbench configuration', () => {
     })
     expect(fetchApi).toHaveBeenCalledWith(
       '/astrophotoflow/api/v1/settings/workbench',
-      undefined
+      expect.objectContaining({ method: 'GET' })
     )
   })
 
@@ -252,11 +255,8 @@ describe('workbench configuration', () => {
     expect(
       (wrapper.get('input[name="data_dir"]').element as HTMLInputElement).value
     ).toBe('D:/data')
-    expect(client.selectDirectory.mock.calls).toEqual([
-      [''],
-      ['data'],
-      ['data']
-    ])
+    expect(client.selectDirectory.mock.calls.map(([path])=>path)).toEqual(['','data','data'])
+    expect(client.selectDirectory.mock.calls.every((call)=>call[1] instanceof AbortSignal)).toBe(true)
     expect(client.saveConfiguration).not.toHaveBeenCalled()
     expect(client.restart).not.toHaveBeenCalled()
     wrapper.unmount()
@@ -347,9 +347,9 @@ describe('workbench configuration', () => {
     expect(wrapper.find('dl').exists()).toBe(false)
     wrapper.unmount()
   })
-  it.each(['completed', 'rejected'] as const)(
-    'observes restart %s without resubmitting',
-    async (state) => {
+  it.each(['completed','rejected'].flatMap(state=>['network','503','timeout'].map(failure=>({state,failure}))))(
+    'observes restart $state after $failure without resubmitting',
+    async ({state,failure}) => {
       const result = {
         operation_id: 'ce88796a-b7bb-488d-9f15-645d04a87be5',
         state,
@@ -362,11 +362,11 @@ describe('workbench configuration', () => {
         saveConfiguration: vi.fn(),
         restart: vi
           .fn()
-          .mockRejectedValue(new ApiClientError('response lost', 'network')),
+          .mockRejectedValue(failure==='network'?new ApiClientError('response lost','network'):failure==='503'?new ApiClientError('unavailable','service',503,'SERVICE_UNAVAILABLE'):new ApiClientError('timeout','service',504,'SERVICE_TIMEOUT')),
         restartResult: vi
           .fn()
           .mockRejectedValueOnce(new ApiClientError('offline', 'network'))
-          .mockResolvedValue(result)
+          .mockImplementation(async(operationId:string)=>({...result,operation_id:operationId}))
       }
       const wrapper = mount(WorkbenchSettings, {
         props: { client, controls, translate: (key) => key }
@@ -381,9 +381,10 @@ describe('workbench configuration', () => {
             .get('[data-testid="workbench-restart"]')
             .attributes('disabled')
         ).toBeDefined()
-        await vi.advanceTimersByTimeAsync(2000)
+        await vi.advanceTimersByTimeAsync(1000)
         expect(client.restart).toHaveBeenCalledTimes(1)
         expect(client.restartResult).toHaveBeenCalledTimes(2)
+        expect(client.restartResult.mock.calls.every(call=>call[0]===client.restart.mock.calls[0][0])).toBe(true)
         if (state === 'rejected')
           expect(wrapper.get('[role="alert"]').text()).toContain('busy import')
         else expect(wrapper.text()).toContain('apfWorkbench.restarted')
@@ -393,4 +394,122 @@ describe('workbench configuration', () => {
       }
     }
   )
+  it('keeps an unsaved draft and its original token when another consumer updates the configuration cache',async()=>{
+    const initial=configuration(),changed={...configuration(),config_token:'external',saved:{...configuration().saved,file_workers:9}}
+    const client={selectDirectory:vi.fn(),restart:vi.fn(),restartResult:vi.fn(),getConfiguration:vi.fn().mockResolvedValue(initial),saveConfiguration:vi.fn().mockRejectedValue(new ApiClientError('conflict','service',409))}
+    let cache!:QueryClient
+    const wrapper=mount(defineComponent({setup(){cache=useQueryClient();return()=>h(WorkbenchSettings,{client,controls,translate:(key:string)=>key})}}))
+    try{
+      await flushPromises()
+      expect(cache.getQueryData(configurationKey(client))).toEqual(initial)
+      cache.setQueryData(configurationKey(client),{...initial,config_token:'clean-cache',saved:{...initial.saved,file_workers:3}});await flushPromises()
+      expect(wrapper.get<HTMLInputElement>('input[name="file_workers"]').element.value).toBe('3')
+      await wrapper.get('input[name="file_workers"]').setValue(5)
+      cache.setQueryData(configurationKey(client),changed);await flushPromises()
+      expect(wrapper.get<HTMLInputElement>('input[name="file_workers"]').element.value).toBe('5')
+      await wrapper.get('form').trigger('submit');await flushPromises()
+      expect(client.saveConfiguration).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({config_token:'clean-cache',values:expect.objectContaining({file_workers:5})}))
+      expect(client.getConfiguration).toHaveBeenCalledTimes(1)
+    }finally{wrapper.unmount()}
+  })
+
+  it('isolates client sources and ignores a directory selection returned after the source changes',async()=>{
+    let finish!:(path:string)=>void
+    const first={selectDirectory:vi.fn().mockImplementation(()=>new Promise(resolve=>{finish=resolve})),restart:vi.fn(),restartResult:vi.fn(),getConfiguration:vi.fn().mockResolvedValue(configuration()),saveConfiguration:vi.fn()}
+    const secondState={...configuration(),config_path:'C:/second/config.toml',saved:{...configuration().saved,data_dir:'second-data'}}
+    const second={selectDirectory:vi.fn(),restart:vi.fn(),restartResult:vi.fn(),getConfiguration:vi.fn().mockResolvedValue(secondState),saveConfiguration:vi.fn()}
+    const wrapper=mount(WorkbenchSettings,{props:{client:first,controls,translate:key=>key}})
+    try{
+      await flushPromises();await wrapper.get('[aria-label="apfWorkbench.chooseDataDirectory"]').trigger('click');await flushPromises()
+      const signal=first.selectDirectory.mock.calls[0][1] as AbortSignal
+      await wrapper.setProps({client:second});await flushPromises()
+      expect(signal.aborted).toBe(true)
+      finish('C:/old-selection');await flushPromises()
+      expect(wrapper.get<HTMLInputElement>('input[name="data_dir"]').element.value).toBe('second-data')
+      expect(configurationKey(first)).not.toEqual(configurationKey(second))
+      expect(first.saveConfiguration).not.toHaveBeenCalled();expect(second.saveConfiguration).not.toHaveBeenCalled()
+    }finally{wrapper.unmount()}
+  })
+
+  it('cancels the active configuration read when the settings page closes',async()=>{
+    const client={selectDirectory:vi.fn(),restart:vi.fn(),restartResult:vi.fn(),getConfiguration:vi.fn().mockImplementation(()=>new Promise(()=>{})),saveConfiguration:vi.fn()}
+    const wrapper=mount(WorkbenchSettings,{props:{client,controls,translate:key=>key}})
+    await flushPromises()
+    const signal=client.getConfiguration.mock.calls[0][0] as AbortSignal
+    wrapper.unmount();expect(signal.aborted).toBe(true)
+    expect(client.saveConfiguration).not.toHaveBeenCalled()
+  })
+
+  it('stops restart observation at five minutes without replaying the POST',async()=>{
+    vi.useFakeTimers()
+    const client={selectDirectory:vi.fn(),getConfiguration:vi.fn().mockResolvedValue(configuration()),saveConfiguration:vi.fn(),
+      restart:vi.fn().mockRejectedValue(new ApiClientError('lost','network')),restartResult:vi.fn().mockResolvedValue(null)}
+    const wrapper=mount(WorkbenchSettings,{props:{client,controls,translate:key=>key}})
+    try{
+      await flushPromises();await wrapper.get('[data-testid="workbench-restart"]').trigger('click');await flushPromises()
+      await vi.advanceTimersByTimeAsync(300_000);await flushPromises()
+      expect(wrapper.get('[role="alert"]').text()).toContain('apfWorkbench.restartUnknown')
+      const reads=client.restartResult.mock.calls.length
+      await vi.advanceTimersByTimeAsync(3000)
+      expect(client.restartResult).toHaveBeenCalledTimes(reads)
+      expect(client.restart).toHaveBeenCalledTimes(1)
+    }finally{wrapper.unmount();vi.useRealTimers()}
+  })
+
+  it('cancels restart result reads on close without claiming to cancel the actual restart',async()=>{
+    vi.useFakeTimers()
+    const client={selectDirectory:vi.fn(),getConfiguration:vi.fn().mockResolvedValue(configuration()),saveConfiguration:vi.fn(),
+      restart:vi.fn().mockRejectedValue(new ApiClientError('lost','network')),restartResult:vi.fn().mockImplementation(()=>new Promise(()=>{}))}
+    const wrapper=mount(WorkbenchSettings,{props:{client,controls,translate:key=>key}})
+    try{
+      await flushPromises();await wrapper.get('[data-testid="workbench-restart"]').trigger('click');await flushPromises()
+      const signal=client.restartResult.mock.calls[0][1] as AbortSignal
+      wrapper.unmount();expect(signal.aborted).toBe(true)
+      await vi.advanceTimersByTimeAsync(3000)
+      expect(client.restart).toHaveBeenCalledTimes(1);expect(client.restartResult).toHaveBeenCalledTimes(1)
+    }finally{vi.useRealTimers()}
+  })
+
+  it('rejects a restart result for another operation instead of reporting completion',async()=>{
+    const client={selectDirectory:vi.fn(),getConfiguration:vi.fn().mockResolvedValue(configuration()),saveConfiguration:vi.fn(),
+      restart:vi.fn().mockRejectedValue(new ApiClientError('lost','network')),
+      restartResult:vi.fn().mockResolvedValue({operation_id:'00000000-0000-4000-8000-000000000009',state:'completed',blockers:[],detail:null})}
+    const wrapper=mount(WorkbenchSettings,{props:{client,controls,translate:key=>key}})
+    try{
+      await flushPromises();await wrapper.get('[data-testid="workbench-restart"]').trigger('click');await flushPromises()
+      expect(wrapper.get('[role="alert"]').text()).toContain('does not match')
+      expect(wrapper.text()).not.toContain('apfWorkbench.restarted')
+      expect(client.restart).toHaveBeenCalledTimes(1)
+    }finally{wrapper.unmount()}
+  })
+
+  it('retains confirmed restart completion when the following configuration read fails',async()=>{
+    const client={selectDirectory:vi.fn(),saveConfiguration:vi.fn(),restartResult:vi.fn(),
+      getConfiguration:vi.fn().mockResolvedValueOnce(configuration()).mockRejectedValue(new ApiClientError('Configuration unavailable','network')),
+      restart:vi.fn().mockImplementation(async(operationId:string)=>({operation_id:operationId,state:'completed',blockers:[],detail:null}))}
+    const wrapper=mount(WorkbenchSettings,{props:{client,controls,translate:key=>key}})
+    try{
+      await flushPromises();await wrapper.get('[data-testid="workbench-restart"]').trigger('click');await flushPromises()
+      expect(wrapper.text()).toContain('apfWorkbench.restarted')
+      expect(wrapper.get('[role="alert"]').text()).toContain('Configuration unavailable')
+      expect(client.restart).toHaveBeenCalledTimes(1)
+      expect(client.restartResult).not.toHaveBeenCalled()
+    }finally{wrapper.unmount()}
+  })
+
+  it('does not adopt a cached configuration after a different control source fails its fresh read',async()=>{
+    const first={selectDirectory:vi.fn(),restart:vi.fn(),restartResult:vi.fn(),getConfiguration:vi.fn().mockResolvedValue(configuration()),saveConfiguration:vi.fn()}
+    const second={selectDirectory:vi.fn(),restart:vi.fn(),restartResult:vi.fn(),getConfiguration:vi.fn().mockRejectedValue(new ApiClientError('Second source offline','network')),saveConfiguration:vi.fn()}
+    const current=shallowRef(first)
+    let cache!:QueryClient
+    const wrapper=mount(defineComponent({setup(){cache=useQueryClient();return()=>h(WorkbenchSettings,{client:current.value,controls,translate:(key:string)=>key})}}))
+    try{
+      await flushPromises();cache.setQueryData(configurationKey(second),{...configuration(),config_path:'C:/second/stale.toml'})
+      current.value=second;await flushPromises()
+      expect(wrapper.get('[role="alert"]').text()).toContain('Second source offline')
+      expect(wrapper.find('form').exists()).toBe(false)
+      expect(second.saveConfiguration).not.toHaveBeenCalled()
+    }finally{wrapper.unmount()}
+  })
+
 })

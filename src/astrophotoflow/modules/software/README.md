@@ -1,8 +1,8 @@
 # ③ 外部软件接入与环境
 
-拥有固定软件包、安装／就绪及实际调用观察。`public.py`提供共享能力，`bundles.py`处理独立Bundle，`routes.py`由应用装配。Siril程序、操作和适配器来自独立私有仓库；节点定义归④、图与运行归⑤。
+拥有固定软件包、安装／就绪及实际调用观察。`public.py`只显式导出共享能力，`packages/`与`execution/`分别实现包维护与具体执行，`bundles/`处理独立Bundle，HTTP适配位于`interfaces/http/software.py`，由应用装配。Siril程序、操作和适配器来自独立私有仓库；节点定义归nodes；图、队列和执行历史归ComfyUI；具体调用归software，已检查结果归data。原workflows目录已拆除；跨模块装配归interfaces/application。
 
-Bundle SDK v1保留已发布单图输入／输出契约；v2消费真实具名图像／序列／文件输入、多输出与分析文件。契约见`contracts/bundles.py`、`contracts/software.py`，具体命令和参数声明仍在独立Bundle，不在平台生成空节点。宿主负责进程、实际观察、取消、输出范围检查；分析与科学输出分别交⑤／②检查，进程退出不等于节点结果已就绪。
+Bundle SDK仅支持v2，消费真实具名图像／序列／文件输入、多输出与分析文件。契约见`contracts/bundles.py`、`contracts/software.py`，具体命令和参数声明仍在独立Bundle，不在平台生成空节点。宿主负责进程、实际观察、取消、输出范围检查；分析schema与科学输出交data公开能力检查，接入层负责组合，进程退出不等于节点结果已就绪。
 
 操作声明的可选 `automatic_result_preview` 布尔值允许该操作成为自动结果计算目标和依赖，缺省为false；节点目录提供同名能力。显式自动目标不改变原生输出节点身份，整条依赖链均须允许自动执行。主进程正常退出后最多观察已知进程树5秒，确认停止再发布完整结果；仍活动或无法核实时保留unknown，不据此重跑。
 
@@ -23,4 +23,6 @@ Bundle维护与热加载遵循[软件和节点需求](../../../../docs/requireme
 
 - [源码导航](../../../../docs/architecture/module-map.md)定位真实入口；[架构](../../../../docs/architecture/overview.md)规定跨模块边界。
 - 测试位置：`tests/modules/software`。是否运行依用户当前要求，命令见 [开发流程](../../../../docs/development/README.md)。
-- 通用节点编辑、完整工作流运行、记忆及后续能力按 [当前计划](../../../../docs/development/implementation-plan.md)选择实际任务，不因目录或定义文件存在而认定交付。
+- 通用节点编辑、原生科学处理闭环、记忆及后续能力按 [当前计划](../../../../docs/development/implementation-plan.md)选择实际任务，不因目录或定义文件存在而认定交付。
+
+Bundle Python由`bundles/loader.py`按独立包命名空间加载，实际内容指纹变化时失效整个自有模块树；从源码编译避免旧时间戳字节码。开发构建采用development.json中的模块名（Siril为`tools.build_catalog`），经`python -m`执行，不保留脚本路径分支。默认发布目录固定为已有SDK v2开发tag v0.2.0-dev.2（5d16fb6fc10b4ee57de428d6eba522c918b1b441），本地开发绑定另有dirty／内容指纹；不得将此拆分当成G6全部完成。

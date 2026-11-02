@@ -1695,6 +1695,322 @@
     "bundle_load_diagnostic": {
       "en": "Bundle node loading failed: {diagnostic}",
       "zh": "Bundle 节点加载失败：{diagnostic}"
+    },
+    "software_call_identity_conflict": {
+      "en": "Call ID already belongs to other inputs.",
+      "zh": "调用 ID 已用于其他输入。"
+    },
+    "software_manual_execution_required": {
+      "en": "This operation requires manual execution.",
+      "zh": "此操作必须手动执行。"
+    },
+    "native_canvas_unconfigured": {
+      "en": "The native canvas address is not configured.",
+      "zh": "原生画布地址尚未配置。"
+    },
+    "export_completed_result_required": {
+      "en": "Select a completed Data result before exporting.",
+      "zh": "请选择已完成的 Data 结果再导出。"
+    },
+    "workbench_under_maintenance": {
+      "en": "Workbench is under maintenance.",
+      "zh": "工作台正在维护。"
+    },
+    "software_maintenance_active": {
+      "en": "Software maintenance is in progress.",
+      "zh": "软件正在维护。"
+    },
+    "native_receipt_identity_mismatch": {
+      "en": "The native receipt identity does not match. Continue checking the original operation.",
+      "zh": "原生回执身份不匹配，请继续核对原操作。"
+    },
+    "export_suggested_filename_invalid": {
+      "en": "Suggested filename cannot contain directory components.",
+      "zh": "建议文件名不能包含目录部分。"
+    },
+    "export_request_identity_conflict": {
+      "en": "request_id already belongs to a different export.",
+      "zh": "request_id 已用于另一项导出。"
+    },
+    "export_not_active": {
+      "en": "This export is not active; inspect the existing receipt.",
+      "zh": "此导出已不在执行中，请查看原有回执。"
+    },
+    "export_member_outside_result": {
+      "en": "Selected export member is outside the completed result.",
+      "zh": "所选导出成员不属于已完成结果。"
+    },
+    "export_absolute_destination_required": {
+      "en": "Choose an absolute local destination.",
+      "zh": "请选择本机绝对路径作为目标。"
+    },
+    "export_members_need_folder": {
+      "en": "Multiple members require an existing destination folder.",
+      "zh": "导出多个成员需要已有的目标文件夹。"
+    },
+    "export_managed_destination_forbidden": {
+      "en": "Local exports cannot write into managed library storage.",
+      "zh": "本机导出不能写入素材库的托管存储。"
+    },
+    "export_source_changed_after_selection": {
+      "en": "Complete source changed after export selection.",
+      "zh": "完整原件在选择导出后发生变化。"
+    },
+    "export_source_changed_during_conversion": {
+      "en": "Source changed while converting the complete image.",
+      "zh": "完整图像在转换过程中发生变化。"
+    },
+    "export_registration_unconfirmed": {
+      "en": "Inspect registration_task_id; do not repeat this export or upstream processing.",
+      "zh": "请查询 registration_task_id；不要重复导出或上游处理。"
+    },
+    "export_filename_invalid": {
+      "en": "Export name cannot contain a directory component.",
+      "zh": "导出名称不能包含目录部分。"
+    },
+    "export_extension_mismatch": {
+      "en": "Destination extension must match the selected format.",
+      "zh": "目标扩展名必须与所选格式一致。"
+    },
+    "export_copy_verification_failed": {
+      "en": "Local copy did not match the validated complete file. Inspect this failed destination before continuing.",
+      "zh": "本机副本与已校验的完整文件不符，请检查失败的目标文件再继续。"
+    },
+    "science_image_plane_required": {
+      "en": "Only nonempty grayscale or RGB image planes are supported; channels are never silently dropped.",
+      "zh": "仅支持非空灰度或 RGB 图像平面；不会静默丢弃通道。"
+    },
+    "science_real_pixels_required": {
+      "en": "Only real integer or floating pixels are supported.",
+      "zh": "仅支持实数整数或浮点像素。"
+    },
+    "science_tiff_series_selection_required": {
+      "en": "Multi-series TIFF is available as an original copy; select an image plane upstream before conversion.",
+      "zh": "多序列 TIFF 可按原件复制；转换前请在上游明确选择图像平面。"
+    },
+    "science_tiff_axes_invalid": {
+      "en": "TIFF axes do not describe one grayscale/RGB plane; keep the original complete container.",
+      "zh": "TIFF 轴不表示单个灰度或 RGB 平面，请保留完整原始容器。"
+    },
+    "import_project_retry_tasks_active": {
+      "en": "Wait for active tasks before retrying project links.",
+      "zh": "请等待活动任务结束后再重试项目关联。"
+    },
+    "import_project_retry_revision_required": {
+      "en": "Read the active project and reconcile its current revision first.",
+      "zh": "请先读取有效项目并核对当前修订。"
+    },
+    "import_request_identity_conflict": {
+      "en": "The request_id was already accepted with different content.",
+      "zh": "该 request_id 已按不同内容受理。"
+    },
+    "import_project_inactive": {
+      "en": "Project must exist and be active.",
+      "zh": "项目必须存在且处于有效状态。"
+    },
+    "import_project_revision_changed": {
+      "en": "Project changed; read its current revision and reconcile before submitting.",
+      "zh": "项目已变化，请读取当前修订并核对后再提交。"
+    },
+    "import_group_outside_inspection": {
+      "en": "Group is not in this inspection.",
+      "zh": "该组不属于本次检查。"
+    },
+    "import_group_members_invalid": {
+      "en": "Every selected member must belong to this scan and occur in only one group.",
+      "zh": "所选成员必须来自本次扫描，且每个成员只能属于一个组。"
+    },
+    "inspection_entry_kind_invalid": {
+      "en": "kind must be files, groups, excluded or issues.",
+      "zh": "kind 必须为 files、groups、excluded 或 issues。"
+    },
+    "inspection_absolute_paths_required": {
+      "en": "Inspection requires absolute local paths.",
+      "zh": "检查需要本机绝对路径。"
+    },
+    "data_upstream_port_not_science": {
+      "en": "Upstream port is not a science output.",
+      "zh": "上游端口不是科学输出。"
+    },
+    "data_execution_identity_conflict": {
+      "en": "Execution ID already belongs to another Data input.",
+      "zh": "执行 ID 已用于另一项 Data 输入。"
+    },
+    "data_execution_not_completed": {
+      "en": "Previous execution did not complete. Inspect its record instead of replaying it.",
+      "zh": "上次执行尚未成功完成，请查看原记录，不要重放执行。"
+    },
+    "data_complete_member_required": {
+      "en": "Data requires at least one complete member.",
+      "zh": "Data 至少需要一个完整成员。"
+    },
+    "data_upstream_prompt_mismatch": {
+      "en": "Upstream science result must belong to this native run.",
+      "zh": "上游科学结果必须属于本次原生任务。"
+    },
+    "data_image_shape_invalid": {
+      "en": "IMAGE member must have the declared floating dtype and nonempty grayscale/RGB shape.",
+      "zh": "IMAGE 成员必须使用声明的浮点类型，并具有非空灰度或 RGB 形状。"
+    },
+    "result_record_identity_mismatch": {
+      "en": "Checked result identity differs from its address.",
+      "zh": "已检查结果的身份与其地址不符。"
+    },
+    "result_execution_identity_conflict": {
+      "en": "Execution already owns different checked output facts.",
+      "zh": "该执行已拥有不同的已检查输出事实。"
+    },
+    "result_prompt_mismatch": {
+      "en": "Only checked outputs from this native prompt may be consumed.",
+      "zh": "只能使用本次原生任务中已检查的输出。"
+    },
+    "result_output_port_invalid": {
+      "en": "Output port is missing or has an incompatible type.",
+      "zh": "输出端口不存在或类型不兼容。"
+    },
+    "result_changed_after_execution": {
+      "en": "Checked result changed after execution.",
+      "zh": "已检查结果在执行后发生变化。"
+    },
+    "result_frozen_bytes_mismatch": {
+      "en": "Checked result bytes differ from the frozen output.",
+      "zh": "已检查文件的字节与固定输出不符。"
+    },
+    "result_file_missing": {
+      "en": "The checked file is missing; an old preview cannot replace it.",
+      "zh": "已检查文件缺失，不能用旧预览代替。"
+    },
+    "result_outside_execution_directory": {
+      "en": "Output is outside its software execution directory.",
+      "zh": "输出不在所属软件执行目录内。"
+    },
+    "science_raw_decode_required": {
+      "en": "Decode/demosaic RAW explicitly upstream before conversion, or copy the original file.",
+      "zh": "转换前请在上游明确解码或去马赛克 RAW，或按原始格式复制文件。"
+    },
+    "science_encoded_layout_mismatch": {
+      "en": "Encoded dimensions, channels or precision do not match the request.",
+      "zh": "编码后的尺寸、通道或精度与请求不符。"
+    },
+    "science_encoded_pixels_mismatch": {
+      "en": "Encoded pixel values do not match the requested conversion.",
+      "zh": "编码后的像素值与请求的转换不符。"
+    },
+    "science_video_frame_required": {
+      "en": "Select an explicit video frame.",
+      "zh": "请选择明确的视频帧。"
+    },
+    "science_float_overflow": {
+      "en": "Finite values overflow the selected floating precision.",
+      "zh": "有限值超出了所选浮点精度的范围。"
+    },
+    "science_fits_hdu_required": {
+      "en": "Choose an explicit image HDU before conversion.",
+      "zh": "转换前请选择明确的图像 HDU。"
+    },
+    "science_fits_hdu_not_image": {
+      "en": "The selected HDU is not an image plane.",
+      "zh": "所选 HDU 不是图像平面。"
+    },
+    "science_xisf_selection_required": {
+      "en": "Multi-image XISF requires explicit upstream image selection; original copying preserves the entire container.",
+      "zh": "多图像 XISF 需要在上游明确选择图像；按原件复制会保留整个容器。"
+    },
+    "science_integer_overflow": {
+      "en": "Pixel values do not fit the selected integer range. Choose floating output or an explicit normalization/display range.",
+      "zh": "像素值超出所选整数范围，请选择浮点输出或明确的归一化／显示范围。"
+    },
+    "science_display_channels_mismatch": {
+      "en": "The frozen display recipe does not match this member's grayscale/RGB channels.",
+      "zh": "固定显示配方与该成员的灰度或 RGB 通道不符。"
+    },
+    "science_normalization_nonfinite": {
+      "en": "Normalization contains NaN/Inf; use floating output or explicitly choose display rendering.",
+      "zh": "归一化包含 NaN 或 Inf，请使用浮点输出或明确选择显示渲染。"
+    },
+    "science_integer_rounding_required": {
+      "en": "Fractional values require explicit rounding (nearest, ties to even), normalization or display rendering.",
+      "zh": "小数值需要明确选择舍入（最近值，平局取偶数）、归一化或显示渲染。"
+    },
+    "science_video_conversion_frame_required": {
+      "en": "Choose an explicit video frame before conversion.",
+      "zh": "转换前请选择明确的视频帧。"
+    },
+    "science_raw_conversion_forbidden": {
+      "en": "RAW files can be copied in their original format. Decode/demosaic explicitly upstream before converting them; export never silently develops sensor data.",
+      "zh": "RAW 可按原始格式复制；转换前请在上游明确解码或去马赛克，导出不会静默处理传感器数据。"
+    },
+    "science_conversion_unsupported": {
+      "en": "This complete file can be copied in its original format, but cannot be converted to an image.",
+      "zh": "此完整文件可按原始格式复制，但不能转换为图像。"
+    },
+    "science_numpy_array_required": {
+      "en": "Choose an explicit NumPy array.",
+      "zh": "请选择明确的 NumPy 数组。"
+    },
+    "software_call_not_found": {
+      "en": "Software invocation not found.",
+      "zh": "未找到软件调用。"
+    },
+    "software_log_unavailable": {
+      "en": "Program log is not available.",
+      "zh": "程序日志尚不可用。"
+    },
+    "software_operation_not_ready": {
+      "en": "Software is not ready.",
+      "zh": "软件尚未就绪。"
+    },
+    "export_local_picker_busy": {
+      "en": "The local file picker is busy.",
+      "zh": "本机文件选择器正在使用。"
+    },
+    "export_local_picker_unavailable": {
+      "en": "The local file picker is unavailable.",
+      "zh": "本机文件选择器不可用。"
+    },
+    "inspection_source_changed": {
+      "en": "Source changed since inspection: {path}",
+      "zh": "来源自检查后发生变化：{path}"
+    },
+    "bundle_development_not_ready": {
+      "en": "Development Bundle is not ready.",
+      "zh": "开发 Bundle 尚未就绪。"
+    },
+    "mcp_tool_not_found": {
+      "en": "The requested tool was not found.",
+      "zh": "未找到请求的工具。"
+    },
+    "mcp_transport_timeout": {
+      "en": "Reply unknown. Query the original operation ID; do not replay writes.",
+      "zh": "受理结果未知。请查询原操作 ID，不要重放写入。"
+    },
+    "mcp_service_unavailable": {
+      "en": "Cannot reach the selected local workspace service.",
+      "zh": "无法连接所选本机工作区服务。"
+    },
+    "mcp_invalid_request": {
+      "en": "The tool request is invalid.",
+      "zh": "工具请求无效。"
+    },
+    "mcp_unexpected_failure": {
+      "en": "Unexpected tool failure; inspect the local service logs.",
+      "zh": "工具发生未预期错误，请检查本机服务日志。"
+    },
+    "import_link_originals_not_ready": {
+      "en": "Only groups with all originals available are linked. Retry failed items, then explicitly retry project linking.",
+      "zh": "仅关联原件全部就绪的组；请先重试失败成员，再明确重试项目关联。"
+    },
+    "import_link_dataset_archived": {
+      "en": "The imported dataset is archived; restore it before retrying project linking.",
+      "zh": "导入集合已归档，请恢复后再重试项目关联。"
+    },
+    "import_link_project_changed": {
+      "en": "Project changed after confirmation. Read it before retrying project linking.",
+      "zh": "项目在确认后发生变化，请读取后再重试项目关联。"
+    },
+    "inspection_source_changed_reading": {
+      "en": "Source changed while reading its metadata.",
+      "zh": "来源在读取元数据时发生变化。"
     }
   },
   "codes": {

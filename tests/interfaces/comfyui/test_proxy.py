@@ -12,6 +12,19 @@ import pytest
 from astrophotoflow.comfyui import proxy
 
 
+def test_public_proxy_routes_match_the_exported_service_contract():
+    root = Path(__file__).resolve().parents[3]
+    document = json.loads((root / 'docs/api/openapi.json').read_text(encoding='utf-8'))
+    methods = {'get', 'post', 'put', 'patch', 'delete', 'head', 'options'}
+    expected = {(method.upper(), path.removeprefix('/api/v1'))
+                for path, operations in document['paths'].items() if path.startswith('/api/v1/')
+                for method in operations if method in methods}
+    assert {(method, path) for method, path, _ in proxy.ROUTES} == expected
+    assert all(path == upstream for _, path, upstream in proxy.ROUTES)
+    assert ('GET', '/canvas/pages') in expected
+    assert not any('/internal/' in path for _, path in expected)
+
+
 def test_aborted_native_selection_closes_the_upstream_request(monkeypatch):
     async def run():
         released = asyncio.Event()
@@ -90,6 +103,9 @@ def test_proxy_whitelist_origin_headers_and_upstream_status(tmp_path, monkeypatc
                     seen["upload_size"] += len(chunk)
                 return web.json_response({"received": seen["upload_size"]})
             request_id = request.headers["X-Request-ID"]
+            if request.path.endswith("/members"):
+                return web.json_response({"frame_types": request.query.getall("frame_type", []), "offset": request.query.get("offset")},
+                                         headers={"X-Request-ID": request_id})
             if request.path.endswith("/health"):
                 return web.json_response({
                     "error": {"code": "AUTHENTICATION_REQUIRED", "message": "bad token", "fields": []},
@@ -135,6 +151,15 @@ def test_proxy_whitelist_origin_headers_and_upstream_status(tmp_path, monkeypatc
                 "labels": ["one", "two"], "offset": "0", "authorization": "Bearer server-only-token",
                 "cookie": None, "client_header": None
             }
+
+            members_path = "/datasets/00000000-0000-0000-0000-000000000001/versions/00000000-0000-0000-0000-000000000002/members"
+            members = await client.get("/api" + proxy.BASE_PATH + members_path,
+                                       params=[("frame_type", "light"), ("frame_type", "dark"), ("limit", "3"), ("offset", "4")],
+                                       headers={"Origin": origin})
+            assert members.status == 200
+            assert await members.json() == {"frame_types": ["light", "dark"], "offset": "4"}
+            assert seen["path"] == "/api/v1" + members_path
+            assert seen["authorization"] == "Bearer server-only-token"
 
             blocked = await client.get("/api" + proxy.BASE_PATH + "/projects", headers={"Origin": "http://evil.invalid"})
             assert blocked.status == 403

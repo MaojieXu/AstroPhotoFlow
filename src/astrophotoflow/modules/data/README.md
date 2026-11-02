@@ -1,12 +1,12 @@
 # ② 数据与资产管理
 
-拥有素材／集合固定版本、项目资料、设备／预设快照、校准、原件与回收站。公开入口是`public.py`、`routes.py`；`science_inputs.py`提供科学输入解析与输出检查。固定科学输入、内容接纳及所选结果交接已有实现。
+拥有素材／集合固定版本、项目资料、设备／预设快照、校准、原件与回收站。公开入口是`public.py`；HTTP路由由`interfaces/http/data/`装配；`science/inputs.py`提供固定输入解析，`science/outputs.py`负责输出检查／显式登记，`assets/content.py`负责内容确认。固定科学输入、内容接纳及所选结果交接已有实现。
 
 软件实际消费的坏点表、ICC、比较星CSV、WCS和脚本也使用稳定文件版本，经`APF_FILE_REFERENCE`交接；它们不伪装为科学图像。来源格式可登记、可解码及可预览仍分开报告。运行输出复用同一查看器／缓存，按所选成员或HDU准备，不为整组预建金字塔，也不因查看而登记素材。颜色布局由软件契约明确声明，读取时只修改内存解释，不覆盖原件；FITS／SER容器保留实际帧数和精度资料。
 
 ## 本模块必须保持
 
-保留稳定身份、固定成员顺序、资料revision及省略／null／0语义。新运行用纠正资料，旧运行不改。登记、原件可读、解析和预览分开；预览不当科学输入。公开交接不暴露私有ORM；图实例／实际运行归⑤。
+保留稳定身份、固定成员顺序、资料revision及省略／null／0语义。新运行用纠正资料，旧运行不改。登记、原件可读、解析和预览分开；预览不当科学输入。公开交接不暴露私有ORM；已检查结果归data，图／队列／历史归ComfyUI，具体调用归software。
 
 实际类型看`contracts`及公开代码，不从旧详设抄签名。完整用户规则见 [需求](../../../../docs/requirements/README.md)，实现与验收状态见 [当前上下文](../../../../docs/development/current-context.md)；不在这里重复维护进度。
 
@@ -14,4 +14,6 @@
 
 - [源码导航](../../../../docs/architecture/module-map.md)定位真实入口；[架构](../../../../docs/architecture/overview.md)规定跨模块边界。
 - 测试位置：`tests/modules/data`。是否运行依用户当前要求，命令见 [开发流程](../../../../docs/development/README.md)。
-- 通用节点编辑、完整工作流运行、记忆及后续能力按 [当前计划](../../../../docs/development/implementation-plan.md)选择实际任务，不因目录或定义文件存在而认定交付。
+- 通用节点编辑、原生科学处理闭环、记忆及后续能力按 [当前计划](../../../../docs/development/implementation-plan.md)选择实际任务，不因目录或定义文件存在而认定交付。
+
+formats/只提供独立格式、布局、像素与文件解码，不依赖导入流水线／ORM／HTTP。science/conversion.py消费原始像素；PixelSource不反向导入科学转换。SER解析返回明确SerInfo；显示可选RGB呈现与科学转换保留完整通道分开处理。旧fits_preview／image_formats／media_sources／media_video／auto_stretch／science_inputs模块已删除，调用方使用当前所有者；导入流水线的阶段拆分仍待完成。

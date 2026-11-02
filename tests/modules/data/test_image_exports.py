@@ -1,3 +1,4 @@
+from astrophotoflow.contracts.media import MediaSelection
 from pathlib import Path
 from types import SimpleNamespace
 from uuid import uuid4
@@ -16,10 +17,13 @@ from astrophotoflow.core.config import Settings
 from astrophotoflow.core.database.schema import database_lock, upgrade_database
 from astrophotoflow.core.errors import ApiError
 from astrophotoflow.interfaces.http.app import create_app
-from astrophotoflow.modules.data.image_formats import convert_pixels, read_image, read_raster, verify_image, write_image
-from astrophotoflow.modules.data.models import Asset
-from astrophotoflow.modules.workflows.data_nodes import execute_data, result_directory
-from astrophotoflow.modules.workflows.software_calls import _resolve_previous
+from astrophotoflow.modules.data.science.conversion import convert_pixels
+from astrophotoflow.modules.data.science.conversion import read_image
+from astrophotoflow.modules.data.formats.raster import read_raster
+from astrophotoflow.modules.data.science.conversion import verify_image
+from astrophotoflow.modules.data.science.conversion import write_image
+from astrophotoflow.modules.data.assets.models import Asset
+from astrophotoflow.modules.data.public import execute_data_node, data_execution_directory, resolve_result_inputs
 
 PRECISIONS = {
     'fits': ['uint8','uint16','uint32','int16','int32','float32','float64'],
@@ -99,18 +103,17 @@ def workspace(tmp_path):
     with database_lock(settings): upgrade_database(settings)
     app = create_app(settings, 'test')
     with TestClient(app) as client: yield settings, client, app.state.database
-    app.state.database.close()
 
 
 def image_result(settings, database, *, dtype='float32', count=2, rgb=True):
     run, execution = uuid4(), uuid4()
-    directory = result_directory(settings, run, execution)
+    directory = data_execution_directory(settings, run, execution)
     directory.mkdir(parents=True)
     for index in range(count):
         values = np.full((4, 5, 3) if rgb else (4, 5), index / 2, dtype=dtype)
         np.save(directory / f'input-{index:06}.npy', values, allow_pickle=False)
     body = NativeDataExecute(run_id=run, execution_id=execution, node_id='7', workflow_id=uuid4(), image_count=count, input_dtype=dtype)
-    result = execute_data(database, settings, body)
+    result = execute_data_node(database, settings, body).model_dump(mode="json")
     return body, result
 
 
@@ -131,8 +134,7 @@ def test_native_image_materialization_does_not_register_assets_and_feeds_science
     body, result = image_result(settings, database, dtype=dtype)
     assert result['state'] == 'completed' and len(result['members']) == 2
     assert result['reference']['kind'] == 'run_output'
-    inputs, supporting = _resolve_previous(settings, SimpleNamespace(prompt_id=body.run_id),
-        OutputLocator.model_validate(result['reference']), SimpleNamespace(type='APF_SCIENCE'))
+    inputs, supporting = resolve_result_inputs(settings,body.run_id,OutputLocator.model_validate(result['output']),'APF_SCIENCE')
     assert len(inputs) == 2 and supporting == []
     with fits.open(inputs[1].read_path) as hdus:
         assert hdus[0].header['BITPIX'] == (-64 if dtype == 'float64' else -32)
@@ -140,7 +142,7 @@ def test_native_image_materialization_does_not_register_assets_and_feeds_science
         np.testing.assert_array_equal(hdus[0].data, np.full((3, 4, 5), 0.5))
     with database.read_session() as session:
         assert session.scalar(select(func.count()).select_from(Asset)) == 0
-    repeated = execute_data(database, settings, body)
+    repeated = execute_data_node(database, settings, body).model_dump(mode="json")
     assert repeated['reference'] == result['reference']
 
 
@@ -205,18 +207,17 @@ def test_member_partial_failure_keeps_order_and_does_not_rerun_native_data(works
 @pytest.mark.parametrize('width', [3, 7])
 def test_export_uses_declared_planar_layout_without_fits_axis_marker(workspace, tmp_path, width):
     settings, client, database = workspace
-    body, _ = image_result(settings, database, count=1)
-    directory = result_directory(settings, body.run_id, body.execution_id)
-    path = directory / 'image-000001.fits'
-    values = np.arange(3 * 4 * width, dtype=np.float32).reshape(3, 4, width)
-    fits.PrimaryHDU(values).writeto(path, overwrite=True)
-    from astrophotoflow.modules.data.science_inputs import check_output
-    import json
-    record_path = directory / 'result.json'
-    record = json.loads(record_path.read_text(encoding='utf-8'))
-    checked = check_output(settings, run_directory=directory, path=path, expected_format='fits', colour_layout='planar')
-    record['members'][0]['checked'] = checked.model_dump(mode='json')
-    record_path.write_text(json.dumps(record), encoding='utf-8')
+    from astrophotoflow.contracts.results import CheckedResult,CheckedResultPort,CheckedResultMember
+    from astrophotoflow.modules.data.public import check_output,publish_checked_result
+    run,call,execution=uuid4(),uuid4(),uuid4()
+    directory=settings.workspace/'runs'/str(run)/'work'/str(call);directory.mkdir(parents=True)
+    path=directory/'result.fits'
+    values=np.arange(3*4*width,dtype=np.float32).reshape(3,4,width)
+    fits.PrimaryHDU(values).writeto(path)
+    checked=check_output(settings,run_directory=directory,path=path,expected_format='fits',colour_layout='planar')
+    publish_checked_result(settings,CheckedResult(run_id=run,execution_id=call,source_kind='software',ports=[CheckedResultPort(name='science',type='APF_SCIENCE',members=[CheckedResultMember(checked=checked,name=path.name)])]))
+    body=NativeDataExecute(run_id=run,execution_id=execution,node_id='Data',reference=OutputLocator(kind='run_output',run_id=run,execution_id=call,output_index=0))
+    execute_data_node(database,settings,body)
     destination = tmp_path / 'rgb.tif'
     request = {'request_id': str(uuid4()), 'source': {'run_id': str(body.run_id), 'execution_id': str(body.execution_id)},
                'target': 'local', 'destination': str(destination), 'member_indexes': [0],
@@ -234,7 +235,7 @@ def test_interleaved_fits_conversion_rewrites_colour_axis(tmp_path):
     settings = ExportSettings(format='fits', precision='float32')
     path = tmp_path / 'planar.fits'
     write_image(path, values, header, settings)
-    from astrophotoflow.modules.data.science_inputs import check_output
+    from astrophotoflow.modules.data.science.outputs import check_output
     checked = check_output(SimpleNamespace(), run_directory=tmp_path, path=path, expected_format='fits', colour_layout='planar')
     assert checked.format == 'fits'
     with fits.open(path) as hdus:
@@ -248,6 +249,20 @@ def test_interleaved_fits_conversion_rewrites_colour_axis(tmp_path):
 
 def test_raw_display_export_requires_explicit_upstream_development(tmp_path):
     from astrophotoflow.contracts.media import MediaSelection
-    from astrophotoflow.modules.data.image_formats import read_display_image
+    from astrophotoflow.modules.data.science.conversion import read_display_image
     with pytest.raises(ApiError, match='upstream'):
         read_display_image(tmp_path / 'sensor.cr2', 'raw', MediaSelection(), tmp_path, {})
+
+
+
+def test_numpy_scientific_conversion_never_silently_drops_a_fourth_channel(tmp_path):
+    from astrophotoflow.modules.data.formats.numpy import select_array
+    path = tmp_path / 'rgba.npy'
+    values = np.arange(5 * 7 * 4, dtype=np.uint16).reshape(5, 7, 4)
+    np.save(path, values)
+    original = path.read_bytes()
+    assert select_array(values, MediaSelection()).shape == (5, 7, 3)
+    with pytest.raises(ApiError) as error:
+        read_image(path, 'numpy', MediaSelection(), tmp_path)
+    assert error.value.code == 'UNSUPPORTED_IMAGE_LAYOUT'
+    assert path.read_bytes() == original

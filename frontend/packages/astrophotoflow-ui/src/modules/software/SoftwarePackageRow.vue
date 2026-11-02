@@ -1,12 +1,14 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
 import type { Component } from 'vue'
-import { ApiClientError } from '../../core/client'
+import { useSoftwareDetails, useSoftwareReleases, type SoftwareDetailsRequest } from './queries'
+import { useSoftwareActionRequest, useSoftwareConfirmation } from './mutations'
 
 import type { SoftwareClient } from './api/client'
-import type { PendingSoftwareAction, SoftwareConfirmationResult, SoftwarePackageDetails, SoftwareRelease, SoftwareReleaseListing } from './api/contracts'
+import type { PendingSoftwareAction, SoftwareConfirmationResult, SoftwarePackageDetails, SoftwareRelease } from './api/contracts'
 
 const props = defineProps<{
+  workspaceId: string
   client: SoftwareClient
   confirmSoftware: (operationId: string) => Promise<SoftwareConfirmationResult>
   confirmationAvailable: boolean
@@ -14,7 +16,6 @@ const props = defineProps<{
   controls?: { button: Component; dialog: Component; select?: Component }
   packageId: string
   operationId?: string
-  refreshKey?: number
 }>()
 
 type PanelState =
@@ -22,19 +23,34 @@ type PanelState =
   | { phase: 'ready' | 'requesting' | 'confirming'; details: SoftwarePackageDetails; error: string | null }
   | { phase: 'error'; error: string }
 
-const state = ref<PanelState>({ phase: 'loading' })
+const intent = ref<'idle'|'requesting'|'confirming'|'reconciling'>('idle')
+const actionFailure = ref<string|null>(null)
+const actionSession = shallowRef({})
+const operationId = ref(props.operationId)
 const planOpen = ref(false)
-const details = computed(() => 'details' in state.value ? state.value.details : null)
+function context(): SoftwareDetailsRequest {
+  return {workspaceId:props.workspaceId,packageId:props.packageId,operationId:operationId.value,client:props.client}
+}
+const detailsQuery = useSoftwareDetails(context, () => intent.value==='requesting'||intent.value==='confirming')
+const releasesQuery = useSoftwareReleases(context)
+const requestMutation = useSoftwareActionRequest()
+const confirmationMutation = useSoftwareConfirmation()
+const details = computed(() => detailsQuery.data.value ?? null)
+const state = computed<PanelState>(() => {
+  if (!details.value) return detailsQuery.isError.value ? {phase:'error',error:message(detailsQuery.error.value)} : {phase:'loading'}
+  const phase=intent.value==='requesting'||intent.value==='confirming'?intent.value:'ready'
+  return {phase,details:details.value,error:actionFailure.value??details.value.current_action?.error?.message??details.value.package.last_error?.message??(detailsQuery.isError.value?message(detailsQuery.error.value):null)}
+})
 const software = computed(() => details.value?.package)
 const action = computed(() => details.value?.current_action)
-const busy = computed(() => state.value.phase === 'requesting' || state.value.phase === 'confirming' || action.value?.state === 'running')
+const busy = computed(() => intent.value!=='idle' || action.value?.state==='running')
 const installed = computed(() => !software.value?.migration_required && (software.value?.installed_version != null || software.value?.install_path != null))
 const uninstallAction = computed(() => action.value?.state === 'running' ? action.value.plan.action === 'uninstall' : installed.value)
 const stateSaveFailed = computed(() => action.value?.error?.code === 'SOFTWARE_STATE_SAVE_FAILED' || software.value?.last_error?.code === 'SOFTWARE_STATE_SAVE_FAILED')
 const ready = computed(() => (software.value?.development_source ? software.value.development_source.state === 'ready' : software.value?.availability === 'ready') && !busy.value && !stateSaveFailed.value)
-const releases = shallowRef<SoftwareReleaseListing>()
-const releasesLoading = ref(false)
-const releasesFailure = ref(false)
+const releases = releasesQuery.data
+const releasesLoading = releasesQuery.isFetching
+const releasesFailure = releasesQuery.isError
 const selectedValue = ref('')
 const rememberedSelection = shallowRef<SoftwareRelease>()
 const releaseKey = (value: SoftwareRelease) => value.tag + '@' + value.commit
@@ -67,11 +83,11 @@ function releaseLabel(value: SoftwareRelease) {
 
 function chooseDefault() {
   if (!software.value) return
-  if (!installed.value && selectedValue.value === '__installed__' && action.value?.state === 'completed' && action.value.plan.action === 'uninstall') {
+  if (!installed.value && selectedValue.value === '__installed__') {
     selectedValue.value = ''
     rememberedSelection.value = undefined
   }
-  if (rememberedSelection.value && isInstalledRelease(rememberedSelection.value) && action.value?.state === 'completed') selectedValue.value = '__installed__'
+  if (rememberedSelection.value && isInstalledRelease(rememberedSelection.value)) selectedValue.value = '__installed__'
   if (selectedValue.value) return
   if (installed.value) selectedValue.value = '__installed__'
   else {
@@ -84,134 +100,92 @@ function chooseDefault() {
 watch(selectedRelease, value => { if (value) rememberedSelection.value = value })
 watch([software, releases, action], chooseDefault)
 
-async function refreshReleases() {
-  if (releasesLoading.value) return
-  releasesLoading.value = true
-  releasesFailure.value = false
-  try {
-    const result = await props.client.listReleases(props.packageId)
-    if (!disposed) releases.value = result
-  } catch {
-    if (!disposed) releasesFailure.value = true
-  } finally {
-    if (!disposed) releasesLoading.value = false
-  }
-}
+function refreshReleases() { return releasesQuery.refetch({cancelRefetch:false}) }
 
 function changeSelection(value: string | number | undefined) { selectedValue.value = String(value ?? '') }
 function selectNative(event: Event) { if (event.target instanceof HTMLSelectElement) changeSelection(event.target.value) }
 const progressLabel = computed(() => props.translate(software.value?.phase ? 'apfSoftware.installPhase.' + software.value.phase : 'apfSoftware.installing'))
 const statusText = computed(() => {
   if (software.value?.development_source) return software.value.development_source.error ?? props.translate('apfSoftware.developmentReady')
-  if (busy.value) return props.translate(action.value?.plan.action === 'uninstall' ? 'apfSoftware.uninstalling' : 'apfSoftware.installing')
+  if (action.value?.state==='running') return props.translate(action.value?.plan.action === 'uninstall' ? 'apfSoftware.uninstalling' : 'apfSoftware.installing')
   const actionError = action.value?.error
   if (actionError?.code === 'SOFTWARE_STATE_SAVE_FAILED') return actionError.message
   return software.value?.last_error?.message ?? software.value?.reason ?? props.translate(`apfSoftware.availability.${software.value?.availability ?? 'unknown'}`)
 })
-let disposed = false
-let generation = 0
-let pollTimer: ReturnType<typeof setTimeout> | undefined
-
 function message(cause: unknown) {
   return cause instanceof Error ? cause.message : props.translate('apfSoftware.loadError')
 }
-
-function schedulePoll(pending: PendingSoftwareAction) {
-  clearTimeout(pollTimer)
-  const current = generation
-  pollTimer = setTimeout(async () => {
-    try {
-      const result = await props.client.getPackage(pending.plan.package_id, pending.operation_id)
-      if (disposed || current !== generation) return
-      state.value = { phase: 'ready', details: result, error: result.current_action?.error?.message ?? null }
-      if (result.current_action?.state === 'running') schedulePoll(result.current_action)
-    } catch (cause) {
-      if (disposed || current !== generation || !details.value) return
-      state.value = { phase: 'ready', details: details.value, error: message(cause) }
-    }
-  }, 1000)
+function adopt(current: SoftwareDetailsRequest, result: SoftwarePackageDetails) {
+  const nextOperation=result.current_action?.operation_id
+  detailsQuery.adopt({...current,operationId:nextOperation},result)
+  operationId.value=nextOperation
 }
-
+watch(detailsQuery.data, result => {
+  if (result && result.current_action?.operation_id!==operationId.value) adopt(context(),result)
+})
+watch(() => [action.value?.operation_id,action.value?.state] as const, ([id,value],[oldId,oldValue]) => {
+  if(value!=='awaiting_confirmation')planOpen.value=false
+  else if(id!==oldId||oldValue!==value)planOpen.value=true
+})
+watch(() => [props.workspaceId,props.packageId,props.operationId,props.client] as const, () => {
+  actionSession.value={}; operationId.value=props.operationId; intent.value='idle'; actionFailure.value=null
+  planOpen.value=false; selectedValue.value=''; rememberedSelection.value=undefined
+}, {flush:'sync'})
+onBeforeUnmount(() => { actionSession.value={} })
 async function load() {
-  clearTimeout(pollTimer)
-  const current = ++generation
-  state.value = { phase: 'loading' }
-  try {
-    const id = props.packageId
-    let result: SoftwarePackageDetails
-    try {
-      result = await props.client.getPackage(id, props.operationId)
-    } catch (cause) {
-      if (!(cause instanceof ApiClientError) || cause.code !== 'SOFTWARE_ACTION_EXPIRED') throw cause
-      result = await props.client.getPackage(id)
-    }
-    if (disposed || current !== generation) return
-    state.value = { phase: 'ready', details: result, error: result.current_action?.error?.message ?? result.package.last_error?.message ?? null }
-    planOpen.value = result.current_action?.state === 'awaiting_confirmation'
-    if (result.current_action?.state === 'running') schedulePoll(result.current_action)
-  } catch (cause) {
-    if (!disposed && current === generation) state.value = { phase: 'error', error: message(cause) }
-  }
+  actionFailure.value=null
+  const result=await detailsQuery.refetch({cancelRefetch:false})
+  if(!result.isError)intent.value='idle'
 }
-
-async function requestAction(kind: 'install' | 'update' | 'uninstall') {
-  const current = details.value
-  if (!current || busy.value) return
-  const selected = selectedRelease.value
-  if (action.value?.state === 'awaiting_confirmation' &&
-      (kind === 'uninstall' ? action.value.plan.action === 'uninstall' :
-        action.value.plan.action !== 'uninstall' && action.value.plan.target_bundle_version === selected?.bundle_version && action.value.plan.target_commit === selected?.commit)) {
-    planOpen.value = true
-    return
+async function reconcile(session: object) {
+  if(session!==actionSession.value)return
+  intent.value='reconciling'
+  const result=await detailsQuery.refetch({cancelRefetch:false})
+  if(session===actionSession.value&&!result.isError)intent.value='idle'
+}
+watch([detailsQuery.isFetching,detailsQuery.isError], ([fetching,error]) => {
+  if(!fetching&&!error&&details.value&&intent.value==='reconciling')intent.value='idle'
+})
+async function requestAction(kind: 'install'|'update'|'uninstall') {
+  const current=details.value
+  if(!current||busy.value)return
+  const selected=selectedRelease.value
+  if(action.value?.state==='awaiting_confirmation' && (kind==='uninstall'?action.value.plan.action==='uninstall':
+    action.value.plan.action!=='uninstall'&&action.value.plan.target_bundle_version===selected?.bundle_version&&action.value.plan.target_commit===selected?.commit)) {
+    planOpen.value=true; return
   }
-  if (kind !== 'uninstall' && (!canInstallSelection.value || !selected?.software_version || !selected.release_token)) return
-  state.value = { phase: 'requesting', details: current, error: null }
+  if(kind!=='uninstall'&&(!canInstallSelection.value||!selected?.software_version||!selected.release_token))return
+  const target=context(), session=actionSession.value
+  intent.value='requesting'; actionFailure.value=null
   try {
     let result: PendingSoftwareAction
-    if (kind === 'uninstall') result = await props.client.requestUninstall(current.package.package_id, { package_token: current.package.package_token })
+    if(kind==='uninstall') result=await requestMutation.mutateAsync({...target,kind,body:{package_token:current.package.package_token}})
     else {
-      if (!selected?.software_version || !selected.release_token) throw new Error(props.translate('apfSoftware.selectVersion'))
-      result = await props.client.requestInstall(current.package.package_id, {
-        version: selected.software_version, package_token: current.package.package_token,
-        bundle_version: selected.bundle_version, release_token: selected.release_token
-      })
+      if(!selected?.software_version||!selected.release_token)throw new Error(props.translate('apfSoftware.selectVersion'))
+      result=await requestMutation.mutateAsync({...target,kind:'install',body:{version:selected.software_version,package_token:current.package.package_token,bundle_version:selected.bundle_version,release_token:selected.release_token}})
     }
-    if (disposed) return
-    state.value = { phase: 'ready', details: { ...current, current_action: result, result: null }, error: null }
-    planOpen.value = true
-  } catch (cause) {
-    if (!disposed) state.value = { phase: 'ready', details: current, error: message(cause) }
+    if(session!==actionSession.value)return
+    adopt(target,{...current,current_action:result,result:null})
+    planOpen.value=true; intent.value='idle'
+  } catch(cause) {
+    if(session===actionSession.value){actionFailure.value=message(cause);await reconcile(session)}
   }
 }
-
 async function confirmAction() {
-  const current = details.value
-  const pending = action.value
-  if (!current || !pending || pending.state !== 'awaiting_confirmation' || busy.value || !props.confirmationAvailable) return
-  state.value = { phase: 'confirming', details: current, error: null }
+  const current=details.value, pending=action.value
+  if(!current||!pending||pending.state!=='awaiting_confirmation'||busy.value||!props.confirmationAvailable)return
+  const target=context(), session=actionSession.value
+  intent.value='confirming'; actionFailure.value=null
   try {
-    const result = await props.confirmSoftware(pending.operation_id)
-    if (disposed) return
-    if (!result.ok) {
-      state.value = { phase: 'ready', details: current, error: result.message ?? props.translate('apfSoftware.confirmationFailed') }
-      return
-    }
-    state.value = { phase: 'ready', details: { ...current, current_action: result.pending }, error: null }
-    planOpen.value = false
-    if (result.pending.state === 'running') schedulePoll(result.pending)
-  } catch (cause) {
-    if (!disposed) state.value = { phase: 'ready', details: current, error: message(cause) }
+    const result=await confirmationMutation.mutateAsync({...target,operationId:pending.operation_id,confirm:props.confirmSoftware})
+    if(session!==actionSession.value)return
+    if(!result.ok){actionFailure.value=result.message??props.translate('apfSoftware.confirmationFailed');await reconcile(session);return}
+    adopt(target,{...current,current_action:result.pending})
+    planOpen.value=false; intent.value='idle'
+  } catch(cause) {
+    if(session===actionSession.value){actionFailure.value=message(cause);await reconcile(session)}
   }
 }
-
-onMounted(() => { void load(); void refreshReleases() })
-watch(() => props.refreshKey, () => void load())
-watch(() => [props.packageId, props.operationId], () => void load())
-onBeforeUnmount(() => {
-  disposed = true
-  generation++
-  clearTimeout(pollTimer)
-})
 </script>
 
 <template>

@@ -9,5 +9,6 @@
 import commands from '../../src/locales/en/commands.json' with { type: 'json' }
 import nodeDefs from '../../src/locales/en/nodeDefs.json' with { type: 'json' }
 import settings from '../../src/locales/en/settings.json' with { type: 'json' }
+import apfUi from '../../packages/astrophotoflow-ui/src/core/locales/en.json' with { type: 'json' }
 
-export const en = { commands, nodeDefs, settings }
+export const en = { commands, nodeDefs, settings, apfUi }

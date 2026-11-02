@@ -8,8 +8,10 @@ import pytest
 from xisf import XISF
 
 from astrophotoflow.contracts.media import MediaSelection
-from astrophotoflow.modules.data import media_sources
-from astrophotoflow.modules.data.media_sources import PixelSource, numpy_arrays, select_array
+from astrophotoflow.modules.data.formats import source as codec_formats_source
+from astrophotoflow.modules.data.formats.source import PixelSource
+from astrophotoflow.modules.data.formats.numpy import numpy_arrays
+from astrophotoflow.modules.data.formats.numpy import select_array
 
 
 def source(tmp_path, path, category, selection=None, parameters=None):
@@ -91,9 +93,9 @@ def test_full_decode_is_cached_once_and_region_reads_keep_source_resolution(tmp_
     reader = source(tmp_path, path, category)
     assert reader.dimensions() == (1313, 671)
     if category == "image":
-        monkeypatch.setattr(media_sources.Image, "open", lambda *args: pytest.fail("source image decoded twice"))
+        monkeypatch.setattr(codec_formats_source.Image, "open", lambda *args: pytest.fail("source image decoded twice"))
     else:
-        monkeypatch.setattr(media_sources, "XISF", lambda *args: pytest.fail("XISF decoded twice"))
+        monkeypatch.setattr(codec_formats_source, "XISF", lambda *args: pytest.fail("XISF decoded twice"))
     np.testing.assert_array_equal(reader.read((1200, 600, 1313, 671)), values[600:, 1200:])
 
 
@@ -109,7 +111,7 @@ def test_raw_uses_full_postprocess_without_embedded_thumbnail(tmp_path, monkeypa
         def postprocess(self, **options):
             seen.update(options)
             return pixels
-    monkeypatch.setattr(media_sources.rawpy, "imread", lambda path: Raw())
+    monkeypatch.setattr(codec_formats_source.rawpy, "imread", lambda path: Raw())
     path = tmp_path / "camera.cr3"
     reader = source(tmp_path, path, "raw")
     assert reader.dimensions() == (1029, 541)
@@ -135,7 +137,7 @@ def test_strided_fits_reads_contiguous_bounded_strips(tmp_path, monkeypatch, kin
     original = path.read_bytes()
     reader = source(tmp_path, path, "fits", MediaSelection(hdu_index=int(kind == "compressed")))
     budget = 71 * 8 * 7
-    monkeypatch.setattr(media_sources, "FITS_STRIP_BYTES", budget)
+    monkeypatch.setattr(codec_formats_source, "FITS_STRIP_BYTES", budget)
     calls = []
     native_pixels = reader.pixels
     @contextmanager
@@ -164,7 +166,7 @@ def test_fits_read_stops_at_strip_boundary(tmp_path, monkeypatch):
     path = tmp_path / "cancel.fits"
     fits.PrimaryHDU(np.ones((100, 60), dtype=np.float32)).writeto(path)
     reader = source(tmp_path, path, "fits")
-    monkeypatch.setattr(media_sources, "FITS_STRIP_BYTES", 60 * 8 * 4)
+    monkeypatch.setattr(codec_formats_source, "FITS_STRIP_BYTES", 60 * 8 * 4)
     checks = []
     def cancel():
         checks.append(True)

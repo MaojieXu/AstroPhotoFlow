@@ -1,3 +1,4 @@
+from astrophotoflow.modules.data.formats import fits as codec_formats_fits
 """Reproducible import phase benchmark; run from a worktree with its own Python.
 
 Fixture generation happens in the parent only. Every measured trial uses a fresh
@@ -58,7 +59,7 @@ def relocate_historical_imports(source):
         elif node.module in {"schemas", "import_schemas", "setup_schemas"}:
             statements = ["from " + owners[alias.name] + " import " + alias.name + (" as " + alias.asname if alias.asname else "") for alias in node.names]
         else:
-            target = {"db": "astrophotoflow.core.database.db", "dependencies": "astrophotoflow.core.http", "errors": "astrophotoflow.core.errors", "config": "astrophotoflow.core.config"}.get(node.module)
+            target = {"db": "astrophotoflow.core.database.db", "dependencies": "astrophotoflow.interfaces.http.dependencies", "errors": "astrophotoflow.core.errors", "config": "astrophotoflow.core.config"}.get(node.module)
             if target is None:
                 continue
             names = [alias.name + (" as " + alias.asname if alias.asname else "") for alias in node.names]
@@ -134,12 +135,12 @@ def instrument(modules, measurements):
         ("_read_hash_and_copy", "hash_copy"),
         ("inspect_fits", "parsing"),
         ("_xisf_layout", "parsing"),
-        ("_inspect_xisf", "parsing"),
+        ("inspect_xisf", "parsing"),
         ("_fit_preview_rows", "preview"),
         ("_save_preview", "preview"),
-        ("_xisf_image", "preview"),
-        ("_ordinary_image", "preview"),
-        ("_raw_image", "preview"),
+        ("read_xisf_preview", "preview"),
+        ("read_raster_preview", "preview"),
+        ("read_raw_preview", "preview"),
         ("first_video_frame", "preview"),
         ("create_preview", "preview_decode"),
     ):
@@ -200,7 +201,8 @@ def worker(args):
     from fastapi.testclient import TestClient
     from sqlalchemy import func, select
     from astrophotoflow.core.database.db import Database
-    from astrophotoflow.modules.data.models import AssetTask, AssetTaskItem, AssetVersion
+    from astrophotoflow.modules.data.assets.models import AssetVersion
+    from astrophotoflow.modules.data.imports.models import AssetTask, AssetTaskItem
     from astrophotoflow.core.database.schema import database_lock, upgrade_database
     from astrophotoflow.core.config import ImportRoot, Settings
 
@@ -212,7 +214,7 @@ def worker(args):
     with database_lock(settings):
         upgrade_database(settings)
     database = Database(settings.database_path)
-    direct_xisf = modules["ingestion"]._xisf_image
+    direct_xisf = modules["ingestion"].read_xisf_preview
     metrics = Measurements()
     instrument(modules, metrics)
     app = FastAPI()
@@ -280,9 +282,9 @@ def worker(args):
                         dataset_id=None, enumeration_completed=False, retry_of_task_id=None, report={}, error=None))
                 background_start = time.perf_counter()
                 if args.revision == "working":
-                    modules["ingestion"].process_task(database, settings, task_id, app.state.import_workers)
+                    modules["ingestion"].run_import_task(database, settings, task_id, app.state.import_workers)
                 else:
-                    modules["ingestion"].process_task(database, settings, task_id)
+                    modules["ingestion"].run_import_task(database, settings, task_id)
         background_wall = time.perf_counter() - background_start
         total_wall = time.perf_counter() - total_start
     finally:

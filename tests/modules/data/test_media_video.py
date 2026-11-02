@@ -7,15 +7,17 @@ from PIL import Image
 import pytest
 
 from astrophotoflow.contracts.media import MediaSelection
-from astrophotoflow.modules.data import media_video
-from astrophotoflow.modules.data.media_sources import PixelSource, ser_info
-from astrophotoflow.modules.data.media_cache import MediaCache
+from astrophotoflow.modules.data.formats import video as codec_formats_video
+from astrophotoflow.modules.data.media import playback as codec_media_playback
+from astrophotoflow.modules.data.formats.source import PixelSource
+from astrophotoflow.modules.data.formats.ser import ser_info
+from astrophotoflow.modules.data.media.cache import MediaCache
 import json
 
 
 def test_vfr_frame_timestamps_are_not_calculated_from_average_fps():
     log = 'config in time_base: 1/1000000\n' + '\n'.join(f'[Parsed_showinfo_0] n: {index:3d} pts: {round(time * 1e6)} pts_time:{time}' for index, time in enumerate([0, .041, .147, .181]))
-    assert media_video.frame_times(log) == [(0, 0.0), (1, .041), (2, .147), (3, .181)]
+    assert codec_formats_video.frame_times(log) == [(0, 0.0), (1, .041), (2, .147), (3, .181)]
 
 
 def test_pause_reads_original_frame_and_rejects_a_different_presented_timestamp(tmp_path, monkeypatch):
@@ -26,19 +28,19 @@ def test_pause_reads_original_frame_and_rejects_a_different_presented_timestamp(
     def run(command, **kwargs):
         commands.append(command)
         return SimpleNamespace(returncode=0, stdout=image.getvalue(), stderr=b'config in time_base: 1/1000000\n[showinfo] n: 0 pts: 147000 pts_time:0.147')
-    monkeypatch.setattr(media_video, 'ffmpeg', lambda: 'existing-ffmpeg')
-    monkeypatch.setattr(media_video.subprocess, 'run', run)
+    monkeypatch.setattr(codec_formats_video, 'ffmpeg', lambda: 'existing-ffmpeg')
+    monkeypatch.setattr(codec_formats_video.subprocess, 'run', run)
     original = tmp_path / 'source.mp4'
     original.write_bytes(b'original compressed video')
     folder = tmp_path / 'frame'
     folder.mkdir()
-    target, width, height, timestamp = media_video.extract_frame(original, MediaSelection(media_time=.147), folder, lambda _: None)
+    target, width, height, timestamp = codec_formats_video.extract_frame(original, MediaSelection(media_time=.147), folder, lambda _: None)
     assert (width, height, timestamp) == (127, 83, .147)
     np.testing.assert_array_equal(np.load(target, allow_pickle=False), pixels)
     assert 'trim=start=0.147000000,showinfo' in commands[0]
     assert not any('scale=' in item for item in commands[0])
     with pytest.raises(ValueError, match='精确对应'):
-        media_video.extract_frame(original, MediaSelection(media_time=.1489 + .01), folder, lambda _: None)
+        codec_formats_video.extract_frame(original, MediaSelection(media_time=.1489 + .01), folder, lambda _: None)
     assert original.read_bytes() == b'original compressed video'
 
 
@@ -52,8 +54,8 @@ def test_ser_frames_are_directly_addressed_with_real_geometry_and_timestamps(tmp
     path = tmp_path / 'sequence.ser'
     path.write_bytes(header + frames.tobytes() + stamps.tobytes())
     info = ser_info(path)
-    assert info['count'] == 3
-    np.testing.assert_allclose(info['times'], [0, .0041, .0147])
+    assert info.count == 3
+    np.testing.assert_allclose(info.times, [0, .0041, .0147])
     reader = PixelSource(path, 'video', MediaSelection(frame_index=2), {}, tmp_path, lambda _: None)
     assert reader.dimensions() == (width, height)
     np.testing.assert_array_equal(reader.read((2, 3, 10, 9)), frames[2, 3:9, 2:10])
@@ -61,9 +63,9 @@ def test_ser_frames_are_directly_addressed_with_real_geometry_and_timestamps(tmp
 
 def test_video_header_dimensions_honor_rotation_without_ffprobe(monkeypatch):
     result = SimpleNamespace(returncode=0, stderr=b'Duration: 00:00:02.15\n Stream #0:0: Video: h264, yuv420p, 1920x1080\n displaymatrix: rotation of -90.00 degrees\nStream mapping:')
-    monkeypatch.setattr(media_video, 'ffmpeg', lambda: 'existing-ffmpeg')
-    monkeypatch.setattr(media_video.subprocess, 'run', lambda *args, **kwargs: result)
-    assert media_video.video_info('portrait.mov') == (1080, 1920, 2.15)
+    monkeypatch.setattr(codec_formats_video, 'ffmpeg', lambda: 'existing-ffmpeg')
+    monkeypatch.setattr(codec_formats_video.subprocess, 'run', lambda *args, **kwargs: result)
+    assert codec_formats_video.video_info('portrait.mov') == (1080, 1920, 2.15)
 
 
 @pytest.mark.parametrize('timed', [False, True])
@@ -100,9 +102,9 @@ def test_ser_proxy_preserves_frame_mapping_and_timestamps_without_preextracting_
             return 0
         def wait(self, **kwargs):
             return 0
-    monkeypatch.setattr(media_video, 'ffmpeg', lambda: 'existing-ffmpeg')
-    monkeypatch.setattr(media_video.subprocess, 'Popen', Encoder)
-    target, note = media_video.make_proxy(original, folder, MediaCache(tmp_path), {}, {'stretch_low': 0, 'stretch_high': 255})
+    monkeypatch.setattr(codec_formats_video, 'ffmpeg', lambda: 'existing-ffmpeg')
+    monkeypatch.setattr(codec_formats_video.subprocess, 'Popen', Encoder)
+    target, note = codec_media_playback.make_proxy(original, folder, MediaCache(tmp_path), {}, {'stretch_low': 0, 'stretch_high': 255})
     assert target.read_bytes() == b'playback proxy'
     mapping = json.loads((folder / 'frames.json').read_text())
     assert [frame['index'] for frame in mapping] == [0, 1, 2]

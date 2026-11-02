@@ -118,7 +118,7 @@ import { useKeybindingStore } from '@/platform/keybindings/keybindingStore'
 import { useKeybindingPresetService } from '@/platform/keybindings/presetService'
 import { useSettingStore } from '@/platform/settings/settingStore'
 import { useCommandStore } from '@/stores/commandStore'
-import { isSettingCommandVisible } from '@/platform/astrophotoflow/settingsPresentation'
+import { isSettingCommandVisible } from '@/platform/astrophotoflow/settings/settingsPresentation'
 import { useDialogStore } from '@/stores/dialogStore'
 import { normalizeI18nKey } from '@/utils/formatUtil'
 

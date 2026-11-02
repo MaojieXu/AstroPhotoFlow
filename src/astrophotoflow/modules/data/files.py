@@ -1,10 +1,9 @@
-from astrophotoflow.core.localization import localized_error, workspace_locale
 import os
 from pathlib import Path, PurePosixPath
 
-from astrophotoflow.core.errors import ApiError
 from astrophotoflow.core.config import ImportRoot, Settings
-
+from astrophotoflow.core.errors import ApiError
+from astrophotoflow.core.localization import localized_error, workspace_locale
 
 SUPPORTED_EXTENSIONS = {
     ".fits": "fits", ".fit": "fits", ".fts": "fits", ".fits.fz": "fits", ".fit.fz": "fits", '.fts.fz': 'fits',

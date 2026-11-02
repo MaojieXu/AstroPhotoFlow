@@ -1,3 +1,4 @@
+import type { EquipmentSetupCreate } from '@ui/generated/api/types.gen'
 import { flushPromises, mount } from '@vue/test-utils'
 import type { VueWrapper } from '@vue/test-utils'
 import { createPinia } from 'pinia'
@@ -8,11 +9,11 @@ import { equipmentSchema, equipmentSetupSchema } from '@ui/modules/data/api/cont
 import type { Equipment, EquipmentSetup } from '@ui/modules/data/api/contracts'
 
 const { get, send } = vi.hoisted(() => ({ get: vi.fn(), send: vi.fn() }))
-vi.mock('@ui/modules/data/api/index', () => ({ assetApi: { get, send } }))
+vi.mock('@ui/modules/data/api/index', async () => ({ libraryApi: (await import('../../../fixtures/library-api')).createLibraryApiFixture(get), catalogApi: (await import('../../../fixtures/library-api')).createCatalogApiFixture(get), mutationApi: (await import('../../../fixtures/library-api')).createMutationApiFixture(send), trashApi: (await import('../../../fixtures/library-api')).createTrashApiFixture(get,send), importApi: (await import('../../../fixtures/library-api')).createImportApiFixture(get,send), datasetApi: (await import('../../../fixtures/library-api')).createDatasetApiFixture(get,send), assetApi: { get, send } }))
 const timestamp = '2026-10-28T12:00:00Z'
 const id = (value: number) => '00000000-0000-4000-8000-' + String(value).padStart(12, '0')
-const setup = (value: number, components: EquipmentSetup['components'] = []) => equipmentSetupSchema.parse({
-  id: id(value), name: 'Rig ' + value, components, notes: null, status: 'active',
+const setup = (value: number, components: EquipmentSetupCreate['components'] = []) => equipmentSetupSchema.parse({
+  id: id(value), name: 'Rig ' + value, components:components.map((component,index)=>({...component,id:component.id??id(value*10+index)})), notes: null, status: 'active',
   revision: 1, created_at: timestamp, updated_at: timestamp
 })
 let devices: Equipment[]
@@ -68,29 +69,33 @@ function latestListQuery() {
 }
 
 describe('equipment setup table', () => {
-  it('shows six columns, resolves both component sources, and keeps optional columns empty', async () => {
-    devices = ['camera', 'optical_system', 'mount', 'filter', 'accessory'].map((kind, index) => equipmentSchema.parse({
-      id: id(index + 1), kind, name: ['Camera with a long full name', 'Legacy optics', 'Mount', 'Filter', 'MPCC'][index],
-      model: null, serial_number: null, notes: null, specs: {}, status: 'active',
+  it('shows four columns, resolves both component sources, and keeps optional columns empty', async () => {
+    devices = ['camera', 'telescope', 'filter'].map((kind, index) => equipmentSchema.parse({
+      id: id(index + 1), kind, name: ['Camera with a long full name', 'Telescope', 'Filter'][index],
+      model: null, notes: null, specs: kind === 'filter' ? { channel: 'Ha', bandwidth_nm: 7 } : {}, status: 'active',
       revision: 1, created_at: timestamp, updated_at: timestamp
     }))
     setups = [setup(100, [
       ...devices.map(item => ({ source: 'registered' as const, equipment_id: item.id })),
-      { source: 'inline', equipment: { kind: 'camera', name: 'Inline camera', model: null, serial_number: null, notes: null, specs: {} } }
+      { source: 'inline', equipment: { kind: 'filter', name: 'Filter', model: null, notes: null, specs: { channel: 'Ha', bandwidth_nm: 7 } } },
+      { source: 'inline', equipment: { kind: 'filter', name: 'Long filter name without truncation', specs: {} } }
     ]), setup(101)]
     const { mounted } = await open()
     const table = mounted.get('table[aria-label="设备组合列表"]')
-    expect(table.findAll('th').map(item => item.text())).toEqual(['名称', '相机', '望远镜', '赤道仪', '滤镜', '光学附件'])
+    expect(table.findAll('th').map(item => item.text())).toEqual(['名称', '相机', '望远镜', '滤镜'])
     expect(table.find('input[type="checkbox"]').exists()).toBe(false)
     const first = table.findAll('tbody tr')[0]
-    expect(first.text()).toContain('Camera with a long full name 等 2 件')
-    expect(first.text()).toContain('Legacy optics（既有成像系统）')
-    expect(first.text()).toContain('MPCC')
-    expect(first.findAll('[title]').some(item => item.attributes('title') === 'Camera with a long full name\nInline camera')).toBe(true)
+    expect(first.text()).toContain('Camera with a long full name')
+    expect(first.findAll('.apf-setup-filter-tag').map(tag=>tag.text())).toEqual(['Ha 7nm','Ha 7nm','未指定通道 · Long filter name without truncation'])
+    expect(first.text()).not.toContain('等 3 件')
+    expect(first.text()).toContain('Telescope')
+    expect(table.text()).not.toContain('赤道仪')
+    expect(table.findAll('th').some(item => item.text()==='光学附件')).toBe(false)
+    expect(first.text()).toContain('Long filter name without truncation')
     expect(mounted.find('button[aria-label="设备组合说明"]').exists()).toBe(false)
     expect(table.find('i.pi-info-circle').exists()).toBe(false)
     expect(mounted.find('section[aria-label="组合拍摄预设"]').exists()).toBe(false)
-    expect(table.findAll('tbody tr')[1].findAll('td').slice(1).map(item => item.text())).toEqual(['—', '—', '—', '—', '—'])
+    expect(table.findAll('tbody tr')[1].findAll('td').slice(1).map(item => item.text())).toEqual(['—', '—', '—'])
     await first.trigger('click')
     await flushPromises()
     const actions=mounted.get('[role="group"][aria-label="组合操作"]')
@@ -102,7 +107,7 @@ describe('equipment setup table', () => {
     await click(mounted,'编辑设备组合')
     expect(mounted.find('form[aria-label="设备组合表单"]').exists()).toBe(true)
     expect(mounted.get('#setup-name').element).toHaveProperty('value','Rig 100')
-    expect(mounted.get('select[aria-label="选择滤镜"]').element).toHaveProperty('value',id(4))
+    expect(mounted.get('select[aria-label="选择滤镜"]').element).toHaveProperty('value',id(3))
     expect(mounted.get('form[aria-label="设备组合表单"]').find('i.pi-info-circle').exists()).toBe(false)
     await click(mounted,'取消')
     expect(mounted.find('form[aria-label="设备组合表单"]').exists()).toBe(false)
@@ -111,7 +116,7 @@ describe('equipment setup table', () => {
 
   it.each([
     ['name', '名称'], ['camera', '相机'], ['telescope', '望远镜'],
-    ['mount', '赤道仪'], ['filter', '滤镜'], ['accessory', '光学附件']
+    ['filter', '滤镜']
   ] as const)('requests global %s sorting, resets paging, and clears selection', async (key, label) => {
     setups = Array.from({ length: 51 }, (_, index) => setup(index + 100))
     const { mounted, store } = await open()
@@ -137,8 +142,7 @@ describe('equipment setup table', () => {
 
   it('refreshes registered device names when returning from My Devices', async () => {
     devices = [equipmentSchema.parse({
-      id: id(1), kind: 'camera', name: 'Original camera', model: null, serial_number: null,
-      notes: null, specs: {}, status: 'active', revision: 1, created_at: timestamp, updated_at: timestamp
+      id: id(1), kind: 'camera', name: 'Original camera', model: null, notes: null, specs: {}, status: 'active', revision: 1, created_at: timestamp, updated_at: timestamp
     })]
     setups = [setup(100, [{ source: 'registered', equipment_id: id(1) }])]
     const { mounted } = await open()
@@ -156,14 +160,15 @@ describe('equipment setup table', () => {
     await mounted.get('button[aria-label="查看组合 Rig 100"]').trigger('click')
     await flushPromises()
     await click(mounted, editor === '组合' ? '编辑设备组合' : '新建拍摄预设')
-    const name=mounted.get(editor === '组合' ? '#setup-name' : '#preset-name')
-    await name.setValue('Unsaved name')
+    const name=mounted.get(editor === '组合' ? '#setup-name' : 'input[aria-label="曝光（秒）"]')
+    const draftValue=editor === '组合' ? 'Unsaved name' : '60'
+    await name.setValue(draftValue)
     await flushPromises()
     const headers = mounted.get('table[aria-label="设备组合列表"]').findAll('th button')
     expect(headers.every(button => button.attributes('disabled') !== undefined)).toBe(true)
     await headers[1].trigger('click')
     expect(latestListQuery()?.get('sort_by')).toBe('created_at')
-    expect(name.element).toHaveProperty('value', 'Unsaved name')
+    expect(name.element).toHaveProperty('value', draftValue)
     vi.spyOn(window, 'confirm').mockReturnValue(true)
     await click(mounted, '取消')
     expect(headers.every(button => button.attributes('disabled') === undefined)).toBe(true)

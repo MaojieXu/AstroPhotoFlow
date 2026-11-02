@@ -4,7 +4,7 @@ import { st } from '@/i18n'
 import {
   isSettingVisible,
   settingCategoryLabelKey
-} from '@/platform/astrophotoflow/settingsPresentation'
+} from '@/platform/astrophotoflow/settings/settingsPresentation'
 import {
   getSettingInfo,
   useSettingStore

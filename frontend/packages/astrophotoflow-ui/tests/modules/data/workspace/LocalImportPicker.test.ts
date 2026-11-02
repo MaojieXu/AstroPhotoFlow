@@ -1,15 +1,32 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import LocalImportPicker from '@ui/modules/data/workspace/LocalImportPicker.vue'
+import { ref } from 'vue'
+import { queryAvailabilityKey } from '@ui/core/query/availability'
+import LocalImportPicker from '@ui/modules/data/imports/LocalImportPicker.vue'
 
 const {send,get}=vi.hoisted(()=>({send:vi.fn(),get:vi.fn()}))
-vi.mock('@ui/modules/data/api/index',()=>({assetApi:{send,get}}))
+vi.mock('@ui/modules/data/api/index',async () => ({ libraryApi: (await import('../../../fixtures/library-api')).createLibraryApiFixture(get), catalogApi: (await import('../../../fixtures/library-api')).createCatalogApiFixture(get), mutationApi: (await import('../../../fixtures/library-api')).createMutationApiFixture(send), trashApi: (await import('../../../fixtures/library-api')).createTrashApiFixture(get,send), importApi: (await import('../../../fixtures/library-api')).createImportApiFixture(get,send), datasetApi: (await import('../../../fixtures/library-api')).createDatasetApiFixture(get,send),assetApi:{send,get}}))
 const files=[{path:'C:\\Images\\one.fit',name:'one.fit',size:100},{path:'D:\\Night\\two.fit',name:'two.fit',size:200}]
 let wrapper:ReturnType<typeof mount>|undefined
 beforeEach(()=>{get.mockReset();send.mockReset().mockResolvedValue({cancelled:false,files,name:'Images',folder:false})})
 afterEach(()=>{wrapper?.unmount();wrapper=undefined})
 
 describe('direct native local source selection',()=>{
+  it('aborts the current chooser when connection identity becomes unverified and does not reopen it automatically',async()=>{
+    const available=ref(true)
+    let finish!:(value:unknown)=>void
+    send.mockImplementation(()=>new Promise(resolve=>{finish=resolve}))
+    wrapper=mount(LocalImportPicker,{props:{open:true,mode:'files'},global:{provide:{[queryAvailabilityKey as symbol]:available}}})
+    await flushPromises()
+    const signal:AbortSignal=send.mock.calls[0][4].signal
+    available.value=false;await flushPromises()
+    expect(signal.aborted).toBe(true)
+    expect(wrapper.emitted('close')).toHaveLength(1)
+    available.value=true;await flushPromises()
+    finish({cancelled:false,files,name:'Old',folder:false});await flushPromises()
+    expect(wrapper.emitted('selected')).toBeUndefined()
+    expect(send).toHaveBeenCalledTimes(1)
+  })
   it('returns absolute files across drives without reading configured roots or uploading browser files',async()=>{
     wrapper=mount(LocalImportPicker,{props:{open:true,mode:'files'}})
     await flushPromises()
@@ -46,6 +63,7 @@ describe('direct native local source selection',()=>{
     let finish:((value:unknown)=>void)|undefined
     send.mockImplementation(()=>new Promise(resolve=>{finish=resolve}))
     wrapper=mount(LocalImportPicker,{props:{open:true,mode:'files'}})
+    await flushPromises()
     await wrapper.setProps({open:false})
     expect(send.mock.calls[0][4].signal.aborted).toBe(true)
     finish?.({cancelled:false,files,name:'Night',folder:false})
@@ -56,6 +74,7 @@ describe('direct native local source selection',()=>{
   it('aborts the native request immediately when cancel is clicked',async()=>{
     send.mockImplementation(()=>new Promise(()=>{}))
     wrapper=mount(LocalImportPicker,{props:{open:true,mode:'files'}})
+    await flushPromises()
     const signal:AbortSignal=send.mock.calls[0][4].signal
     expect(signal.aborted).toBe(false)
     await wrapper.findAll('button').find(button=>button.text()==='取消')!.trigger('click')
@@ -64,9 +83,10 @@ describe('direct native local source selection',()=>{
     expect(wrapper.emitted('selected')).toBeUndefined()
   })
 
-  it('aborts an outstanding chooser when the component is unmounted',()=>{
+  it('aborts an outstanding chooser when the component is unmounted',async()=>{
     send.mockImplementation(()=>new Promise(()=>{}))
     wrapper=mount(LocalImportPicker,{props:{open:true,mode:'folder'}})
+    await flushPromises()
     const signal:AbortSignal=send.mock.calls[0][4].signal
     wrapper.unmount()
     wrapper=undefined
@@ -79,6 +99,7 @@ describe('direct native local source selection',()=>{
     await flushPromises()
     const retry=wrapper.findAll('button').find(button=>button.text()==='重新选择')!
     await Promise.all([retry.trigger('click'),retry.trigger('click')])
+    await flushPromises()
     expect(send).toHaveBeenCalledTimes(2)
   })
 
@@ -86,9 +107,11 @@ describe('direct native local source selection',()=>{
     const finish:Array<(value:unknown)=>void>=[]
     send.mockImplementation(()=>new Promise(resolve=>{finish.push(resolve)}))
     wrapper=mount(LocalImportPicker,{props:{open:true,mode:'files'}})
+    await flushPromises()
     const first:AbortSignal=send.mock.calls[0][4].signal
     await wrapper.setProps({open:false})
     await wrapper.setProps({open:true})
+    await flushPromises()
     const second:AbortSignal=send.mock.calls[1][4].signal
     finish[0]({cancelled:false,files,name:'Old',folder:false})
     await flushPromises()

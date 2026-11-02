@@ -1,10 +1,23 @@
-from astrophotoflow.contracts.assets import AssetClassification, AssetParameters
-from astrophotoflow.contracts.common import StrictModel, UuidInput
 from datetime import datetime
 from pathlib import PurePosixPath, PureWindowsPath
-from pydantic import Field, field_validator, model_validator
 from typing import Literal
 from uuid import UUID
+
+from pydantic import ConfigDict, Field, JsonValue, field_validator, model_validator
+
+from astrophotoflow.contracts.common import PageMetadata, SnapshotModel, StrictModel, UuidInput
+from astrophotoflow.contracts.metadata import AssetClassification, AssetParameters
+
+TaskStatus = Literal["queued", "running", "cancelling", "completed", "completed_with_errors", "failed", "cancelled", "interrupted"]
+
+
+class ImportTaskStateOut(StrictModel):
+    task_id: UUID
+    status: TaskStatus
+
+
+class UploadReceipt(StrictModel):
+    received: int = Field(ge=0)
 
 
 class ImportRootOut(StrictModel):
@@ -22,11 +35,8 @@ class ImportRootEntryOut(StrictModel):
     size: int | None
 
 
-class ImportRootEntryPage(StrictModel):
+class ImportRootEntryPage(PageMetadata):
     items: list[ImportRootEntryOut]
-    total: int
-    limit: int
-    offset: int
 
 
 class ImportAccepted(StrictModel):
@@ -53,9 +63,43 @@ class TaskItemOut(StrictModel):
     updated_at: datetime
 
 
+class ImportRegistrationProgress(StrictModel):
+    total: int = Field(ge=0)
+    registered: int = Field(ge=0)
+    completed: bool
+
+
+class ImportContentProgress(StrictModel):
+    total: int = Field(ge=0)
+    succeeded: int = Field(ge=0)
+    failed: int = Field(ge=0)
+    skipped: int = Field(ge=0)
+    metadata_failed: int = Field(ge=0)
+    bytes_total: int = Field(ge=0)
+    bytes_copied: int = Field(ge=0)
+    completed: bool
+
+
+class ImportPreviewProgress(StrictModel):
+    total: int = Field(ge=0)
+    available: int = Field(ge=0)
+    failed: int = Field(ge=0)
+    unsupported: int = Field(ge=0)
+    completed: bool
+
+
+class ImportReport(SnapshotModel):
+    model_config = ConfigDict(extra="allow")
+    __pydantic_extra__: dict[str, JsonValue] = Field(init=False)
+
+    registration: ImportRegistrationProgress | None = None
+    content: ImportContentProgress | None = None
+    preview: ImportPreviewProgress | None = None
+
+
 class AssetTaskOut(StrictModel):
     id: UUID
-    status: str
+    status: TaskStatus
     sources: list[dict]
     storage_mode: Literal["reference", "managed"]
     classification: dict
@@ -67,7 +111,7 @@ class AssetTaskOut(StrictModel):
     dataset_id: UUID | None
     enumeration_completed: bool
     retry_of_task_id: UUID | None
-    report: dict = Field(description="阶段事实。registration为登记判定计数；content包含total/succeeded/failed/skipped/metadata_failed、bytes_total/bytes_copied及completed；preview包含total/available/failed/unsupported及completed。原件就绪与预览完成分别表达，任务status仍遵循既有终态协议。")
+    report: ImportReport
     error: dict | None
     created_at: datetime
     updated_at: datetime
@@ -78,11 +122,8 @@ class AssetTaskOut(StrictModel):
     items_offset: int
 
 
-class AssetTaskPage(StrictModel):
+class AssetTaskPage(PageMetadata):
     items: list[AssetTaskOut]
-    total: int
-    limit: int
-    offset: int
 
 
 class ImportSource(StrictModel):

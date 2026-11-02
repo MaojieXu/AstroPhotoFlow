@@ -1,0 +1,2 @@
+class WorkbenchError(RuntimeError):
+    pass

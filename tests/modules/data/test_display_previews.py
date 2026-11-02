@@ -1,8 +1,15 @@
 from __future__ import annotations
+import astrophotoflow.modules.data.media.import_previews as owner_import_previews
+import astrophotoflow.modules.data.imports.stages as owner_stages
+from astrophotoflow.modules.data.formats import layout as codec_formats_layout
+from astrophotoflow.modules.data.formats import pixels as codec_formats_pixels
+from astrophotoflow.modules.data.formats import fits as codec_formats_fits
+from astrophotoflow.modules.data.media.ownership import assert_no_preview_jobs
 
 from astrophotoflow.core.localization import error_message
 
 from io import BytesIO
+from contextlib import closing
 import json
 from pathlib import Path
 import struct
@@ -19,10 +26,13 @@ import pytest
 from sqlalchemy import delete, select, update
 from xisf import XISF
 
-from astrophotoflow.modules.data import ingestion, previews
+from astrophotoflow.modules.data.media import display as previews
 from astrophotoflow.interfaces.http.app import create_app
-from astrophotoflow.modules.data.models import Asset, AssetTaskItem, AssetVersion, Preview
+from astrophotoflow.modules.data.assets.models import Asset, AssetVersion
+from astrophotoflow.modules.data.media.models import Preview
+from astrophotoflow.modules.data.imports.models import AssetTaskItem
 from astrophotoflow.core.database.schema import database_lock, upgrade_database
+from astrophotoflow.core.database.db import Database
 from astrophotoflow.core.config import ImportRoot, Settings
 
 AUTH = {"Authorization": "Bearer display-preview-test"}
@@ -38,7 +48,6 @@ def service(tmp_path):
     app = create_app(settings, "display-preview-test")
     with TestClient(app) as client:
         yield settings, app, client, root
-    app.state.database.close()
 
 
 def imported(client, name):
@@ -325,7 +334,7 @@ def test_display_is_lazy_sized_cached_and_keeps_thumbnail(service, monkeypatch, 
         assert max(image.size) <= 100
     assert client.get(base(item) + "/display", headers=AUTH).status_code == 404
     calls = []
-    decoder_name = "create_preview" if kind in {"mono", "bayer", "planar", "interleaved"} else "_xisf_image" if kind == "xisf" else "first_video_frame" if kind == "video" else "_ordinary_image"
+    decoder_name = "create_preview" if kind in {"mono", "bayer", "planar", "interleaved"} else "read_xisf_preview" if kind == "xisf" else "first_video_frame" if kind == "video" else "read_raster_preview"
     decoder = getattr(previews, decoder_name)
     def counted(*args, **kwargs):
         calls.append(1)
@@ -442,14 +451,14 @@ def test_failure_retry_dedup_and_trash_block_active_job(service, monkeypatch):
     picture(root / "photo.png")
     item = imported(client, "photo.png")
     entered, release = Event(), Event()
-    decode = previews._ordinary_image
+    decode = previews.read_raster_preview
     calls = []
     def blocked(*args, **kwargs):
         calls.append(1)
         entered.set()
         assert release.wait(5)
         return decode(*args, **kwargs)
-    monkeypatch.setattr(previews, "_ordinary_image", blocked)
+    monkeypatch.setattr(previews, "read_raster_preview", blocked)
     started = time.perf_counter()
     assert client.post(base(item) + "/display", headers=AUTH, json={}).json()["status"] == "generating"
     assert time.perf_counter() - started < 1
@@ -482,16 +491,16 @@ def test_failed_display_can_retry_same_cache_and_deleted_version_cannot_publish(
     settings, app, client, root = service
     picture(root / "photo.png")
     item = imported(client, "photo.png")
-    decode = previews._ordinary_image
+    decode = previews.read_raster_preview
     def failed(*_args):
         raise ValueError("decoder failure")
-    monkeypatch.setattr(previews, "_ordinary_image", failed)
+    monkeypatch.setattr(previews, "read_raster_preview", failed)
     client.post(base(item) + "/display", headers=AUTH, json={})
     state = finished(client, base(item))
     assert state["status"] == "failed" and "decoder failure" in state["error"]["message"]
     with app.state.database.read_session() as session:
         preview_id = session.scalar(select(Preview.id).where(Preview.size == "display"))
-    monkeypatch.setattr(previews, "_ordinary_image", decode)
+    monkeypatch.setattr(previews, "read_raster_preview", decode)
     client.post(base(item) + "/display", headers=AUTH, json={})
     assert finished(client, base(item))["status"] == "available"
     with app.state.database.write_session() as session:
@@ -504,7 +513,7 @@ def test_failed_display_can_retry_same_cache_and_deleted_version_cannot_publish(
         result = decode(*args)
         decoded.set()
         return result
-    monkeypatch.setattr(previews, "_ordinary_image", blocked)
+    monkeypatch.setattr(previews, "read_raster_preview", blocked)
     client.post(base(item) + "/display", headers=AUTH, json={})
     assert entered.wait(5)
     with app.state.database.write_session() as session:
@@ -569,22 +578,19 @@ def test_orphan_generating_record_is_failed_on_restart_and_does_not_block_cleanu
     temporary_path = settings.data_dir / "previews" / item["asset_version_id"] / "interrupted-display.jpg.tmp"
     temporary_path.write_bytes(b"interrupted JPEG")
     restarted = create_app(settings, "display-preview-test")
-    try:
-        with TestClient(restarted) as other:
-            state = other.get(base(item) + "/display/status", headers=AUTH).json()
-            assert state["status"] == "failed" and state["error"]["message"] == error_message("en", "", "preview_interrupted")
-            asset = other.get(f"/api/v1/library/assets/{item['asset_id']}", headers=AUTH).json()
-            other.request("DELETE", "/api/v1/library/items", headers=AUTH, json={"items": [{
-                "entry_type": "asset", "id": asset["id"], "revision": asset["revision"], "current_version_id": asset["current_version_id"]}]})
-            removal = other.get("/api/v1/library/trash", headers=AUTH).json()["items"][0]
-            selection = {"items": [{key: removal[key] for key in ("entry_type", "id", "removed_at", "revision", "current_version_id")}]}
-            cleanup = other.post("/api/v1/library/trash/delete-preview", headers=AUTH, json=selection)
-            assert cleanup.status_code == 200
-            result = other.post("/api/v1/library/trash/delete", headers=AUTH, json={**selection, "preview_fingerprint": cleanup.json()["preview_fingerprint"]})
-            assert result.status_code == 200, result.text
-            assert not temporary_path.exists()
-    finally:
-        restarted.state.database.close()
+    with TestClient(restarted) as other:
+        state = other.get(base(item) + "/display/status", headers=AUTH).json()
+        assert state["status"] == "failed" and state["error"]["message"] == error_message("en", "", "preview_interrupted")
+        asset = other.get(f"/api/v1/library/assets/{item['asset_id']}", headers=AUTH).json()
+        other.request("DELETE", "/api/v1/library/items", headers=AUTH, json={"items": [{
+            "entry_type": "asset", "id": asset["id"], "revision": asset["revision"], "current_version_id": asset["current_version_id"]}]})
+        removal = other.get("/api/v1/library/trash", headers=AUTH).json()["items"][0]
+        selection = {"items": [{key: removal[key] for key in ("entry_type", "id", "removed_at", "revision", "current_version_id")}]}
+        cleanup = other.post("/api/v1/library/trash/delete-preview", headers=AUTH, json=selection)
+        assert cleanup.status_code == 200
+        result = other.post("/api/v1/library/trash/delete", headers=AUTH, json={**selection, "preview_fingerprint": cleanup.json()["preview_fingerprint"]})
+        assert result.status_code == 200, result.text
+        assert not temporary_path.exists()
 
 
 def test_raw_display_ignores_tiny_embedded_preview_and_selects_decode_size(service, monkeypatch):
@@ -602,12 +608,12 @@ def test_raw_display_ignores_tiny_embedded_preview_and_selects_decode_size(servi
             calls.append(kwargs)
             return np.zeros((1500, 2000, 3), dtype=np.uint8)
     monkeypatch.setattr(rawpy, "imread", lambda _path: FakeRaw())
-    assert ingestion._raw_image(root / "photo.raw").size == (100, 60)
+    assert owner_stages.read_raw_preview(root / "photo.raw").size == (100, 60)
     assert calls == []
-    assert ingestion._raw_image(root / "photo.raw", 1080).size == (2000, 1500)
+    assert owner_stages.read_raw_preview(root / "photo.raw", 1080).size == (2000, 1500)
     assert calls[-1]["half_size"] is True
     FakeRaw.sizes = SimpleNamespace(width=1500, height=1000)
-    ingestion._raw_image(root / "photo.raw", 1080)
+    owner_stages.read_raw_preview(root / "photo.raw", 1080)
     assert calls[-1]["half_size"] is False
     (root / "photo.dng").write_bytes(b"synthetic RAW decoder fixture")
     item = imported(client, "photo.dng")
@@ -631,7 +637,7 @@ def test_shutdown_drains_display_jobs_and_shared_executor_limits_generation(tmp_
     for name in ("one", "two"):
         picture(root / f"{name}.png")
     items = [imported(client, f"{name}.png") for name in ("one", "two")]
-    decode = previews._ordinary_image
+    decode = previews.read_raster_preview
     entered, release, closed = Event(), Event(), Event()
     calls = []
     def blocked(*args):
@@ -639,7 +645,7 @@ def test_shutdown_drains_display_jobs_and_shared_executor_limits_generation(tmp_
         entered.set()
         assert release.wait(5)
         return decode(*args)
-    monkeypatch.setattr(previews, "_ordinary_image", blocked)
+    monkeypatch.setattr(previews, "read_raster_preview", blocked)
     assert app.state.display_previews.executor is app.state.import_workers[1]
     client.post(base(items[0]) + "/display", headers=AUTH, json={})
     assert entered.wait(5)
@@ -658,10 +664,9 @@ def test_shutdown_drains_display_jobs_and_shared_executor_limits_generation(tmp_
         release.set()
         thread.join(5)
     assert closed.is_set() and len(calls) == 2
-    with app.state.database.read_session() as session:
+    with closing(Database(settings.database_path)) as database, database.read_session() as session:
         assert len(session.scalars(select(Preview).where(Preview.size == "display", Preview.status == "available")).all()) == 2
     assert all(executor._shutdown for executor in app.state.import_workers)
-    app.state.database.close()
 
 
 def test_save_preview_uses_size_specific_path(service):
@@ -669,7 +674,7 @@ def test_save_preview_uses_size_specific_path(service):
     picture(root / "small.png", 80, 60)
     item = imported(client, "small.png")
     before = client.get(base(item) + "/thumbnail", headers=AUTH).content
-    ingestion._save_preview(app.state.database, settings, item["asset_version_id"], 0, "display", 1080, Image.new("RGB", (200, 150)))
+    owner_import_previews.save_preview(app.state.database, settings, item["asset_version_id"], 0, "display", 1080, Image.new("RGB", (200, 150)))
     assert client.get(base(item) + "/thumbnail", headers=AUTH).content == before
     with app.state.database.read_session() as session:
         rows = session.scalars(select(Preview).where(Preview.asset_version_id == item["asset_version_id"])).all()
@@ -678,7 +683,7 @@ def test_save_preview_uses_size_specific_path(service):
 
 
 def test_project_reference_can_preview_removed_library_asset_until_cleanup_starts(service):
-    from astrophotoflow.modules.data.models import LibraryEntryRemoval
+    from astrophotoflow.modules.data.trash.models import LibraryEntryRemoval
     settings, app, client, root = service
     picture(root / "shared.png")
     item = imported(client, "shared.png")
@@ -716,7 +721,7 @@ def test_locked_cache_publication_is_failed_and_retryable(service, monkeypatch):
     state = finished(client, base(item))
     assert state["status"] == "failed" and "locked display cache" in state["error"]["message"]
     with app.state.database.read_session() as session:
-        previews.assert_no_preview_jobs(session, [item["asset_version_id"]])
+        assert_no_preview_jobs(session, [item["asset_version_id"]])
     monkeypatch.setattr(previews.os, "replace", original)
     client.post(base(item) + "/display", headers=AUTH, json={})
     assert finished(client, base(item))["status"] == "available"
@@ -754,10 +759,10 @@ def test_shared_display_file_and_interrupted_temporary_are_preserved(service):
 def test_failed_header_metadata_waits_for_import_retry_before_caching_display(service, monkeypatch):
     _, app, client, root = service
     XISF.write(str(root / "metadata.xisf"), np.arange(600, dtype=np.float32).reshape(20, 30, 1))
-    inspect = ingestion._inspect_xisf
+    inspect = owner_stages.inspect_xisf
     def failed(_path):
         raise ValueError("injected header failure")
-    monkeypatch.setattr(ingestion, "_inspect_xisf", failed)
+    monkeypatch.setattr(owner_stages, "inspect_xisf", failed)
     accepted = client.post("/api/v1/imports", headers=AUTH, json={
         "sources": [{"root_id": "science", "path": "metadata.xisf"}], "storage_mode": "managed"})
     task_id = accepted.json()["task_id"]
@@ -768,7 +773,7 @@ def test_failed_header_metadata_waits_for_import_retry_before_caching_display(se
     assert state["status"] == "not_ready" and state["error"]["code"] == "METADATA_NOT_READY"
     with app.state.database.read_session() as session:
         assert not session.scalar(select(Preview).where(Preview.size == "display"))
-    monkeypatch.setattr(ingestion, "_inspect_xisf", inspect)
+    monkeypatch.setattr(owner_stages, "inspect_xisf", inspect)
     retry = client.post(f"/api/v1/asset-tasks/{task_id}/retry", headers=AUTH, json={"item_ids": [item["id"]]})
     assert client.get("/api/v1/asset-tasks/" + retry.json()["task_id"], headers=AUTH).json()["status"] == "completed"
     client.post(base(item) + "/display", headers=AUTH, json={})
@@ -776,29 +781,29 @@ def test_failed_header_metadata_waits_for_import_retry_before_caching_display(se
 
 
 def test_metadata_retry_barrier_and_cancelled_preview_stage_stay_uncached_until_retry(service, monkeypatch):
-    from astrophotoflow.modules.data.models import AssetTask
+    from astrophotoflow.modules.data.imports.models import AssetTask
     _, app, client, root = service
     XISF.write(str(root / "recipe.xisf"), np.arange(600, dtype=np.float32).reshape(20, 30, 1), image_metadata={
         "FITSKeywords": {"EXPTIME": [{"value": "300.000", "comment": "Exposure"}],
                          "IMAGETYP": [{"value": "Master Light", "comment": "Type"}]}})
-    inspect = ingestion._inspect_xisf
+    inspect = owner_stages.inspect_xisf
     def failed(_path):
         raise ValueError("injected header failure")
-    monkeypatch.setattr(ingestion, "_inspect_xisf", failed)
+    monkeypatch.setattr(owner_stages, "inspect_xisf", failed)
     accepted = client.post("/api/v1/imports", headers=AUTH, json={
         "sources": [{"root_id": "science", "path": "recipe.xisf"}], "storage_mode": "managed"})
     original_task = client.get("/api/v1/asset-tasks/" + accepted.json()["task_id"], headers=AUTH).json()
     item = original_task["items"][0]
     with app.state.database.read_session() as session:
         old_recipe = dict(session.scalar(select(Preview).where(Preview.size == "thumbnail")).display_parameters)
-    monkeypatch.setattr(ingestion, "_inspect_xisf", inspect)
-    process = ingestion._process_preview
+    monkeypatch.setattr(owner_stages, "inspect_xisf", inspect)
+    process = owner_stages.prepare_preview
     entered, release = Event(), Event()
     def blocked(*args):
         entered.set()
         assert release.wait(5)
         return process(*args)
-    monkeypatch.setattr(ingestion, "_process_preview", blocked)
+    monkeypatch.setattr(owner_stages, "prepare_preview", blocked)
     response = {}
     def retry():
         response["retry"] = client.post(f"/api/v1/asset-tasks/{original_task['id']}/retry", headers=AUTH,
@@ -832,7 +837,7 @@ def test_metadata_retry_barrier_and_cancelled_preview_stage_stay_uncached_until_
     with app.state.database.read_session() as session:
         assert session.scalar(select(Preview).where(Preview.size == "thumbnail")).status == "pending"
         assert not session.scalar(select(Preview).where(Preview.size == "display"))
-    monkeypatch.setattr(ingestion, "_process_preview", process)
+    monkeypatch.setattr(owner_stages, "prepare_preview", process)
     recovered = client.post(f"/api/v1/asset-tasks/{retry_id}/retry", headers=AUTH, json={"item_ids": [retry_item_id]})
     assert recovered.status_code == 202, recovered.text
     assert client.get("/api/v1/asset-tasks/" + recovered.json()["task_id"], headers=AUTH).json()["status"] == "completed"
@@ -848,7 +853,7 @@ def test_metadata_retry_barrier_and_cancelled_preview_stage_stay_uncached_until_
 
 @pytest.mark.parametrize("historical_status", ["unsupported", "failed"])
 def test_backfilled_thumbnail_is_display_authority_without_rewriting_task_history(service, monkeypatch, historical_status):
-    from astrophotoflow.modules.data import fits_preview
+
     settings, app, client, root = service
     source = root / "pixinsight.fits"
     image = fits.PrimaryHDU(np.stack([np.full((20, 30), value, dtype=np.float32) for value in (0, 100, 200)]))
@@ -858,18 +863,18 @@ def test_backfilled_thumbnail_is_display_authority_without_rewriting_task_histor
     original_bytes = source.read_bytes()
     with monkeypatch.context() as legacy:
         if historical_status == "unsupported":
-            legacy.setattr(fits_preview, "_rgb_channel_first", lambda _header: False)
+            legacy.setattr(codec_formats_layout, "rgb_channel_first", lambda _header: False)
         else:
             def failed(*_args, **_kwargs):
                 raise ValueError("controlled old preview failure")
-            legacy.setattr(ingestion, "create_preview", failed)
+            legacy.setattr(owner_import_previews, "create_preview", failed)
         accepted = client.post("/api/v1/imports", headers=AUTH, json={
             "sources": [{"root_id": "science", "path": source.name}], "storage_mode": "managed"})
     task_id = accepted.json()["task_id"]
     before_backfill = client.get("/api/v1/asset-tasks/" + task_id, headers=AUTH).json()
     item = before_backfill["items"][0]
     assert item["preview_status"] == historical_status
-    assert ingestion.backfill_missing_previews(app.state.database, settings) == {"generated": 1, "failed": 0}
+    assert owner_import_previews.backfill_missing_previews(app.state.database, settings) == {"generated": 1, "failed": 0}
     history = client.get("/api/v1/asset-tasks/" + task_id, headers=AUTH).json()
     assert history["items"] == before_backfill["items"]
     with app.state.database.read_session() as session:
@@ -899,20 +904,20 @@ def test_failed_metadata_retry_leaves_cache_pending_until_backfill_without_histo
     _, app, client, root = service
     XISF.write(str(root / "backfill.xisf"), np.arange(600, dtype=np.float32).reshape(20, 30, 1), image_metadata={
         "FITSKeywords": {"EXPTIME": [{"value": "300.000", "comment": "Exposure"}]}})
-    inspect = ingestion._inspect_xisf
+    inspect = owner_stages.inspect_xisf
     def failed_header(_path):
         raise ValueError("controlled header failure")
-    monkeypatch.setattr(ingestion, "_inspect_xisf", failed_header)
+    monkeypatch.setattr(owner_stages, "inspect_xisf", failed_header)
     accepted = client.post("/api/v1/imports", headers=AUTH, json={
         "sources": [{"root_id": "science", "path": "backfill.xisf"}], "storage_mode": "managed"})
     original_task = client.get("/api/v1/asset-tasks/" + accepted.json()["task_id"], headers=AUTH).json()
     item = original_task["items"][0]
     assert item["metadata_status"] == "failed" and item["preview_status"] == "available"
-    monkeypatch.setattr(ingestion, "_inspect_xisf", inspect)
-    decode = ingestion._xisf_image
+    monkeypatch.setattr(owner_stages, "inspect_xisf", inspect)
+    decode = owner_stages.read_xisf_preview
     def failed_preview(*_args, **_kwargs):
         raise ValueError("controlled refreshed preview failure")
-    monkeypatch.setattr(ingestion, "_xisf_image", failed_preview)
+    monkeypatch.setattr(owner_stages, "read_xisf_preview", failed_preview)
     retry = client.post(f"/api/v1/asset-tasks/{original_task['id']}/retry", headers=AUTH, json={"item_ids": [item["id"]]})
     retry_id = retry.json()["task_id"]
     failed = client.get("/api/v1/asset-tasks/" + retry_id, headers=AUTH).json()
@@ -922,8 +927,8 @@ def test_failed_metadata_retry_leaves_cache_pending_until_backfill_without_histo
         assert session.scalar(select(Preview).where(Preview.size == "thumbnail")).status == "pending"
         assert not session.scalar(select(Preview).where(Preview.size == "display"))
     assert client.post(base(item) + "/display", headers=AUTH, json={}).json()["error"]["code"] == "RECIPE_NOT_READY"
-    monkeypatch.setattr(ingestion, "_xisf_image", decode)
-    assert ingestion.backfill_missing_previews(app.state.database, app.state.settings) == {"generated": 1, "failed": 0}
+    monkeypatch.setattr(owner_stages, "read_xisf_preview", decode)
+    assert owner_import_previews.backfill_missing_previews(app.state.database, app.state.settings) == {"generated": 1, "failed": 0}
     history = client.get("/api/v1/asset-tasks/" + retry_id, headers=AUTH).json()
     assert history["items"] == failed["items"]
     client.post(base(item) + "/display", headers=AUTH, json={})

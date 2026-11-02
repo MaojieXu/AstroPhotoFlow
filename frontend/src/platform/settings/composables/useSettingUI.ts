@@ -10,7 +10,7 @@ import {
   isSettingPanelVisible,
   isSettingVisible,
   settingCategoryLabelKey
-} from '@/platform/astrophotoflow/settingsPresentation'
+} from '@/platform/astrophotoflow/settings/settingsPresentation'
 import {
   getSettingInfo,
   useSettingStore
@@ -278,7 +278,7 @@ export function useSettingUI(
   const workbenchPanel: SettingPanelItem = {
     node: { key: 'workbench', label: 'Workbench', children: [] },
     component: defineAsyncComponent(
-      () => import('@/platform/astrophotoflow/WorkbenchSettingsPanel.vue')
+      () => import('@/platform/astrophotoflow/settings/WorkbenchSettingsPanel.vue')
     )
   }
 

@@ -1,16 +1,17 @@
-import { createApiClient } from '../../../core/client'
-import type { FetchApi } from '../../../core/client'
+import { createPlatformClient } from '../../../core/api/client'
+import type { FetchApi } from '../../../core/api/client'
 import {
-  pendingSoftwareActionSchema,
-  softwareInstallRequestSchema,
-  softwarePackageDetailsSchema,
-  softwarePackageSchema,
-  softwarePreparationSchema,
-  sirilCommandSchema
-} from './contracts'
-import { softwareReleaseListingSchema } from './contracts'
-import type { SoftwareReleaseListing } from './contracts'
+  getSoftwarePackagesApiV1SoftwarePackagesGet,
+  getSoftwareReleasesApiV1SoftwarePackagesPackageIdReleasesGet,
+  getSoftwareCommandsApiV1SoftwarePackagesPackageIdVersionsVersionCommandsGet,
+  getSoftwarePackageApiV1SoftwarePackagesPackageIdGet,
+  requestSoftwareInstallApiV1SoftwarePackagesPackageIdInstallPost,
+  requestSoftwareUninstallApiV1SoftwarePackagesPackageIdUninstallPost,
+  prepareSoftwarePackageApiV1SoftwarePackagesPackageIdPreparePost
+} from '../../../generated/api/sdk.gen'
+import type { RequestSoftwareUninstallApiV1SoftwarePackagesPackageIdUninstallPostData } from '../../../generated/api/types.gen'
 import type {
+  SoftwareReleaseListing,
   PendingSoftwareAction,
   SoftwareInstallRequest,
   SoftwarePackage,
@@ -18,18 +19,21 @@ import type {
   SoftwarePreparation,
   SirilCommand
 } from './contracts'
-
-export { ApiClientError } from '../../../core/client'
+export { ApiClientError } from '../../../core/api/errors'
 
 export interface SoftwareClient {
-  listReleases(packageId: string): Promise<SoftwareReleaseListing>
-  listPackages(): Promise<SoftwarePackage[]>
-  listCommands(packageId: string, version: string): Promise<SirilCommand[]>
+  listReleases(packageId: string, signal?: AbortSignal): Promise<SoftwareReleaseListing>
+  listPackages(signal?: AbortSignal): Promise<SoftwarePackage[]>
+  listCommands(packageId: string, version: string, signal?: AbortSignal): Promise<SirilCommand[]>
   getPackage(
     packageId: string,
-    operationId?: string
+    operationId?: string,
+    signal?: AbortSignal
   ): Promise<SoftwarePackageDetails>
-  requestUninstall(packageId: string, body: { package_token: string }): Promise<PendingSoftwareAction>
+  requestUninstall(
+    packageId: string,
+    body: RequestSoftwareUninstallApiV1SoftwarePackagesPackageIdUninstallPostData['body']
+  ): Promise<PendingSoftwareAction>
   requestInstall(
     packageId: string,
     body: SoftwareInstallRequest
@@ -37,42 +41,52 @@ export interface SoftwareClient {
   prepare(packageId: string): Promise<SoftwarePreparation>
 }
 
-const basePath = '/astrophotoflow/api/v1/software/packages'
-
 export function createSoftwareClient(fetchApi: FetchApi): SoftwareClient {
-  const api = createApiClient(fetchApi)
+  const options = {
+    client: createPlatformClient({ fetchApi }),
+    throwOnError: true
+  } as const
   return {
-    listReleases: (packageId) => api.get(`${basePath}/${encodeURIComponent(packageId)}/releases`, softwareReleaseListingSchema),
-    listPackages: () => api.get(basePath, softwarePackageSchema.array()),
-    listCommands: (packageId, version) =>
-      api.get(
-        `${basePath}/${encodeURIComponent(packageId)}/versions/${encodeURIComponent(version)}/commands`,
-        sirilCommandSchema.array()
-      ),
-    getPackage: (packageId, operationId) => {
-      const query = operationId
-        ? `?operation_id=${encodeURIComponent(operationId)}`
-        : ''
-      return api.get(
-        `${basePath}/${encodeURIComponent(packageId)}${query}`,
-        softwarePackageDetailsSchema
-      )
-    },
-    requestInstall: (packageId, body) =>
-      api.send(
-        `${basePath}/${encodeURIComponent(packageId)}/install`,
-        pendingSoftwareActionSchema,
-        'POST',
-        softwareInstallRequestSchema.parse(body)
-      ),
-    requestUninstall: (packageId, body) =>
-      api.send(`${basePath}/${encodeURIComponent(packageId)}/uninstall`, pendingSoftwareActionSchema, 'POST', body),
-    prepare: (packageId) =>
-      api.send(
-        `${basePath}/${encodeURIComponent(packageId)}/prepare`,
-        softwarePreparationSchema,
-        'POST',
-        {}
-      )
+    listPackages: async (signal) =>
+      (await getSoftwarePackagesApiV1SoftwarePackagesGet<true>({...options,signal})).data,
+    listReleases: async (packageId, signal) =>
+      (
+        await getSoftwareReleasesApiV1SoftwarePackagesPackageIdReleasesGet<true>(
+          { ...options, path: { package_id: packageId }, signal }
+        )
+      ).data,
+    listCommands: async (packageId, version, signal) =>
+      (
+        await getSoftwareCommandsApiV1SoftwarePackagesPackageIdVersionsVersionCommandsGet<true>(
+          { ...options, path: { package_id: packageId, version }, signal }
+        )
+      ).data,
+    getPackage: async (packageId, operationId, signal) =>
+      (
+        await getSoftwarePackageApiV1SoftwarePackagesPackageIdGet<true>({
+          ...options,
+          path: { package_id: packageId },
+          query: operationId ? { operation_id: operationId } : {},
+          signal
+        })
+      ).data,
+    requestInstall: async (packageId, body) =>
+      (
+        await requestSoftwareInstallApiV1SoftwarePackagesPackageIdInstallPost<true>(
+          { ...options, path: { package_id: packageId }, body }
+        )
+      ).data,
+    requestUninstall: async (packageId, body) =>
+      (
+        await requestSoftwareUninstallApiV1SoftwarePackagesPackageIdUninstallPost<true>(
+          { ...options, path: { package_id: packageId }, body }
+        )
+      ).data,
+    prepare: async (packageId) =>
+      (
+        await prepareSoftwarePackageApiV1SoftwarePackagesPackageIdPreparePost<true>(
+          { ...options, path: { package_id: packageId } }
+        )
+      ).data
   }
 }

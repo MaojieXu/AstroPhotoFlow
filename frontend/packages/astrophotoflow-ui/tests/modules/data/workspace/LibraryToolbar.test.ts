@@ -1,14 +1,15 @@
+import { libraryAsset, libraryDataset } from '../../../fixtures/library-summary'
 import { flushPromises, mount } from '@vue/test-utils'
 import type { VueWrapper } from '@vue/test-utils'
 import { createPinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import Workspace from '@ui/modules/data/workspace/Workspace.vue'
-import LibraryMenu from '@ui/modules/data/workspace/LibraryMenu.vue'
+import LibraryMenu from '@ui/modules/data/components/LibraryMenu.vue'
 import { assetSchema } from '@ui/modules/data/api/contracts'
 import { useWorkspaceStore } from '@ui/modules/data/workspace/store'
 
 const { get, send } = vi.hoisted(() => ({ get: vi.fn(), send: vi.fn() }))
-vi.mock('@ui/modules/data/api/index', () => ({ assetApi: { get, send } }))
+vi.mock('@ui/modules/data/api/index', async () => ({ libraryApi: (await import('../../../fixtures/library-api')).createLibraryApiFixture(get), catalogApi: (await import('../../../fixtures/library-api')).createCatalogApiFixture(get), mutationApi: (await import('../../../fixtures/library-api')).createMutationApiFixture(send), trashApi: (await import('../../../fixtures/library-api')).createTrashApiFixture(get,send), importApi: (await import('../../../fixtures/library-api')).createImportApiFixture(get,send), datasetApi: (await import('../../../fixtures/library-api')).createDatasetApiFixture(get,send), assetApi: { get, send } }))
 const timestamp = '2026-10-28T12:00:00Z'
 const asset = assetSchema.parse({
   id: '00000000-0000-4000-8000-000000000001', name: 'M31.fit', scope: 'shared', owner_project_id: null,
@@ -32,7 +33,7 @@ beforeEach(() => {
     const url = new URL(path, 'http://test')
     const offset = Number(url.searchParams.get('offset') ?? 0)
     const limit = Number(url.searchParams.get('limit') ?? 50)
-    return { items: path.includes('/library/items?') && total > 0 ? [{ entry_type: 'asset', asset, import_issue: null }] : [], total: path.includes('/library/items?') ? total : 0, limit, offset }
+    return { items: path.includes('/library/items?') && total > 0 ? [libraryAsset(asset)] : [], total: path.includes('/library/items?') ? total : 0, limit, offset }
   })
   send.mockReset()
 })
@@ -112,4 +113,27 @@ describe('minimal library toolbar', () => {
     expect(mounted.get('[role="dialog"]').text()).toContain('回收站')
     expect(send).not.toHaveBeenCalled()
   })
+})
+
+
+it('aborts an actual library read when the page unmounts', async () => {
+  await open()
+  const original = get.getMockImplementation()!
+  let observedSignal: AbortSignal | undefined
+  let announceStarted: (() => void) | undefined
+  const started = new Promise<void>(resolve => { announceStarted = resolve })
+  get.mockImplementation((path: string, schema: unknown, signal?: AbortSignal) => {
+    if (path.includes('/library/items?') && new URL(path, window.location.origin).searchParams.get('q') === 'slow') {
+      observedSignal = signal
+      announceStarted?.()
+      return new Promise((_resolve, reject) => signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')), { once: true }))
+    }
+    return original(path, schema, signal)
+  })
+  useWorkspaceStore(pinia).setQuery('slow')
+  await started
+  wrapper!.unmount()
+  wrapper = undefined
+  await flushPromises()
+  expect(observedSignal?.aborted).toBe(true)
 })

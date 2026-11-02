@@ -3,8 +3,8 @@ from functools import lru_cache
 from importlib.resources import files
 from pathlib import Path
 
-from astrophotoflow.contracts.localization import Locale
 from astrophotoflow.contracts.common import ErrorDetail
+from astrophotoflow.contracts.localization import Locale
 from astrophotoflow.core.config import ConfigurationError
 from astrophotoflow.core.errors import ApiError
 
@@ -39,11 +39,16 @@ def error_message(locale: Locale, code: str, key: str | None = None, parameters:
     return catalog['messages'][selected][locale].format_map(values)
 
 
-def localized_error(locale: Locale, code: str, message_key: str, *, parameters: dict | None = None,
+def localized_error(locale: Locale, code: str, message_key: str | None, *, parameters: dict | None = None,
                     fields: list[dict[str, str]] | None = None) -> ErrorDetail:
     """Render a newly produced platform error without changing its diagnostics."""
     return ErrorDetail(code=code, message=error_message(locale, code, message_key, parameters),
                        fields=list(fields or []))
+
+
+def forwarded_error(code: str, message: str, *, fields: list[dict[str, str]] | None = None) -> ErrorDetail:
+    """Keep an upstream error's already-rendered message and raw field diagnostics."""
+    return ErrorDetail(code=code, message=message, fields=list(fields or []))
 
 
 def exception_error(locale: Locale, exc: Exception, *, code: str, message_key: str) -> ErrorDetail:

@@ -3,13 +3,14 @@
 .apf-workspace .apf-equipment-management .apf-record{min-height:48px;padding:6px 8px;gap:8px}
 .apf-equipment-management .apf-record-icon{font-size:16px}
 .apf-equipment-management .apf-record strong{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.apf-equipment-management .apf-record span:last-child{gap:0}
+.apf-equipment-management .apf-record .apf-equipment-record-text{display:flex;flex-direction:column;gap:2px;min-width:0}
+.apf-equipment-management .apf-equipment-record-text strong{font-size:14px;line-height:20px}
+.apf-equipment-management .apf-equipment-record-text small{display:block;font-size:12px;line-height:18px}
 .apf-equipment-management .apf-setup-table-scroll{min-width:0;min-height:0;max-width:100%;margin-inline:10px;overflow-x:auto}
-.apf-equipment-management .apf-setup-table{width:100%;min-width:720px;table-layout:fixed;font-size:12px}
+.apf-equipment-management .apf-setup-table{width:100%;min-width:520px;table-layout:fixed;font-size:12px}
 .apf-equipment-management .apf-setup-table th,.apf-equipment-management .apf-setup-table td{height:48px;box-sizing:border-box;vertical-align:middle}
 .apf-equipment-management .apf-setup-table .apf-setup-select-cell{width:28px;padding-inline:4px}
 .apf-equipment-management .apf-setup-table .apf-setup-name-cell{width:140px}
-.apf-equipment-management .apf-setup-table th:last-child{width:128px}
 .apf-equipment-management .apf-setup-table .apf-sort-button{min-height:28px;padding:4px 6px;border-radius:8px;background:var(--comfy-menu-secondary-bg,#292929);font:inherit}
 .apf-workspace .apf-equipment-management .apf-setup-table .apf-setup-name{display:block;width:100%;min-height:28px;padding:2px 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left;font-size:12px;background:transparent}
 .apf-equipment-management .apf-setup-equipment-cell{display:flex;align-items:center;min-width:0}
@@ -77,3 +78,25 @@
 .apf-equipment-dialog .apf-equipment-dialog-body p{margin:0;font-size:12px;line-height:18px}
 .apf-equipment-dialog .apf-equipment-dialog-body ul{margin:0;padding-left:20px}
 .apf-equipment-dialog .apf-error{color:var(--error-text,#f99)}
+
+/* Device editors use one content grid; unit suffixes never wrap with labels. */
+.apf-equipment-dialog .apf-device-form{width:100%;max-width:464px;align-self:center;gap:16px;container-type:inline-size}
+.apf-equipment-dialog .apf-device-section{display:flex;flex-direction:column;gap:8px;min-width:0;width:100%}
+.apf-equipment-dialog .apf-device-section>h3,.apf-equipment-dialog .apf-accessory-heading h3{margin:0;font-size:13px;line-height:20px;font-weight:600;color:var(--color-base-foreground)}
+.apf-equipment-dialog .apf-device-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.apf-equipment-dialog .apf-device-field{display:flex;flex-direction:column;gap:4px;min-width:0;margin:0;font-size:12px;line-height:18px;font-weight:400}
+.apf-equipment-dialog .apf-device-field>span:first-child{color:var(--color-muted-foreground)}
+.apf-equipment-dialog .apf-device-field-wide{grid-column:1/-1}
+.apf-equipment-dialog .apf-device-form input:not([type=checkbox]),.apf-equipment-dialog .apf-device-form textarea,.apf-equipment-dialog .apf-device-form select,.apf-equipment-dialog .apf-device-form .apf-equipment-select{width:100%;max-width:none}
+.apf-equipment-dialog .apf-device-input-unit{display:flex;position:relative;align-items:center;min-width:0;width:100%}
+.apf-equipment-dialog .apf-device-input-unit input{padding-right:32px}
+.apf-equipment-dialog .apf-device-unit{position:absolute;right:10px;pointer-events:none;color:var(--color-muted-foreground);font-size:12px;line-height:18px;white-space:nowrap}
+.apf-equipment-dialog .apf-accessory-heading{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.apf-equipment-dialog .apf-accessory-columns,.apf-equipment-dialog .apf-accessory-row{display:grid;grid-template-columns:minmax(0,1fr) 96px 32px;align-items:center;gap:8px;min-width:0}
+.apf-equipment-dialog .apf-accessory-columns{font-size:12px;line-height:18px;font-weight:400;color:var(--color-muted-foreground)}
+.apf-equipment-dialog .apf-accessory-remove{width:32px;padding:0}
+.apf-equipment-dialog .apf-device-help{color:var(--color-muted-foreground)}
+@container (max-width:360px){.apf-equipment-dialog .apf-device-grid{grid-template-columns:minmax(0,1fr)}.apf-equipment-dialog .apf-accessory-columns,.apf-equipment-dialog .apf-accessory-row{grid-template-columns:minmax(0,1fr) 80px 32px}}
+
+.apf-equipment-management .apf-setup-filter-list{display:flex;flex-wrap:wrap;align-items:center;gap:4px;padding-block:8px;min-width:0}
+.apf-equipment-management .apf-setup-filter-tag{display:block;max-width:100%;padding:2px 6px;border-radius:4px;background:var(--color-secondary-background);white-space:normal;overflow-wrap:anywhere;font-size:12px;line-height:18px}

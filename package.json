@@ -9,13 +9,18 @@
   },
   "scripts": {
     "docs:api": "uv run --locked --no-sync python scripts/export_openapi.py",
+    "generate:sdk": "python scripts/export_openapi.py && pnpm --dir frontend --filter @astrophotoflow/ui exec openapi-ts -f openapi-ts.config.ts",
+    "generate:database-baseline": "python scripts/generate_database_baseline.py",
+    "benchmark:library": "python scripts/benchmark_library.py",
     "typecheck": "pnpm --dir frontend --filter @astrophotoflow/ui typecheck",
     "build": "python scripts/build_engine.py && pnpm typecheck && pnpm --dir frontend build",
     "dev:prepare": "python scripts/dev_prepare.py",
     "build:watch": "python scripts/dev_frontend.py",
     "test": "pnpm --dir frontend --filter @astrophotoflow/ui test",
-    "test:browser": "node tests/browser/native-web.mjs",
+    "test:browser": "pnpm --dir frontend exec playwright test --config ../tests/browser/playwright.config.mjs",
     "test:watch": "pnpm --dir frontend --filter @astrophotoflow/ui test:watch",
-    "check:boundaries": "python -m pytest tests/architecture -q && pnpm --dir frontend exec depcruise src/platform/astrophotoflow packages/astrophotoflow-ui/src --config .dependency-cruiser.json --do-not-follow \"node_modules|^src/(?!platform/astrophotoflow/)\" --output-type err-long"
+    "check:boundaries": "python -m pytest tests/architecture -q && pnpm --dir frontend exec depcruise src/platform/astrophotoflow packages/astrophotoflow-ui/src --config .dependency-cruiser.json --do-not-follow \"node_modules|^src/(?!platform/astrophotoflow/)\" --output-type err-long",
+    "test:browser:modernization": "pnpm --dir frontend exec playwright test --config ../tests/browser/modernization.config.mjs",
+    "test:browser:native": "pnpm --dir frontend exec playwright test --config ../tests/browser/modernization-native.config.mjs"
   }
 }

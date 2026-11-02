@@ -1,3 +1,4 @@
+import astrophotoflow.modules.software.packages.state as software_packages_state
 import asyncio
 import hashlib
 import json
@@ -27,7 +28,7 @@ def test_real_native_category_paths_and_legacy_category():
 sys.path.insert(0, sys.argv[1])
 from comfy.cli_args import args
 args.cpu = True
-from astrophotoflow.interfaces.bundle_nodes import BundleNode
+from astrophotoflow.interfaces.native.bundles.node import BundleNode
 import math
 assert math.isnan(BundleNode.fingerprint_inputs())
 assert BundleNode.APF_AUTOMATIC_RESULT is False
@@ -62,7 +63,7 @@ def test_real_native_v3_siril_schema():
 sys.path.insert(0, sys.argv[1])
 from comfy.cli_args import args
 args.cpu=True
-from astrophotoflow.interfaces.bundle_nodes import BundleNode
+from astrophotoflow.interfaces.native.bundles.node import BundleNode
 from importlib.resources import files
 catalog=lambda:json.loads(files('astrophotoflow').joinpath('vendor/bundle-catalog.json').read_text(encoding='utf-8'))
 from astrophotoflow.contracts.nodes import NodeDefinition
@@ -71,17 +72,21 @@ SirilAutostretchNode=type("TestBundleNode",(BundleNode,),{"definition":NodeDefin
 schema=SirilAutostretchNode.GET_SCHEMA()
 import asyncio
 from types import SimpleNamespace
-import astrophotoflow.interfaces.bundle_nodes as adapter
+import astrophotoflow.interfaces.native.bundles.node as adapter
 SirilAutostretchNode.hidden=SimpleNamespace(extra_pnginfo=None)
 sessions=[]
 async def request(session, method, path, body=None):
     assert session._loop is asyncio.get_running_loop() and not session.closed
+    if method == 'GET':
+        return {"prompt_id":path.split('/')[-3],"call_id":path.split('/')[-1],"log_url":path+'/log',"node_id":"65","state":"completed","ports":[]}
     sessions.append(session)
     return {"state":"completed","images":[],"outputs":[{}],"preview_error":None,"ports":[],"operation":{"package_id":"siril","version":"1.4.4","operation_id":"autostretch"},"bundle":{"version":"0.1.2-dev.1","commit":"test"}}
-adapter._request=request
+adapter.request_service=request
 adapter.get_executing_context=lambda:SimpleNamespace(prompt_id="00000000-0000-4000-8000-000000000001",node_id="65",list_index=0)
 for _ in range(2):
-    asyncio.run(SirilAutostretchNode.execute(image={},linked=False,shadowsclip=-2.8,targetbg=0.25))
+    parameters={parameter.name:parameter.default for parameter in SirilAutostretchNode.definition.parameters}
+    parameters.update(linked=False,shadowsclip=-2.8,targetbg=0.25)
+    asyncio.run(SirilAutostretchNode.execute(image={},**parameters))
 assert len(sessions)==2 and sessions[0] is not sessions[1] and all(session.closed for session in sessions)
 print("APF_SCHEMA="+json.dumps({"id":schema.node_id,"inputs":SirilAutostretchNode.INPUT_TYPES(),"outputs":SirilAutostretchNode.RETURN_TYPES,"object_info":SirilAutostretchNode.GET_NODE_INFO_V1()}))
 '''
@@ -114,7 +119,7 @@ def test_real_siril_autostretch_two_members_and_original_integrity(tmp_path):
     manifest = json.loads((bundle / 'bundle.json').read_text(encoding='utf-8'))
     (bundle.parent/"bundle-lock.json").write_text(json.dumps({"commit":commit,"bundle_version":manifest['bundle_version']}))
     (bundle.parent/"native-load.json").write_text(json.dumps({"commit":commit,"ready":True,"pid":os.getpid(),"create_time":psutil.Process().create_time()}))
-    public._write_package_state(settings, "siril", SoftwarePackageState(
+    software_packages_state.write_package_state(settings, "siril", SoftwarePackageState(
         installed_version="1.4.4", install_path=app, availability="ready", reason=None,
         operation="install", operation_state="completed", phase=None, progress=None, last_error=None, node_definition_ids=[],
     ))
@@ -129,7 +134,7 @@ def test_real_siril_autostretch_two_members_and_original_integrity(tmp_path):
         hashes.append(hashlib.sha256(path.read_bytes()).hexdigest())
         inputs.append(ResolvedOutputInput(
             kind="run_output", reference_index=0,
-            locator={"kind": "run_output", "run_id": run_id, "node_execution_id": "source", "output_index": 0, "member_index": index},
+            locator={"kind": "run_output", "run_id": run_id, "execution_id": uuid4(), "output_index": 0, "member_index": index},
             read_path=path, format="fits", selection={"kind": "whole_file"}, byte_size=path.stat().st_size,
             content_hash="blake3:" + blake3.blake3(path.read_bytes()).hexdigest(), mtime_ns=path.stat().st_mtime_ns,
             scientific_metadata={"selected_hdu": 0},
@@ -137,17 +142,15 @@ def test_real_siril_autostretch_two_members_and_original_integrity(tmp_path):
     from types import SimpleNamespace
     from astrophotoflow.contracts.data_nodes import NativeDataExecute
     from astrophotoflow.contracts.inputs import OutputLocator
-    from astrophotoflow.modules.workflows.data_nodes import execute_data, result_directory
-    from astrophotoflow.modules.workflows.software_calls import _resolve_previous
+    from astrophotoflow.modules.data.public import execute_data_node, data_execution_directory, resolve_result_inputs
     data_id = uuid4()
-    data_directory = result_directory(settings, run_id, data_id)
+    data_directory = data_execution_directory(settings, run_id, data_id)
     data_directory.mkdir(parents=True)
     for index, original in enumerate(inputs):
         np.save(data_directory / f'input-{index:06}.npy', fits.getdata(original.read_path), allow_pickle=False)
-    data_result = execute_data(None, settings, NativeDataExecute(run_id=run_id, execution_id=data_id,
+    data_result = execute_data_node(None, settings, NativeDataExecute(run_id=run_id, execution_id=data_id,
                                node_id='source-data', image_count=2, input_dtype='float32'))
-    data_inputs, supporting = _resolve_previous(settings, SimpleNamespace(prompt_id=run_id),
-        OutputLocator.model_validate(data_result['reference']), SimpleNamespace(type='APF_SCIENCE'))
+    data_inputs, supporting = resolve_result_inputs(settings,run_id,data_result.output,'APF_SCIENCE')
     assert len(data_inputs) == 2 and not supporting
     data_hashes = [hashlib.sha256(item.read_path.read_bytes()).hexdigest() for item in data_inputs]
     body = SoftwareInvocation(

@@ -1,9 +1,9 @@
 import { mount } from '@vue/test-utils'
 import { defineComponent } from 'vue'
 import { describe, expect, it, vi } from 'vitest'
-import LibraryCheckbox from '@ui/modules/data/workspace/LibraryCheckbox.vue'
-import LibraryMenu from '@ui/modules/data/workspace/LibraryMenu.vue'
-import LibraryTabs from '@ui/modules/data/workspace/LibraryTabs.vue'
+import LibraryCheckbox from '@ui/modules/data/components/LibraryCheckbox.vue'
+import LibraryMenu from '@ui/modules/data/components/LibraryMenu.vue'
+import LibraryTabs from '@ui/modules/data/components/LibraryTabs.vue'
 import { libraryControlsKey } from '@ui/modules/data/workspace/libraryControls'
 
 const checkbox=defineComponent({props:{modelValue:[Boolean,String]},emits:['update:modelValue'],template:'<button :data-value="modelValue" @click="$emit(\'update:modelValue\',true)">Toggle</button>'})

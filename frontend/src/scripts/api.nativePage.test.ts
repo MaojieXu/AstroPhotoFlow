@@ -86,4 +86,22 @@ describe('ComfyApi native page events', () => {
     await expect(pending).resolves.toEqual({ ok: false, reason: 'connection_closed' })
     expect(socket.send).toHaveBeenCalledTimes(2)
   })
+  it('rejects a malformed correlated reply without replaying the confirmation',async()=>{
+    FakeWebSocket.instances=[]
+    vi.stubGlobal('WebSocket',FakeWebSocket)
+    const api=new ComfyApi()
+    api.serverFeatureFlags.value={apf_page:true}
+    await api.init()
+    const socket=FakeWebSocket.instances[0]
+    socket.open()
+    const pending=api.sendNativePage('confirm_software',{operation_id:'11111111-1111-4111-8111-111111111111'})
+    const confirmation=socket.send.mock.calls.map(([text])=>JSON.parse(text)).find(message=>message.data?.action==='confirm_software')
+    const sends=socket.send.mock.calls.length
+    socket.message({type:'apf.page_result',data:{event_id:confirmation.data.event_id,
+      page_id:'22222222-2222-4222-8222-222222222222',page_token:'current',result:{invented:true},error:null}})
+    await expect(pending).resolves.toEqual({ok:false,reason:'invalid_response'})
+    expect(socket.send).toHaveBeenCalledTimes(sends)
+    api.socket=null
+  })
+
 })

@@ -1399,7 +1399,7 @@ class PromptServer():
         self.app.add_routes([
             web.static('/', self.web_root),
         ])
-        from astrophotoflow.interfaces.comfyui import register_native
+        from astrophotoflow.interfaces.native.bootstrap import register_native
         register_native(self)
 
     def get_queue_info(self):

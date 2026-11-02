@@ -1,19 +1,25 @@
-from astrophotoflow.contracts.assets import AssetClassificationPatch, AssetOut, AssetParametersPatch, AssetVersionOut, LibraryAssetItemOut
-from astrophotoflow.contracts.calibration import CalibrationBindings
-from astrophotoflow.contracts.common import StrictModel, UuidInput, check_name
 from datetime import datetime
-from pydantic import Field, field_validator, model_validator
-from typing import Annotated, Literal
+from typing import Literal
 from uuid import UUID
+
+from pydantic import Field, field_validator, model_validator
+
+from astrophotoflow.contracts.assets import AssetOut, AssetVersionOut, LibraryMemberFilters, LibraryMetadataSummary, LibrarySortKey
+from astrophotoflow.contracts.calibration import CalibrationBindings
+from astrophotoflow.contracts.common import PageMetadata, StrictModel, UuidInput, check_name
+from astrophotoflow.contracts.metadata import AssetClassification, AssetParametersPatch
 
 
 class DatasetOut(StrictModel):
+    summary: LibraryMetadataSummary
+    input_ready: bool
     id: UUID
     name: str
     notes: str | None
     status: Literal["active", "archived"]
     revision: int
     current_version_id: UUID | None
+    current_version_number: int | None
     member_count: int
     created_at: datetime
     updated_at: datetime
@@ -26,11 +32,8 @@ class DatasetMemberParametersUpdateOut(StrictModel):
     assets: list[AssetOut]
 
 
-class DatasetPage(StrictModel):
+class DatasetPage(PageMetadata):
     items: list[DatasetOut]
-    total: int
-    limit: int
-    offset: int
 
 
 class DatasetMemberOut(StrictModel):
@@ -44,6 +47,26 @@ class DatasetMemberOut(StrictModel):
     version: AssetVersionOut
 
 
+class DatasetMemberQuery(LibraryMemberFilters):
+    q: str | None = None
+    sort_by: LibrarySortKey | Literal["position"] = "position"
+    order: Literal["asc", "desc"] = "asc"
+    limit: int = Field(default=50, ge=1, le=200, strict=False)
+    offset: int = Field(default=0, ge=0, strict=False)
+
+
+class DatasetMemberPage(PageMetadata):
+    items: list[DatasetMemberOut]
+
+
+class DatasetVersionSummary(StrictModel):
+    id: UUID
+    dataset_id: UUID
+    version_number: int
+    created_at: datetime
+    calibration_defaults: CalibrationBindings = Field(default_factory=dict)
+
+
 class DatasetVersionOut(StrictModel):
     id: UUID
     dataset_id: UUID
@@ -53,29 +76,14 @@ class DatasetVersionOut(StrictModel):
     members: list[DatasetMemberOut]
 
 
-class LibraryDatasetItemOut(StrictModel):
-    entry_type: Literal["dataset"]
-    dataset: DatasetOut
-    version: DatasetVersionOut | None
-    import_issue: str | None
-    matching_member_count: int
 
 
-LibraryItemOut = Annotated[LibraryAssetItemOut | LibraryDatasetItemOut, Field(discriminator="entry_type")]
 
 
-class LibraryItemPage(StrictModel):
-    items: list[LibraryItemOut]
-    total: int
-    limit: int
-    offset: int
 
 
-class DatasetVersionPage(StrictModel):
-    items: list[DatasetVersionOut]
-    total: int
-    limit: int
-    offset: int
+class DatasetVersionPage(PageMetadata):
+    items: list[DatasetVersionSummary]
 
 
 class DatasetMembersCreate(StrictModel):
@@ -122,7 +130,7 @@ class DatasetMemberParametersUpdate(StrictModel):
     base_version_id: UuidInput
     members: list[DatasetMemberRevision]
     parameters: AssetParametersPatch | None = None
-    classification: AssetClassificationPatch | None = None
+    classification: AssetClassification | None = None
 
     @model_validator(mode="after")
     def has_changes(self):
@@ -136,3 +144,12 @@ class DatasetMemberParametersUpdate(StrictModel):
         if len(ids) != len(set(ids)):
             raise ValueError("members 中不能包含重复 Asset")
         return self
+
+
+class DatasetQuery(StrictModel):
+    limit: int = Field(default=50,ge=1,le=200,strict=False)
+    offset: int = Field(default=0,ge=0,strict=False)
+    sort_by: Literal['created_at','name'] = 'created_at'
+    order: Literal['asc','desc'] = 'desc'
+    q: str | None = None
+    status: Literal['active','archived','all'] = 'active'

@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { parameterSummary } from '@ui/modules/data/workspace/presentation'
+import { parameterSummary } from '@ui/modules/data/library/presentation'
 
 it('distinguishes recorded zero from a missing number without inferring a parameter mode',()=>{
   expect(parameterSummary({parameter_mode:'standard',gain:0})).toBe('模式未指定 · Gain 0')

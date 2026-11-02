@@ -1,3 +1,4 @@
+from astrophotoflow.modules.software.development import builder as development_builder
 import json
 from pathlib import Path
 import shutil
@@ -10,6 +11,7 @@ import subprocess
 
 from astrophotoflow.core.config import Settings
 from astrophotoflow.modules.software import bundles, development, public
+from astrophotoflow.modules.software.bundles.loader import load_adapter
 
 
 def _source(tmp_path, bundle_install, monkeypatch):
@@ -18,7 +20,7 @@ def _source(tmp_path, bundle_install, monkeypatch):
     source = tmp_path / 'source'
     shutil.copytree(installed, source)
     (source / 'authored.json').write_text(json.dumps({'name': 'Source title'}))
-    (source / 'development.json').write_text(json.dumps({'build': 'generate.py', 'watch': ['authored.json', 'generate.py', 'adapter/*.py']}))
+    (source / 'development.json').write_text(json.dumps({'build': 'generate', 'watch': ['authored.json', 'generate.py', 'adapter/*.py']}))
     (source / 'generate.py').write_text('''import json
 from pathlib import Path
 root = Path(__file__).parent
@@ -28,7 +30,7 @@ value = json.loads(path.read_text())
 value['name'] = json.loads((root / 'authored.json').read_text())['name']
 path.write_text(json.dumps(value))
 ''')
-    monkeypatch.setattr(development.subprocess, 'check_output', lambda command, **kwargs: 'a' * 40 if command[-2:] == ['rev-parse', 'HEAD'] else ' M authored.json')
+    monkeypatch.setattr(development_builder.subprocess, 'check_output', lambda command, **kwargs: 'a' * 40 if command[-2:] == ['rev-parse', 'HEAD'] else ' M authored.json')
     return settings, installed, source
 
 
@@ -70,15 +72,15 @@ def test_helper_changes_invalidate_adapter_cache_and_source_fingerprint(tmp_path
     helper = source / 'adapter/helper.py'
     helper.write_text('VALUE = 1\n')
     adapter = source / 'adapter/siril.py'
-    adapter.write_text('import runpy\nfrom pathlib import Path\nVALUE = runpy.run_path(str(Path(__file__).with_name("helper.py")))["VALUE"]\n')
+    adapter.write_text('from .helper import VALUE\n')
     development.configure(settings.workspace, ['siril=' + str(source)], [], sys.executable)
     first = development.identity(settings.workspace, 'siril')
-    old = bundles._adapter(str(adapter), first['fingerprint'], adapter.read_bytes())
+    old = load_adapter(source, 'adapter/siril.py', first['fingerprint'])
     helper.write_text('VALUE = 2\n')
     development.refresh_sources(settings.workspace)
     development.refresh_sources(settings.workspace)
     second = development.identity(settings.workspace, 'siril')
-    current = bundles._adapter(str(adapter), second['fingerprint'], adapter.read_bytes())
+    current = load_adapter(source, 'adapter/siril.py', second['fingerprint'])
     assert second['fingerprint'] != first['fingerprint']
     assert old.VALUE == 1 and current.VALUE == 2
 
@@ -105,14 +107,14 @@ def test_generation_exception_stays_failed_until_author_change(tmp_path, bundle_
     settings, _, source = _source(tmp_path, bundle_install, monkeypatch)
     development.configure(settings.workspace, ['siril=' + str(source)], [], sys.executable)
     (source / 'authored.json').write_text(json.dumps({'name': 'Changed'}))
-    original_run = development.subprocess.run
+    original_run = development_builder.subprocess.run
     def fail(*args, **kwargs):
         raise failure
-    monkeypatch.setattr(development.subprocess, 'run', fail)
+    monkeypatch.setattr(development_builder.subprocess, 'run', fail)
     development.refresh_sources(settings.workspace)
     development.refresh_sources(settings.workspace)
     assert development.source_state(settings.workspace, 'siril').state == 'failed'
-    monkeypatch.setattr(development.subprocess, 'run', original_run)
+    monkeypatch.setattr(development_builder.subprocess, 'run', original_run)
     development.refresh_sources(settings.workspace)
     assert development.source_state(settings.workspace, 'siril').state == 'failed'
     (source / 'authored.json').write_text(json.dumps({'name': 'Fixed'}))

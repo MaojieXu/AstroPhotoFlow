@@ -30,7 +30,7 @@
 | `src/astrophotoflow/modules/workflows/public.py`、`src/astrophotoflow/modules/workflows/routes.py` | N：list/get、关联/文件准入业务；薄公开/内部路由适配 | data.public.get_project；文件bytes读取按原生userdata范围，路由不写ORM |
 | `src/astrophotoflow/interfaces/http/app.py`、`src/astrophotoflow/interfaces/comfyui.py`、`src/astrophotoflow/comfyui/proxy.py` | M：装配pages/permits和page read、file-check/finished、有限代理 | 前者不写⑤ORM；适配不承载业务；双解释器局部依赖边界 |
 | `engine/ComfyUI/app/user_manager.py`、`frontend/src/scripts/api.ts` | M：实际save/move/delete前后钩子及每请求token | 原生临时文件/os.replace、非托管userdata行为保留 |
-| `frontend/src/platform/astrophotoflow/workflowBridge.ts`、`frontend/src/platform/astrophotoflow/NativeShell.vue` | M：先save/关联，安装/卸载同一薄桥接 | Store/画布操作仅此宿主；真实handoff由B52完整加入 |
+| `frontend/src/platform/astrophotoflow/software/confirmation.ts`、`frontend/src/platform/astrophotoflow/sidebar/NativeShell.vue` | M：先save/关联，安装/卸载同一薄桥接 | Store/画布操作仅此宿主；真实handoff由B52完整加入 |
 | `frontend/src/platform/workflow/core/services/workflowService.ts`、`frontend/src/platform/workflow/management/stores/workflowStore.ts` | M：保存结果和首次关联联动 | 保留原提示/草稿/UUID/saveas，不另建文件操作 |
 | `src/astrophotoflow/interfaces/client/workflows.py` | N：list_workflows/get_workflow具名HTTP方法 | 由根`src/astrophotoflow/client.py`（M）组合，无SQL |
 | `frontend/packages/astrophotoflow-ui/src/modules/workflows/WorkflowPanel.vue`、`frontend/packages/astrophotoflow-ui/src/modules/workflows/api/contracts.ts`、`frontend/packages/astrophotoflow-ui/src/modules/workflows/api/client.ts`、`frontend/packages/astrophotoflow-ui/src/modules/workflows/index.ts` | N：项目图列表/读取/保存状态，Zod/具名client/组件公开 | 原生JSON只校验对象；首次保存/项目选择由宿主回调组合 |
@@ -116,10 +116,10 @@ pnpm test:browser
 | `src/astrophotoflow/contracts/workflows.py` | M：页面/Guard/EditOp/EditResult/Save/Replace/AgentContext既定类型 | 原生JSON不复制；无新Target/控制实体 |
 | `src/astrophotoflow/modules/workflows/public.py`、`src/astrophotoflow/modules/workflows/routes.py` | M：context/page事件/edit/save/replace及有限错误 | ②④公开能力、PageCall；无data ORM/import interfaces |
 | `src/astrophotoflow/interfaces/http/app.py`、`src/astrophotoflow/interfaces/comfyui.py`、`engine/ComfyUI/server.py` | M：同socket定向命令/回包、真实socket page观察 | 仅有限apf.*，当前pages/等待回包内存，不建连接服务 |
-| `frontend/src/platform/astrophotoflow/workflowBridge.ts`、`frontend/src/platform/astrophotoflow/NativeShell.vue`、`frontend/src/scripts/api.ts` | M：实际本地图操作/真实交回/撤销/支持列表/连接生命周期 | 原生Store及LiteGraph实际操作；包外单例只在宿主 |
+| `frontend/src/platform/astrophotoflow/software/confirmation.ts`、`frontend/src/platform/astrophotoflow/sidebar/NativeShell.vue`、`frontend/src/scripts/api.ts` | M：实际本地图操作/真实交回/撤销/支持列表/连接生命周期 | 原生Store及LiteGraph实际操作；包外单例只在宿主 |
 | `frontend/src/scripts/changeTracker.ts`、`frontend/src/platform/workflow/core/services/workflowService.ts` | M：真实手改/undo/redo与切图观察 | 不以所有graphChanged都当人工，保原生历史 |
 | `frontend/packages/astrophotoflow-ui/src/modules/workflows/WorkflowPanel.vue`、`frontend/packages/astrophotoflow-ui/src/modules/workflows/api/contracts.ts`、`frontend/packages/astrophotoflow-ui/src/modules/workflows/api/client.ts`、`frontend/packages/astrophotoflow-ui/src/modules/workflows/index.ts`、`frontend/packages/astrophotoflow-ui/src/index.ts` | M：当前目标/同步/控制可见，真实具名client与交给Agent按钮回调 | 无自填human/confirmed/恢复控制能力 |
-| `frontend/packages/astrophotoflow-ui/src/modules/data/workspace/Workspace.vue`、`frontend/src/platform/astrophotoflow/LibrarySidebarTab.vue` | M：公开宿主接缝的拖入/选择事件 | 不在data UI导入画布或生成内部path |
+| `frontend/packages/astrophotoflow-ui/src/modules/data/workspace/Workspace.vue`、`frontend/src/platform/astrophotoflow/sidebar/LibrarySidebarTab.vue` | M：公开宿主接缝的拖入/选择事件 | 不在data UI导入画布或生成内部path |
 | `src/astrophotoflow/interfaces/client/workflows.py`、`src/astrophotoflow/comfyui/proxy.py`、`docs/api/openapi.json` | M：相应具名方法/代理/实际快照 | 无临时MCP注册 |
 | `tests/modules/workflows/test_service.py`、`frontend/src/platform/astrophotoflow/workflowBridge.test.ts`、`tests/browser/platform-workflows.mjs` | M：多页、迟到、部分应用、人工接管与真实按钮 | 同一P文件增量 |
 
@@ -200,7 +200,7 @@ G06须真实同socket命令/结果/确认来源和迟到；B53再补嵌套prepar
 | `src/astrophotoflow/modules/data/trash.py`、`src/astrophotoflow/modules/data/science_inputs.py` | M：本次unlink写Session调用active_input_usage；解析先拒cleanup_active | 复用现有回收站校准/导入/预览/共享路径规则；data不导入⑤ |
 | `src/astrophotoflow/modules/data/public.py` | M：保留B24导出，必要实际callback接缝 | 不新增Protection表/输入登记API |
 | `src/astrophotoflow/modules/software/public.py`、`src/astrophotoflow/interfaces/http/app.py` | M：既有maintain_package段组合⑤固定实现使用 | queued/preparing及binding_unknown也阻止已存在的包维护；B55新增卸载/更新沿同一保护，不只看③句柄 |
-| `frontend/src/platform/astrophotoflow/workflowBridge.ts`、`frontend/src/scripts/app.ts` | M：prepareRun/check/submitNativeRun，托管分支唯一投递 | 复用现有控件顺序/Store保存/原生queued job与afterQueued；非托管路径保留 |
+| `frontend/src/platform/astrophotoflow/software/confirmation.ts`、`frontend/src/scripts/app.ts` | M：prepareRun/check/submitNativeRun，托管分支唯一投递 | 复用现有控件顺序/Store保存/原生queued job与afterQueued；非托管路径保留 |
 | `frontend/packages/astrophotoflow-ui/src/modules/workflows/WorkflowPanel.vue`、`frontend/packages/astrophotoflow-ui/src/modules/workflows/api/contracts.ts`、`frontend/packages/astrophotoflow-ui/src/modules/workflows/api/client.ts`、`frontend/packages/astrophotoflow-ui/src/modules/workflows/index.ts` | M：run真实受理/查询/准备/错误与显式测试展示 | 不以202显示完成；UI人工运行走宿主回调 |
 | `frontend/packages/astrophotoflow-ui/src/modules/nodes/NodeEditor.vue`、`src/astrophotoflow/modules/nodes/routes.py` | M：显式节点测试接同次run；最近测试取⑤ | 不增④执行器，测试不是保存/ready门禁 |
 | `src/astrophotoflow/interfaces/client/workflows.py`、`src/astrophotoflow/interfaces/client/nodes.py`、`src/astrophotoflow/interfaces/cli/commands.py`、`src/astrophotoflow/comfyui/proxy.py` | M：具名run/test、CLI只读、代理 | CLI不直接SQL；无临时MCP |
@@ -299,7 +299,7 @@ G06须在真实同socket提交处理中仍能接嵌套prepare结果、无自锁�
 | `engine/ComfyUI/server.py` | M：send_sync非阻塞观察hook/有限内部取消route注册 | 不修改既有public取消bool或helper逻辑 |
 | `src/astrophotoflow/modules/data/trash.py`、`src/astrophotoflow/modules/data/routes.py` | R：回归B53实际unlink保护；公共removal-preview/DELETE改装配留B57同卡发布 | 不注入空消费者、不提前改现有普通移除请求语义 |
 | `src/astrophotoflow/modules/data/ingestion.py`、`src/astrophotoflow/modules/data/imports.py`、`src/astrophotoflow/modules/data/public.py` | R，若B24观察到缺口仅M窄修：真实同task/阶段、路径脱敏 | 不重写导入/增来源表，不先登记做预览 |
-| `frontend/src/platform/astrophotoflow/workflowBridge.ts`、`frontend/src/scripts/app.ts`、`frontend/src/scripts/changeTracker.ts`、`frontend/src/stores/nodeOutputStore.ts` | M：prompt→run→workflow显示/事件归图 | B同节点ID不接A的onExecuted，不抢视图；缓存回放非新处理 |
+| `frontend/src/platform/astrophotoflow/software/confirmation.ts`、`frontend/src/scripts/app.ts`、`frontend/src/scripts/changeTracker.ts`、`frontend/src/stores/nodeOutputStore.ts` | M：prompt→run→workflow显示/事件归图 | B同节点ID不接A的onExecuted，不抢视图；缓存回放非新处理 |
 | `frontend/packages/astrophotoflow-ui/src/modules/workflows/WorkflowPanel.vue`、`frontend/packages/astrophotoflow-ui/src/modules/workflows/api/contracts.ts`、`frontend/packages/astrophotoflow-ui/src/modules/workflows/api/client.ts` | M：实际进度/取消/多次预览/选择完整结果/保存事实 | 不把HTTP200或202变完成，名称省略合法 |
 | `frontend/packages/astrophotoflow-ui/src/modules/data/workspace/Workspace.vue` | M：已保存素材来源只读回查 | ②不读⑤ORM，宿主组合回查运行；普通移除新字段/UI留B57 |
 | `src/astrophotoflow/interfaces/client/workflows.py`、`src/astrophotoflow/comfyui/proxy.py`、`docs/api/openapi.json` | M：run结果具名方法/图像与实际API | 现有library客户端普通移除请求不在此提前改 |
@@ -383,7 +383,7 @@ uv run --locked --no-sync pytest -c pyproject.toml --noconftest -o pythonpath=en
 
 **1. 目标。** `codex/workflow-package-node-updates`。软件更新/卸载和自制节点更新先列准确影响，再真实确认；已固定preparing/queued/running/unknown实现阻止替换；变化参数/端口按既定规则，未打开图也沿原生最终文件guard写，逐图报告实际部分结果。A55-1～4 / V06/08 / G09。
 
-**2. 必读。** [FR-03/16](../../../../requirements/README.md#scenario-nodes)、[③更新/卸载数据](../../architecture/data-models/03-software.md#更新与卸载)、[④修改数据](../../architecture/data-models/04-nodes.md#修改已有自定义节点)、[③④公开面](../../api/platform-contracts.md#software-design)、[⑤影响/更新](../../api/platform-contracts.md#workflows-design)、[已批准维护文件入口](../../api/platform-contracts.md#native-design)。重点读④“③必要public”“确认更新及在途保护”“public.py完整签名”“受控保存入口”“共享图控制”。R：[原生文件最终写](../../../../../engine/ComfyUI/app/user_manager.py)；运行实际事实复用 `src/astrophotoflow/modules/workflows/public.py`（B51起创建，B53接运行），原生Store/画布实际操作复用 `frontend/src/platform/astrophotoflow/workflowBridge.ts`（B32起创建）。
+**2. 必读。** [FR-03/16](../../../../requirements/README.md#scenario-nodes)、[③更新/卸载数据](../../architecture/data-models/03-software.md#更新与卸载)、[④修改数据](../../architecture/data-models/04-nodes.md#修改已有自定义节点)、[③④公开面](../../api/platform-contracts.md#software-design)、[⑤影响/更新](../../api/platform-contracts.md#workflows-design)、[已批准维护文件入口](../../api/platform-contracts.md#native-design)。重点读④“③必要public”“确认更新及在途保护”“public.py完整签名”“受控保存入口”“共享图控制”。R：[原生文件最终写](../../../../../engine/ComfyUI/app/user_manager.py)；运行实际事实复用 `src/astrophotoflow/modules/workflows/public.py`（B51起创建，B53接运行），原生Store/画布实际操作复用 `frontend/src/platform/astrophotoflow/software/confirmation.ts`（B32起创建）。
 
 **3. 前置。** B32/B43/B51/B54；复用B53完整get_implementation_usage及现有maintain_package/①维护gate。G04已锁定实际加载/刷新/显式重启条件；G09未打开图和嵌套最终guard失败即阻塞。用户确认的是准确业务计划，普通Agent不能借维护后台改任意图。
 
@@ -400,7 +400,7 @@ uv run --locked --no-sync pytest -c pyproject.toml --noconftest -o pythonpath=en
 | `engine/ComfyUI/app/user_manager.py` | R，必要M仅复用B51同guard接维护来源 | 同token真实文件bytes核对；不建第二保存器 |
 | `frontend/packages/astrophotoflow-ui/src/modules/software/SoftwarePanel.vue`、`frontend/packages/astrophotoflow-ui/src/modules/software/api/contracts.ts`、`frontend/packages/astrophotoflow-ui/src/modules/software/api/client.ts` | M：同一准确软件计划/真实确认/逐项状态 | 许可敏感输入仍用户直接处理 |
 | `frontend/packages/astrophotoflow-ui/src/modules/nodes/NodeEditor.vue`、`frontend/packages/astrophotoflow-ui/src/modules/nodes/api/contracts.ts`、`frontend/packages/astrophotoflow-ui/src/modules/nodes/api/client.ts` | M：影响预览/确认更新/旧测试提示 | 软件配套变化默认与custom全新默认区分 |
-| `frontend/src/platform/astrophotoflow/workflowBridge.ts`、`frontend/packages/astrophotoflow-ui/src/modules/workflows/WorkflowPanel.vue` | M：维护结果可见/后续交互重读保存图，保草稿不抢视图 | 无需每个被改图活动页面，不授Agent写权 |
+| `frontend/src/platform/astrophotoflow/software/confirmation.ts`、`frontend/packages/astrophotoflow-ui/src/modules/workflows/WorkflowPanel.vue` | M：维护结果可见/后续交互重读保存图，保草稿不抢视图 | 无需每个被改图活动页面，不授Agent写权 |
 | `src/astrophotoflow/interfaces/client/software.py`、`src/astrophotoflow/interfaces/client/nodes.py`、`src/astrophotoflow/comfyui/proxy.py`、`docs/api/openapi.json` | M：精确update-preview/update与实际响应 | 固定具名映射，无任意URL |
 | `tests/modules/software/test_service.py`、`tests/modules/nodes/test_service.py`、`tests/modules/workflows/test_service.py`、`tests/modules/workflows/test_runs.py`、`tests/integration/test_platform_workflow.py`、`frontend/src/platform/astrophotoflow/workflowBridge.test.ts`、`tests/browser/platform-workflows.mjs` | M：差异、在途、草稿/文件竞态、部分失败/加载真实事实 | 不复制另一个工作流更新引擎 |
 

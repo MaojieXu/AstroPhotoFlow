@@ -3,7 +3,7 @@ import { createI18n } from 'vue-i18n'
 import { describe, expect, it } from 'vitest'
 
 import { configureUII18n, uiMessages, uiT } from '../../src/core/i18n'
-import { displayLabel } from '../../src/modules/data/workspace/presentation'
+import { displayLabel } from '../../src/modules/data/library/presentation'
 import { nodeCapabilitySchema } from '../../src/modules/nodes/client'
 
 describe('workspace display language', () => {
@@ -34,6 +34,6 @@ describe('workspace display language', () => {
       expect(en[key].trim()).not.toBe('')
       expect((en[key].match(/\{p\d+\}/g) ?? []).sort()).toEqual((zh[key].match(/\{p\d+\}/g) ?? []).sort())
     }
-    expect(nodeCapabilitySchema.shape.display.parse(undefined)).toEqual({})
+    expect(nodeCapabilitySchema.shape.display.parse({})).toEqual({})
   })
 })

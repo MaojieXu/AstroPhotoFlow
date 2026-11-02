@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import httpx
 import pytest
@@ -13,9 +13,7 @@ from astrophotoflow.contracts.imports import ImportCreate
 from astrophotoflow.client import AssetClient, ServiceApiError
 from astrophotoflow.contracts.imports import PhotoImportOptions
 from astrophotoflow.contracts.trash import EquipmentDelete, EquipmentDeleteSelection
-from astrophotoflow.interfaces.cli.main import _parser
-from astrophotoflow.interfaces.cli.commands import run
-from astrophotoflow.contracts.workflows import CanvasAddRequest
+from astrophotoflow.contracts.canvas import CanvasAddRequest, CanvasGraphRequest
 
 
 @pytest.fixture
@@ -24,11 +22,37 @@ def client():
 
     def handle(request):
         calls.append(request)
-        if request.url.path == "/api/v1/uploads":
-            return httpx.Response(202, json={"task_id": "upload-task", "status": "queued"})
-        if request.url.path.endswith("/previews/display"):
-            return httpx.Response(200, content=b"jpeg", headers={"Content-Type": "image/jpeg"})
-        return httpx.Response(200, json={"ok": True})
+        path=request.url.path
+        identity="00000000-0000-4000-8000-000000000001"
+        timestamp="2026-10-31T00:00:00Z"
+        payload=json.loads(request.content) if request.content and request.method!="PUT" else {}
+        if path in {"/api/v1/uploads","/api/v1/imports"} or path.endswith(("/start","/retry")):
+            return httpx.Response(202,json={"task_id":identity,"status":"queued"})
+        if path.startswith("/api/v1/uploads/") and request.method=="PUT":
+            return httpx.Response(200,json={"received":len(request.content)})
+        if path.endswith("/previews/display"):
+            return httpx.Response(200,content=b"jpeg",headers={"Content-Type":"image/jpeg"})
+        if path=="/api/v1/canvas/pages":return httpx.Response(200,json=[])
+        if path.startswith("/api/v1/canvas/"):
+            target={key:payload.get(key,identity) for key in ("operation_id","page_id","workflow_id","graph_id")}
+            return httpx.Response(200,json={**target,"applied":True,"node_id":None,"error":None})
+        if path.endswith("/equipment-management/delete-preview"):
+            return httpx.Response(200,json={"items":[],"dependencies":[],"blocked":False,"preview_fingerprint":"current"})
+        if path.endswith("/equipment-management/delete"):
+            return httpx.Response(200,json={"deleted_count":1,"detached_material_count":0})
+        if path.startswith("/api/v1/library/assets/"):
+            return httpx.Response(200,json={"id":path.rsplit("/",1)[1],"name":"Sample","scope":"shared","owner_project_id":None,
+                "role":"raw","calibration_level":None,"current_version_id":None,"current_version":None,"classification":{},
+                "parameters":{},"equipment_snapshot":{},"value_sources":{},"notes":None,"status":"active","revision":8,"created_at":timestamp})
+        if path.startswith("/api/v1/datasets/") and path.endswith("/versions"):
+            return httpx.Response(200,json={"id":identity,"dataset_id":path.split("/")[-2],"version_number":2,
+                "created_at":timestamp,"calibration_defaults":{},"members":[]})
+        if path.endswith("/entries") or path=="/api/v1/asset-tasks":
+            return httpx.Response(200,json={"items":[],"total":0,"limit":10,"offset":0})
+        if path=="/api/v1/equipment" or path.startswith("/api/v1/equipment/"):
+            return httpx.Response(200,json={"id":identity,"name":"Scope","kind":payload["kind"],"specs":payload.get("specs",{}),
+                "model":None,"notes":None,"status":"active","revision":3,"created_at":timestamp,"updated_at":timestamp})
+        raise AssertionError("Unexpected request: "+str(request.url))
 
     client = AssetClient.__new__(AssetClient)
     client.client = httpx.Client(base_url="http://service/api/v1", transport=httpx.MockTransport(handle))
@@ -44,8 +68,7 @@ def test_cli_absolute_local_source_does_not_require_root_id(client):
     api, calls = client
     path = str(Path.cwd() / "local-image.fits")
     request = {"sources": [{"path": path}], "storage_mode": "managed"}
-    args = _parser().parse_args(["imports", "local", "--data", json.dumps(request)])
-    assert run(api, args) == {"ok": True}
+    assert api.import_local(ImportCreate.model_validate(request)).status == "queued"
     assert calls[0].url.path == "/api/v1/imports"
     assert body(calls[0]) == request
 
@@ -53,8 +76,7 @@ def test_cli_absolute_local_source_does_not_require_root_id(client):
 def test_canvas_cli_and_client_preserve_explicit_target_and_operation_id(client):
     api, calls = client
     request = {"operation_id": str(uuid4()), "page_id": str(uuid4()), "workflow_id": str(uuid4()), "graph_id": str(uuid4()), "content_token": "current", "source": {"entry_type": "asset", "id": str(uuid4()), "version_id": str(uuid4())}}
-    args = _parser().parse_args(["canvas", "add-data", "--data", json.dumps(request)])
-    assert run(api, args) == {"ok": True}
+    assert api.add_canvas_data(CanvasAddRequest.model_validate(request)).operation_id == UUID(request["operation_id"])
     api.get_canvas_request(request["operation_id"])
     api.list_canvas_pages()
     assert [(call.method, call.url.path) for call in calls] == [
@@ -75,8 +97,7 @@ def test_canvas_cli_edits_use_target_and_content_without_control_marker(client, 
         'content_token': 'current',
         'edit': edit,
     }
-    args = _parser().parse_args(['canvas', 'edit', '--data', json.dumps(request)])
-    assert run(api, args) == {'ok': True}
+    assert api.edit_canvas(CanvasGraphRequest.model_validate(request)).operation_id == UUID(request["operation_id"])
     assert calls[0].url.path == '/api/v1/canvas/graph'
     assert body(calls[0]) == request
 
@@ -102,7 +123,7 @@ def test_bulk_upload_preserves_order_and_automatic_classification(client, tmp_pa
     api.import_photos(photos)
     assert body(calls[0]) == {"files": [{"name": "one.png", "size": 3}, {"name": "two.png", "size": 3}]}
     assert [request.url.path for request in calls] == [
-        "/api/v1/uploads", "/api/v1/uploads/upload-task/0", "/api/v1/uploads/upload-task/1", "/api/v1/uploads/upload-task/start",
+        "/api/v1/uploads", "/api/v1/uploads/00000000-0000-4000-8000-000000000001/0", "/api/v1/uploads/00000000-0000-4000-8000-000000000001/1", "/api/v1/uploads/00000000-0000-4000-8000-000000000001/start",
     ]
     assert calls[1].content == bytes([0]) * 3 and calls[2].content == bytes([1]) * 3
     calls.clear()
@@ -170,41 +191,38 @@ def test_software_command_catalog_client_uses_the_exact_package_version():
     assert calls[0].url.path == "/api/v1/software/packages/siril/versions/1.4.4/commands"
 
 
-def test_cli_json_file_body_and_archive_use_backend_schemas(client, tmp_path):
-    api, calls = client
-    identity = str(uuid4())
-    data = tmp_path / "patch.json"
-    data.write_text(json.dumps({"base_revision": 7, "notes": None, "parameters": {"gain": 0}}), encoding="utf-8")
-    args = _parser().parse_args(["assets", "patch", identity, "--data", "@" + str(data)])
-    run(api, args)
-    assert body(calls[-1]) == {"base_revision": 7, "notes": None, "parameters": {"gain": 0}}
-    args = _parser().parse_args(["equipment", "archive", identity, "--kind", "mount", "--base-revision", "2"])
-    run(api, args)
-    assert body(calls[-1]) == {"kind": "mount", "base_revision": 2, "status": "archived"}
-    args = _parser().parse_args(["equipment", "create", "--data", '{"kind":"telescope","name":"Scope","specs":{"aperture_mm":80}}'])
-    run(api, args)
-    assert body(calls[-1])["specs"] == {"aperture_mm": 80.0}
-    args = _parser().parse_args(["tasks", "retry", identity, "--data", json.dumps({"item_ids": [identity]})])
-    run(api, args)
-    assert calls[-1].url.path.endswith("/retry") and body(calls[-1]) == {"item_ids": [identity]}
+def test_client_sparse_patch_archive_create_and_retry_use_shared_schemas(client):
+    from pydantic import TypeAdapter
+    from astrophotoflow.contracts.equipment import EquipmentCreate,EquipmentPatch
+    from astrophotoflow.contracts.imports import RetryCreate
+    api,calls=client
+    identity=str(uuid4())
+    api.update_asset(identity,AssetPatch(base_revision=7,notes=None,parameters={'gain':0}))
+    assert body(calls[-1])=={'base_revision':7,'notes':None,'parameters':{'gain':0}}
+    api.update_equipment(identity,TypeAdapter(EquipmentPatch).validate_python({'kind':'telescope','base_revision':2,'status':'archived'}))
+    assert body(calls[-1])=={'kind':'telescope','base_revision':2,'status':'archived'}
+    api.create_equipment(TypeAdapter(EquipmentCreate).validate_python({'kind':'telescope','name':'Scope','specs':{'native_focal_length_mm':480}}))
+    assert body(calls[-1])['specs']=={'native_focal_length_mm':480.0}
+    api.retry_import_items(identity,RetryCreate(item_ids=[identity]))
+    assert calls[-1].url.path.endswith('/retry') and body(calls[-1])=={'item_ids':[identity]}
 
 
-def test_cli_rejects_invalid_domain_body_before_http(client):
-    api, calls = client
-    args = _parser().parse_args(["presets", "create", str(uuid4()), "--data", '{"name":"night","parameters":{"invented":1}}'])
-    with pytest.raises(ValueError, match="invented"):
-        run(api, args)
+def test_client_rejects_invalid_domain_body_before_http(client):
+    from astrophotoflow.contracts.setups import CapturePresetCreate
+    api,calls=client
+    with pytest.raises(ValueError,match='invented'):
+        api.create_capture_preset(str(uuid4()),CapturePresetCreate.model_validate({'name':'night','parameters':{'invented':1}}))
     assert not calls
 
 
-def test_init_flags_remain_and_control_commands_have_no_activation_flag():
-    args = _parser().parse_args(["init", "--workspace", "work", "--reuse-runtime", "--frontend-assets", "build/frontend", "--no-activate"])
-    assert args.reuse_runtime and args.no_activate and args.frontend_assets == Path("build/frontend")
-    for command in ("start", "status", "stop", "restart"):
-        control = _parser().parse_args([command, "--workspace", "work"])
-        assert control.workspace == Path("work") and not hasattr(control, "no_activate")
-    with pytest.raises(SystemExit):
-        _parser().parse_args(["start", "--no-activate"])
+def test_cyclopts_local_init_and_control_options_do_not_execute_actions():
+    from astrophotoflow.interfaces.cli.main import app
+    _,args,_=app.parse_args(['init','--workspace','work','--reuse-runtime','--frontend-assets','build/frontend','--no-activate'])
+    assert args.arguments['reuse_runtime'] is True and args.arguments['activate'] is False
+    assert args.arguments['frontend_assets']==Path('build/frontend')
+    for command in ('start','status','stop','restart'):
+        _,args,_=app.parse_args([command,'--workspace','work'])
+        assert args.arguments['workspace']==Path('work') and 'activate' not in args.arguments
 
 
 def test_display_preview_reads_bytes_and_exports_without_scheduling(tmp_path):
@@ -214,36 +232,39 @@ def test_display_preview_reads_bytes_and_exports_without_scheduling(tmp_path):
     def handle(request):
         calls.append(request)
         if request.method == "POST":
-            return httpx.Response(202, json={"status": "generating"})
+            return httpx.Response(202, json={"asset_version_id":"00000000-0000-4000-8000-000000000001","size":"display","status":"generating"})
         if request.url.path.endswith("/status"):
-            return httpx.Response(200, json={"status": "available"})
+            return httpx.Response(200, json={"asset_version_id":"00000000-0000-4000-8000-000000000001","size":"display","status":"available"})
         return httpx.Response(200, content=jpeg, headers={"Content-Type": "image/jpeg"})
 
     api = AssetClient.__new__(AssetClient)
     api.client = httpx.Client(base_url="http://service/api/v1", transport=httpx.MockTransport(handle))
     with api:
-        assert api.schedule_display_preview("asset", "version")["status"] == "generating"
-        assert api.get_display_preview_status("asset", "version")["status"] == "available"
+        assert api.schedule_display_preview("asset", "version").status == "generating"
+        assert api.get_display_preview_status("asset", "version").status == "available"
         output = tmp_path / "display.jpg"
-        result = run(api, _parser().parse_args(["previews", "export", "asset", "version", str(output)]))
+        result = api.export_display_preview("asset", "version", output)
     assert output.read_bytes() == jpeg and result == {"path": str(output.resolve()), "byte_size": len(jpeg)}
     assert [(call.method, call.url.path.rsplit("/", 1)[-1]) for call in calls] == [("POST", "display"), ("GET", "status"), ("GET", "display")]
 
 
-def test_mcp_display_image_uses_sdk_content_conversion(monkeypatch):
+def test_mcp_display_image_uses_framework_content_conversion(monkeypatch):
     import asyncio
     from base64 import b64decode
-    from astrophotoflow.interfaces.mcp import server as mcp_server
-
-    jpeg = b"\xff\xd8jpeg\xff\xd9"
-    api = AssetClient.__new__(AssetClient)
-    api.client = httpx.Client(base_url="http://service/api/v1", transport=httpx.MockTransport(lambda request: httpx.Response(200, content=jpeg, headers={"Content-Type": "image/jpeg"})))
-    monkeypatch.setattr(mcp_server, "AssetClient", lambda: api)
-    tool = mcp_server.server._tool_manager.get_tool("data_management")
-    result = asyncio.run(tool.run({"operation":"previews.read", "arguments":{"asset_id": "asset", "version_id": "version"}}, None, convert_result=True))
-    assert result.structured_content is None and len(result.content) == 1
-    assert result.content[0].type == "image" and result.content[0].mime_type == "image/jpeg"
-    assert b64decode(result.content[0].data) == jpeg
+    from fastmcp import Client
+    from astrophotoflow.interfaces.mcp import lifespan
+    from astrophotoflow.interfaces.mcp.server import build_tool_catalog
+    jpeg=b'\xff\xd8jpeg\xff\xd9'
+    api=AssetClient.__new__(AssetClient)
+    api.client=httpx.Client(base_url='http://service/api/v1',transport=httpx.MockTransport(lambda _:httpx.Response(200,content=jpeg,headers={'Content-Type':'image/jpeg'})))
+    monkeypatch.setattr(lifespan,'AssetClient',lambda:api)
+    async def check():
+        async with Client(build_tool_catalog()) as client:
+            result=await client.call_tool('data_media_read',{'asset_id':'asset','version_id':'version'})
+            assert result.structured_content is None and len(result.content)==1
+            assert result.content[0].type=='image' and result.content[0].mime_type=='image/jpeg'
+            assert b64decode(result.content[0].data)==jpeg
+    asyncio.run(check())
 
 
 def test_preview_export_preserves_existing_destination_and_cli_fails(client, tmp_path, monkeypatch, capsys):
@@ -257,11 +278,16 @@ def test_preview_export_preserves_existing_destination_and_cli_fails(client, tmp
         api.export_display_preview("asset", "version", output)
     assert output.read_bytes() == original
 
-    monkeypatch.setattr(cli, "AssetClient", lambda: api)
-    monkeypatch.setattr("sys.argv", ["apf", "previews", "export", "asset", "version", str(output)])
+    from astrophotoflow.interfaces.cli import generated
+    from astrophotoflow.interfaces.mcp import lifespan
+    from astrophotoflow.interfaces.mcp.server import build_tool_catalog
+    monkeypatch.setattr(lifespan,'AssetClient',lambda:api)
+    monkeypatch.setattr(generated,'CLIENT_SPEC',build_tool_catalog())
+    monkeypatch.setattr('sys.argv',['apf','call-tool','data_media_export','--asset-id','asset','--version-id','version','--output',str(output)])
     with pytest.raises(SystemExit) as caught:
         cli.main()
-    assert caught.value.code == 1 and output.name in capsys.readouterr().err
+    captured=capsys.readouterr()
+    assert caught.value.code == 1 and output.name in captured.out+captured.err
     assert output.read_bytes() == original
 
 

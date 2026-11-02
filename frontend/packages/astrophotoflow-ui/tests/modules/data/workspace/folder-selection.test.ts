@@ -1,5 +1,5 @@
 import {describe,expect,it} from 'vitest'
-import {firstLevelImportFiles} from '@ui/modules/data/workspace/folder-selection'
+import {firstLevelImportFiles} from '@ui/modules/data/imports/folder-selection'
 
 function file(name:string,path:string){
   const value=new File(['image'],name)

@@ -4,7 +4,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import App from '@ui/modules/data/App.vue'
 import Workspace from '@ui/modules/data/workspace/Workspace.vue'
 
-const { get } = vi.hoisted(() => ({
+const { get, send } = vi.hoisted(() => ({
+  send:vi.fn(),
   get: vi.fn(async (path: string) => path.endsWith('/capabilities')
     ? {
         stage: 'ingestion', shared_library_read: true, project_assets_read: true,
@@ -14,8 +15,8 @@ const { get } = vi.hoisted(() => ({
     : { items: [], total: 0, limit: 50, offset: 0 })
 }))
 
-vi.mock('@ui/modules/data/api/index', () => ({
-  assetApi: { get, send: vi.fn() }
+vi.mock('@ui/modules/data/api/index', async () => ({ libraryApi: (await import('../../../fixtures/library-api')).createLibraryApiFixture(get), catalogApi: (await import('../../../fixtures/library-api')).createCatalogApiFixture(get), mutationApi: (await import('../../../fixtures/library-api')).createMutationApiFixture(send), trashApi: (await import('../../../fixtures/library-api')).createTrashApiFixture(get,send), importApi: (await import('../../../fixtures/library-api')).createImportApiFixture(get,send), datasetApi: (await import('../../../fixtures/library-api')).createDatasetApiFixture(get,send),
+  assetApi: { get, send }
 }))
 
 describe('workspace panel', () => {
@@ -46,28 +47,19 @@ describe('workspace panel', () => {
     expect(native.emitted('back-to-library')).toHaveLength(1)
   })
 
-  it('shows five side areas and opens each area in the current panel', async () => {
+  it('exposes only connected library and equipment areas', async () => {
     wrapper = mount(App, { global: { plugins: [createPinia()] } })
     await flushPromises()
     expect(wrapper.find('input[type="file"]').exists()).toBe(false)
     expect(wrapper.find('dialog').exists()).toBe(false)
     expect(wrapper.text()).not.toContain('打开资产工作区')
-    expect(wrapper.get('.apf-nav').findAll('button')).toHaveLength(5)
+    expect(wrapper.get('.apf-nav').findAll('button')).toHaveLength(2)
     expect(wrapper.get('.apf-nav').text()).toBe('')
     expect(wrapper.get('.apf-import').text()).toBe('导入')
     expect((wrapper.get('.apf-import').element as HTMLButtonElement).disabled).toBe(true)
-    await wrapper.get('.apf-nav button[aria-label="节点仓库"]').trigger('click')
-    await flushPromises()
-    expect(wrapper.get('h1').text()).toBe('节点仓库')
-    expect(wrapper.text()).toContain('节点仓库区域已预留')
-    await wrapper.get('.apf-nav button[aria-label="可安装软件"]').trigger('click')
-    await flushPromises()
-    expect(wrapper.get('h1').text()).toBe('可安装软件')
-    expect(wrapper.text()).toContain('软件目录和安装功能尚未接入')
-    await wrapper.get('.apf-nav button[aria-label="Agent 聊天"]').trigger('click')
-    await flushPromises()
-    expect(wrapper.get('h1').text()).toBe('Agent 聊天')
-    expect(wrapper.text()).toContain('聊天功能尚未接入')
+    expect(wrapper.find('.apf-nav button[aria-label="节点仓库"]').exists()).toBe(false)
+    expect(wrapper.find('.apf-nav button[aria-label="可安装软件"]').exists()).toBe(false)
+    expect(wrapper.find('.apf-nav button[aria-label="Agent 聊天"]').exists()).toBe(false)
     await wrapper.get('.apf-nav button[aria-label="设备管理"]').trigger('click')
     await flushPromises()
     expect(wrapper.get('h1').text()).toBe('设备管理')
@@ -104,7 +96,7 @@ describe('workspace panel', () => {
     await flushPromises()
 
     const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
-    await wrapper.get('.apf-nav button[aria-label="节点仓库"]').trigger('click')
+    await wrapper.get('.apf-nav button[aria-label="素材库"]').trigger('click')
     await flushPromises()
     expect(confirm).toHaveBeenCalledOnce()
     expect((wrapper.get('.apf-editor input').element as HTMLInputElement).value).toBe('unsaved draft')

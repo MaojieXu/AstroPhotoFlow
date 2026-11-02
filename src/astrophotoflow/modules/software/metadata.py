@@ -4,9 +4,9 @@ from importlib.resources import files
 from pathlib import Path
 
 from astrophotoflow.contracts.bundles import BundleManifest
+from astrophotoflow.contracts.localization import CapabilityDisplay
 from astrophotoflow.contracts.nodes import NodeDefinition
 from astrophotoflow.contracts.software import SoftwareOperation
-from astrophotoflow.contracts.localization import CapabilityDisplay
 
 
 def read_bundle_locales(root: Path, manifest: BundleManifest, operations: list) -> dict:

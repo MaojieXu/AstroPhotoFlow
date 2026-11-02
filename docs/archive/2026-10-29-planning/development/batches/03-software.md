@@ -152,8 +152,8 @@ B13、B31、B41。B13已按用户确认完成通用client窄移及fields；B41�
 | `src/astrophotoflow/interfaces/comfyui.py` | N | 只先落实际WS/page确认转发、有限注册与关闭清理；TYPE_CHECKING和入口局部依赖支持领域/引擎双解释器；不填⑤空动作。 |
 | engine/ComfyUI/server.py | M | 当前/ws单reader内有限apf消息分派／关闭钩子；reader不可等待会反向等本socket结果的领域请求。 |
 | `frontend/src/scripts/api.ts` | M | 现连接有限apf.page/page_result类型与定向接收，不开第二socket。 |
-| `frontend/src/platform/astrophotoflow/workflowBridge.ts` | N | confirmSoftware专用宿主链；page/socket实际状态与回包；不做画布操作或授Agent权。 |
-| `frontend/src/platform/astrophotoflow/NativeShell.vue` | M | 安装／卸载当前真实桥接，软件确认链接按既定query打开SoftwarePanel，GraphView继续常驻。 |
+| `frontend/src/platform/astrophotoflow/software/confirmation.ts` | N | confirmSoftware专用宿主链；page/socket实际状态与回包；不做画布操作或授Agent权。 |
+| `frontend/src/platform/astrophotoflow/sidebar/NativeShell.vue` | M | 安装／卸载当前真实桥接，软件确认链接按既定query打开SoftwarePanel，GraphView继续常驻。 |
 | `frontend/packages/astrophotoflow-ui/src/modules/software/SoftwarePanel.vue`、`frontend/packages/astrophotoflow-ui/src/modules/software/api/contracts.ts`、`frontend/packages/astrophotoflow-ui/src/modules/software/api/client.ts`、`frontend/packages/astrophotoflow-ui/src/modules/software/index.ts` | N | 显示计划、安装/准备状态和原因；真实确认调用宿主callback；同源具名HTTP复用B13公共client，不导原生Store。 |
 | `frontend/packages/astrophotoflow-ui/src/index.ts` | M | 只导出本卡组件、真实客户端/DTO及所需callback类型。 |
 | `src/astrophotoflow/interfaces/client/software.py`、`src/astrophotoflow/client.py`、`src/astrophotoflow/comfyui/proxy.py`、`docs/api/openapi.json` | M | 本卡具名客户端／白名单／实际OpenAPI；不公开内部确认链。 |

@@ -2,7 +2,9 @@
 
 私有workspace业务UI包，通过 [src/index.ts](src/index.ts) 公开导出，由原生网页编译；不独立运行或发布。实际导出包括素材Workspace、工作台配置、软件面板及节点／预览客户端，完整清单以代码为准。
 
-`src/core`保存实际共用HTTP／错误和工作台配置；业务在`src/modules/data`、`software`、`nodes`、`workflows`。原生组件通过宿主注入，本包不导入原生Store、画布单例或`frontend/src`。
+`src/core`保存实际共用HTTP／错误、查询缓存和工作台配置；业务在`src/modules/data`、`software`、`nodes`。原生组件通过宿主注入，本包不导入原生Store、画布单例或`frontend/src`。
+
+宿主在现有Vue应用安装公开的`PlatformQueryPlugin`，共用一个应用级Vue Query客户端。查询键包含workspace身份；查询与写入允许断开互联网，默认不重试，普通读取5秒新鲜期、非活动缓存5分钟，关闭聚焦刷新。导入任务的服务数据归查询缓存；可见任务目录每10秒发现跨入口任务；活动任务每1.5秒读取，结束或暂停后停止高频并恢复目录频率，恢复后按workspace失效任务查询。测试挂载使用同一插件，每个应用独立缓存。
 
 中英文消息通过公开入口的`uiMessages`合并到宿主现有vue-i18n实例；宿主使用`configureUII18n((key, values) => i18n.global.t(key, values))`注入同一个翻译函数，供非组件展示辅助函数使用。组件模板使用宿主注入的`$t`，本包不创建第二个应用或独立语言设置。
 

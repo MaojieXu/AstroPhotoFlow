@@ -6,7 +6,8 @@ import pytest
 from sqlalchemy import select
 
 from astrophotoflow.interfaces.http.app import create_app
-from astrophotoflow.modules.data.models import AssetTask, Equipment
+from astrophotoflow.modules.data.equipment.models import Equipment
+from astrophotoflow.modules.data.imports.models import AssetTask
 from astrophotoflow.core.database.schema import upgrade_database
 from astrophotoflow.core.config import Settings
 
@@ -27,16 +28,12 @@ def service(tmp_path):
     app = create_app(settings, "settings-test")
     with TestClient(app) as client:
         yield client, app.state.database
-    app.state.database.close()
 
 
 @pytest.mark.parametrize("kind,specs,patch", [
     ("camera", {"sensor_width_px": 100, "cfa_pattern": "RGGB"}, {"sensor_width_px": 200}),
-    ("telescope", {"aperture_mm": 80, "native_focal_length_mm": 400}, {"aperture_mm": 90}),
+    ("telescope", {"native_focal_length_mm": 400, "optical_accessories": []}, {"native_focal_length_mm": 500}),
     ("filter", {"filter_type": "Ha", "bandwidth_nm": 3}, {"filter_type": "OIII"}),
-    ("mount", {"mount_type": "equatorial", "payload_kg": 20}, {"mount_type": "harmonic"}),
-    ("accessory", {"accessory_type": "focuser", "connection_note": "USB"}, {"accessory_type": "rotator"}),
-    ("optical_system", {"native_focal_length_mm": 400, "effective_focal_length_mm": 320}, {"effective_focal_length_mm": 300}),
 ])
 def test_equipment_categories_keep_unspecified_specs(service, kind, specs, patch):
     client, _ = service
@@ -57,12 +54,14 @@ def test_setup_inline_and_registered_edits_do_not_modify_equipment(service):
     equipment = client.post("/api/v1/equipment", headers=AUTH, json={"kind": "camera", "name": "registered"}).json()
     components = [
         {"source": "registered", "equipment_id": equipment["id"]},
-        {"source": "inline", "equipment": {"kind": "telescope", "name": "inline", "specs": {"aperture_mm": 80}}},
+        {"source": "inline", "equipment": {"kind": "telescope", "name": "inline", "specs": {"native_focal_length_mm": 400}}},
     ]
     created = client.post("/api/v1/equipment-setups", headers=AUTH, json={"name": "Rig", "components": components})
     assert created.status_code == 201, created.text
     row = created.json()
     row["components"][1]["equipment"]["name"] = "edited snapshot"
+    for component in row["components"]:
+        component.pop("effective_focal_length_mm", None)
     changed = client.patch("/api/v1/equipment-setups/" + row["id"], headers=AUTH,
                            json={"base_revision": 1, "components": row["components"]})
     assert changed.status_code == 200, changed.text
@@ -98,7 +97,7 @@ def test_setup_paging_status_revisions_and_standard_errors(service):
                         json={"base_revision": 2, "components": None}).status_code == 422
 
 
-@pytest.mark.parametrize("kind", ["camera", "telescope", "mount", "filter", "accessory"])
+@pytest.mark.parametrize("kind", ["camera", "telescope", "filter"])
 @pytest.mark.parametrize("order", ["asc", "desc"])
 def test_setup_equipment_sorting_precedes_paging_and_keeps_empty_last(service, kind, order):
     client, _ = service
@@ -149,20 +148,20 @@ def test_setup_equipment_sort_uses_all_names_in_component_order(service, order, 
     for index, names in enumerate([("Alpha", "Zulu"), ("Alpha", "Beta"), ("Zulu", "Alpha")]):
         rows.append(_create_sort_record(client, "equipment-setups", {
             "name": "Rig " + str(index),
-            "components": [{"source": "inline", "equipment": {"kind": "camera", "name": name}} for name in names],
+            "components": [{"source": "inline", "equipment": {"kind": "filter", "name": name}} for name in names],
         }))
-    result = client.get("/api/v1/equipment-setups", headers=AUTH, params={"sort_by": "camera", "order": order}).json()
+    result = client.get("/api/v1/equipment-setups", headers=AUTH, params={"sort_by": "filter", "order": order}).json()
     assert [row["id"] for row in result["items"]] == [rows[index]["id"] for index in indices]
 
 
-def test_setup_telescope_sort_includes_registered_and_inline_legacy_optics(service):
+def test_setup_telescope_sort_includes_registered_and_inline_telescopes(service):
     client, _ = service
-    optics = _create_sort_record(client, "equipment", {"kind": "optical_system", "name": "Zulu legacy"})
+    optics = _create_sort_record(client, "equipment", {"kind": "telescope", "name": "Zulu registered"})
     registered = _create_sort_record(client, "equipment-setups", {
         "name": "Registered", "components": [{"source": "registered", "equipment_id": optics["id"]}],
     })
     inline = _create_sort_record(client, "equipment-setups", {
-        "name": "Inline", "components": [{"source": "inline", "equipment": {"kind": "optical_system", "name": "Alpha legacy"}}],
+        "name": "Inline", "components": [{"source": "inline", "equipment": {"kind": "telescope", "name": "Alpha inline"}}],
     })
     telescope = _create_sort_record(client, "equipment-setups", {
         "name": "Telescope", "components": [{"source": "inline", "equipment": {"kind": "telescope", "name": "Beta telescope"}}],
@@ -171,8 +170,8 @@ def test_setup_telescope_sort_includes_registered_and_inline_legacy_optics(servi
     result = client.get("/api/v1/equipment-setups", headers=AUTH, params=params).json()
     assert [row["id"] for row in result["items"]] == [inline["id"], telescope["id"], registered["id"]]
     legacy = client.get("/api/v1/equipment-setups", headers=AUTH,
-                        params={**params, "component_kind": "optical_system"}).json()
-    assert [row["id"] for row in legacy["items"]] == [inline["id"], registered["id"]]
+                        params={**params, "component_kind": "telescope"}).json()
+    assert [row["id"] for row in legacy["items"]] == [inline["id"], telescope["id"], registered["id"]]
 
 
 def test_setup_name_sort_descending_and_sort_scope(service):
@@ -189,31 +188,29 @@ def test_setup_name_sort_descending_and_sort_scope(service):
 def test_owned_presets_preserve_sparse_null_zero_and_revision(service):
     client, _ = service
     setup = client.post("/api/v1/equipment-setups", headers=AUTH, json={"name": "Rig"}).json()
-    missing = client.post("/api/v1/equipment-setups/" + str(uuid4()) + "/presets", headers=AUTH, json={"name": "missing"})
+    missing = client.post("/api/v1/equipment-setups/" + str(uuid4()) + "/presets", headers=AUTH, json={})
     assert missing.status_code == 404
-    created = client.post("/api/v1/equipment-setups/" + setup["id"] + "/presets", headers=AUTH, json={
-        "name": "Zero gain", "parameters": {"gain": 0, "offset": None}, "classification": {"frame_type": "light"},
-    })
+    created = client.post("/api/v1/equipment-setups/" + setup["id"] + "/presets", headers=AUTH, json={'parameters': {'parameter_mode': 'gain', 'gain': 0, 'offset': None}})
     assert created.status_code == 201, created.text
     preset = created.json()
     assert preset["equipment_setup_id"] == setup["id"]
-    assert preset["parameters"] == {"gain": 0, "offset": None}
-    assert preset["classification"] == {"frame_type": "light"}
+    assert preset["parameters"] == {"parameter_mode": "gain", "gain": 0, "offset": None}
+    assert "classification" not in preset
     updated = client.patch("/api/v1/capture-presets/" + preset["id"], headers=AUTH,
-                           json={"base_revision": 1, "parameters": {"exposure_seconds": 0, "gain": None}})
+                           json={'base_revision': 1, 'parameters': {'parameter_mode': 'gain', 'exposure_seconds': 0, 'gain': None}})
     assert updated.status_code == 200, updated.text
-    assert updated.json()["parameters"] == {"gain": None, "offset": None, "exposure_seconds": 0}
+    assert updated.json()["parameters"] == {"parameter_mode": "gain", "gain": None, "offset": None, "exposure_seconds": 0}
     assert client.patch("/api/v1/capture-presets/" + preset["id"], headers=AUTH,
-                        json={"base_revision": 1, "name": "stale"}).status_code == 409
+                        json={'base_revision': 1}).status_code == 409
     video = client.patch("/api/v1/capture-presets/" + preset["id"], headers=AUTH,
-                         json={"base_revision": 2, "classification": {"frame_class": "video"}, "status": "archived"})
-    assert video.json()["classification"] == {"frame_class": "video", "frame_type": None}
+                         json={'base_revision': 2, 'status': 'archived'})
+    assert video.json()["status"] == "archived"
     assert client.get("/api/v1/capture-presets", headers=AUTH).json()["total"] == 0
     assert client.get("/api/v1/capture-presets", headers=AUTH, params={"status": "all"}).json()["items"][0]["parameters"] == updated.json()["parameters"]
     assert client.get("/api/v1/equipment-setups/" + setup["id"] + "/presets", headers=AUTH,
                       params={"status": "all"}).json()["total"] == 1
     rejected = client.patch("/api/v1/capture-presets/" + preset["id"], headers=AUTH,
-                            json={"base_revision": 3, "parameters": {"camera_id": str(uuid4())}})
+                            json={'base_revision': 3, 'equipment_selection': {'camera': str(uuid4())}})
     assert rejected.status_code == 422
     assert client.get("/api/v1/capture-presets/" + preset["id"], headers=AUTH).json()["revision"] == 3
 
@@ -226,7 +223,7 @@ def test_accepted_import_and_retry_keep_configuration_snapshot(service, monkeypa
         {"source": "inline", "equipment": {"kind": "telescope", "name": "inline scope"}},
     ]}).json()
     preset = client.post("/api/v1/equipment-setups/" + setup["id"] + "/presets", headers=AUTH,
-                         json={"name": "original preset", "parameters": {"gain": 0}}).json()
+                         json={'parameters': {'parameter_mode': 'gain', 'gain': 0}}).json()
     accepted = client.post("/api/v1/uploads", headers=AUTH,
                            json={"files": [{"name": "small.fits", "size": 0}], "capture_preset_id": preset["id"]})
     assert accepted.status_code == 202, accepted.text
@@ -234,17 +231,17 @@ def test_accepted_import_and_retry_keep_configuration_snapshot(service, monkeypa
     task = client.get("/api/v1/asset-tasks/" + task_id, headers=AUTH).json()
     with database.read_session() as session:
         frozen = deepcopy(session.get(AssetTask, task_id).import_defaults_snapshot)
-    assert frozen["parameters"] == {"gain": 0, "camera_id": camera["id"]}
+    assert frozen["parameters"]["gain"] == 0 and frozen["parameters"]["camera_id"] == camera["id"]
     assert frozen["equipment_setup"]["components"][1]["equipment"]["name"] == "inline scope"
     assert client.patch("/api/v1/equipment/" + camera["id"], headers=AUTH,
                         json={"base_revision": 1, "kind": "camera", "name": "changed camera"}).status_code == 200
     assert client.patch("/api/v1/equipment-setups/" + setup["id"], headers=AUTH,
                         json={"base_revision": 1, "name": "changed rig", "components": []}).status_code == 200
     assert client.patch("/api/v1/capture-presets/" + preset["id"], headers=AUTH,
-                        json={"base_revision": 1, "name": "changed preset", "parameters": {"gain": 100}}).status_code == 200
+                        json={'base_revision': 1, 'parameters': {'parameter_mode': 'gain', 'gain': 100}}).status_code == 200
     with database.write_session() as session:
         session.get(AssetTask, task_id).status = "failed"
-    monkeypatch.setattr("astrophotoflow.modules.data.imports.process_task", lambda *args: None)
+    monkeypatch.setattr("astrophotoflow.modules.data.public.run_import_task", lambda *args: None)
     retried = client.post("/api/v1/asset-tasks/" + task_id + "/retry", headers=AUTH,
                           json={"item_ids": [task["items"][0]["id"]]})
     assert retried.status_code == 202, retried.text

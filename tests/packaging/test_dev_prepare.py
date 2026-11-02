@@ -375,3 +375,23 @@ def test_bootstrap_reads_utf8_child_receipt_without_corrupting_paths(tmp_path):
     env.pop("PSMODULEPATH", None)
     subprocess.run([str(powershell), "-NoProfile", "-File", str(script)], env=env, check=True, capture_output=True)
     assert json.loads(receipt.read_text(encoding="utf-8")) == expected
+
+
+def test_explicit_private_runtime_does_not_reuse_the_default_runtime(preparer, tmp_path):
+    module, _, _ = preparer
+    workspace = tmp_path / ".artifacts/workspaces/modernization"
+    private = tmp_path / ".artifacts/runtimes/modernization"
+    original = module.environment(workspace)["ASTROPHOTOFLOW_RUNTIME"]
+    selected = module.environment(workspace, runtime=private)
+    assert Path(selected["ASTROPHOTOFLOW_RUNTIME"]) == private
+    assert selected["ASTROPHOTOFLOW_RUNTIME"] != original
+    assert os.environ.get("ASTROPHOTOFLOW_RUNTIME") != str(private)
+
+
+def test_private_runtime_outside_feature_artifacts_is_rejected_before_preparation(preparer, tmp_path, monkeypatch):
+    module, commands, _ = preparer
+    monkeypatch.setattr(sys, "argv", ["dev_prepare.py", "--workspace", str(tmp_path / ".artifacts/workspaces/modernization"),
+                                    "--runtime-dir", str(tmp_path / "external-runtime")])
+    assert module.main() == 2
+    assert commands == []
+    assert not (tmp_path / "external-runtime").exists()

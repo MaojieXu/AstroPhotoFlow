@@ -12,6 +12,7 @@
     "typecheck": "vue-tsc --noEmit"
   },
   "dependencies": {
+    "@tanstack/vue-query": "5.105.0",
     "zod": "catalog:"
   },
   "peerDependencies": {
@@ -20,6 +21,7 @@
     "pinia": "^4.0.2"
   },
   "devDependencies": {
+    "@hey-api/openapi-ts": "0.99.0",
     "@vitejs/plugin-vue": "catalog:",
     "@vue/test-utils": "2.5.1",
     "jsdom": "catalog:",

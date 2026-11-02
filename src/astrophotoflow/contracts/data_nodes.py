@@ -1,10 +1,12 @@
 from typing import Literal
+
 from pydantic import Field, field_validator, model_validator
+
+from astrophotoflow.contracts.assets import OutputRegistration
 from astrophotoflow.contracts.common import StrictModel, UuidInput, check_name
 from astrophotoflow.contracts.inputs import InputReference, OutputLocator
 from astrophotoflow.contracts.media import MediaSelection
 from astrophotoflow.contracts.previews import AutoStretch
-from astrophotoflow.contracts.assets import OutputRegistration
 
 ScienceReference = InputReference | OutputLocator
 
@@ -128,6 +130,7 @@ class DataNodeResult(StrictModel):
     state: Literal['preparing', 'completed', 'failed']
     error: str | None
     reference: ScienceReference | None
+    output: OutputLocator | None
     input_bindings: dict[str, list[str | int]]
     members: list[DataNodeMember]
 

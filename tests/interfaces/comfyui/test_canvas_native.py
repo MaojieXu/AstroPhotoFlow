@@ -6,8 +6,8 @@ from uuid import uuid4
 from aiohttp import web
 import pytest
 
-from astrophotoflow.contracts.workflows import CanvasPageOut, NativeCanvasCommand, NativeCanvasGraphCommand
-from astrophotoflow.interfaces import canvas_native
+from astrophotoflow.contracts.canvas import CanvasPageOut, NativeCanvasCommand, NativeCanvasGraphCommand
+from astrophotoflow.interfaces.native import canvas as canvas_native
 
 
 def command():
@@ -63,7 +63,7 @@ def test_repeating_operation_returns_same_receipt_without_second_socket_command(
         socket = object()
         native = SimpleNamespace(sockets={"client": socket})
         canvas_native.initialize_canvas(native)
-        from astrophotoflow.contracts.workflows import CanvasPageOut, CanvasAddResult
+        from astrophotoflow.contracts.canvas import CanvasPageOut, CanvasAddResult
         native.apf_canvas_pages["client"] = CanvasPageOut(page_id=body.request.page_id, workflow_id=body.request.workflow_id, graph_id=body.request.graph_id, title="active", content_token="content")
         sends = []
         async def send(event, data, client_id):

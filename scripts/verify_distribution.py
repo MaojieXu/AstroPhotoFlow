@@ -7,16 +7,15 @@ import hashlib
 import io
 import json
 import os
-from pathlib import Path
 import shutil
 import site
 import subprocess
 import sys
 import tarfile
-from tempfile import TemporaryDirectory
 import tomllib
 import zipfile
-
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -26,17 +25,23 @@ def check_wheel(path: Path) -> None:
         names = set(archive.namelist())
         prefix = "astrophotoflow/"
         required = {
-            "interfaces/http/cli.py", "core/database/alembic.ini", "core/database/alembic/env.py", "contracts/assets.py", "modules/data/public.py", "modules/data/routes.py",
+            "interfaces/http/cli.py", "core/database/alembic.ini", "core/database/alembic/env.py", "contracts/assets.py", "modules/data/public.py", "interfaces/http/data/assets.py", "interfaces/native/bootstrap.py", "core/workbench/__init__.py", "modules/data/imports/pipeline.py", "modules/data/imports/runner.py", "modules/data/formats/source.py",
             "contracts/software.py", "contracts/nodes.py", "modules/software/public.py", "modules/nodes/public.py",
-            "core/database/alembic/versions/0008_asset_equipment_snapshot.py",
-            "core/database/alembic/versions/0009_remove_legacy_capture_profiles.py",
-            "comfyui/proxy.py", "web/index.html", "vendor/comfyui-source.json",
+            "core/database/alembic/versions/0001_baseline.py",
+            "comfyui/proxy.py", "core/files.py", "web/index.html", "vendor/comfyui-source.json", "vendor/http-routes.json",
             "vendor/comfyui-0.42.0.zip", "vendor/comfyui-0.42.0-windows-py312.lock",
             "vendor/siril-1.4.4-commands.json", "vendor/siril-1.4.4-manifest.json",
             "vendor/siril-1.4.4-command-assessments.json",
             "vendor/bundle-catalog.json",
         }
-        assert {prefix + name for name in required} <= names, f"Missing product resources in {path.name}"
+        missing_resources = sorted({prefix + name for name in required} - names)
+        assert not missing_resources, f"Missing product resources in {path.name}: {missing_resources}"
+        product_python = {
+            prefix + source.relative_to(ROOT / "src/astrophotoflow").as_posix()
+            for source in (ROOT / "src/astrophotoflow").rglob("*.py")
+        }
+        missing_modules = sorted(product_python - names)
+        assert not missing_modules, f"Missing product Python modules in {path.name}: {missing_modules}"
         assert not any(name.startswith(("astrophotoflow_service/", "tests/", "astrophotoflow/frontend/", "astrophotoflow/backend/", "astrophotoflow/agent_tools/", "astrophotoflow/client_domains/")) for name in names)
         assert not any("node_modules/" in name or "/__pycache__/" in name for name in names)
         assert prefix + "backend/capture_profiles.py" not in names
@@ -56,7 +61,7 @@ def check_wheel(path: Path) -> None:
 
 
 def run(command: list[str], *, cwd: Path, env: dict[str, str]) -> None:
-    result = subprocess.run(command, cwd=cwd, env=env, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=180)
+    result = subprocess.run(command, cwd=cwd, env=env, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=180, check=False)
     if result.returncode:
         raise SystemExit(result.stdout)
 
@@ -158,10 +163,11 @@ assert len(validated_definitions) == len(node_definitions)
 public_commands = list_siril_commands()
 assert public_commands == get_command_catalog('siril', '1.4.4')
 assert len(public_commands) == catalog_manifest['indexed_commands']
-from astrophotoflow.modules.data.models import Base
-assert 'capture_profile' not in Base.metadata.tables
-assert 'project_capture_profile' not in Base.metadata.tables
-assert 'capture_profile_id' not in Base.metadata.tables['asset_version'].c
+from astrophotoflow.modules.data.persistence import schema_metadata
+metadata = schema_metadata()
+assert 'capture_profile' not in metadata.tables
+assert 'project_capture_profile' not in metadata.tables
+assert 'capture_profile_id' not in metadata.tables['asset_version'].c
 """
             script += "\ndata = Path('database'); data.mkdir(exist_ok=True)\nsettings = Settings('127.0.0.1', 8190, data.resolve(), ('http://127.0.0.1:8188',), workspace=Path.cwd())\nupgrade_database(settings)\nassert current_revision(settings.database_path) == SCHEMA_REVISION\n"
             run([str(python), "-c", script], cwd=work, env=env)

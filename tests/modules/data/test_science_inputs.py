@@ -16,10 +16,15 @@ from astrophotoflow.core.errors import ApiError
 from astrophotoflow.interfaces.http.app import create_app
 from astrophotoflow.contracts.inputs import ResolveInputsRequest
 from astrophotoflow.contracts.trash import LibraryEntriesRemove
-from astrophotoflow.modules.data.science_inputs import check_output, get_output_registration, observe_reference_inputs, register_output, render_output_preview, resolve_inputs
-from astrophotoflow.modules.data.trash import preview_library_removal
-from astrophotoflow.modules.data.ingestion import process_task
-from astrophotoflow.modules.data import science_inputs
+from astrophotoflow.modules.data.science.outputs import check_output
+from astrophotoflow.modules.data.science.outputs import get_output_registration
+from astrophotoflow.modules.data.science.inputs import observe_reference_inputs
+from astrophotoflow.modules.data.science.outputs import register_output
+from astrophotoflow.modules.data.science.outputs import render_output_preview
+from astrophotoflow.modules.data.science.inputs import resolve_inputs
+from astrophotoflow.modules.data.trash.scope import preview_library_removal
+from astrophotoflow.modules.data.imports.runner import run_import_task
+from astrophotoflow.modules.data.science import inputs as science_input_service, outputs as science_output_service, files as science_files
 
 
 TOKEN = "test-token"
@@ -140,6 +145,11 @@ def test_content_change_creates_same_asset_new_version_without_moving_project_re
         assert asset_after["current_version"]["content_hash"] == "blake3:" + blake3.blake3(source.read_bytes()).hexdigest()
         assert asset_after["parameters"]["gain"] == asset_before["parameters"]["gain"] == 42
         assert asset_after["parameters"]["exposure_seconds"] == 33
+        assert asset_before["current_version"]["capture_snapshot"]["parameters"]["exposure_seconds"] == 31
+        assert asset_after["current_version"]["capture_snapshot"]["parameters"]["exposure_seconds"] == 33
+        assert asset_after["current_version"]["capture_snapshot"]["import_provenance"]["observed_parameters"]["exposure_seconds"] == 33
+        original_version = client.get(f"/api/v1/library/assets/{item['asset_id']}/versions/{version_before}", headers=AUTH).json()
+        assert original_version["capture_snapshot"] == asset_before["current_version"]["capture_snapshot"]
         project_assets = client.get(f"/api/v1/projects/{project['id']}/assets", headers=AUTH).json()
         assert project_assets["items"][0]["asset_version_id"] == version_before
         duplicate = client.post(f"/api/v1/library/assets/{item['asset_id']}/content-accept", headers=AUTH, json={
@@ -229,7 +239,7 @@ def test_output_registration_accepts_other_extension_and_removal_scope_is_read_o
         task_id = uuid4()
         registered = register_output(client.app.state.database, settings, task_id=task_id, output=checked, name="selected")
         assert registered.created
-        process_task(client.app.state.database, settings, str(task_id))
+        run_import_task(client.app.state.database, settings, str(task_id))
         result = get_output_registration(client.app.state.database, settings, task_id)
         assert result.content_status == "available"
         assert result.metadata_status == "unsupported"
@@ -268,7 +278,7 @@ def test_checked_output_preview_and_registration_reuse_asset_task(tmp_path):
         result = register_output(client.app.state.database, settings, task_id=task_id, output=checked, name=None)
         assert result.created is True
         assert result.task_status == "queued"
-        process_task(client.app.state.database, settings, str(task_id))
+        run_import_task(client.app.state.database, settings, str(task_id))
         completed = get_output_registration(client.app.state.database, settings, task_id)
         assert completed.created is False
         assert completed.task_status == "completed"
@@ -310,7 +320,7 @@ def test_output_preview_reports_missing_dependency_and_decode_failure(tmp_path, 
     video = run_directory / "video.mp4"
     video.write_bytes(b"video bytes")
     checked_video = check_output(settings, run_directory=run_directory, path=video, expected_format="video")
-    monkeypatch.setattr(science_inputs.shutil, "which", lambda _name: None)
+    monkeypatch.setattr(science_input_service.shutil, "which", lambda _name: None)
     with pytest.raises(ApiError) as dependency:
         render_output_preview(checked_video, run_directory / "video.jpg", max_edge=100)
     assert dependency.value.code == "PREVIEW_DEPENDENCY_UNAVAILABLE"

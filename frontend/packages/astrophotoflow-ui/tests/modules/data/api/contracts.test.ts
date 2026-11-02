@@ -12,7 +12,9 @@ describe('asset parameter contracts',()=>{
 
 it('accepts a real nanosecond modification time without weakening observation identity',()=>{
   const id='00000000-0000-4000-8000-000000000001'
-  const response={asset_id:id,base_version_id:id,base_revision:1,storage_mode:'managed',stored_hash:'blake3:one',state:'unchanged',observed_hash:'blake3:one',observed_byte_size:135360,observed_mtime_ns:1793223954488571800,error:null}
+  const response={asset_id:id,base_version_id:id,base_revision:1,storage_mode:'managed',stored_hash:'blake3:one',state:'unchanged',observed_hash:'blake3:one',observed_byte_size:135360,observed_mtime_ns:'1793223954488571800',error:null}
   expect(assetContentObservationSchema.parse(response).state).toBe('unchanged')
+  expect(assetContentObservationSchema.parse(response).observed_mtime_ns).toBe('1793223954488571800')
+  expect(assetContentObservationSchema.safeParse({...response,observed_mtime_ns:Number(response.observed_mtime_ns)}).success).toBe(false)
   expect(assetContentObservationSchema.safeParse({...response,asset_id:'invalid'}).success).toBe(false)
 })

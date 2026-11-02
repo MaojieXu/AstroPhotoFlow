@@ -4,7 +4,6 @@ from pydantic import Field
 
 from astrophotoflow.contracts.common import StrictModel
 
-
 Locale = Literal['en', 'zh']
 
 

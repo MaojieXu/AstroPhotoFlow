@@ -1,6 +1,6 @@
 from threading import Event
 
-from astrophotoflow.modules.data.preview_executor import PreviewExecutor
+from astrophotoflow.modules.data.media.executor import PreviewExecutor
 
 
 def test_foreground_and_visible_previews_run_before_queued_background_work():

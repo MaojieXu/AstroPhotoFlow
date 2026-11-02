@@ -1,4 +1,4 @@
-export { default as NativeShell } from './NativeShell.vue'
-export { useLibrarySidebarTab } from './useLibrarySidebarTab'
-export { useProjectSidebarTab } from './useProjectSidebarTab'
-export { useSoftwareSidebarTab } from './useSoftwareSidebarTab'
+export { default as NativeShell } from './sidebar/NativeShell.vue'
+export { useLibrarySidebarTab } from './sidebar/useLibrarySidebarTab'
+export { useProjectSidebarTab } from './sidebar/useProjectSidebarTab'
+export { useSoftwareSidebarTab } from './sidebar/useSoftwareSidebarTab'

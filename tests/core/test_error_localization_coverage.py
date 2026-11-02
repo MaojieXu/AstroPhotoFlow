@@ -76,13 +76,10 @@ def test_platform_error_constructors_cannot_bypass_message_keys():
                 name = node.func.id
                 if name == 'localized_error' and len(node.args) >= 3 and isinstance(node.args[2], ast.Constant):
                     assert node.args[2].value in catalog, (path, node.lineno, node.args[2].value)
-                if name in {'ApiError', 'IngestionError', 'ProxyError', '_binding_error', '_raise'}:
+                if name in {'ApiError', 'IngestionError', 'ProxyError', 'binding_error', 'raise_input_error'}:
                     if not any(keyword.arg == 'message_key' for keyword in node.keywords):
                         failures.append(f'{path}:{node.lineno}: missing message_key')
-                if name == 'ErrorDetail' and not (
-                    path == root / 'core/localization.py' or
-                    path == root / 'modules/data/science_inputs.py' and function.name == '_output_registration'
-                ):
+                if name == 'ErrorDetail' and path != root / 'core/localization.py':
                     failures.append(f'{path}:{node.lineno}: use the localized constructor')
                 for keyword in node.keywords:
                     if keyword.arg == 'message_key' and isinstance(keyword.value, ast.Constant):

@@ -1,26 +1,42 @@
-from datetime import datetime, timezone
-import sqlite3
-from pathlib import Path
-from uuid import uuid4
+from astrophotoflow.core.workbench import control as wb_control
+from astrophotoflow.core.workbench import observations as wb_observations
+from astrophotoflow.core.workbench import processes as wb_processes
+import httpx
+from astrophotoflow.modules.data.assets.metadata import classification_columns, parameter_columns
 import json
+import sqlite3
 import sys
+from datetime import datetime, timezone
+from pathlib import Path
 from types import SimpleNamespace
+from uuid import uuid4
+
 import pytest
 from alembic.autogenerate import compare_metadata
-from alembic import command
-from alembic.config import Config
 from alembic.migration import MigrationContext
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, select
-import astrophotoflow.core.database as backend
-from astrophotoflow.interfaces.http.app import create_app
-from astrophotoflow.core.database.db import Database
-from astrophotoflow.modules.data.models import Asset, AssetTask, AssetTaskItem, AssetVersion, Base, Dataset, DatasetMember, DatasetVersion, Equipment, LibraryEntryRemoval, Preview, Project, ProjectAssetReference, ProjectDatasetReference
-from astrophotoflow.core.database.schema import SCHEMA_REVISION, SchemaError, current_revision, database_lock, ensure_schema_for_serve, upgrade_database
-from astrophotoflow.contracts.common import ErrorEnvelope
-from astrophotoflow.core.config import ConfigurationError, Settings, ensure_data_dir, ensure_service_token, load_settings
 
 from astrophotoflow.comfyui.proxy import ROUTES
+from astrophotoflow.contracts.common import ErrorEnvelope
+from astrophotoflow.core.config import ConfigurationError, Settings, ensure_data_dir, ensure_service_token, load_settings
+from astrophotoflow.core.database.db import Database
+from astrophotoflow.core.database.schema import (
+    SCHEMA_REVISION,
+    SchemaError,
+    current_revision,
+    database_lock,
+    ensure_schema_for_serve,
+    upgrade_database,
+)
+from astrophotoflow.interfaces.http.app import create_app
+from astrophotoflow.modules.data.assets.models import Asset, AssetVersion
+from astrophotoflow.modules.data.datasets.models import Dataset, DatasetMember, DatasetVersion
+from astrophotoflow.modules.data.media.models import Preview
+from astrophotoflow.modules.data.projects.models import Project, ProjectAssetReference, ProjectDatasetReference
+from astrophotoflow.modules.data.imports.models import AssetTask, AssetTaskItem
+from astrophotoflow.core.database.base import Base
+from astrophotoflow.modules.data.trash.models import LibraryEntryRemoval
 
 TOKEN="test-token"
 def auth(): return {"Authorization":f"Bearer {TOKEN}"}
@@ -43,7 +59,6 @@ def service(tmp_path):
     with database_lock(settings): upgrade_database(settings)
     app=create_app(settings,TOKEN)
     with TestClient(app) as client: yield settings,client,app.state.database
-    app.state.database.close()
 
 @pytest.fixture
 def managed_service(service):
@@ -148,118 +163,36 @@ path = "relative/path"
     with pytest.raises(ConfigurationError, match="唯一"):
         load_settings(config)
 
-def test_explicit_upgrade_keeps_consistent_backup_on_failure(tmp_path):
+def test_old_revision_requires_rebuild_without_changing_existing_data(tmp_path):
     settings = Settings("127.0.0.1", 8190, tmp_path, (), workspace=tmp_path)
     with sqlite3.connect(settings.database_path) as db:
         db.execute("CREATE TABLE alembic_version(version_num VARCHAR(32) NOT NULL)")
         db.execute("INSERT INTO alembic_version VALUES ('0000_unknown')")
         db.execute("CREATE TABLE preserved(value TEXT)")
         db.execute("INSERT INTO preserved VALUES ('same snapshot')")
-    with pytest.raises(SchemaError, match="备份均已保留"):
+    with pytest.raises(SchemaError, match="rebuild"):
         upgrade_database(settings)
-    backups = list((settings.data_dir / "backups").glob("*.sqlite3"))
-    assert len(backups) == 1
-    with sqlite3.connect(backups[0]) as db:
+    assert not (settings.data_dir / "backups").exists()
+    with sqlite3.connect(settings.database_path) as db:
         assert db.execute("SELECT value FROM preserved").fetchone() == ("same snapshot",)
         assert db.execute("SELECT version_num FROM alembic_version").fetchone() == ("0000_unknown",)
 
 
-def test_stage_two_upgrade_preserves_stage_one_records_and_backs_up(tmp_path):
-    settings = Settings("127.0.0.1", 8190, tmp_path, (), workspace=tmp_path)
-    config = Config(str(Path(backend.__file__).resolve().parent / "alembic.ini"))
-    config.attributes["database_url"] = "sqlite:///" + str(settings.database_path)
-    command.upgrade(config, "0001_foundation")
-
-    project_id, equipment_id = str(uuid4()), str(uuid4())
-    asset_id, version_id, reference_id = str(uuid4()), str(uuid4()), str(uuid4())
-    with sqlite3.connect(settings.database_path) as db:
-        db.execute(
-            "INSERT INTO project (id,name,status,revision) VALUES (?,?,?,?)",
-            (project_id, "pre-stage-two", "active", 3),
-        )
-        db.execute(
-            "INSERT INTO equipment (id,kind,name,specs,status,revision) VALUES (?,?,?,?,?,?)",
-            (equipment_id, "camera", "preserved camera", "{}", "active", 2),
-        )
-        db.execute(
-            "INSERT INTO asset (id,name,scope,role) VALUES (?,?,?,?)",
-            (asset_id, "existing asset", "shared", "raw"),
-        )
-        db.execute(
-            "INSERT INTO asset_version (id,asset_id,version_number,storage_mode,storage_location,availability) VALUES (?,?,?,?,?,?)",
-            (version_id, asset_id, 1, "reference", "roots/raw.fits", "unknown"),
-        )
-        db.execute("UPDATE asset SET current_version_id=? WHERE id=?", (version_id, asset_id))
-        db.execute(
-            "INSERT INTO project_asset_reference (id,project_id,asset_version_id) VALUES (?,?,?)",
-            (reference_id, project_id, version_id),
-        )
-
-    backup = upgrade_database(settings)
-    assert backup is not None and backup.is_file()
-    assert current_revision(settings.database_path) == SCHEMA_REVISION
-    with sqlite3.connect(settings.database_path) as db:
-        assert db.execute("SELECT name,revision FROM project WHERE id=?", (project_id,)).fetchone() == ("pre-stage-two", 3)
-        assert db.execute("SELECT name FROM equipment WHERE id=?", (equipment_id,)).fetchone() == ("preserved camera",)
-        assert db.execute("SELECT parameters,status,revision FROM asset WHERE id=?", (asset_id,)).fetchone() == ("{}", "active", 1)
-        assert db.execute("SELECT COUNT(*) FROM project_asset_reference WHERE id=?", (reference_id,)).fetchone() == (1,)
-    with sqlite3.connect(backup) as db:
-        assert db.execute("SELECT version_num FROM alembic_version").fetchone() == ("0001_foundation",)
-
-
-def test_asset_fact_backfill_uses_current_version_and_preserves_manual_clears(tmp_path):
-    settings = Settings("127.0.0.1", 8190, tmp_path, (), workspace=tmp_path)
-    config = Config(str(Path(backend.__file__).resolve().parent / "alembic.ini"))
-    config.attributes["database_url"] = "sqlite:///" + str(settings.database_path)
-    command.upgrade(config, "0001_foundation")
-    ids = [str(uuid4()) for _ in range(6)]
-    camera_id, old_asset_id, old_version_id, edited_asset_id, edited_version_id, _ = ids
-    with sqlite3.connect(settings.database_path) as db:
-        db.execute("INSERT INTO equipment (id,kind,name,specs,status,revision) VALUES (?,?,?,?,?,?)",
-                   (camera_id, "camera", "legacy camera", "{}", "active", 1))
-        db.execute("INSERT INTO asset (id,name,scope,role) VALUES (?,?,?,?)", (old_asset_id, "legacy", "shared", "calibration"))
-        db.execute("INSERT INTO asset_version (id,asset_id,version_number,storage_mode,storage_location,availability,camera_id,frame_type,calibration_level,capture_snapshot) VALUES (?,?,?,?,?,?,?,?,?,?)",
-                   (old_version_id, old_asset_id, 1, "reference", "old.fit", "available", camera_id, "dark", "master", json.dumps({"gain": 100, "exposure_seconds": 60, "sensor_temperature_c": 0})))
-        db.execute("UPDATE asset SET current_version_id=? WHERE id=?", (old_version_id, old_asset_id))
-    command.upgrade(config, "0003_capture_profile_gain_mode")
-    with sqlite3.connect(settings.database_path) as db:
-        db.execute("INSERT INTO asset (id,name,scope,role,current_version_id,classification,parameters,value_sources) VALUES (?,?,?,?,?,?,?,?)",
-                   (edited_asset_id, "edited", "shared", "raw", edited_version_id, '{"frame_type":null}', '{"gain":77,"camera_id":null}', '{"gain":"manual","classification.frame_type":"manual"}'))
-        db.execute("INSERT INTO asset_version (id,asset_id,version_number,storage_mode,storage_location,availability,frame_type,capture_snapshot) VALUES (?,?,?,?,?,?,?,?)",
-                   (edited_version_id, edited_asset_id, 1, "reference", "edited.fit", "available", "light", json.dumps({"gain": 12, "exposure_seconds": 30})))
-
-    backup = upgrade_database(settings)
-    assert backup is not None and current_revision(settings.database_path) == SCHEMA_REVISION
-    with sqlite3.connect(settings.database_path) as db:
-        legacy = db.execute("SELECT classification,parameters FROM asset WHERE id=?", (old_asset_id,)).fetchone()
-        edited = db.execute("SELECT classification,parameters,value_sources FROM asset WHERE id=?", (edited_asset_id,)).fetchone()
-        assert json.loads(legacy[0]) == {"frame_type": "dark", "frame_class": "masterframe"}
-        assert json.loads(legacy[1]) == {"camera_id": camera_id, "gain": 100, "exposure_seconds": 60, "sensor_temperature_c": 0}
-        assert json.loads(edited[0]) == {"frame_type": None}
-        assert json.loads(edited[1]) == {"gain": 77, "camera_id": None, "exposure_seconds": 30}
-        assert json.loads(edited[2]) == {"gain": "manual", "classification.frame_type": "manual", "exposure_seconds": "file"}
-        before = (legacy, edited)
-    assert upgrade_database(settings) is None
-    with sqlite3.connect(settings.database_path) as db:
-        after_legacy = db.execute("SELECT classification,parameters FROM asset WHERE id=?", (old_asset_id,)).fetchone()
-        after_edited = db.execute("SELECT classification,parameters,value_sources FROM asset WHERE id=?", (edited_asset_id,)).fetchone()
-    assert (after_legacy, after_edited) == before
-
 def test_config_crud_references_revision_and_persistence(service):
     s,c,database=service
-    b={"kind":"camera","name":"相机","model":"same","specs":{"sensor_mode":"mono"}}
+    b={"kind":"camera","name":"相机","model":"same","specs":{"cfa_pattern":"MONO"}}
     camera=c.post("/api/v1/equipment",headers=auth(),json=b).json()
     duplicate=c.post("/api/v1/equipment",headers=auth(),json=b).json()
     assert camera["id"]!=duplicate["id"]
-    optics=add_equipment(c,"optical_system","成像系统",{"native_focal_length_mm":600,"effective_focal_length_mm":400}).json()
+    optics=add_equipment(c,"telescope","望远镜",{"native_focal_length_mm":600,"optical_accessories":[]}).json()
     project=c.post("/api/v1/projects",headers=auth(),json={"name":"M31"})
     assert project.status_code==201
-    update={"base_revision":1,"kind":"optical_system","specs":{"native_focal_length_mm":800}}
+    update={"base_revision":1,"kind":"telescope","specs":{"native_focal_length_mm":800}}
     first=c.patch(f"/api/v1/equipment/{optics['id']}",headers=auth(),json=update)
     stale=c.patch(f"/api/v1/equipment/{optics['id']}",headers=auth(),json={**update,"name":"stale"})
-    assert first.status_code==200 and first.json()["specs"]["effective_focal_length_mm"]==400
+    assert first.status_code==200 and first.json()["specs"]["optical_accessories"]==[]
     assert stale.status_code==409
-    assert add_equipment(c,"optical_system","zero focal",{"effective_focal_length_mm":0}).status_code==422
+    assert add_equipment(c,"telescope","zero focal",{"native_focal_length_mm":0}).status_code==422
     archived=c.patch(f"/api/v1/equipment/{camera['id']}",headers=auth(),json={"base_revision":1,"kind":"camera","status":"archived"})
     assert archived.status_code==200 and c.get(f"/api/v1/equipment/{camera['id']}",headers=auth()).json()["status"]=="archived"
     restored=c.patch(f"/api/v1/equipment/{camera['id']}",headers=auth(),json={"base_revision":2,"kind":"camera","status":"active"})
@@ -280,7 +213,7 @@ def test_shared_and_project_version_scope(service):
         own=Asset(id=str(uuid4()),name="own",scope="project",owner_project_id=p1.id,role="intermediate")
         foreign=Asset(id=str(uuid4()),name="foreign",scope="project",owner_project_id=p2.id,role="intermediate")
         s.add_all([shared,own,foreign]);s.flush()
-        v1=AssetVersion(id=str(uuid4()),asset_id=shared.id,version_number=1,storage_mode="reference",storage_location="v1",availability="unknown",frame_type="light",capture_snapshot={"gain":10})
+        v1=AssetVersion(id=str(uuid4()),asset_id=shared.id,version_number=1,storage_mode="reference",storage_location="v1",availability="unknown",frame_type="light",capture_snapshot={"parameters": {"gain":10}})
         v2=AssetVersion(id=str(uuid4()),asset_id=shared.id,version_number=2,storage_mode="reference",storage_location="v2",availability="unknown",frame_type="dark")
         ownv=AssetVersion(id=str(uuid4()),asset_id=own.id,version_number=1,storage_mode="managed",storage_location="own",availability="unknown")
         foreignv=AssetVersion(id=str(uuid4()),asset_id=foreign.id,version_number=1,storage_mode="managed",storage_location="foreign",availability="unknown")
@@ -335,8 +268,8 @@ def test_dataset_library_removal_freezes_current_version_members(service):
             asset_id, asset_version_id = str(uuid4()), str(uuid4())
             asset = Asset(
                 id=asset_id, name=name, scope="shared", role="raw", status="active", revision=1,
-                classification={"frame_class": "subframe", "frame_type": "light"},
-                parameters={"parameter_mode": "gain", "gain": gain, "offset": None},
+                **classification_columns({"frame_class": "subframe", "frame_type": "light"}),
+                **parameter_columns({"parameter_mode": "gain", "gain": gain, "offset": None}),
             )
             session.add(asset)
             session.flush()
@@ -422,8 +355,8 @@ def test_dataset_library_removal_freezes_current_version_members(service):
     with database.write_session() as session:
         new_asset = Asset(
             id=new_asset_id, name="C.fit", scope="shared", role="raw", status="active", revision=1,
-            classification={"frame_class": "subframe", "frame_type": "light"},
-            parameters={"parameter_mode": "gain", "gain": 200, "offset": None},
+            **classification_columns({"frame_class": "subframe", "frame_type": "light"}),
+            **parameter_columns({"parameter_mode": "gain", "gain": 200, "offset": None}),
         )
         session.add(new_asset)
         session.flush()
@@ -448,8 +381,7 @@ def test_dataset_library_removal_freezes_current_version_members(service):
 
     after = client.get("/api/v1/library/items", headers=auth()).json()
     visible = {
-        ("dataset", item["dataset"]["id"]) if item["entry_type"] == "dataset"
-        else ("asset", item["asset"]["id"])
+        (item["entry_type"], item["id"])
         for item in after["items"]
     }
     assert after["total"] == 3
@@ -474,7 +406,7 @@ def test_trash_group_restore_also_restores_individually_removed_members(service)
     dataset_id, dataset_version_id = str(uuid4()), str(uuid4())
     with database.write_session() as session:
         asset = Asset(id=asset_id, name="A.fit", scope="shared", role="raw", status="active", revision=1,
-                      parameters={}, classification={})
+                      **parameter_columns({}), **classification_columns({}))
         session.add(asset)
         session.flush()
         session.add(AssetVersion(id=asset_version_id, asset_id=asset_id, version_number=1, storage_mode="reference",
@@ -507,7 +439,8 @@ def test_trash_group_restore_also_restores_individually_removed_members(service)
     assert restored.status_code == 200 and restored.json()["restored_count"] == 1
     library = client.get("/api/v1/library/items", headers=auth()).json()
     group = next(row for row in library["items"] if row["entry_type"] == "dataset")
-    assert [member["asset"]["id"] for member in group["version"]["members"]] == [asset_id]
+    members = client.get(f"/api/v1/datasets/{group['id']}/versions/{group['version_id']}/members", headers=auth()).json()["items"]
+    assert [member["asset"]["id"] for member in members] == [asset_id]
     assert client.get("/api/v1/library/trash", headers=auth()).json()["total"] == 0
     with database.read_session() as session:
         assert session.get(Asset, asset_id).current_version_id == asset_version_id
@@ -520,7 +453,7 @@ def test_trash_group_delete_uses_snapshot_including_previously_removed_member_on
     with database.write_session() as session:
         for asset_id, version_id, name in ((asset_a, version_a, "A.fit"), (asset_b, version_b, "B.fit")):
             asset = Asset(id=asset_id, name=name, scope="shared", role="raw", status="active", revision=1,
-                          parameters={}, classification={})
+                          **parameter_columns({}), **classification_columns({}))
             session.add(asset)
             session.flush()
             session.add(AssetVersion(id=version_id, asset_id=asset_id, version_number=1, storage_mode="reference",
@@ -578,7 +511,7 @@ def test_trash_permanent_delete_removes_only_managed_files_and_reports_preview(s
             preview_path.write_bytes(b"preview" + bytes([index]))
             expected_paths.extend((content_path, preview_path))
             asset = Asset(id=asset_id, name=f"A{index}.fit", scope="shared", role="raw", status="active",
-                          revision=1, parameters={}, classification={})
+                          revision=1, **parameter_columns({}), **classification_columns({}))
             session.add(asset)
             session.flush()
             session.add(AssetVersion(id=version_id, asset_id=asset_id, version_number=1, storage_mode="managed",
@@ -642,7 +575,7 @@ def test_trash_asset_delete_preserves_a_managed_path_used_by_unselected_asset(se
         for asset_id, version_id, name in ((selected_asset_id, selected_version_id, "Selected.fit"),
                                            (other_asset_id, other_version_id, "Other.fit")):
             asset = Asset(id=asset_id, name=name, scope="shared", role="raw", status="active", revision=1,
-                          parameters={}, classification={})
+                          **parameter_columns({}), **classification_columns({}))
             session.add(asset)
             session.flush()
             session.add(AssetVersion(id=version_id, asset_id=asset_id, version_number=1, storage_mode="managed",
@@ -674,7 +607,7 @@ def test_trash_first_unlink_failure_keeps_photo_recoverable(service, monkeypatch
     path.write_bytes(b"managed")
     with database.write_session() as session:
         asset = Asset(id=asset_id, name="Recoverable.fit", scope="shared", role="raw", status="active",
-                      revision=1, parameters={}, classification={})
+                      revision=1, **parameter_columns({}), **classification_columns({}))
         session.add(asset)
         session.flush()
         session.add(AssetVersion(id=version_id, asset_id=asset_id, version_number=1, storage_mode="managed",
@@ -712,7 +645,7 @@ def test_trash_recovers_after_progress_write_failure_without_reenabling_restore(
     path.write_bytes(b"managed")
     with database.write_session() as session:
         asset = Asset(id=asset_id, name="Progress.fit", scope="shared", role="raw", status="active",
-                      revision=1, parameters={}, classification={})
+                      revision=1, **parameter_columns({}), **classification_columns({}))
         session.add(asset)
         session.flush()
         session.add(AssetVersion(id=version_id, asset_id=asset_id, version_number=1, storage_mode="managed",
@@ -764,7 +697,7 @@ def test_trash_delete_cleans_confirmed_project_and_membership_references(service
     historical_task_id = str(uuid4())
     with database.write_session() as session:
         asset = Asset(id=asset_id, name="Referenced.fit", scope="shared", role="raw", status="active",
-                      revision=1, parameters={}, classification={})
+                      revision=1, **parameter_columns({}), **classification_columns({}))
         session.add(asset)
         session.flush()
         session.add(AssetVersion(id=asset_version_id, asset_id=asset_id, version_number=1, storage_mode="reference",
@@ -836,7 +769,7 @@ def test_trash_rechecks_new_reference_after_confirmation_before_file_io(service,
     asset_id, version_id = str(uuid4()), str(uuid4())
     with database.write_session() as session:
         asset = Asset(id=asset_id, name="Race.fit", scope="shared", role="raw", status="active",
-                      revision=1, parameters={}, classification={})
+                      revision=1, **parameter_columns({}), **classification_columns({}))
         session.add(asset)
         session.flush()
         session.add(AssetVersion(id=version_id, asset_id=asset_id, version_number=1, storage_mode="reference",
@@ -877,7 +810,7 @@ def test_trash_active_import_blocks_and_terminal_task_pointers_are_cleared(servi
     asset_id, version_id, task_id, item_id, retry_task_id, retry_item_id = (str(uuid4()) for _ in range(6))
     with database.write_session() as session:
         asset = Asset(id=asset_id, name="Tasked.fit", scope="shared", role="raw", status="active",
-                      revision=1, parameters={}, classification={})
+                      revision=1, **parameter_columns({}), **classification_columns({}))
         session.add(asset)
         session.flush()
         session.add(AssetVersion(id=version_id, asset_id=asset_id, version_number=1, storage_mode="reference",
@@ -931,8 +864,8 @@ def test_gain_sort_applies_to_filtered_results_before_pagination(service):
             asset_id, asset_version_id = str(uuid4()), str(uuid4())
             asset = Asset(
                 id=asset_id, name=name, scope="shared", role="raw", status="active", revision=1,
-                classification={"frame_class": "subframe", "frame_type": "light"},
-                parameters={"parameter_mode": "gain", "gain": gain, "offset": None},
+                **classification_columns({"frame_class": "subframe", "frame_type": "light"}),
+                **parameter_columns({"parameter_mode": "gain", "gain": gain, "offset": None}),
             )
             session.add(asset)
             session.flush()
@@ -947,14 +880,14 @@ def test_gain_sort_applies_to_filtered_results_before_pagination(service):
         "q": "matched", "sort_by": "parameter_mode", "order": "desc", "limit": 1, "offset": 1,
     }).json()
     assert sorted_page["total"] == 3
-    assert sorted_page["items"][0]["asset"]["parameters"]["gain"] == 50
+    assert sorted_page["items"][0]["summary"]["parameters"]["gain"]["value"] == 50
 
     filtered_page = client.get("/api/v1/library/items", headers=auth(), params={
         "q": "matched", "gain_min": 10, "gain_max": 50,
         "sort_by": "parameter_mode", "order": "desc", "limit": 1, "offset": 1,
     }).json()
     assert filtered_page["total"] == 2
-    assert filtered_page["items"][0]["asset"]["parameters"]["gain"] == 10
+    assert filtered_page["items"][0]["summary"]["parameters"]["gain"]["value"] == 10
 
 
 def test_openapi_snapshot_matches_service_and_proxy_allowlist(service):
@@ -1042,7 +975,7 @@ def test_datetime_serialization_preserves_text_and_snapshots(service):
         version = AssetVersion(
             id=version_id, asset_id=asset_id, version_number=1, storage_mode="reference",
             storage_location="snapshot", availability="unknown",
-            capture_snapshot={"note": snapshot_text}, scientific_metadata={"note": snapshot_text},
+            capture_snapshot={"import_provenance": {"observed_parameters": {"note": snapshot_text}}}, scientific_metadata={"note": snapshot_text},
         )
         session.add(version)
         session.flush()
@@ -1050,7 +983,7 @@ def test_datetime_serialization_preserves_text_and_snapshots(service):
 
     response = c.get("/api/v1/library/assets", headers=auth()).json()["items"][0]
     assert response["name"] == "snapshot"
-    assert response["current_version"]["capture_snapshot"]["note"] == snapshot_text
+    assert response["current_version"]["capture_snapshot"]["import_provenance"]["observed_parameters"]["note"] == snapshot_text
     assert response["current_version"]["scientific_metadata"]["note"] == snapshot_text
     assert response["current_version"]["created_at"].endswith("Z")
 
@@ -1062,7 +995,7 @@ def test_trash_group_child_restore_shrinks_scope_and_preserves_dataset_membershi
     with database.write_session() as session:
         for asset_id, version_id, name in ((asset_a, version_a, "A.fit"), (asset_b, version_b, "B.fit")):
             asset = Asset(id=asset_id, name=name, scope="shared", role="raw", status="active", revision=1,
-                          parameters={}, classification={})
+                          **parameter_columns({}), **classification_columns({}))
             session.add(asset); session.flush()
             session.add(AssetVersion(id=version_id, asset_id=asset_id, version_number=1, storage_mode="reference",
                                      storage_location=name, availability="available")); session.flush()
@@ -1088,7 +1021,7 @@ def test_trash_group_child_restore_shrinks_scope_and_preserves_dataset_membershi
         assert session.scalar(select(DatasetMember.id).where(DatasetMember.dataset_version_id == dataset_version_id,
                                                               DatasetMember.asset_version_id == version_a)) is not None
     normal_page = client.get("/api/v1/library/items?limit=50&offset=0", headers=auth()).json()
-    assert any(item.get("asset", {}).get("id") == asset_a for item in normal_page["items"])
+    assert any(item["entry_type"] == "asset" and item["id"] == asset_a for item in normal_page["items"])
     remaining = client.get(f"/api/v1/library/trash?group_id={dataset_id}", headers=auth()).json()
     assert remaining["total"] == 1 and remaining["items"][0]["id"] == asset_b
     group = next(row for row in client.get("/api/v1/library/trash", headers=auth()).json()["items"] if row["id"] == dataset_id)
@@ -1113,7 +1046,7 @@ def test_trash_group_rechecks_project_dataset_reference_before_member_cleanup(se
     path.parent.mkdir(parents=True, exist_ok=True); path.write_bytes(b"managed")
     with database.write_session() as session:
         asset = Asset(id=asset_id, name="GroupRace.fit", scope="shared", role="raw", status="active", revision=1,
-                      parameters={}, classification={}); session.add(asset); session.flush()
+                      **parameter_columns({}), **classification_columns({})); session.add(asset); session.flush()
         session.add(AssetVersion(id=version_id, asset_id=asset_id, version_number=1, storage_mode="managed",
             storage_location=(Path("objects") / version_id / "source.fit").as_posix(), availability="available")); session.flush()
         asset.current_version_id = version_id
@@ -1179,7 +1112,7 @@ def test_trash_group_persists_database_cleanup_progress_and_retries_after_file_f
             (asset_b, version_b, "B managed.fit", "managed", (Path("objects") / version_b / "source.fit").as_posix()),
         ):
             asset = Asset(id=asset_id, name=name, scope="shared", role="raw", status="active", revision=1,
-                          parameters={}, classification={}); session.add(asset); session.flush()
+                          **parameter_columns({}), **classification_columns({})); session.add(asset); session.flush()
             session.add(AssetVersion(id=version_id, asset_id=asset_id, version_number=1, storage_mode=mode,
                 storage_location=location, availability="available")); session.flush(); asset.current_version_id = version_id
         dataset = Dataset(id=dataset_id, name="Partial database group", status="active", revision=1)
@@ -1233,7 +1166,7 @@ def test_trash_group_child_delete_only_removes_selected_asset_and_group_remains_
     with database.write_session() as session:
         for asset_id, version_id, name in ((asset_a, version_a, "A only.fit"), (asset_b, version_b, "B remains.fit")):
             asset = Asset(id=asset_id, name=name, scope="shared", role="raw", status="active", revision=1,
-                          parameters={}, classification={}); session.add(asset); session.flush()
+                          **parameter_columns({}), **classification_columns({})); session.add(asset); session.flush()
             session.add(AssetVersion(id=version_id, asset_id=asset_id, version_number=1, storage_mode="reference",
                                      storage_location=name, availability="available")); session.flush(); asset.current_version_id=version_id
         dataset=Dataset(id=dataset_id,name="Single member removal",status="active",revision=1);session.add(dataset);session.flush()
@@ -1275,7 +1208,7 @@ def test_trash_group_deletes_multiple_members_without_self_revision_conflict(ser
     with database.write_session() as session:
         for index, (asset_id, version_id) in enumerate(zip(asset_ids, version_ids)):
             asset=Asset(id=asset_id,name=f"Multi {index}.fit",scope="shared",role="raw",status="active",revision=1,
-                        parameters={},classification={});session.add(asset);session.flush()
+                        **parameter_columns({}),**classification_columns({}));session.add(asset);session.flush()
             session.add(AssetVersion(id=version_id,asset_id=asset_id,version_number=1,storage_mode="reference",
                                      storage_location=f"Multi {index}.fit",availability="available"));session.flush()
             asset.current_version_id=version_id
@@ -1312,7 +1245,7 @@ def trash_recovery_group(service):
             raw.parent.mkdir(parents=True); raw.write_bytes(b"source")
             thumb.parent.mkdir(parents=True); thumb.write_bytes(b"thumbnail")
             asset = Asset(id=aid, name=f"{index}.fit", scope="shared", role="raw", status="active",
-                          revision=1, parameters={}, classification={})
+                          revision=1, **parameter_columns({}), **classification_columns({}))
             session.add(asset); session.flush()
             session.add(AssetVersion(id=vid, asset_id=aid, version_number=1, storage_mode="managed",
                 storage_location=raw.relative_to(settings.data_dir).as_posix(), availability="available"))
@@ -1451,8 +1384,8 @@ def test_trash_partial_group_blocks_damaged_child_but_restores_intact_sibling(tr
 
 @pytest.mark.parametrize("remove_source", [False, True])
 def test_trash_child_intent_survives_interruption_and_restart(trash_recovery_group, monkeypatch, remove_source):
-    from astrophotoflow.modules.data import trash
     from astrophotoflow.contracts.trash import LibraryTrashDelete
+    from astrophotoflow.modules.data import public as trash
     group = trash_recovery_group
     photo = group.photos[0]
     client, database = group.client, group.database
@@ -1470,36 +1403,34 @@ def test_trash_child_intent_survives_interruption_and_restart(trash_recovery_gro
     with monkeypatch.context() as patch:
         patch.setattr(Path, "unlink", interrupt)
         with pytest.raises(KeyboardInterrupt), database.read_session() as session:
-            trash.library_trash_delete(LibraryTrashDelete.model_validate({
-                **selection, "preview_fingerprint": preview["preview_fingerprint"]}), request, session)
+            trash.delete_library_trash(body=LibraryTrashDelete.model_validate({
+                **selection, "preview_fingerprint": preview["preview_fingerprint"]}), database=database, settings=group.settings, session=session)
     with database.read_session() as session:
         record = session.get(LibraryEntryRemoval, ("asset", photo.id))
         assert set(record.pending_paths) == {str(photo.raw), str(photo.thumb)}
         assert session.get(Asset, photo.id) is not None
     restarted_app = create_app(group.settings, TOKEN)
-    try:
-        with TestClient(restarted_app) as restarted:
-            child = restarted.get(f"/api/v1/library/trash?group_id={group.id}", headers=auth()).json()["items"][0]
-            assert child["cleanup_status"] == ("partial" if remove_source else "trash")
-            selection = trash_selection(child)
-            restored = restarted.post("/api/v1/library/trash/restore", headers=auth(), json=selection)
-            assert restored.status_code == (409 if remove_source else 200), restored.text
-            if remove_source:
-                preview = restarted.post("/api/v1/library/trash/delete-preview", headers=auth(), json=selection).json()
-                deleted = restarted.post("/api/v1/library/trash/delete", headers=auth(), json={
-                    **selection, "preview_fingerprint": preview["preview_fingerprint"]})
-                assert deleted.status_code == 200 and not deleted.json()["failed"], deleted.text
-                assert not photo.thumb.exists()
-            else:
-                assert photo.raw.exists() and photo.thumb.exists()
-    finally:
-        restarted_app.state.database.close()
+    with TestClient(restarted_app) as restarted:
+        child = restarted.get(f"/api/v1/library/trash?group_id={group.id}", headers=auth()).json()["items"][0]
+        assert child["cleanup_status"] == ("partial" if remove_source else "trash")
+        selection = trash_selection(child)
+        restored = restarted.post("/api/v1/library/trash/restore", headers=auth(), json=selection)
+        assert restored.status_code == (409 if remove_source else 200), restored.text
+        if remove_source:
+            preview = restarted.post("/api/v1/library/trash/delete-preview", headers=auth(), json=selection).json()
+            deleted = restarted.post("/api/v1/library/trash/delete", headers=auth(), json={
+                **selection, "preview_fingerprint": preview["preview_fingerprint"]})
+            assert deleted.status_code == 200 and not deleted.json()["failed"], deleted.text
+            assert not photo.thumb.exists()
+        else:
+            assert photo.raw.exists() and photo.thumb.exists()
 
 
 def test_trash_child_restore_between_intent_and_cleanup_cancels_deletion(trash_recovery_group, monkeypatch):
     from contextlib import contextmanager
-    from astrophotoflow.modules.data import trash
+
     from astrophotoflow.contracts.trash import LibraryTrashSelection
+    from astrophotoflow.modules.data import public as trash
     group = trash_recovery_group
     photo = group.photos[0]
     child = group.client.get(f"/api/v1/library/trash?group_id={group.id}", headers=auth()).json()["items"][0]
@@ -1515,8 +1446,8 @@ def test_trash_child_restore_between_intent_and_cleanup_cancels_deletion(trash_r
         if not restored:
             restored = True
             with write_session() as session:
-                result = trash.restore_library_trash(LibraryTrashSelection.model_validate(selection), session)
-                assert result["restored_count"] == 1
+                result = trash.restore_library_trash(session=session, body=LibraryTrashSelection.model_validate(selection))
+                assert result.restored_count == 1
     monkeypatch.setattr(group.database, "write_session", restore_after_intent)
     response = group.client.post("/api/v1/library/trash/delete", headers=auth(), json={
         **selection, "preview_fingerprint": preview["preview_fingerprint"]})
@@ -1530,8 +1461,9 @@ def test_trash_child_restore_between_intent_and_cleanup_cancels_deletion(trash_r
 @pytest.mark.parametrize("remove_again", [False, True])
 def test_trash_group_restore_after_delete_intent_invalidates_old_request(trash_recovery_group, monkeypatch, remove_again):
     from contextlib import contextmanager
-    from astrophotoflow.modules.data import trash
+
     from astrophotoflow.contracts.trash import LibraryEntriesRemove, LibraryTrashSelection
+    from astrophotoflow.modules.data import public as trash
     group = trash_recovery_group
     children = group.client.get(f"/api/v1/library/trash?group_id={group.id}", headers=auth()).json()["items"]
     restored = group.client.post("/api/v1/library/trash/restore", headers=auth(), json={
@@ -1553,12 +1485,12 @@ def test_trash_group_restore_after_delete_intent_invalidates_old_request(trash_r
         if not restored_after_intent:
             restored_after_intent = True
             with write_session() as session:
-                result = trash.restore_library_trash(LibraryTrashSelection.model_validate(selection), session)
-                assert result["restored_count"] == 1
+                result = trash.restore_library_trash(session=session, body=LibraryTrashSelection.model_validate(selection))
+                assert result.restored_count == 1
                 if remove_again:
-                    trash.remove_library_entries(LibraryEntriesRemove.model_validate({"items": [{
+                    trash.remove_library_entries(body=LibraryEntriesRemove.model_validate({"items": [{
                         "entry_type": "dataset", "id": group.id, "revision": row["revision"],
-                        "current_version_id": row["current_version_id"]}]}), session)
+                        "current_version_id": row["current_version_id"]}]}), session=session)
 
     monkeypatch.setattr(group.database, "write_session", restore_after_intent)
     response = group.client.post("/api/v1/library/trash/delete", headers=auth(), json={
@@ -1655,9 +1587,10 @@ def test_maintenance_rejects_unknown_or_nonempty_native_queue(managed_service, m
 
 def test_maintenance_check_and_task_admission_cannot_cross(managed_service, monkeypatch):
     import asyncio
-    import httpx
     from concurrent.futures import ThreadPoolExecutor
     from threading import Event
+
+    import httpx
     _, client, _, operation_id = managed_service
     entered, release = Event(), Event()
     async def paused(self, url, **kwargs):
@@ -1737,8 +1670,9 @@ def test_maintenance_release_is_bound_to_its_operation_and_cannot_reopen_shutdow
 
 def test_restart_lost_enter_reply_releases_the_actual_service_gate(managed_service, monkeypatch):
     import httpx
+
+    from astrophotoflow.contracts.workbench import ProcessInfo, WorkbenchState
     from astrophotoflow.core import config, workbench
-    from astrophotoflow.contracts.workbench import WorkbenchState, ProcessInfo
     settings, client, _, _ = managed_service
     monkeypatch.setattr(config, "CONFIG_PATH", settings.workspace / "user/config.toml")
     path = settings.workspace / "config.toml"
@@ -1754,8 +1688,8 @@ def test_restart_lost_enter_reply_releases_the_actual_service_gate(managed_servi
     ready = WorkbenchState(workspace=str(settings.workspace), config_path=str(path), state="running", ready=True,
                            web_url=values.allowed_origins[0], service_url=settings.service_url, processes=[info],
                            effective_settings=values, versions={}, reason=None, recent=None)
-    monkeypatch.setattr(workbench, "status", lambda target: ready)
-    monkeypatch.setattr(workbench, "_stop", lambda target: pytest.fail("lost reply must not stop or restart"))
+    monkeypatch.setattr(wb_observations, 'status', lambda target: ready)
+    monkeypatch.setattr(wb_processes, 'stop_processes', lambda target: pytest.fail("lost reply must not stop or restart"))
     async def empty_queue(self, url, **kwargs):
         return httpx.Response(200, json={"queue_running": [], "queue_pending": []}, request=httpx.Request("GET", url))
     monkeypatch.setattr(httpx.AsyncClient, "get", empty_queue)
@@ -1768,8 +1702,8 @@ def test_restart_lost_enter_reply_releases_the_actual_service_gate(managed_servi
             assert client.app.state.maintenance
             raise httpx.ReadTimeout("test accepted enter response lost")
         return httpx.Response(200, json=response.json(), request=httpx.Request("POST", url))
-    monkeypatch.setattr(workbench.httpx, "post", forward_and_lose_enter)
-    result = workbench.restart(path)
+    monkeypatch.setattr(httpx, "post", forward_and_lose_enter)
+    result = wb_control.restart(path)
     assert result.state == "rejected"
     assert [body["action"] for body in calls] == ["enter", "release"]
     assert all(body["operation_id"] == str(result.operation_id) for body in calls)
@@ -1779,9 +1713,10 @@ def test_restart_lost_enter_reply_releases_the_actual_service_gate(managed_servi
 
 
 def test_workbench_restart_requires_auth_and_exposes_correlated_result(service, monkeypatch):
-    from astrophotoflow.interfaces.http import system
-    from astrophotoflow.contracts.workbench import WorkbenchResult
     from uuid import uuid4
+
+    from astrophotoflow.contracts.workbench import WorkbenchResult
+    from astrophotoflow.interfaces.http import system
     _, client, _ = service
     result = WorkbenchResult(operation_id=uuid4(), action="restart", state="in_progress",
                              workspace="workspace", config_path="workspace/config.toml", reused=False,
@@ -1822,3 +1757,38 @@ def test_workbench_directory_selection_is_authenticated_and_does_not_save_config
     monkeypatch.setattr(system, "select_directory", unavailable)
     response = client.post(endpoint, headers=auth(), json={"path": "data"})
     assert response.status_code == 503 and response.json()["error"]["code"] == "DIRECTORY_PICKER_UNAVAILABLE"
+
+
+@pytest.mark.parametrize("activity", ["export", "output_prepare", "output_read", "asset_prepare"])
+def test_maintenance_observes_owned_activity_and_release(managed_service, monkeypatch, activity):
+    import httpx
+
+    _, client, _, operation_id = managed_service
+
+    async def empty_queue(self, url, **kwargs):
+        return httpx.Response(200, json={"queue_running": [], "queue_pending": []}, request=httpx.Request("GET", url))
+
+    monkeypatch.setattr(httpx.AsyncClient, "get", empty_queue)
+    identity = str(uuid4())
+    exports = client.app.state.data_exports
+    media = client.app.state.media_views
+    owner = exports if activity == "export" else media
+    state = exports.active if activity == "export" else media.leases.active if activity == "output_read" else media.preparing
+    with owner.lock:
+        state[identity] = 1
+        if activity.startswith("output_"):
+            media.output_jobs[identity] = object()
+    try:
+        observed = client.post("/internal/maintenance", headers=auth(), json={"action": "enter", "operation_id": operation_id})
+        assert observed.status_code == 200, observed.text
+        assert observed.json()["busy"] is (activity != "asset_prepare")
+        assert not observed.json()["unknown"]
+        assert any(identity in reason for reason in observed.json()["blockers"]) is (activity != "asset_prepare")
+    finally:
+        with owner.lock:
+            state.pop(identity)
+            if activity.startswith("output_"):
+                media.output_jobs.pop(identity)
+    released = client.post("/internal/maintenance", headers=auth(), json={"action": "enter", "operation_id": operation_id})
+    assert released.status_code == 200, released.text
+    assert released.json() == {"busy": False, "unknown": False, "blockers": []}
