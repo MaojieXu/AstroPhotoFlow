@@ -1,6 +1,6 @@
 # 当前开发上下文
 
-用户已授权将现代化与设备改造的累计候选整理成本地待审提交，不推送、不合并。交接后暂停修改，准确 SHA 见聊天最终 Brief；下文“未提交”为各轮执行时的历史状态。最新设备回归测试仅编写，未执行套件。
+现代化、设备精简与滤镜Channel累计候选已获用户集成/普通推送/清理及Chat归档授权；Manager独立审查、最小修复与必要验证已完成，见[集成记录](test-matrix.md#modernization-equipment-channel-integration)。以下各轮“未提交/未运行”为历史状态，不覆盖本次结果；最终远端SHA与清理情况见Manager交付报告。
 
 当前设备Feature已增加只能手填的滤镜Channel，组合按通道＋可选带宽展示，选择器保留实际名称；单相机／单望远镜、多滤镜及精简预设规则继续有效。原optics-b数据与历史原文保留，最新预览及检查边界见[当前计划](implementation-plan.md)和[Channel记录](test-matrix.md#filter-free-text-channel)。
 

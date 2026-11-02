@@ -2173,3 +2173,31 @@ filterLabels.ts统一生成组合标签、候选及只读表单预览。组合�
 独立审查、设备／预设／Channel新增回归、真实保存清空与快照、跨入口刷新、数字带宽排序及完整集成验收留给Manager。全部160节点、真实用户天文素材、长期热加载、Linux／WSL及seqprofile已知限制仍未据本轮宣称通过。交接后冻结两个待审版本；继续修改须重新提交并更新Brief。
 
 封存暂存检查发现累计候选的既有空白问题：官方原文有行尾空格（按快照要求保持字节），排除官方资料后自研文件仍有行尾空格／EOF空行，完整记录`.artifacts/reports/filter-channel/review-diff-check.log`。本次不借封存改写应用源码；此检查未通过，交由Manager审查时处理，不能以此前窄范围diff通过替代全量暂存检查。
+
+
+<a id="modernization-equipment-channel-integration"></a>
+
+## 2026-11-01 现代化、设备精简与滤镜 Channel 集成验证
+
+用户一次授权独立审查、必要测试/最小修复、通过后合并并普通推送两个仓库 dev，随后删除本 Feature 全部私有空间并归档原 Chat；不修改 main、不发布 tag、不迁移或额外备份运行数据。原平台候选 679be0cf93b5dabbd25e59ca6375777f5277b111（基点 bbb6f4a9f872fc1b79defa6dddf849247b5099d6）、Bundle 824a1910773a95287e567bc369c3ed2b27e3aed3（基点 f4f11b34587f989fb026607b483b740ee3b74cac）作为累计重构整体审查，未单独挑选 Channel。
+
+三个独立上下文 Reviewer 只读核查设备/数据库/UI、原生画布/具体调用、Bundle 拆分，修复后复审通过。最小修复：PSF 选区调用传入 RuntimeOptions；Data 已检查成员保存完整 ResolvedAssetInput，并经 Data→Data/软件调用持久保留来源身份、成员顺序、资料 revision、capture_snapshot、value_sources 和有效校准；可空 classification 正确处理；PresetEquipmentSelection 序列化区分继承 {} 与明确禁用 {filter:null}。过时设备、多相机、名称选择器、预设 revision 及原生请求 mock 测试按最终契约修正，未删除有效业务断言；新增实际 Channel 保存、清空、设备 revision=2→3 后历史冻结、PSF 默认/自定义选区和来源冻结回归。已清理观察到的自研行尾空白/EOF 空行，官方文档和上游快照原文不改，不能将其全量 diff --check 写为通过。
+
+准确构建/验证平台源码提交：1bd7ffc2f0c4501c52bb138315cc547c4b5ebdea（产品修复 d7bdf6524d9482b6dd21cdc9fc8b900776ad1a04）；Bundle 产品修复：83c79cf813df4a35c64dc4a1f7da932902a710cd。后续集成记录提交仅更新文档，不改变上述应用源码。Bundle 0.2.0-dev.2、Siril 1.4.4、SDK v2 配套开发源码绑定；发布目录仍为 v0.2.0-dev.2 / 5d16fb6fc10b4ee57de428d6eba522c918b1b441，不把本候选视为已发布安装版本。
+
+### 自动检查与实际运行
+
+- 平台完整 pytest 首轮 983 passed / 10 failed / 16 skipped（1009）；10 个失败为预设冻结期望取错分支，修正后整个快照文件 32 passed，含新增非1 revision。受影响 data/software/MCP/native/architecture 范围最终 783 passed / 1 skipped。按 JUnit classname+name，以后续定向结果覆盖同名首轮项，累计唯一 1012 项：1006 passed、6 skipped、0 unresolved failed；不是声称单次全套全绿。新增来源 7 项、最新设备 37 项、真实科学及原生测试均纳入该去重统计。
+- Bundle 作者 tests 全部 58 passed；自研 UI 81 files / 526 passed；宿主桥接 24 files / 117 passed。根完整构建含 UI 与宿主类型检查通过；修复范围 Ruff 通过；OpenAPI 与 SDK 重新生成无漂移。前端依赖边界检查 289 modules / 1224 dependencies，0 violation。
+- 浏览器 optics-b：9 个唯一场景全部通过（默认7项 + 显式原生队列/配置重启2项），覆盖真实手填 Channel 保存、清空不改名称与带宽、页面/画布、合成上传与原件、原生保存重载执行、配置恢复。modernization-current 配套候选：自动结果、未保存草稿执行、真实科学结果查看/所选成员入库及本机导出、原生保存/撤销/切图/内容冲突/关闭页面，共5项通过；软件安装专项未重新执行，不冒充已验证候选发布安装。
+- 真实 Siril 校准、注册/堆叠/拒绝图、单帧序列分析、压缩、直接进程取消、缺少 StarNet 依赖六项通过；seqprofile 首次父退出0但捕获的 Python 子进程仍在途，平台如实返回 unknown/active=true。核对原调用进程身份并确认稍后全退出，未把原 unknown 改成 completed 或重发该调用；测试仅为该已知情形增加有界同调用查询/保留原事实。定向 seqprofile 新合成用例通过，未来同一延迟分支可记 xfail，不能当作科学成功。真实原生 interrupt→所属 Siril 进程停止、历史 interrupted、原件不变回归1项通过；真实 CPU runtime 原生 category/schema 两项通过。
+- 浏览器科学 prompt 4423b76c-bc96-4511-b371-7cf5730ba557，软件 call 16757919-ed54-5dd3-8697-96f9f1b9a6c7；实际调用记录的 source_input 含固定 dataset/member 0、1，原件哈希不变、完整输出与显式保存/导出通过。
+- 最终固定 bootstrap 回执 12514a06c20a4397b3a2b784169f3de1：HEAD=1bd7ffc2f0c4501c52bb138315cc547c4b5ebdea、dirty=false、completed/ready=true；总71.142秒，build52.46秒、start12.40秒（复用依赖/runtime，非冷机）。网页32689实际HTTP build-manifest为同SHA，代理健康确认optics-b与0001_baseline。另一个私有科学实例32588/32590绑定Bundle83c79cf，ready。前述浏览器验证对应产品相同源码，最终提交只额外修正测试与空白。
+
+### 数据与尚未验证的边界
+
+SQLite 旧备份 SHA256 b44fa505c54052ea17e0a6e821cc2bcb17f1988de9ed4c4237126f1532d1b851 已复核；当前21表 schema一致、integrity_check=ok、无外键违规。六台原设备记录及历史素材等保留。不能把旧备份与当前整库写成逐行一致：原组合 revision1→2，三个成员移除、其余成员顺序变化的 updated_at=2026-11-02T00:45:03Z，早于交接清单生成01:02:59Z及Manager测试开始01:08:29Z；本轮不恢复/覆盖交接前现状。所有设备/预设历史不变语义以本次合成回归与实际新记录验证，浏览器新增合成记录也不冒充原库未变化。
+
+六个 pytest opt-in 未运行：Bundle 实际安装编辑移除热加载、另一独立原生草稿测试、旧平台workspace生命周期、启动失败时真实导入排空、另一独立两成员autostretch复制安装测试、官方MCP reload重连。相近浏览器/科学场景不能直接记作这些测试通过。全部160操作逐项科学正确性、用户真实素材、长期热加载/跨发布升级、Linux/WSL仍未完整验收；seqprofile延迟子进程边界保留。新0001_baseline明确不自动迁移旧数据库；正常dev实例/默认workspace/全局MCP未重启或改写，不在本次集成时升级它们。
+
+完整瞬态日志、JUnit、浏览器记录和备份曾在本Feature .artifacts/reports/manager-integration及modernization/g7中；按用户清理授权随私有空间删除，不迁移保留副本。本节、测试及源码通过Git保留；最终远端SHA、停止/删除和原Chat归档结果以Git Manager交付报告为准。
