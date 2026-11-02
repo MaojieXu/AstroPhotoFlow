@@ -5,11 +5,12 @@ from typing import Literal
 from pydantic import Field
 
 from astrophotoflow.contracts.common import JsonObject, StrictModel, UuidInput
-from astrophotoflow.contracts.inputs import CheckedOutput
+from astrophotoflow.contracts.inputs import CheckedOutput, ResolvedAssetInput
 
 
 class CheckedResultMember(StrictModel):
     checked: CheckedOutput
+    source_input: ResolvedAssetInput | None = None
     name: str
     selection: JsonObject = Field(default_factory=dict)
     display: Literal["direct", "auto"] = "direct"

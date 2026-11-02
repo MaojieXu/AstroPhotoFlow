@@ -130,7 +130,7 @@ describe('compact equipment toolbar', () => {
     expect(mounted.text()).toContain('Device 2')
     expect(mounted.text()).not.toContain('Device 1')
     expect(mounted.text()).not.toContain('删除所选')
-    await mounted.get('select[aria-label="设备类别"]').setValue('mount')
+    await mounted.get('select[aria-label="设备类别"]').setValue('telescope')
     await flushPromises()
     expect(mounted.text()).toContain('没有匹配的记录，请调整搜索或设备类别。')
     expect(mounted.find('.apf-pagination').exists()).toBe(false)

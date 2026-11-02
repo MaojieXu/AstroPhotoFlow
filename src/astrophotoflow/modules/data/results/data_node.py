@@ -40,9 +40,9 @@ def _source_members(database, settings, reference, directory):
                                colour_layout=(item.scientific_metadata or {}).get('colour_layout'))
         checked = checked.model_copy(update={'scientific_metadata': {
             **(checked.scientific_metadata or {}), 'parameters': item.parameters,
-            'equipment_snapshot': item.equipment_snapshot, 'classification': item.classification.model_dump(mode='json'),
+            'equipment_snapshot': item.equipment_snapshot, 'classification': item.classification.model_dump(mode='json') if item.classification is not None else None,
         }})
-        members.append({'checked': checked.model_dump(mode='json'), 'name': item.read_path.name,
+        members.append({'checked': checked.model_dump(mode='json'), 'source_input': item.model_dump(mode='json'), 'name': item.read_path.name,
                         'selection': {'hdu_index': item.selection.hdu_index} if item.selection.kind == 'fits_hdu' else {},
                         'display': 'auto'})
     return members

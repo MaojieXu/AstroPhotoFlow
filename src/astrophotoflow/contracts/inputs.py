@@ -143,6 +143,7 @@ class ResolvedOutputInput(StrictModel):
     kind: Literal["run_output"]
     reference_index: int = Field(ge=0)
     locator: OutputLocator
+    source_input: ResolvedAssetInput | None = None
     read_path: Path
     format: ScienceFormat
     selection: ScienceSelection

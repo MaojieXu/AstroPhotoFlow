@@ -128,13 +128,13 @@ describe('settings organization',()=>{
   })
 
   it('preserves inline member identity and untouched pixel size when applying a name change',async()=>{
-    setups[0].components.push({id:id(12),source:'inline',equipment:{kind:'camera',name:'Old inline camera',model:null,notes:null,specs:{pixel_size_um:3.76}}})
+    setups[0].components=[{id:id(12),source:'inline',equipment:{kind:'camera',name:'Old inline camera',model:null,notes:null,specs:{pixel_size_um:3.76}}}]
     await openSetups();await wrapper!.get('button[aria-label="查看组合 Night rig"]').trigger('click');await flushPromises();await click('编辑设备组合');await click('编辑')
     await label('设备名称').get('input').setValue('Renamed inline camera')
     await wrapper!.get('form[aria-label="新建设备表单"]').trigger('submit');await flushPromises()
     expect(send).not.toHaveBeenCalled()
     await wrapper!.get('form[aria-label="设备组合表单"]').trigger('submit');await flushPromises()
-    expect(setups[0].components[1]).toMatchObject({id:id(12),equipment:{name:'Renamed inline camera',specs:{pixel_size_um:3.76}}})
+    expect(setups[0].components[0]).toMatchObject({id:id(12),equipment:{name:'Renamed inline camera',specs:{pixel_size_um:3.76}}})
   })
 
   it('owns presets within a combination, preserves zero and sparsity, and guards dirty drafts',async()=>{

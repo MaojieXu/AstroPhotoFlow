@@ -329,7 +329,7 @@ describe('first-stage regression fixes', () => {
     await wrapper.findAll('button').find(button=>button.text()==='编辑')!.trigger('click')
     await flushPromises()
     const form=wrapper.get('form[aria-label="记录编辑表单"]')
-    const widthField=form.findAll('label').find(label=>label.text().startsWith('宽度（px）'))!
+    const widthField=form.findAll('label').find(label=>label.text().startsWith('图像宽度'))!
     const width=widthField.get('input[type="number"]')
     expect((width.element as HTMLInputElement).value).toBe('2048')
     await width.setValue('4096')

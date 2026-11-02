@@ -131,3 +131,13 @@ def test_explicit_cleanup_preserves_rows_history_and_blocks_real_overrides(datab
     with sqlite3.connect(path) as target:
         assert target.execute("SELECT id,equipment_setup_id FROM capture_preset").fetchone() == (str(preset.id),str(setup.id))
         assert target.execute("PRAGMA foreign_key_check").fetchall() == []
+
+
+def test_mcp_preserves_inherited_and_explicitly_disabled_filter():
+    from fastmcp.tools.base import ToolResult
+
+    from astrophotoflow.contracts.setups import PresetEquipmentSelection
+    inherited=ToolResult(structured_content={'equipment_selection':PresetEquipmentSelection()})
+    disabled=ToolResult(structured_content={'equipment_selection':PresetEquipmentSelection(filter=None)})
+    assert inherited.structured_content=={'equipment_selection':{}}
+    assert disabled.structured_content=={'equipment_selection':{'filter':None}}

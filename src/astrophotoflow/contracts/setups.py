@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Annotated, Literal
 from uuid import UUID
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_serializer
 
 from astrophotoflow.contracts.common import EquipmentKind, PageMetadata, StrictModel, UuidInput, check_name, finite
 from astrophotoflow.contracts.equipment import EquipmentCreate
@@ -87,6 +87,10 @@ class PresetEquipmentSelection(StrictModel):
     """Omitted filter inherits; null disables; UUID selects an owned filter member."""
 
     filter: UuidInput | None = None
+
+    @model_serializer(mode="wrap")
+    def serialize_selection(self, handler):
+        return {key: value for key, value in handler(self).items() if key in self.model_fields_set}
 
 
 class PresetParametersPatch(StrictModel):

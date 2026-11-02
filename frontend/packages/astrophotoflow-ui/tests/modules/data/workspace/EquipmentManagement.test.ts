@@ -74,7 +74,7 @@ describe('equipment management',()=>{
   it.each([['camera','相机'],['telescope','望远镜'],['filter','滤镜']])('registers %s inside a combination and keeps it after abandoning the combination',async(kind,label)=>{
     await open();await click('新建设备组合');await click('新建'+label)
     await field('设备名称').setValue('Saved '+kind)
-    if(kind==='camera')await field('像元尺寸（μm）').setValue('3.76')
+    if(kind==='camera')await wrapper!.get('input[aria-label="像元尺寸"]').setValue('3.76')
     await wrapper!.get('form[aria-label="新建设备表单"]').trigger('submit');await flushPromises()
     expect(devices).toHaveLength(1)
     expect(devices[0]).toMatchObject({kind,name:'Saved '+kind})
@@ -110,7 +110,7 @@ describe('equipment management',()=>{
     await click('编辑')
     await flushPromises()
     expect(wrapper!.findAll('[role="dialog"]')).toHaveLength(1)
-    expect(wrapper!.get('#device-name').element).toHaveProperty('value','Ha filter')
+    expect(wrapper!.get('input[aria-label="名称"]').element).toHaveProperty('value','Ha filter')
     expect(field('型号').element).toHaveProperty('value','7 nm')
     expect(wrapper!.get('select[aria-label="设备类型"]').attributes('disabled')).toBeDefined()
     await click('取消')
@@ -120,7 +120,7 @@ describe('equipment management',()=>{
     expect(wrapper!.get('[role="group"][aria-label="设备 Ha filter"]').find('button[aria-label^="编辑设备 "]').exists()).toBe(false)
     expect(wrapper!.get('[role="group"][aria-label="设备 OIII filter"]').get('button[aria-label="编辑设备 OIII filter"]').text()).toBe('编辑')
     await click('编辑')
-    expect(wrapper!.get('#device-name').element).toHaveProperty('value','OIII filter')
+    expect(wrapper!.get('input[aria-label="名称"]').element).toHaveProperty('value','OIII filter')
   })
 
   it('keeps checkbox deletion separate from opening an editor',async()=>{
@@ -138,12 +138,12 @@ describe('equipment management',()=>{
     devices=[equipmentSchema.parse({id:id(1),kind:'filter',name:'Ha filter',model:null,notes:null,specs:{},status:'active',revision:3,created_at:timestamp,updated_at:timestamp})]
     await open();await click('我的设备');await wrapper!.get('button[aria-label="选择设备 Ha filter"]').trigger('click');await flushPromises();await click('编辑')
     const form=wrapper!.get('form[aria-label="记录编辑表单"]')
-    await form.get('#device-name').setValue('Revised Ha')
+    await form.get('input[aria-label="名称"]').setValue('Revised Ha')
     expect(send).not.toHaveBeenCalled()
     send.mockRejectedValueOnce(new Error('Device save failed'))
     await form.trigger('submit');await flushPromises()
     expect(form.text()).toContain('Device save failed')
-    expect(form.get('#device-name').element).toHaveProperty('value','Revised Ha')
+    expect(form.get('input[aria-label="名称"]').element).toHaveProperty('value','Revised Ha')
     send.mockImplementationOnce(async()=>{devices=[{...devices[0],name:'Revised Ha',revision:4}];return devices[0]})
     await form.trigger('submit');await flushPromises()
     expect(send.mock.calls.at(-1)).toEqual(['/astrophotoflow/api/v1/equipment/'+id(1),expect.anything(),'PATCH',{kind:'filter',base_revision:3,name:'Revised Ha'}])
@@ -164,7 +164,7 @@ describe('equipment management',()=>{
   })
 
   it('keeps unsaved changes when cancelling is declined and discards them without a write when confirmed',async()=>{
-    devices=[equipmentSchema.parse({id:id(1),kind:'mount',name:'Mount',model:null,notes:null,specs:{},status:'active',revision:1,created_at:timestamp,updated_at:timestamp})]
+    devices=[equipmentSchema.parse({id:id(1),kind:'telescope',name:'Mount',model:null,notes:null,specs:{},status:'active',revision:1,created_at:timestamp,updated_at:timestamp})]
     await open();await click('我的设备');await wrapper!.get('button[aria-label="选择设备 Mount"]').trigger('click');await flushPromises();await click('编辑')
     await field('名称').setValue('Unsaved telescope')
     const confirm=vi.spyOn(window,'confirm').mockReturnValue(false)
@@ -183,16 +183,16 @@ describe('equipment management',()=>{
     await wrapper!.get('form[aria-label="设备组合表单"]').trigger('submit');await flushPromises()
     expect(wrapper!.text()).not.toContain('加入组合草稿')
     await click('新建设备组合');await field('组合名称').setValue('Long rig')
-    await wrapper!.get('select[aria-label="选择相机"]').setValue([id(1)]);await flushPromises()
+    await wrapper!.get('select[aria-label="选择相机"]').setValue(id(1));await flushPromises()
     await wrapper!.get('form[aria-label="设备组合表单"]').trigger('submit');await flushPromises()
-    expect(setups.map(row=>row.components)).toEqual([[{id:id(500),source:'registered',equipment_id:id(1)}],[{id:id(600),source:'registered',equipment_id:id(1)}]])
+    expect(setups.map(row=>row.components)).toEqual([[{id:id(500),source:'registered',equipment_id:id(1),optical_accessory_id:null}],[{id:id(600),source:'registered',equipment_id:id(1),optical_accessory_id:null}]])
     expect(send.mock.calls.filter(([path])=>String(path).endsWith('/equipment'))).toHaveLength(1)
   })
 
   it('keeps the combination draft in one dialog while returning from a device view',async()=>{
     await open();await click('新建设备组合');await field('组合名称').setValue('Draft rig')
     const dialog=wrapper!.get('[role="dialog"]').element
-    expect(wrapper!.findAll('select[multiple]')).toHaveLength(5)
+    expect(wrapper!.findAll('select[multiple]')).toHaveLength(1)
     await click('新建相机')
     expect(wrapper!.findAll('[role="dialog"]')).toHaveLength(1)
     expect(wrapper!.get('[role="dialog"]').element).toBe(dialog)
@@ -207,7 +207,7 @@ describe('equipment management',()=>{
     expect(send).not.toHaveBeenCalled()
   })
 
-  it.each([['camera','相机'],['filter','滤镜']])('updates multiple %s selections directly and preserves the order of retained components',async(kind,label)=>{
+  it.each([['filter','滤镜']])('updates multiple %s selections directly and preserves the order of retained components',async(kind,label)=>{
     devices=[1,2,3].map(index=>equipmentSchema.parse({id:id(index),kind,name:label+' '+index,model:null,notes:null,specs:{},status:'active',revision:1,created_at:timestamp,updated_at:timestamp}))
     setups=[{id:id(100),name:'Ordered rig',components:[{id:id(201),source:'registered',equipment_id:id(2)},{id:id(202),source:'registered',equipment_id:id(1)}],notes:null,status:'active',revision:1,created_at:timestamp,updated_at:timestamp}]
     await open();await wrapper!.get('button[aria-label="查看组合 Ordered rig"]').trigger('click');await flushPromises();await click('编辑设备组合')

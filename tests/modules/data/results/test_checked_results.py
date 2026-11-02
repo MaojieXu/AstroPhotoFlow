@@ -1,5 +1,5 @@
-from uuid import uuid4
 import os
+from uuid import uuid4
 
 import numpy as np
 import pytest
@@ -7,10 +7,10 @@ from astropy.io import fits
 from pydantic import ValidationError
 
 from astrophotoflow.contracts.inputs import OutputLocator
-from astrophotoflow.contracts.results import CheckedResult,CheckedResultPort,CheckedResultMember
+from astrophotoflow.contracts.results import CheckedResult, CheckedResultMember, CheckedResultPort
 from astrophotoflow.core.config import Settings
 from astrophotoflow.core.errors import ApiError
-from astrophotoflow.modules.data.public import check_output,publish_checked_result,resolve_result_inputs,get_result_member
+from astrophotoflow.modules.data.public import check_output, get_result_member, publish_checked_result, resolve_result_inputs
 
 
 def make_result(settings,prompt,execution,value):
@@ -79,3 +79,33 @@ def test_read_rejects_a_corrupted_software_record_pointing_outside_its_execution
     result_record_path(settings,prompt,execution).write_text(corrupted.model_dump_json(),encoding='utf-8')
     with pytest.raises(ApiError) as invalid:get_result_member(settings,prompt,execution,0,0,full=True)
     assert invalid.value.code=='INVALID_REFERENCE'
+
+
+def test_data_pass_through_freezes_full_library_source(tmp_path, monkeypatch):
+    from astrophotoflow.contracts.data_nodes import NativeDataExecute
+    from astrophotoflow.contracts.inputs import ResolvedAssetInput, ResolvedInputs
+    from astrophotoflow.modules.data.results import data_node
+    settings=Settings('127.0.0.1',8190,tmp_path/'data',(),workspace=tmp_path)
+    prompt,origin,execution,copy=uuid4(),uuid4(),uuid4(),uuid4()
+    result,source=make_result(settings,prompt,origin,2)
+    checked=result.ports[0].members[0].checked
+    frozen=ResolvedAssetInput(kind='asset_version',reference_index=0,asset_id=uuid4(),asset_version_id=uuid4(),
+        dataset_version_id=uuid4(),member_index=3,asset_revision=7,parameters={'gain':0},classification=None,
+        value_sources={'gain':'manual'},capture_snapshot=None,equipment_snapshot={'camera':{'name':'Original camera'}},
+        effective_calibration={'dark':{'kind':'asset_version','id':uuid4()}},read_path=source,format='fits',
+        selection={'kind':'fits_hdu','hdu_index':0},byte_size=checked.byte_size,content_hash=checked.content_hash,
+        mtime_ns=source.stat().st_mtime_ns,scientific_metadata=checked.scientific_metadata,preparation='existing_managed')
+    monkeypatch.setattr(data_node,'resolve_canvas_inputs',lambda *args,**kwargs:ResolvedInputs(
+        input_mode='reproducible',items=[frozen],required_copy_bytes=0,copied_bytes=0))
+    reference={'kind':'asset_version','asset_version_id':frozen.asset_version_id,'selection':{'kind':'fits_hdu','hdu_index':0}}
+    first=data_node.execute_data_node(None,settings,NativeDataExecute(run_id=prompt,execution_id=execution,node_id='data',reference=reference))
+    expected=frozen.model_dump(mode='json')
+    frozen.parameters['gain']=99
+    frozen.effective_calibration.clear()
+    frozen.equipment_snapshot.clear()
+    second=data_node.execute_data_node(None,settings,NativeDataExecute(run_id=prompt,execution_id=copy,node_id='pass',reference=first.output))
+    items,_=resolve_result_inputs(settings,prompt,second.output,'APF_SCIENCE')
+    assert items[0].source_input.model_dump(mode='json')==expected
+    assert items[0].source_input.parameters['gain']==0
+    assert items[0].source_input.member_index==3
+    assert items[0].source_input.effective_calibration['dark'] is not None

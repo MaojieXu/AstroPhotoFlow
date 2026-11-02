@@ -72,7 +72,7 @@ def resolve_result_inputs(settings: Settings, prompt_id: UUID, locator: OutputLo
         validate_member_scope(settings, result, member)
         checked = validate_result_file(settings, member.checked, full=True)
         return ResolvedOutputInput(kind="run_output", reference_index=0, locator=locator.model_copy(update={"member_index": index}),
-            read_path=checked.path, format=checked.format, selection={'kind':'fits_hdu','hdu_index':member.selection['hdu_index']} if member.selection.get('hdu_index') is not None else {'kind':'whole_file'}, byte_size=checked.byte_size,
+            source_input=member.source_input, read_path=checked.path, format=checked.format, selection={'kind':'fits_hdu','hdu_index':member.selection['hdu_index']} if member.selection.get('hdu_index') is not None else {'kind':'whole_file'}, byte_size=checked.byte_size,
             content_hash=checked.content_hash, mtime_ns=checked.path.stat().st_mtime_ns, scientific_metadata=checked.scientific_metadata)
     return [resolve(index, port.members[index]) for index in indexes], [resolve(index, member) for index, member in enumerate(port.supporting)] if locator.member_index is None else []
 
