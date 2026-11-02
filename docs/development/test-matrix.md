@@ -2201,3 +2201,11 @@ SQLite 旧备份 SHA256 b44fa505c54052ea17e0a6e821cc2bcb17f1988de9ed4c4237126f15
 六个 pytest opt-in 未运行：Bundle 实际安装编辑移除热加载、另一独立原生草稿测试、旧平台workspace生命周期、启动失败时真实导入排空、另一独立两成员autostretch复制安装测试、官方MCP reload重连。相近浏览器/科学场景不能直接记作这些测试通过。全部160操作逐项科学正确性、用户真实素材、长期热加载/跨发布升级、Linux/WSL仍未完整验收；seqprofile延迟子进程边界保留。新0001_baseline明确不自动迁移旧数据库；正常dev实例/默认workspace/全局MCP未重启或改写，不在本次集成时升级它们。
 
 完整瞬态日志、JUnit、浏览器记录和备份曾在本Feature .artifacts/reports/manager-integration及modernization/g7中；按用户清理授权随私有空间删除，不迁移保留副本。本节、测试及源码通过Git保留；最终远端SHA、停止/删除和原Chat归档结果以Git Manager交付报告为准。
+
+<a id="three-step-feature-handoff"></a>
+
+## 2026-11-01 Feature 三步交接流程文档
+
+按用户确认，将开发流程改为三个用户动作：创建 Feature、要求整理交付、确认集成。Manager 完成准备后主动发送开发指令并交接准确 Chat/host 标识；Feature 整理本地待审提交后主动回传完整冻结 Brief，并在原 Feature Chat 展示发送结果。发送失败明确报告，回传不代表集成授权；用户确认后 Manager 才组织审查、必要验证、普通推送、私有空间清理及原 Chat 归档。根 AGENTS 的交接时序改为引用该流程，保留原有隔离和发布边界。
+
+已核对三份用户 Prompt 及 Manager 自动发送模板，AGENTS/开发流程内24个本地文档链接目标存在，Git diff --check通过。本轮仅文档变更，不执行应用构建、测试套件或实际 Chat 派发。

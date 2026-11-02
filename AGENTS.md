@@ -19,7 +19,7 @@
 ## 并行开发与集成
 
 - 一个 Git Manager 负责空间准备、清理、独立审查、测试、修复和串行合并 `dev`；Feature 只在自己的分支、Worktree、runtime 与 workspace 工作，不自行合并或默认推送。
-- 用户确认可以集成后，Feature 交接最终需求、准确 SHA、预览版本和待验证项，并暂停修改待审版本。Reviewer 使用独立上下文，只根据最终需求、必要约束和代码变更找问题，不修改代码。
+- Feature 按[开发流程](docs/development/README.md)冻结并回传待审 Brief，暂停修改；用户确认可集成后才由 Manager 组织审查。Reviewer 使用独立上下文，只根据最终需求、必要约束和代码变更找问题，不修改代码。
 - `demo` 只表示验收环境，不设长期分支；集成、推送、空间清理与 Feature Chat 归档可由用户一次明确授权，推进 `main`、发布 tag 和正式发布仍须另行授权。操作步骤、角色 Prompt 和 Brief 格式统一在 [开发流程](docs/development/README.md)。
 
 ## 必须保持的边界

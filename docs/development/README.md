@@ -12,9 +12,9 @@
 
 1. Manager 核对 dev、工作区和已有 Worktree，从确认的已提交 SHA 创建 `codex/<feature>`；复用 Codex 创建的空间并核对实际分支。用户要求时才创建 Feature Chat。
 2. Feature空间默认准备到可见的独立前端：源码空间、开发依赖、空workspace、前端构建、私有CPU runtime、双服务启动及页面展示连续完成。用户明确要求源码空间或依赖等较低等级时才提前结束。交接基点、分支、路径、工具／缓存位置及实际完成等级。
-3. 指定一方执行下方固定入口，另一方读取回执。Manager 使用带 cursor 的状态等待，失败、需用户处理或完成时再读详情；初始化交接不重复整套核对。
-4. Feature 按最终需求实现、编写必要测试、构建及提供独立预览，默认不执行测试套件或综合验收。用户确认可集成后，按授权整理待审提交并暂停修改准确 SHA。
-5. 用户可用下方一次交付 Prompt 一并授权审查、测试、修复、本地合并、普通推送、Feature 空间清理及 Feature Chat 归档。Manager 按此顺序串行执行，不再逐步请求相同授权；审查或验证未通过则不合并、不推送，远端 dev 未包含最终提交则不清理。清理时删除该 Feature 的 workspace、私有 runtime、已合并分支及可安全删除的 Worktree，包含其中的证据、运行数据、依赖和缓存，不额外备份或迁移保留副本；已提交到 Git 的源码和验证记录继续保留。归档对应 Feature Chat，保留 Git Manager Chat 和其他 Feature。只删除本 Feature 私有路径，不删除外部引用的原始素材或共享缓存。用户明确要求暂不推送或保留空间时，以该要求为准。main、tag 和正式发布仍须另行授权；demo 只表示验收环境。Git 忽略的运行数据删除后不能靠 Git 恢复。
+3. 指定一方执行下方固定入口，另一方读取回执。Manager 使用带 cursor 的状态等待，失败、需用户处理或完成时再读详情；初始化交接不重复整套核对。Manager 交接原 Manager Chat 和对应 Feature Chat 的准确标识及可用的 host 标识；准备完成后，主动向该 Feature Chat 发送下方开发指令并启动开发，用户无需再发送开始指令。发送失败时明确报告，不将准备就绪描述为开发已启动。
+4. Feature 按最终需求实现、编写必要测试、构建及提供独立预览，默认不执行测试套件或综合验收。用户在 Feature Chat 反馈、试用和调整需求，满意后授权整理本地待审提交。Feature 冻结准确 SHA，整理完整 Brief，主动发送回原 Manager Chat，并在 Feature Chat 展示 Brief 和发送结果；用户无需手动复制。继续修改须另作提交并回传更新后的 Brief。无法定位原 Chat 或发送失败时明确报告，不将未发送描述为已交接。
+5. Brief 回传仅为交接，不代表授权集成；Manager 收到后等待用户确认。用户可用下方一次交付 Prompt 一并授权审查、测试、修复、本地合并、普通推送、Feature 空间清理及 Feature Chat 归档，Manager 使用对应 Feature 最新冻结的 Brief，不要求用户再次粘贴。Manager 按此顺序串行执行，不再逐步请求相同授权；审查或验证未通过则不合并、不推送，远端 dev 未包含最终提交则不清理。清理时删除该 Feature 的 workspace、私有 runtime、已合并分支及可安全删除的 Worktree，包含其中的证据、运行数据、依赖和缓存，不额外备份或迁移保留副本；已提交到 Git 的源码和验证记录继续保留。归档对应 Feature Chat，保留 Git Manager Chat 和其他 Feature。只删除本 Feature 私有路径，不删除外部引用的原始素材或共享缓存。用户明确要求暂不推送或保留空间时，以该要求为准。main、tag 和正式发布仍须另行授权；demo 只表示验收环境。Git 忽略的运行数据删除后不能靠 Git 恢复。
 
 两个角色的交接 Prompt 只需包含：角色、当前需求、授权范围及基点／路径；操作规则引用本页，不复制整套命令。最终 Brief 默认放聊天：
 
@@ -26,7 +26,9 @@ Branch / Base / Commit:
 跨仓库依赖: [涉及时填写Bundle准确版本与SHA]
 ```
 
-### 用户操作 Prompt（四步）
+### 用户操作 Prompt（三步）
+
+用户只需创建 Feature、要求整理交付、确认集成。开发开始指令由 Manager 自动发送，最终 Brief 由 Feature 主动回传；开发期间用户直接在 Feature Chat 试用、反馈和调整需求。
 
 **1. 在 Git Manager Chat 创建 Feature**
 
@@ -47,35 +49,32 @@ Branch / Base / Commit:
 由指定的一方使用bootstrap固定入口，默认传入--build --start，连续完成依赖、网页构建、私有runtime和双服务启动。
 就绪后使用回执返回的web_url打开页面并确认加载，交接准确SHA、分支、路径、环境、回执和实际地址。
 分别报告服务就绪、页面打开请求及实际展示结果；queued不等于页面已展示。如涉及独立Bundle仓库，分别交接准确基点。
+准备完成后，由你向对应 Feature Chat 发送开发指令并启动开发，
+同时交接原 Git Manager Chat 的准确标识，供完成后主动回传 Brief。
 不修改正常 dev 实例、默认 workspace 或全局 MCP；暂不推送、不合并。
 ```
 
-**2. 在 Feature Chat 开发**
+**2. 开发满意后，在 Feature Chat 整理并回传交付**
 
 ```text
-请按交接信息实现 Feature「名称」。
-遵守 AGENTS.md 和 docs/development/README.md，只在本 Feature 空间工作。
-按最新需求做最小实现，编写必要测试，完成构建和类型检查，
-提供独立预览并说明对应源码版本。
-默认不执行测试套件或综合验收，由 Manager 在集成阶段组织。
-产品选择不明确时询问我，常规实现选择自行处理。不自行合并或推送。
-```
-
-**3. 在 Feature Chat 整理交付**
-
-```text
-开发完成，请整理本地待审提交和最终 Brief。
+开发完成，请整理本地待审提交和最终 Brief，
+并将完整 Brief 主动发送回创建本 Feature 的原 Git Manager Chat。
+同时在当前 Feature Chat 展示 Brief 和发送结果。
 允许本地提交，不推送、不合并。
 按开发流程的 Brief 格式提供最终需求、验收点、各仓库准确 SHA、
 预览版本、已完成检查、已编写未执行测试、待验证项、已知限制及跨仓库依赖。
-交接后暂停修改待审版本；如需继续修改，重新提交并更新 Brief。
+交接后暂停修改待审版本，等待用户授权 Manager 集成。
+如需继续修改，重新提交并向 Manager 发送更新后的 Brief。
+无法定位原 Manager Chat 或发送失败时明确报告，
+不将未发送描述为已交接。
 ```
 
-**4. 回到 Git Manager Chat，一次授权交付**
+**3. 回到 Git Manager Chat，确认集成并一次授权交付**
 
 ```text
-确认该 Feature 可以集成，并授权通过后推送、清理空间及归档 Feature Chat。
-请遵守 AGENTS.md 和 docs/development/README.md，按以下 Brief 连续完成：
+确认 Feature「名称」可以集成，并授权通过后推送、清理空间及归档 Feature Chat。
+请使用该 Feature 已回传的最新冻结 Brief，
+遵守 AGENTS.md 和 docs/development/README.md，连续完成：
 
 1. 组织独立上下文 Reviewer 只读审查，执行必要测试和最小修复，
    对受影响范围复审复测；通过后将准确候选本地合并到干净的 dev。
@@ -93,8 +92,24 @@ Branch / Base / Commit:
 不要越过失败步骤继续推送或清理；被占用或无法安全删除的内容如实报告，不强行关闭用户应用。
 不强制推送、不修改 main、不发布 tag，不影响正常 dev 或其他 Feature。
 报告各仓库远端最终 SHA、验证结果、已提交的验证记录位置、空间删除及 Chat 归档结果和未解决项。
+```
 
-[粘贴 Feature 最终 Brief]
+### Manager 自动发送的开发指令
+
+以下指令由 Manager 在空间准备和交接完成后发送给对应 Feature Chat，不是用户的额外步骤。发送时填入准确 Feature 名称及原 Manager Chat 标识，附上已核对的准备交接信息。
+
+```text
+请按交接信息实现 Feature「名称」。
+原 Git Manager Chat：[准确 Chat 标识及可用的 host 标识]。
+遵守 AGENTS.md 和 docs/development/README.md，只在本 Feature 空间工作。
+按最新需求做最小实现，编写必要测试，完成构建和类型检查，
+提供独立预览并说明对应源码版本。
+默认不执行测试套件或综合验收，由 Manager 在集成阶段组织。
+产品选择不明确时询问用户，常规实现选择自行处理。不自行合并或推送。
+用户要求整理交付后，本地提交并冻结准确 SHA，
+将完整最终 Brief 主动回传上述 Manager Chat，在当前 Chat 展示 Brief 和发送结果。
+回传不代表获准集成；交接后暂停修改，等待用户确认。
+继续修改须另作提交并回传更新后的 Brief；无法定位或发送失败时明确报告。
 ```
 
 ## 安装与构建
