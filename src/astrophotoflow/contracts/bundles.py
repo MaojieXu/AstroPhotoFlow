@@ -104,4 +104,5 @@ class BundleProgress(StrictModel):
 class BundlePreview(StrictModel):
     kind: Literal["science-image"]
     input: str
+    output: str | None = None
     max_edge: Literal[1024] = 1024

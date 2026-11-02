@@ -1,6 +1,7 @@
 import shutil
 from collections import OrderedDict
 from contextlib import contextmanager
+from pathlib import Path
 from threading import RLock
 
 MEMORY_BYTES = 256 * 1024**2
@@ -76,7 +77,7 @@ class MediaCache:
 
 
 def media_locations(preview, settings):
-    if preview.size not in {"viewer", "playback", "siril-live"}:
+    if not preview.storage_path or Path(preview.storage_path).name != 'manifest.json':
         return []
     manifest = (settings.data_dir / preview.storage_path).resolve()
     manifest.relative_to((settings.data_dir / "previews").resolve())

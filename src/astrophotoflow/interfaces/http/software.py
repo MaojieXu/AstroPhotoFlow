@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, Query, Request
 
 from astrophotoflow.contracts.packages import PendingSoftwareAction, SoftwarePackageDetails
 from astrophotoflow.contracts.software import (
-    SirilCommand,
+    SoftwareCommand,
     SoftwareInstallRequest,
     SoftwarePackage,
     SoftwarePreparation,
@@ -28,7 +28,7 @@ def get_software_releases(package_id: str, request: Request):
     return list_releases(request.app.state.settings, package_id)
 
 
-@router.get("/software/packages/{package_id}/versions/{version}/commands", response_model=list[SirilCommand],
+@router.get("/software/packages/{package_id}/versions/{version}/commands", response_model=list[SoftwareCommand],
             dependencies=[Depends(authenticate)], operation_id='get_software_commands_api_v1_software_packages__package_id__versions__version__commands_get')
 def get_software_commands(package_id: str, version: str, request: Request):
     return get_command_catalog(package_id, version, request.app.state.settings)

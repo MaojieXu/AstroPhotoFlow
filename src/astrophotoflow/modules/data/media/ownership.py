@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from sqlalchemy import select
 
 from astrophotoflow.core.errors import ApiError
@@ -6,7 +8,7 @@ from astrophotoflow.modules.data.media.models import Preview
 
 
 def owned_preview_locations(preview, settings) -> list[str]:
-    if preview.size in {"viewer", "playback", "siril-live"}:
+    if preview.storage_path and Path(preview.storage_path).name == 'manifest.json':
         return media_locations(preview, settings)
     if not preview.storage_path:
         return []

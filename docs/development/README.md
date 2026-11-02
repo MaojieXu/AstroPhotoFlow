@@ -2,6 +2,8 @@
 
 本文是环境准备、角色交接和命令的唯一操作入口。产品目标见[需求](../requirements/README.md)，模块职责见[架构](../architecture/overview.md)，有效状态见[当前上下文](current-context.md)。
 
+源码、生成物、安装副本、workspace和缓存的归属、写入者及实际读取链统一见[文件归属与读写关系](../architecture/repository-layout.md)。
+
 需要 Python 3.12、uv、Node `>=26.8.2 <27`、pnpm 11.13.1，工具须在当前进程 PATH 可用；不修改全局环境。依赖锁为根 `uv.lock` 和 `frontend/pnpm-lock.yaml`，根 package.json 是任务入口，不执行根 pnpm install。
 
 首次 clone 的工具自动准备与启动见根 [Quickstart](../../README.md#quickstartwindows-x64)。工具尚未在 PATH 时用 `scripts/bootstrap.ps1` 转发本页参数；`--watch` 转发给 Vite 入口。自动准备只支持 Windows x64，其他平台单独验证。

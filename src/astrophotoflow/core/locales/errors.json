@@ -2011,6 +2011,18 @@
     "inspection_source_changed_reading": {
       "en": "Source changed while reading its metadata.",
       "zh": "来源在读取元数据时发生变化。"
+    },
+    "bundle_preview_failed": {
+      "en": "Software live preview did not complete. See the original diagnostics.",
+      "zh": "软件实时预览未完成，请查看原始诊断。"
+    },
+    "bundle_preview_install_required": {
+      "en": "Install the software package first.",
+      "zh": "请先安装软件包。"
+    },
+    "bundle_preview_maintenance": {
+      "en": "The software package is undergoing maintenance.",
+      "zh": "软件包正在维护。"
     }
   },
   "codes": {

@@ -11,7 +11,7 @@ export type {
   SoftwarePreparation,
   SoftwareRelease,
   SoftwareReleaseListing,
-  SirilCommand
+  SoftwareCommand
 } from './api/contracts'
 
 export { useSoftwareWorkspace } from './queries'

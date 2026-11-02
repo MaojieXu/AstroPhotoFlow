@@ -21776,7 +21776,7 @@
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/SirilCommand"
+                    "$ref": "#/components/schemas/SoftwareCommand"
                   },
                   "title": "Response Get Software Commands Api V1 Software Packages  Package Id  Versions  Version  Commands Get"
                 }
@@ -24285,6 +24285,17 @@
           "input": {
             "type": "string",
             "title": "Input"
+          },
+          "output": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Output"
           },
           "max_edge": {
             "type": "integer",
@@ -33761,133 +33772,6 @@
         ],
         "title": "ServiceHealth"
       },
-      "SirilCommand": {
-        "properties": {
-          "command": {
-            "type": "string",
-            "title": "Command"
-          },
-          "scriptable": {
-            "type": "boolean",
-            "title": "Scriptable"
-          },
-          "syntax": {
-            "type": "string",
-            "title": "Syntax"
-          },
-          "description": {
-            "type": "string",
-            "title": "Description"
-          },
-          "url": {
-            "type": "string",
-            "title": "Url"
-          },
-          "assessment": {
-            "$ref": "#/components/schemas/SirilCommandAssessment"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "command",
-          "scriptable",
-          "syntax",
-          "description",
-          "url",
-          "assessment"
-        ],
-        "title": "SirilCommand"
-      },
-      "SirilCommandAssessment": {
-        "properties": {
-          "parameter_details": {
-            "type": "string",
-            "title": "Parameter Details"
-          },
-          "structured_parameter_defaults_ranges": {
-            "type": "string",
-            "title": "Structured Parameter Defaults Ranges"
-          },
-          "single_image_sequence_context": {
-            "type": "string",
-            "title": "Single Image Sequence Context"
-          },
-          "input_output_semantics": {
-            "type": "string",
-            "title": "Input Output Semantics"
-          },
-          "headless_status": {
-            "type": "string",
-            "title": "Headless Status"
-          },
-          "dependencies": {
-            "type": "string",
-            "title": "Dependencies"
-          },
-          "security_risk": {
-            "type": "string",
-            "title": "Security Risk"
-          },
-          "semantic_review_status": {
-            "type": "string",
-            "title": "Semantic Review Status"
-          },
-          "node_definition_status": {
-            "type": "string",
-            "title": "Node Definition Status"
-          },
-          "node_definition_reason": {
-            "type": "string",
-            "title": "Node Definition Reason"
-          },
-          "node_generation_status": {
-            "type": "string",
-            "title": "Node Generation Status"
-          },
-          "node_generation_reason": {
-            "type": "string",
-            "title": "Node Generation Reason"
-          },
-          "registry_load_status": {
-            "type": "string",
-            "title": "Registry Load Status"
-          },
-          "registry_load_reason": {
-            "type": "string",
-            "title": "Registry Load Reason"
-          },
-          "runtime_test_status": {
-            "type": "string",
-            "title": "Runtime Test Status"
-          },
-          "runtime_test_reason": {
-            "type": "string",
-            "title": "Runtime Test Reason"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "parameter_details",
-          "structured_parameter_defaults_ranges",
-          "single_image_sequence_context",
-          "input_output_semantics",
-          "headless_status",
-          "dependencies",
-          "security_risk",
-          "semantic_review_status",
-          "node_definition_status",
-          "node_definition_reason",
-          "node_generation_status",
-          "node_generation_reason",
-          "registry_load_status",
-          "registry_load_reason",
-          "runtime_test_status",
-          "runtime_test_reason"
-        ],
-        "title": "SirilCommandAssessment"
-      },
       "SoftwareBinding": {
         "additionalProperties": false,
         "properties": {
@@ -34138,6 +34022,47 @@
           "error"
         ],
         "title": "SoftwareCallResult"
+      },
+      "SoftwareCommand": {
+        "properties": {
+          "command": {
+            "type": "string",
+            "title": "Command"
+          },
+          "scriptable": {
+            "type": "boolean",
+            "title": "Scriptable"
+          },
+          "syntax": {
+            "type": "string",
+            "title": "Syntax"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "assessment": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "type": "object",
+            "title": "Assessment"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "command",
+          "scriptable",
+          "syntax",
+          "description",
+          "url"
+        ],
+        "title": "SoftwareCommand"
       },
       "SoftwareInputDefinition": {
         "properties": {

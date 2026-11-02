@@ -8,12 +8,12 @@ from astrophotoflow.contracts.media import MediaSelection
 from astrophotoflow.modules.data.formats.source import PixelSource
 
 
-def read_fits_sample(path: Path, hdu_index: int, max_edge: int | None, checkpoint=lambda: None, *, siril_output=False, colour_layout=None):
+def read_fits_sample(path: Path, hdu_index: int, max_edge: int | None, checkpoint=lambda: None, *, colour_layout=None):
     source = PixelSource(path, "fits", MediaSelection(hdu_index=hdu_index), {'colour_layout': colour_layout}, path.parent,
                          lambda _size: None, checkpoint)
     with source.pixels() as hdu:
-        if siril_output and len(hdu.shape) == 3 and hdu.shape[0] == 3:
-            # Siril writes planar RGB without necessarily adding CTYPE3.
+        if colour_layout == 'planar' and len(hdu.shape) == 3 and hdu.shape[0] == 3:
+            # A declared planar RGB layout may not have CTYPE3.
             # This modifies only the in-memory header, never the original file.
             hdu.header["CTYPE3"] = "RGB"
             height, width = hdu.shape[1:]
@@ -30,7 +30,7 @@ def direct_fits_image(path: Path, hdu_index: int | None, max_edge: int | None, *
         hdu_index = inspect_fits(path, colour_layout=colour_layout)['selected_hdu']
         if hdu_index is None:
             raise ValueError('输出没有可显示的图像HDU。')
-    pixels = read_fits_sample(path, hdu_index, max_edge, siril_output=colour_layout == 'planar', colour_layout=colour_layout)
+    pixels = read_fits_sample(path, hdu_index, max_edge, colour_layout=colour_layout)
     if np.issubdtype(pixels.dtype, np.integer):
         values = pixels.astype(np.float32) / np.iinfo(pixels.dtype).max
     else:

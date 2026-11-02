@@ -9,7 +9,7 @@ import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import type { ComponentWidget } from '@/scripts/domWidget'
 import { LGraph, LGraphNode } from '@/lib/litegraph/src/litegraph'
 import { api } from '@/scripts/api'
-import SirilPreviewWidget from './SirilPreviewWidget.vue'
+import BundlePreviewWidget from './BundlePreviewWidget.vue'
 vi.mock('../useNativeWorkspace')
 
 const service = vi.hoisted(() => ({
@@ -79,7 +79,7 @@ function setup(expand = true) {
   graph.add(node)
   source.connect(0, node, 0)
   const widget = fromPartial<ComponentWidget<string | object>>({ node })
-  const wrapper = render(SirilPreviewWidget, {
+  const wrapper = render(BundlePreviewWidget, {
     props: { widget },
     global: {
       plugins: [PlatformQueryPlugin],

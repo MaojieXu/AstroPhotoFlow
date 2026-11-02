@@ -12,7 +12,7 @@ import { useExtensionStore } from '@/stores/extensionStore'
 import { useNodeDefStore } from '@/stores/nodeDefStore'
 import type { ComfyNodeDefImpl } from '@/stores/nodeDefStore'
 import type { ComfyApp, ComfyExtension } from '@/types/comfy'
-import { attachSirilPreview, configureBundleNode, registerSirilPreviewDisplay } from './sirilPreviewDisplay'
+import { attachBundlePreview, configureBundleNode, registerBundlePreviewDisplay } from './bundlePreviewDisplay'
 
 describe('Siril preview display', () => {
   it('uses native default-title resolution and preserves authored titles', () => {
@@ -63,7 +63,7 @@ describe('Siril preview display', () => {
       reloadNodeDefs: vi.fn().mockResolvedValue(undefined),
       registerExtension: (extension: ComfyExtension) => useExtensionStore().registerExtension(extension)
     })
-    const dispose = registerSirilPreviewDisplay(app)
+    const dispose = registerBundlePreviewDisplay(app)
     onTestFinished(() => {
       dispose?.()
       bundleCapabilities.clear()
@@ -107,12 +107,12 @@ describe('Siril preview display', () => {
     node.addWidget('toggle', 'linked', false, () => {})
     node.addWidget('number', 'shadowsclip', -2.8, () => {})
     node.addWidget('number', 'targetbg', 0.25, () => {})
-    attachSirilPreview(node)
-    attachSirilPreview(node)
-    const preview = node.widgets?.find(widget => widget.name === 'apf_siril_preview')
+    attachBundlePreview(node)
+    attachBundlePreview(node)
+    const preview = node.widgets?.find(widget => widget.name === 'apf_bundle_preview')
     expect(preview && isComponentWidget(preview)).toBe(true)
     expect(preview?.serialize).toBe(false)
     expect(node.serialize().widgets_values).toEqual([false, -2.8, 0.25])
-    expect(node.widgets?.filter(widget => widget.name === 'apf_siril_preview')).toHaveLength(1)
+    expect(node.widgets?.filter(widget => widget.name === 'apf_bundle_preview')).toHaveLength(1)
   })
 })

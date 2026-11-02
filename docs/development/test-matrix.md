@@ -1,5 +1,26 @@
 # 需求、实现与验证矩阵
 
+<a id="file-ownership-map"></a>
+
+### 文件归属与读写关系核对（2026-11-01）
+
+- 按用户限定，只核对平台、前端、MCP／CLI、Bundle的源码、受跟踪生成文件、构建产物、安装副本、workspace和缓存；结论统一维护在[文件归属与读写关系](../architecture/repository-layout.md)，开发入口仅链接，不另建重复清单。
+- 静态核对构建／打包、workspace网页复制、runtime解压和启动参数、配置选择、MCP生命周期与CLI传输、Bundle生成／导出／安装／开发绑定、节点同步、版本缓存、素材／预览缓存与原生浏览器草稿。开发Python实际导入路径为本Worktree的src，editable关联一致。
+- 本轮仅修改上述文档和开发入口链接；此前Siril清理的未提交实现及隔离Bundle保持原样。未启停服务、修改绑定／安装／全局注册、清理缓存或读取令牌；未执行构建、生成或测试套件。相对文件链接、代码依据和文档差异检查结果在`.artifacts/reports/file-ownership`。
+- 本记录证明文件归属说明已按当前代码核对，不证明此前实现已集成、发布，或当前进程／外部MCP已加载最新版本。
+
+<a id="siril-bundle-ownership-cleanup"></a>
+
+### 平台与 Siril Bundle 归属清理（2026-11-02）
+
+- 平台基点`f8c613633148e365839bcc0c1c627a7c42e266ca`，分支`codex/equipment-management-final`；用户已授权整理本地待审提交和回传Brief，准确冻结SHA见最终Brief。不合并、推送或发布。
+- 独立Bundle从干净dev克隆到本Feature的`.artifacts/bundles/AstroPhotoFlow-Siril`，分支`codex/siril-decoupling`，基点`570504cd593d923726ac76b9775a812e371fdc03`。manifest仍为Siril1.4.4／Bundle0.2.0-dev.2，基点没有精确tag；修改为未发布待审内容，准确冻结SHA见最终Brief，不代表现有v0.2.0-dev.2。原Bundle仓库与安装副本未改。
+- 删除平台三个旧Siril参考JSON及旧读取函数。核对确认命令资料与Bundle语义一致；评估资料覆盖同一组199个命令、保留全部评估字段，Bundle版本另有更新后的状态与历史证据。Siril内容验证归Bundle，平台发行检查只核对通用Bundle资源与契约。
+- 命令查询按有效Bundle软件版本读取，公共模型改为SoftwareCommand及通用assessment字典；预览按声明读取端口，Bundle十个live操作及生成器增加output声明。旧不可变目录未重写；未声明output时只允许唯一FITS图像输出，歧义明确失败。
+- 平台样本、缓存及宿主显示改用Bundle命名；输入与输出颜色布局取操作声明，采样缓存身份覆盖操作与参数。旧缓存不复用、不转换；按受管manifest目录保留其清理归属和启动恢复。平台单元测试用独立合成目录；新增非Siril包名／版本／端口、缺失资料、版本冲突、输出缺失、范围保护、取消、原件变化及缓存归属用例。新增／调整的测试均未执行。
+- 已完成：OpenAPI／前端六份契约与97项MCP离线目录生成、UI包类型检查、宿主类型检查及前端构建、Python语法与Bundle声明检查、产品修改及新增测试的Ruff检查。CLI脚本无参数变化，生成后内容不变。MCP生成初次受沙箱asyncio socketpair阻塞，沙箱外同脚本生成成功；未连接业务服务。
+- 未执行：测试套件、独立打包安装、真实Siril处理、浏览器验收、跨版本升级。已有测试文件保留的历史lint不作为本轮通过项。当前服务未重启，运行界面不代表本轮修改已加载。证据、构建日志及两仓库差异见`.artifacts/reports/siril-decoupling`。
+
 <a id="modernization-g7-browser-closure"></a>
 
 ### G7旧浏览器入口收尾及G1—G7重新复核（2026-11-01）
@@ -2209,3 +2230,33 @@ SQLite 旧备份 SHA256 b44fa505c54052ea17e0a6e821cc2bcb17f1988de9ed4c4237126f15
 按用户确认，将开发流程改为三个用户动作：创建 Feature、要求整理交付、确认集成。Manager 完成准备后主动发送开发指令并交接准确 Chat/host 标识；Feature 整理本地待审提交后主动回传完整冻结 Brief，并在原 Feature Chat 展示发送结果。发送失败明确报告，回传不代表集成授权；用户确认后 Manager 才组织审查、必要验证、普通推送、私有空间清理及原 Chat 归档。根 AGENTS 的交接时序改为引用该流程，保留原有隔离和发布边界。
 
 已核对三份用户 Prompt 及 Manager 自动发送模板，AGENTS/开发流程内24个本地文档链接目标存在，Git diff --check通过。本轮仅文档变更，不执行应用构建、测试套件或实际 Chat 派发。
+
+
+<a id="file-ownership-siril-decoupling-integration"></a>
+
+## 文件归属与平台 Siril 残留清理：Manager 集成验证（2026-11-01）
+
+用户已一次授权独立审查、必要测试与最小修复，通过后合并及普通推送两个仓库 dev，再清理本 Feature 私有空间并归档原 Chat。最终范围是源码、生成物、安装副本与缓存归属；原 equipment-management-final 未新增设备功能。
+
+- 平台基点 `f8c613633148e365839bcc0c1c627a7c42e266ca`，原候选 `9c2f7f244febdd99bd957a40d6013b90b59f72fd`。Manager 修复提交 `fe642105a725fda1ce3b7830980c2c374da6cccb` 仅涉及测试：合成参数恢复 [0,1] 边界、示例符合字典契约、预览 mock 保持 metadata 一致，并增加 HTTP→Python 客户端→FastMCP 非 Siril 包名/版本/assessment 保真回归；产品代码未追加修改。
+- Bundle 基点 `570504cd593d923726ac76b9775a812e371fdc03`，原候选 `a6f5ad0f3eafceb44018ac4b99dc7b9f5b9c3786`，生成规范化提交 `7c75f46931a2aa52b86d06e43ab295f8fad850cf`。实际源码绑定将十份 preview JSON 的 output/max_edge 字段顺序对齐生成器，逐份解析比较语义完全一致。未改版本、程序或发布 tag。
+- 两位独立上下文只读 Reviewer 分别审查公共契约/命令来源/打包及预览/缓存/前端/Bundle；原候选均无可确认新增缺陷，测试修复及生成规范化均复审通过。
+
+自动验证：
+
+- 初轮平台软件、数据、应用、客户端及架构 786 项：779 通过、7 失败（新测试夹具问题）；修复后软件模块完整 131 项通过，包含新增跨接口用例。按 JUnit classname/name 合并初轮与最终复测，覆盖该范围 787 项均通过。
+- 补充 HTTP/MCP、打包及 MCP 发现/双语回归：36 通过、1 跳过；合计唯一平台测试 **823 通过、1 跳过，无未解决失败**。跳过的是显式 opt-in 的官方 reload/reconnect 测试，不记为通过。并非一次全项目套件运行。
+- Bundle 最终提交 tests：60 通过。前端命令目录 1 项、原生 BundlePreviewWidget/bundlePreviewDisplay 9 项通过。
+- 固定 bootstrap 完整构建含 UI 包和宿主类型检查通过；定向 Ruff、Git diff --check 通过。无产品代码变更后未重复接口生成。
+- 标准隔离构建本地 wheel，执行 scripts/verify_distribution.py 的 check_wheel：资源完整、网页字节一致、固定引擎校验通过，旧 vendor/siril-*.json 不存在。私有目标目录 --no-deps 安装 wheel 后从该目录导入并查询 199 条通用命令通过；依赖复用本 Feature 开发环境，不冒称全新机器或独立依赖安装验收。首次 no-isolation 构建因 venv 无 setuptools 失败，改用声明后端的标准隔离构建成功，未修改依赖锁。
+
+真实运行观察：
+
+- 构建/服务源码 `fe642105a725fda1ce3b7830980c2c374da6cccb`；构建启动回执 `8a0fa1ccbd5a4d56b2f2f84419dee8e4`，109.875 秒（构建 69.554 秒、启动 31.443 秒）。生成规范化后按固定 stop/start 刷新成功回执 `692fb67a3eaf42a395a1a00c8f310797`，21.134 秒，completed/ready=true，平台及 Bundle dirty=false；Bundle HEAD 为 `7c75f46931a2aa52b86d06e43ab295f8fad850cf`、指纹 `6cbc788a54a1ade971b4ee3727e70607fcc073eadebca969b4442e93c37f3e1c`。重复 start 曾被运行中保护拒绝，随后正确 stop/start，未绕过保护。
+- 本 Feature workspace/runtime 均为 equipment-management-final 私有路径；网页 33588、领域服务 33590。HTTP build-manifest 与上述平台 SHA 一致，浏览器实际显示素材库、空画布和运行控件。只确认页面加载，不等同功能/用户验收。
+- 实际 HTTP 与 AssetClient 查询 199 条命令、assessment 字典及错版本 404 通过；真实 CLI→本 workspace 新 stdio MCP→HTTP 查询 199 条命令通过，未更改全局 MCP。
+- 最后追加的验证文档不改变上述已验证应用源码；最终集成提交与远端 SHA 以 Manager 交付报告为准。
+
+限制与未执行项：未执行真实 Siril 科学处理、十种 live 预览的全部真实交互、全项目浏览器综合验收、sdist 无 Node 重建、全新无缓存安装或跨平台验证；这些不因测试/构建通过而宣称完成。bootstrap 首次 Python 解释器/导入路径问题仍在原 Brief 的已知限制内，本轮用进程级 venv/PYTHONPATH，不扩大修复范围。平台固定发布目录仍指向 v0.2.0-dev.2 / `5d16fb6fc10b4ee57de428d6eba522c918b1b441`，本轮配套开发 Bundle 并非新发布版本。
+
+完整临时日志曾在本 Feature `.artifacts/reports/ownership-*` 与 `.artifacts/logs/dev-prepare`；按本次授权，交付后随私有 workspace/runtime/Worktree 删除，不另行备份。已提交的本条记录和源码继续由 Git 保留。

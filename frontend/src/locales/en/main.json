@@ -293,7 +293,7 @@
       "contentHash": "Content hash",
       "fixedFile": "Fixed file version"
     },
-    "siril": {
+    "bundlePreview": {
       "quickPreview": "Quick preview",
       "connectSource": "Connect a library data node for a live preview.",
       "updating": "Updating preview…"

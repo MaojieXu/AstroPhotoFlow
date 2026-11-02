@@ -5,7 +5,7 @@ from astrophotoflow.client import AssetClient
 from astrophotoflow.contracts.common import UuidInput
 from astrophotoflow.contracts.packages import PendingSoftwareAction, SoftwarePackageDetails
 from astrophotoflow.contracts.software import (
-    SirilCommand,
+    SoftwareCommand,
     SoftwareInstallRequest,
     SoftwarePackage,
     SoftwarePreparation,
@@ -44,7 +44,7 @@ def build_server() -> FastMCP:
         description="Read command reference for an exact software version; this does not execute commands. 软件 命令 参考 文档 版本",
     )
     @service_errors
-    def commands(package_id: str, version: str, *, client: AssetClient = Depends(service_client)) -> list[SirilCommand]:
+    def commands(package_id: str, version: str, *, client: AssetClient = Depends(service_client)) -> list[SoftwareCommand]:
         return client.list_software_commands(package_id, version)
 
     @mcp.tool(

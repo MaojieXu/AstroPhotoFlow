@@ -697,6 +697,10 @@ export type BundlePreview = {
      */
     input: string;
     /**
+     * Output
+     */
+    output?: string | null;
+    /**
      * Max Edge
      */
     max_edge?: 1024;
@@ -5481,103 +5485,6 @@ export type ServiceHealth = {
 };
 
 /**
- * SirilCommand
- */
-export type SirilCommand = {
-    /**
-     * Command
-     */
-    command: string;
-    /**
-     * Scriptable
-     */
-    scriptable: boolean;
-    /**
-     * Syntax
-     */
-    syntax: string;
-    /**
-     * Description
-     */
-    description: string;
-    /**
-     * Url
-     */
-    url: string;
-    assessment: SirilCommandAssessment;
-};
-
-/**
- * SirilCommandAssessment
- */
-export type SirilCommandAssessment = {
-    /**
-     * Parameter Details
-     */
-    parameter_details: string;
-    /**
-     * Structured Parameter Defaults Ranges
-     */
-    structured_parameter_defaults_ranges: string;
-    /**
-     * Single Image Sequence Context
-     */
-    single_image_sequence_context: string;
-    /**
-     * Input Output Semantics
-     */
-    input_output_semantics: string;
-    /**
-     * Headless Status
-     */
-    headless_status: string;
-    /**
-     * Dependencies
-     */
-    dependencies: string;
-    /**
-     * Security Risk
-     */
-    security_risk: string;
-    /**
-     * Semantic Review Status
-     */
-    semantic_review_status: string;
-    /**
-     * Node Definition Status
-     */
-    node_definition_status: string;
-    /**
-     * Node Definition Reason
-     */
-    node_definition_reason: string;
-    /**
-     * Node Generation Status
-     */
-    node_generation_status: string;
-    /**
-     * Node Generation Reason
-     */
-    node_generation_reason: string;
-    /**
-     * Registry Load Status
-     */
-    registry_load_status: string;
-    /**
-     * Registry Load Reason
-     */
-    registry_load_reason: string;
-    /**
-     * Runtime Test Status
-     */
-    runtime_test_status: string;
-    /**
-     * Runtime Test Reason
-     */
-    runtime_test_reason: string;
-};
-
-/**
  * SoftwareBinding
  */
 export type SoftwareBinding = {
@@ -5680,6 +5587,38 @@ export type SoftwareCallResult = {
     preview_error: string | null;
     observation: SoftwareObservation | null;
     error: ErrorDetail | null;
+};
+
+/**
+ * SoftwareCommand
+ */
+export type SoftwareCommand = {
+    /**
+     * Command
+     */
+    command: string;
+    /**
+     * Scriptable
+     */
+    scriptable: boolean;
+    /**
+     * Syntax
+     */
+    syntax: string;
+    /**
+     * Description
+     */
+    description: string;
+    /**
+     * Url
+     */
+    url: string;
+    /**
+     * Assessment
+     */
+    assessment?: {
+        [key: string]: JsonValue;
+    };
 };
 
 /**
@@ -16555,7 +16494,7 @@ export type GetSoftwareCommandsApiV1SoftwarePackagesPackageIdVersionsVersionComm
      *
      * Successful Response
      */
-    200: Array<SirilCommand>;
+    200: Array<SoftwareCommand>;
 };
 
 export type GetSoftwareCommandsApiV1SoftwarePackagesPackageIdVersionsVersionCommandsGetResponse = GetSoftwareCommandsApiV1SoftwarePackagesPackageIdVersionsVersionCommandsGetResponses[keyof GetSoftwareCommandsApiV1SoftwarePackagesPackageIdVersionsVersionCommandsGetResponses];

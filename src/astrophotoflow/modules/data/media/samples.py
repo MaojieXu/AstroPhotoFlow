@@ -20,7 +20,7 @@ from astrophotoflow.modules.data.media.references import library_preview_version
 from .rendering import read_fits_sample
 
 
-class SirilSample:
+class BundleSample:
     def __init__(self, database: Database, row_id: str, folder: Path, path: Path, guard: AbstractContextManager):
         self.database, self.row_id, self.folder, self.path, self.guard = database, row_id, folder, path, guard
 
@@ -34,7 +34,7 @@ class SirilSample:
             self.guard.__exit__(None, None, None)
 
 
-def prepare_siril_sample(database, settings, cache, body, check_cancel, decoder_key='', colour_layout=None) -> SirilSample:
+def prepare_bundle_sample(database, settings, cache, body, check_cancel, decoder_key='', colour_layout=None) -> BundleSample:
     item = inspect_canvas_data(database, CanvasInspectRequest(reference=body.reference, member_index=body.member_index))
     with database.write_session() as session:
         version = session.get(AssetVersion, library_preview_version(session, str(item.asset_id), str(item.asset_version_id)))
@@ -54,13 +54,13 @@ def prepare_siril_sample(database, settings, cache, body, check_cancel, decoder_
             raise ApiError(422, "UNSUPPORTED_SELECTION", "该实时样本预览使用默认图像HDU，不支持任意HDU选择。", message_key='this_live_sample_preview_uses_the_default_image_hdu_arbitrary_hdu_selection')
         identity = json.dumps([str(item.asset_version_id), version.content_hash, stamp.st_size, stamp.st_mtime_ns, str(body.consumer_id), hdu, decoder_key, body.preview_max_edge])
         key = hashlib.sha256(identity.encode()).hexdigest()[:40]
-        algorithm = "siril-live-1:" + key
+        algorithm = "bundle-sample-1:" + key
         folder = settings.data_dir / "previews" / str(item.asset_version_id) / "media" / key
         row = session.scalar(select(Preview).where(Preview.asset_version_id == str(item.asset_version_id),
-            Preview.hdu_index == hdu, Preview.size == "siril-live", Preview.algorithm_version == algorithm))
+            Preview.hdu_index == hdu, Preview.size == "bundle-sample", Preview.algorithm_version == algorithm))
         if row is None:
             row = Preview(id=str(uuid4()), asset_version_id=str(item.asset_version_id), hdu_index=hdu,
-                size="siril-live", algorithm_version=algorithm, width=0, height=0, mime_type="application/json",
+                size="bundle-sample", algorithm_version=algorithm, width=0, height=0, mime_type="application/json",
                 storage_path=(folder / "manifest.json").relative_to(settings.data_dir).as_posix(),
                 display_parameters={"source_stamp": [stamp.st_size, stamp.st_mtime_ns]}, status="generating")
             session.add(row)
@@ -69,16 +69,22 @@ def prepare_siril_sample(database, settings, cache, body, check_cancel, decoder_
         row_id = row.id
     guard = cache.hold(folder)
     guard.__enter__()
-    sample = SirilSample(database, row_id, folder, folder / "linear.fit", guard)
+    sample = BundleSample(database, row_id, folder, folder / "sample.fit", guard)
     try:
+        manifest_path = folder / "manifest.json"
+        if manifest_path.is_file():
+            cached = (folder / json.loads(manifest_path.read_text(encoding='utf-8'))['input']).resolve()
+            if not cached.is_relative_to(folder.resolve()):
+                raise ValueError('Cached sample escapes preview directory.')
+            sample.path = cached
         check_cancel()
         cache.reserve(64 * 1024**2)
         if not sample.path.is_file():
             folder.mkdir(parents=True, exist_ok=True)
             if category != "fits":
-                # Siril decodes the original and prepares a reusable sample.
+                # The Bundle decodes the original and prepares a reusable sample.
                 sample.path = path
-                (folder / "manifest.json").write_text(json.dumps({"input": "linear.fit", "output": "result.png"}), encoding="utf-8")
+                (folder / "manifest.json").write_text(json.dumps({"input": "sample.fit", "output": "result.png"}), encoding="utf-8")
                 return sample
             pixels = read_fits_sample(path, hdu, body.preview_max_edge, check_cancel, colour_layout=colour_layout)
             header = fits.Header()
@@ -95,7 +101,7 @@ def prepare_siril_sample(database, settings, cache, body, check_cancel, decoder_
                 temporary.replace(sample.path)
             finally:
                 temporary.unlink(missing_ok=True)
-        (folder / "manifest.json").write_text(json.dumps({"input": "linear.fit", "output": "result.png"}), encoding="utf-8")
+        (folder / "manifest.json").write_text(json.dumps({"input": sample.path.name, "output": "result.png"}), encoding="utf-8")
         return sample
     except BaseException as exc:
         sample.close(exc)

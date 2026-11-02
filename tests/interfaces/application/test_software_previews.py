@@ -8,7 +8,7 @@ import pytest
 
 from astrophotoflow.contracts.software import BundlePreviewRequest
 from astrophotoflow.core.errors import ApiError
-from astrophotoflow.interfaces.application import software_previews as siril_preview
+from astrophotoflow.interfaces.application import software_previews as bundle_preview
 
 
 def test_live_preview_cancels_old_generation_and_releases_samples(tmp_path, monkeypatch):
@@ -30,18 +30,19 @@ def test_live_preview_cancels_old_generation_and_releases_samples(tmp_path, monk
             await asyncio.Event().wait()
         return directory / "result.fit"
 
-    monkeypatch.setattr(siril_preview, "prepare_siril_sample", sample)
-    monkeypatch.setattr(siril_preview, 'get_package', lambda *_args: SimpleNamespace(effective_version='1.4.4', effective_bundle_commit='fixture', development_source=None))
-    monkeypatch.setattr(siril_preview, 'get_operation', lambda *_args: SimpleNamespace(inputs=[SimpleNamespace(name='image', colour_layout='planar')]))
-    monkeypatch.setattr(siril_preview, "preview_operation", run)
-    monkeypatch.setattr(siril_preview, "direct_fits_image", lambda *_args, **_kwargs: Image.new("RGB", (12, 9), "blue"))
+    monkeypatch.setattr(bundle_preview, "prepare_bundle_sample", sample)
+    monkeypatch.setattr(bundle_preview, 'get_package', lambda *_args: SimpleNamespace(effective_version='1.4.4', effective_bundle_commit='fixture', development_source=None))
+    monkeypatch.setattr(bundle_preview, 'get_preview_definition', lambda *_args: SimpleNamespace(input='image', output='image'))
+    monkeypatch.setattr(bundle_preview, 'get_operation', lambda *_args: SimpleNamespace(inputs=[SimpleNamespace(name='image', colour_layout='planar')], outputs=[SimpleNamespace(name='image', colour_layout='planar')], content_token='fixture'))
+    monkeypatch.setattr(bundle_preview, "preview_operation", run)
+    monkeypatch.setattr(bundle_preview, "direct_fits_image", lambda *_args, **_kwargs: Image.new("RGB", (12, 9), "blue"))
 
     class Cache:
         def write(self, path, content):
             path.write_bytes(content)
 
     async def scenario(executor):
-        manager = siril_preview.BundlePreviews(None, SimpleNamespace(preview_workers=1), executor, Cache())
+        manager = bundle_preview.BundlePreviews(None, SimpleNamespace(preview_workers=1), executor, Cache())
         first = asyncio.create_task(manager.render(body))
         await first_started.wait()
         newer = body.model_copy(update={"generation": 2, "parameters": {"linked":True,"shadowsclip":0,"targetbg":0.25}})
@@ -67,8 +68,8 @@ def test_preview_http_is_authenticated_and_does_not_accept_source_paths(tmp_path
 
     settings = Settings("127.0.0.1", 8190, tmp_path, (), workspace=tmp_path)
     app = create_app(settings, "token")
-    monkeypatch.setattr(siril_preview, "get_package", lambda *_args: SimpleNamespace(effective_availability="ready"))
-    monkeypatch.setattr(siril_preview, "validate_parameters", lambda *_args: None)
+    monkeypatch.setattr(bundle_preview, "get_package", lambda *_args: SimpleNamespace(effective_availability="ready"))
+    monkeypatch.setattr(bundle_preview, "validate_parameters", lambda *_args: None)
 
     async def render(_body):
         return b"\x89PNGpreview"

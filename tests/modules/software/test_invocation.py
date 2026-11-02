@@ -303,8 +303,8 @@ def test_non_fits_preview_uses_siril_decoder_and_reuses_unstretched_sample(confi
     parameters = SimpleNamespace(linked=True, shadowsclip=-2.8, targetbg=0.25)
     asyncio.run(public.preview_operation(configured, source, folder / str(uuid4()), vars(parameters), package_id="siril", operation_id="autostretch", prepare_sample=True))
     assert "linear.fit" in scripts[0]
-    assert (folder / "linear.fit").is_file()
-    asyncio.run(public.preview_operation(configured, folder / "linear.fit", folder / str(uuid4()), vars(parameters), package_id="siril", operation_id="autostretch"))
+    assert (folder / "sample.fit").is_file()
+    asyncio.run(public.preview_operation(configured, folder / "sample.fit", folder / str(uuid4()), vars(parameters), package_id="siril", operation_id="autostretch"))
     assert scripts[1].count('save "') == 1
     assert source.read_bytes() == b"original image fixture"
 
