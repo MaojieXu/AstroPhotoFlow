@@ -1,10 +1,12 @@
+from astrophotoflow.modules.data.formats import pixels as codec_formats_pixels
 from pathlib import Path
 
 import numpy as np
 import pytest
 from astropy.io import fits
 
-from astrophotoflow.modules.data.fits_preview import create_preview, inspect_fits
+from astrophotoflow.modules.data.formats.fits import create_preview
+from astrophotoflow.modules.data.formats.fits import inspect_fits
 
 
 def test_bayer_manual_cfa_and_display_presets_do_not_upscale(tmp_path):
@@ -142,7 +144,9 @@ def test_manual_cfa_choice_overrides_conflicting_fits_header(tmp_path):
 @pytest.mark.parametrize("layout", ["float", "uint16", "scaled", "bayer", "planar", "interleaved", "compressed"])
 def test_sampled_rows_match_previous_scalar_section_samples_and_preview(tmp_path, layout):
     from PIL import Image
-    from astrophotoflow.modules.data.fits_preview import _bayer_demosaic, _display, stretch_bounds
+    from astrophotoflow.modules.data.formats.layout import bayer_demosaic
+    from astrophotoflow.modules.data.formats.pixels import display_pixels
+    from astrophotoflow.modules.data.formats.pixels import stretch_bounds
     path = tmp_path / f"{layout}.fits"
     values = np.arange(99 * 148, dtype=np.float32).reshape(99, 148) / 100
     kind, parameters = "mono", {}
@@ -187,9 +191,9 @@ def test_sampled_rows_match_previous_scalar_section_samples_and_preview(tmp_path
         else:
             sample = np.asarray(source.section[::stride, ::stride], dtype=np.float32)
         if kind == "bayer":
-            sample = _bayer_demosaic(sample, "RGGB", 1, 1, stride)
+            sample = bayer_demosaic(sample, "RGGB", 1, 1, stride)
     low, high = stretch_bounds(sample)
-    expected = _display(sample, (low, high))
+    expected = display_pixels(sample, (low, high))
     expected.thumbnail((31, 31), Image.Resampling.LANCZOS)
     actual, display = create_preview(path, index, kind, parameters, 31)
     assert actual.size == expected.size
@@ -220,8 +224,9 @@ def test_sampled_rows_avoid_per_pixel_fits_reads(tmp_path, monkeypatch):
 
 @pytest.mark.parametrize("color", [False, True])
 def test_percentile_statistics_are_bounded_and_keep_finite_zero_samples(color, monkeypatch):
-    from astrophotoflow.modules.data.fits_preview import stretch_bounds
-    from astrophotoflow.modules.data.auto_stretch import STATISTICS_SAMPLES, sample_statistics
+    from astrophotoflow.modules.data.formats.pixels import stretch_bounds
+    from astrophotoflow.modules.data.formats.pixels import STATISTICS_SAMPLES
+    from astrophotoflow.modules.data.formats.pixels import sample_statistics
 
     pixels = np.arange(1025 * 777, dtype=np.float64).reshape(1025, 777)
     if color:
@@ -247,8 +252,9 @@ def test_percentile_statistics_are_bounded_and_keep_finite_zero_samples(color, m
 
 @pytest.mark.parametrize("layout", ["mono", "uint16", "scaled", "planar", "interleaved", "compressed"])
 def test_fits_statistics_sample_original_spatial_strata_with_row_reads(tmp_path, monkeypatch, layout):
-    from astrophotoflow.modules.data.auto_stretch import sample_statistics, statistics_indices
-    from astrophotoflow.modules.data.fits_preview import read_stretch_pixels
+    from astrophotoflow.modules.data.formats.pixels import sample_statistics
+    from astrophotoflow.modules.data.formats.pixels import statistics_indices
+    from astrophotoflow.modules.data.formats.fits import read_stretch_pixels
 
     values = np.arange(1025 * 777, dtype=np.float32).reshape(1025, 777) / 100
     kind = "mono"
@@ -290,8 +296,8 @@ def test_fits_statistics_sample_original_spatial_strata_with_row_reads(tmp_path,
 
 @pytest.mark.parametrize("pattern", ["RGGB", "BGGR", "GRBG", "GBRG"])
 def test_bayer_statistics_keep_rgb_cells_and_offsets_together(tmp_path, pattern):
-    from astrophotoflow.modules.data.auto_stretch import sample_statistics
-    from astrophotoflow.modules.data.fits_preview import read_stretch_pixels
+    from astrophotoflow.modules.data.formats.pixels import sample_statistics
+    from astrophotoflow.modules.data.formats.fits import read_stretch_pixels
 
     values = np.arange(600 * 800, dtype=np.float32).reshape(600, 800)
     mosaic = np.empty((1200, 1600), dtype=np.float32)

@@ -1,7 +1,7 @@
 import {flushPromises,mount} from '@vue/test-utils'
 import {describe,expect,it,vi} from 'vitest'
 import {nextTick} from 'vue'
-import InlineField from '@ui/modules/data/workspace/InlineField.vue'
+import InlineField from '@ui/modules/data/components/InlineField.vue'
 
 async function doubleClick(wrapper:ReturnType<typeof mount>){
   const button=wrapper.get('button').element

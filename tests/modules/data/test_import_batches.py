@@ -1,3 +1,5 @@
+import astrophotoflow.modules.data.imports.stages as owner_stages
+import astrophotoflow.modules.data.imports.enumeration as owner_enumeration
 from uuid import uuid4
 
 import numpy as np
@@ -9,7 +11,8 @@ from sqlalchemy import func, select
 from astrophotoflow.core.config import Settings
 from astrophotoflow.core.database.schema import database_lock, upgrade_database
 from astrophotoflow.interfaces.http.app import create_app
-from astrophotoflow.modules.data.models import Asset, AssetTask, AssetTaskItem
+from astrophotoflow.modules.data.assets.models import Asset
+from astrophotoflow.modules.data.imports.models import AssetTask
 
 AUTH = {'Authorization': 'Bearer test-token'}
 
@@ -24,7 +27,6 @@ def environment(tmp_path):
     source.mkdir()
     with TestClient(app) as client:
         yield source, client, app.state.database
-    app.state.database.close()
 
 
 def write_fits(path, *, target='M31', frame='Light Frame', filt='L'):
@@ -156,7 +158,7 @@ def test_wait_bounds_interrupted_tasks_and_manifest_survives_reopening(environme
 
 
 def test_project_conflict_retries_linking_without_ingesting_again(environment, monkeypatch):
-    from astrophotoflow.modules.data import import_batches
+    from astrophotoflow.modules.data.imports import batches as import_batches
     source, client, db = environment
     write_fits(source / 'one.fits')
     scan = inspect(client, source)
@@ -181,12 +183,12 @@ def test_project_conflict_retries_linking_without_ingesting_again(environment, m
 
 
 def test_aggregate_wait_cancel_and_resume_preserve_accepted_batch(environment, monkeypatch):
-    from astrophotoflow.modules.data import imports
+    import astrophotoflow.modules.data.public as imports
     source, client, db = environment
     write_fits(source / 'one.fits')
     scan = inspect(client, source)
-    process = imports.process_task
-    monkeypatch.setattr(imports, 'process_task', lambda *args: None)
+    process = imports.run_import_task
+    monkeypatch.setattr("astrophotoflow.modules.data.public.run_import_task", lambda *args: None)
     body = submission(scan)
     accepted = client.post('/api/v1/import-batches', headers=AUTH, json=body).json()
     task_id = accepted['groups'][0]['task_id']
@@ -199,7 +201,7 @@ def test_aggregate_wait_cancel_and_resume_preserve_accepted_batch(environment, m
     assert client.post(f'/api/v1/asset-tasks/{task_id}/resume', headers=AUTH).status_code == 409
     with db.write_session() as session:
         session.get(AssetTask, task_id).status = 'interrupted'
-    monkeypatch.setattr(imports, 'process_task', process)
+    monkeypatch.setattr("astrophotoflow.modules.data.public.run_import_task", process)
     assert client.post(f'/api/v1/asset-tasks/{task_id}/resume', headers=AUTH).status_code == 202
     completed = client.get(f"/api/v1/import-batches/{body['request_id']}", headers=AUTH).json()
     assert completed['state'] == 'completed' and completed['groups'][0]['task_id'] == task_id
@@ -219,7 +221,7 @@ def test_large_inspection_summary_does_not_expand_all_members(environment):
 
 @pytest.mark.parametrize('archive', [False, True])
 def test_project_link_retry_preserves_published_members_or_reports_archive_failure(environment, monkeypatch, archive):
-    from astrophotoflow.modules.data import import_batches
+    from astrophotoflow.modules.data.imports import batches as import_batches
     source, client, db = environment
     write_fits(source / 'one.fits')
     write_fits(source / 'two.fits')
@@ -262,26 +264,25 @@ def test_project_link_retry_preserves_published_members_or_reports_archive_failu
 
 
 def test_retry_of_first_failed_member_links_actual_published_order(environment, monkeypatch):
-    from astrophotoflow.modules.data import ingestion
     source, client, db = environment
     write_fits(source / 'a.fits')
     write_fits(source / 'b.fits')
     scan = inspect(client, source)
     project = client.post('/api/v1/projects', headers=AUTH, json={'name': 'Recovery'}).json()
-    original = ingestion._source_item
+    original = owner_enumeration.register_source_item
     def fail_first(database, task_id, entry, position, known, **kwargs):
         if Path(entry['path']).name == 'a.fits':
             entry = {**entry, 'error': {'code': 'SOURCE_UNAVAILABLE', 'message': 'Transient registration failure'}}
         original(database, task_id, entry, position, known, **kwargs)
     from pathlib import Path
-    monkeypatch.setattr(ingestion, '_source_item', fail_first)
+    monkeypatch.setattr(owner_enumeration, 'register_source_item', fail_first)
     body = submission(scan, project_id=project['id'], project_revision=project['revision'])
     response = client.post('/api/v1/import-batches', headers=AUTH, json=body)
     assert response.status_code == 202, response.text
     root_id = response.json()['groups'][0]['task_id']
     task = client.get(f'/api/v1/asset-tasks/{root_id}', headers=AUTH).json()
     failed = next(item for item in task['items'] if Path(item['source_path']).name == 'a.fits')
-    monkeypatch.setattr(ingestion, '_source_item', original)
+    monkeypatch.setattr(owner_enumeration, 'register_source_item', original)
     retried = client.post(f'/api/v1/asset-tasks/{root_id}/retry', headers=AUTH, json={'item_ids': [failed['id']]})
     assert retried.status_code == 202, retried.text
     retry_id = retried.json()['task_id']

@@ -1,3 +1,5 @@
+from astrophotoflow.modules.data.formats import pixels as codec_formats_pixels
+from astrophotoflow.modules.data.formats import fits as codec_formats_fits
 import hashlib
 
 import numpy as np
@@ -7,7 +9,8 @@ from PIL import Image
 
 from astrophotoflow.core.config import Settings
 from astrophotoflow.modules.data.public import check_output, render_output_preview
-from astrophotoflow.modules.data.siril_preview import fits_sample, direct_fits_image
+from astrophotoflow.modules.data.media.rendering import read_fits_sample
+from astrophotoflow.modules.data.media.rendering import direct_fits_image
 
 
 @pytest.mark.parametrize("dtype", [np.float32, np.uint16])
@@ -26,13 +29,13 @@ def test_linear_sample_retains_rgb_channels_and_odd_dimensions(tmp_path):
     path = tmp_path / "rgb.fit"
     data = np.arange(3 * 33 * 51, dtype=np.float32).reshape(3, 33, 51) / 6000
     fits.writeto(path, data, fits.Header({"CTYPE3": "RGB"}))
-    sample = fits_sample(path, 0, 17)
+    sample = read_fits_sample(path, 0, 17)
     np.testing.assert_array_equal(sample, np.moveaxis(data[:, ::3, ::3], 0, -1))
     assert max(sample.shape[:2]) <= 17
 
 
 def test_formal_siril_result_uses_direct_output_values(tmp_path, monkeypatch):
-    from astrophotoflow.modules.data import fits_preview
+
 
     path = tmp_path / "output.fit"
     fits.writeto(path, np.full((15, 17), 0.3, dtype=np.float32))
@@ -42,7 +45,7 @@ def test_formal_siril_result_uses_direct_output_values(tmp_path, monkeypatch):
     def forbidden(*_args, **_kwargs):
         pytest.fail("A processed Siril result must not be automatically stretched again")
 
-    monkeypatch.setattr(fits_preview, "calculate_stretch", forbidden)
+    monkeypatch.setattr(codec_formats_fits, "calculate_stretch", forbidden)
     target = tmp_path / "preview.jpg"
     render_output_preview(checked, target, max_edge=1024, auto_stretch=False)
     assert abs(float(np.asarray(Image.open(target)).mean()) - 76) <= 2

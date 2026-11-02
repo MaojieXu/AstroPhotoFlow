@@ -303,7 +303,7 @@ FR-01／02／07～11、AT-06～11／14～18／24；S3 最小项目编排与测�
 | UI包`modules/software/SoftwarePanel.vue`、`modules/nodes/NodeEditor.vue`、`modules/workflows/WorkflowPanel.vue` | B32已有软件计划／状态／确认面板；NodeEditor及项目图／运行／预览／结果保存界面待后续Batch，GraphView继续原生 |
 | UI包各模块`api/contracts.ts`、`api/client.ts`、`index.ts`及包根`src/index.ts` | data／software入口及core共用客户端已有，nodes／workflows领域入口仍拟新增；各模块保存自身Zod产品DTO和具名客户端，根只公开实际消费者所需导出。FetchApi声明／共用请求代码归core/client.ts，data原入口直接重导出保留既有消费；原生JSON只校验对象，不复制其schema |
 | UI包已有`modules/data/workspace/Workspace.vue`及设备表单 | 选定引用／拖入走公开宿主接缝；单像元输入明确写x/y，未修改则保留；不要求位深／赤道仪／配件，不删既有字段／类型 |
-| `frontend/src/platform/astrophotoflow/workflowBridge.ts`、`NativeShell.vue` | 前者已有B32的confirmSoftware软件确认回调，⑤图编辑／控制／运行桥接仍待实现；后者挂载原生GraphView并按路由选择素材／软件侧栏；可用原生Store／画布，业务UI不可反向导入 |
+| `frontend/src/platform/astrophotoflow/software/confirmation.ts`、`NativeShell.vue` | 前者已有B32的confirmSoftware软件确认回调，⑤图编辑／控制／运行桥接仍待实现；后者挂载原生GraphView并按路由选择素材／软件侧栏；可用原生Store／画布，业务UI不可反向导入 |
 | `frontend/src/scripts/{api,app,changeTracker}.ts`、原生`workflowService.ts/workflowStore.ts` | 已有，实际文件／编辑／提交／事件钩子详见第14、15节 |
 
 B13共用ApiClientError已包含fields／code／requestId；后续客户端直接复用，不复制多套JSON／错误／图像请求处理。部分编辑事实仍由业务DTO保存。UI只显示事实或提交明确操作，不新起应用；双解释器适配的依赖隔离见第15节。
@@ -1196,8 +1196,8 @@ sequenceDiagram
 | `engine/ComfyUI/app/user_manager.py`（已有） | 托管图实际写／移动／删除前调用文件 guard，完成后回传事实；原生其余 userdata 行为保留 |
 | `engine/ComfyUI/execution.py`（已有） | 仅增加一个私有执行 token 的原生敏感数据／hidden 输入交接；图执行、缓存、UI 输出仍归原生 |
 | `src/astrophotoflow/interfaces/http/app.py`（已有） | 领域组合根：构造具体 HTTP 客户端，将有限适配函数绑定实际地址和认证后交⑤，装配领域内部回传路由、生命周期和维护检查 |
-| `frontend/src/platform/astrophotoflow/workflowBridge.ts`（拟新增） | 宿主组合：当前原生图、原生 Store、ChangeTracker、原生转换、WS 命令处理、文件请求钩子、交给 Agent 按钮及人工运行入口 |
-| `frontend/src/platform/astrophotoflow/NativeShell.vue`（已有） | 安装／卸载该宿主桥接；继续挂载原生 GraphView |
+| `frontend/src/platform/astrophotoflow/software/confirmation.ts`（拟新增） | 宿主组合：当前原生图、原生 Store、ChangeTracker、原生转换、WS 命令处理、文件请求钩子、交给 Agent 按钮及人工运行入口 |
+| `frontend/src/platform/astrophotoflow/sidebar/NativeShell.vue`（已有） | 安装／卸载该宿主桥接；继续挂载原生 GraphView |
 | `frontend/src/scripts/api.ts`（已有） | 注册 `apf.*` 事件类型和有限 userdata 前后钩子；复用现有 socket／HTTP，不建立第二连接 |
 | `frontend/src/scripts/app.ts`、原生 `workflowService.ts`、`changeTracker.ts`（已有） | 在实际队列入口、文件操作结果和原生编辑事务处接薄钩子，继续使用原有编辑／保存／撤销能力 |
 

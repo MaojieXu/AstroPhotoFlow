@@ -1,7 +1,7 @@
 import {flushPromises,mount} from '@vue/test-utils'
 import {describe,expect,it,vi} from 'vitest'
 import {nextTick} from 'vue'
-import InlineMultiSelect from '@ui/modules/data/workspace/InlineMultiSelect.vue'
+import InlineMultiSelect from '@ui/modules/data/components/InlineMultiSelect.vue'
 
 async function open(wrapper:ReturnType<typeof mount>){
   const button=wrapper.get('button').element

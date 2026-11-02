@@ -1,6 +1,7 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
 import { ref } from 'vue'
+import { focusManager } from '@tanstack/vue-query'
 
 import SoftwarePanel from '@ui/modules/software/SoftwarePanel.vue'
 import { ApiClientError } from '@ui/core/client'
@@ -39,7 +40,6 @@ const pending: PendingSoftwareAction = {
     restart_required: null,
     restart_reason: 'B42 verification pending',
     node_changes: [],
-    workflow_impacts: []
   },
   confirmation_url: 'http://127.0.0.1:8188/#/workflows?apf_panel=software',
   error: null
@@ -74,7 +74,7 @@ describe('SoftwarePanel', () => {
       bundle_version: '0.2.0-dev.2', bundle_commit: 'c'.repeat(40), development_source: source }
     const apiClient = client({ listPackages: vi.fn().mockResolvedValue([installed]),
       getPackage: vi.fn().mockResolvedValue({ ...details, package: installed }) })
-    const wrapper = mount(SoftwarePanel, { props: { client: apiClient, confirmSoftware: vi.fn(), confirmationAvailable: true, translate, refreshKey: 0 } })
+    const wrapper = mount(SoftwarePanel, { props: { workspaceId: '/test-workspace', client: apiClient, confirmSoftware: vi.fn(), confirmationAvailable: true, translate, refreshKey: 0 } })
     await flushPromises()
     expect(wrapper.get('[data-testid="development-source"]').text()).toContain('C:/feature/Siril')
     expect(wrapper.get('[data-testid="development-source"]').text()).toContain(source.fingerprint)
@@ -91,11 +91,11 @@ describe('SoftwarePanel', () => {
     const other = { ...packageInfo, package_id: 'other', name: 'Other Bundle' }
     const apiClient = client({ listPackages: vi.fn().mockResolvedValue([packageInfo, other]),
       getPackage: vi.fn().mockImplementation(id => Promise.resolve({ ...details, package: id === 'siril' ? packageInfo : other })) })
-    const wrapper = mount(SoftwarePanel, { props: { client: apiClient, confirmSoftware: vi.fn(), confirmationAvailable: true, translate } })
+    const wrapper = mount(SoftwarePanel, { props: { workspaceId: '/test-workspace', client: apiClient, confirmSoftware: vi.fn(), confirmationAvailable: true, translate } })
     await flushPromises()
     expect(wrapper.findAll('[data-testid="software-package-row"]')).toHaveLength(2)
-    expect(apiClient.listReleases).toHaveBeenCalledWith('siril')
-    expect(apiClient.listReleases).toHaveBeenCalledWith('other')
+    expect(apiClient.listReleases).toHaveBeenCalledWith('siril', expect.any(AbortSignal))
+    expect(apiClient.listReleases).toHaveBeenCalledWith('other', expect.any(AbortSignal))
     wrapper.unmount()
   })
 
@@ -103,7 +103,7 @@ describe('SoftwarePanel', () => {
     const incompatible = { ...release, bundle_version: '2.0.0', channel: 'stable' as const, tag: 'v2.0.0', commit: 'b'.repeat(40), compatible: false, reason_code: 'unsupported_sdk' as const, reason_parameters: { required: '3' }, release_token: null }
     const stable = { ...release, bundle_version: '1.0.0', channel: 'stable' as const, tag: 'v1.0.0', commit: 'c'.repeat(40), is_latest: false }
     const apiClient = client({ listReleases: vi.fn().mockResolvedValue({ ...releaseList, releases: [incompatible, release, stable] }) })
-    const wrapper = mount(SoftwarePanel, { props: { client: apiClient, confirmSoftware: vi.fn(), confirmationAvailable: true, translate } })
+    const wrapper = mount(SoftwarePanel, { props: { workspaceId: '/test-workspace', client: apiClient, confirmSoftware: vi.fn(), confirmationAvailable: true, translate } })
     await flushPromises()
     expect(wrapper.get('select').element.value).toBe(stable.tag + '@' + stable.commit)
     expect(wrapper.findAll('option').find(option => option.attributes('value') === incompatible.tag + '@' + incompatible.commit)?.attributes('disabled')).toBeDefined()
@@ -117,7 +117,7 @@ describe('SoftwarePanel', () => {
     const newer = { ...release, tag: 'v0.3.0-dev.1', bundle_version: '0.3.0-dev.1', commit: 'c'.repeat(40) }
     const apiClient = client({ listReleases: vi.fn().mockResolvedValueOnce({ ...releaseList, releases: [release, older] })
       .mockResolvedValueOnce({ ...releaseList, releases: [newer, release, older] }) })
-    const wrapper = mount(SoftwarePanel, { props: { client: apiClient, confirmSoftware: vi.fn(), confirmationAvailable: true, translate: key => language.value + ':' + key } })
+    const wrapper = mount(SoftwarePanel, { props: { workspaceId: '/test-workspace', client: apiClient, confirmSoftware: vi.fn(), confirmationAvailable: true, translate: key => language.value + ':' + key } })
     await flushPromises()
     const chosen = older.tag + '@' + older.commit
     await wrapper.get('select').setValue(chosen)
@@ -136,7 +136,7 @@ describe('SoftwarePanel', () => {
   it('retains installed controls when version discovery fails', async () => {
     const apiClient = client({ getPackage: vi.fn().mockResolvedValue({ ...details, package: { ...packageInfo, installed_version: '1.4.4', bundle_version: '0.1.2-dev.1', bundle_commit: 'b'.repeat(40), availability: 'ready' } }),
       listReleases: vi.fn().mockResolvedValue({ ...releaseList, stale: true, error: { code: 'RELEASE_CHECK_FAILED', message: 'Network', fields: [] } }) })
-    const wrapper = mount(SoftwarePanel, { props: { client: apiClient, confirmSoftware: vi.fn(), confirmationAvailable: true, translate } })
+    const wrapper = mount(SoftwarePanel, { props: { workspaceId: '/test-workspace', client: apiClient, confirmSoftware: vi.fn(), confirmationAvailable: true, translate } })
     await flushPromises()
     expect(wrapper.get('select').element.value).toBe('__installed__')
     expect(wrapper.get('[data-testid="request-uninstall"]').attributes('disabled')).toBeUndefined()
@@ -147,7 +147,7 @@ describe('SoftwarePanel', () => {
   it('creates a new plan when selection differs from the pending target', async () => {
     const oldPlan = { ...pending, plan: { ...pending.plan, target_bundle_version: '0.1.2-dev.1', target_commit: 'b'.repeat(40) } }
     const apiClient = client({ getPackage: vi.fn().mockResolvedValue({ ...details, current_action: oldPlan }) })
-    const wrapper = mount(SoftwarePanel, { props: { client: apiClient, confirmSoftware: vi.fn(), confirmationAvailable: true, translate } })
+    const wrapper = mount(SoftwarePanel, { props: { workspaceId: '/test-workspace', client: apiClient, confirmSoftware: vi.fn(), confirmationAvailable: true, translate } })
     await flushPromises()
     await wrapper.get('[data-testid="software-plan"]').trigger('close')
     await wrapper.get('[data-testid="request-install"]').trigger('click')
@@ -163,7 +163,7 @@ describe('SoftwarePanel', () => {
       current_action: { ...pending, state: 'failed', error }
     }) })
     const confirmSoftware = vi.fn()
-    const wrapper = mount(SoftwarePanel, { props: { client: apiClient, confirmSoftware, confirmationAvailable: true, translate } })
+    const wrapper = mount(SoftwarePanel, { props: { workspaceId: '/test-workspace', client: apiClient, confirmSoftware, confirmationAvailable: true, translate } })
     await flushPromises()
     expect(wrapper.get('[role="alert"]').text()).toContain(error.message)
     expect(wrapper.get('[data-testid="software-status"]').classes()).not.toContain('bg-success-background')
@@ -180,7 +180,7 @@ describe('SoftwarePanel', () => {
       package: { ...packageInfo, phase: 'downloading', progress: 0.42 },
       current_action: { ...pending, state: 'running' }
     }) })
-    const wrapper = mount(SoftwarePanel, { props: { client: apiClient, confirmSoftware: vi.fn(), confirmationAvailable: true, translate } })
+    const wrapper = mount(SoftwarePanel, { props: { workspaceId: '/test-workspace', client: apiClient, confirmSoftware: vi.fn(), confirmationAvailable: true, translate } })
     await flushPromises()
     expect(wrapper.text()).toContain('42%')
     expect(wrapper.text()).toContain('apfSoftware.installPhase.downloading')
@@ -193,7 +193,7 @@ describe('SoftwarePanel', () => {
     const getPackage = vi.fn()
       .mockResolvedValueOnce({ ...details, current_action: { ...pending, state: 'running' } })
       .mockResolvedValue({ ...details, current_action: { ...pending, state: 'completed' } })
-    const wrapper = mount(SoftwarePanel, { props: {
+    const wrapper = mount(SoftwarePanel, { props: { workspaceId: '/test-workspace',
       client: client({ getPackage }), confirmSoftware: vi.fn(), confirmationAvailable: true, translate
     } })
     try {
@@ -216,7 +216,7 @@ describe('SoftwarePanel', () => {
       requestInstall: vi.fn().mockResolvedValue(update)
     })
     const confirmSoftware = vi.fn().mockResolvedValue({ ok: true, pending: { ...update, state: 'completed' } })
-    const wrapper = mount(SoftwarePanel, { props: { client: apiClient, confirmSoftware, confirmationAvailable: true, translate } })
+    const wrapper = mount(SoftwarePanel, { props: { workspaceId: '/test-workspace', client: apiClient, confirmSoftware, confirmationAvailable: true, translate } })
     await flushPromises()
     await wrapper.get('select[aria-label="apfSoftware.bundleVersion"]').setValue(releaseValue)
     await wrapper.get('[data-testid="request-update"]').trigger('click')
@@ -233,9 +233,9 @@ describe('SoftwarePanel', () => {
       .mockResolvedValue({ ...details, package: { ...packageInfo, installed_version: '1.4.4', availability: 'ready', reason: null } })
     const apiClient = client({ getPackage })
     const confirmSoftware = vi.fn()
-    const wrapper = mount(SoftwarePanel, { props: { client: apiClient, confirmSoftware, confirmationAvailable: true, translate, operationId: pending.operation_id } })
+    const wrapper = mount(SoftwarePanel, { props: { workspaceId: '/test-workspace', client: apiClient, confirmSoftware, confirmationAvailable: true, translate, operationId: pending.operation_id } })
     await flushPromises()
-    expect(getPackage).toHaveBeenNthCalledWith(2, 'siril')
+    expect(getPackage).toHaveBeenNthCalledWith(2, 'siril', undefined, expect.any(AbortSignal))
     expect(wrapper.find('[data-testid="request-uninstall"]').exists()).toBe(true)
     expect(confirmSoftware).not.toHaveBeenCalled()
     expect(apiClient.requestInstall).not.toHaveBeenCalled()
@@ -246,7 +246,7 @@ describe('SoftwarePanel', () => {
     const apiClient = client({ getPackage: vi.fn().mockResolvedValue({ ...details, package: {
       ...packageInfo, installed_version: '1.4.4', install_path: 'C:/workspace/software/siril/app', migration_required: true
     } }) })
-    const wrapper = mount(SoftwarePanel, { props: { client: apiClient, confirmSoftware: vi.fn(), confirmationAvailable: true, translate } })
+    const wrapper = mount(SoftwarePanel, { props: { workspaceId: '/test-workspace', client: apiClient, confirmSoftware: vi.fn(), confirmationAvailable: true, translate } })
     await flushPromises()
     await wrapper.get('[data-testid="request-install"]').trigger('click')
     await flushPromises()
@@ -257,7 +257,7 @@ describe('SoftwarePanel', () => {
   it('requests an install plan but waits for the separate confirmation action', async () => {
     const apiClient = client()
     const confirmSoftware = vi.fn()
-    const wrapper = mount(SoftwarePanel, { props: { client: apiClient, confirmSoftware, confirmationAvailable: true, translate } })
+    const wrapper = mount(SoftwarePanel, { props: { workspaceId: '/test-workspace', client: apiClient, confirmSoftware, confirmationAvailable: true, translate } })
     await flushPromises()
 
     await wrapper.get('[data-testid="request-install"]').trigger('click')
@@ -281,7 +281,7 @@ describe('SoftwarePanel', () => {
       pending: { ...pending, state: 'running' }
     })
     const wrapper = mount(SoftwarePanel, {
-      props: { client: apiClient, confirmSoftware, confirmationAvailable: true, translate, packageId: 'siril', operationId: pending.operation_id }
+      props: { workspaceId: '/test-workspace', client: apiClient, confirmSoftware, confirmationAvailable: true, translate, packageId: 'siril', operationId: pending.operation_id }
     })
     await flushPromises()
 
@@ -300,7 +300,7 @@ describe('SoftwarePanel', () => {
       getPackage: vi.fn().mockResolvedValue({ ...details, current_action: pending })
     })
     const wrapper = mount(SoftwarePanel, {
-      props: {
+      props: { workspaceId: '/test-workspace',
         client: apiClient,
         confirmSoftware: vi.fn(),
         confirmationAvailable: false,
@@ -320,7 +320,7 @@ describe('Compact package controls', () => {
   it.each(['not_installed', 'ready', 'not_ready', 'unknown'] as const)('shows version selection and explicit actions for %s', async availability => {
     const installed = availability !== 'not_installed'
     const apiClient = client({ getPackage: vi.fn().mockResolvedValue({ ...details, package: { ...packageInfo, availability, installed_version: installed ? '1.4.4' : null } }) })
-    const wrapper = mount(SoftwarePanel, { props: { client: apiClient, confirmSoftware: vi.fn(), confirmationAvailable: true, translate } })
+    const wrapper = mount(SoftwarePanel, { props: { workspaceId: '/test-workspace', client: apiClient, confirmSoftware: vi.fn(), confirmationAvailable: true, translate } })
     await flushPromises()
     expect(wrapper.findAll('select')).toHaveLength(1)
     expect(wrapper.findAll('[data-testid="refresh-versions"]')).toHaveLength(1)
@@ -337,7 +337,7 @@ describe('Compact package controls', () => {
   it('cancels uninstall confirmation without deleting or confirming', async () => {
     const apiClient = client({ getPackage: vi.fn().mockResolvedValue({ ...details, package: { ...packageInfo, availability: 'ready', installed_version: '1.4.4' } }) })
     const confirmSoftware = vi.fn()
-    const wrapper = mount(SoftwarePanel, { props: { client: apiClient, confirmSoftware, confirmationAvailable: true, translate } })
+    const wrapper = mount(SoftwarePanel, { props: { workspaceId: '/test-workspace', client: apiClient, confirmSoftware, confirmationAvailable: true, translate } })
     await flushPromises()
     await wrapper.get('[data-testid="request-uninstall"]').trigger('click')
     await flushPromises()
@@ -352,7 +352,7 @@ describe('Compact package controls', () => {
   it('shows request failure without confirming and permits another attempt', async () => {
     const apiClient = client({ requestInstall: vi.fn().mockRejectedValue(new Error('network failed')) })
     const confirmSoftware = vi.fn()
-    const wrapper = mount(SoftwarePanel, { props: { client: apiClient, confirmSoftware, confirmationAvailable: true, translate } })
+    const wrapper = mount(SoftwarePanel, { props: { workspaceId: '/test-workspace', client: apiClient, confirmSoftware, confirmationAvailable: true, translate } })
     await flushPromises()
     await wrapper.get('[data-testid="request-install"]').trigger('click')
     await flushPromises()
@@ -368,7 +368,7 @@ it('allows removal of a known failed partial program without claiming a version 
   const apiClient = client({ getPackage: vi.fn().mockResolvedValue({ ...details, package: {
     ...packageInfo, availability: 'not_ready', installed_version: null, install_path: 'C:/workspace/software/siril/app', operation_state: 'failed', reason: 'Installation incomplete'
   } }) })
-  const wrapper = mount(SoftwarePanel, { props: { client: apiClient, confirmSoftware: vi.fn(), confirmationAvailable: true, translate } })
+  const wrapper = mount(SoftwarePanel, { props: { workspaceId: '/test-workspace', client: apiClient, confirmSoftware: vi.fn(), confirmationAvailable: true, translate } })
   await flushPromises()
   expect(wrapper.get('[data-testid="software-status"]').classes()).toContain('bg-error')
   await wrapper.get('[data-testid="request-uninstall"]').trigger('click')
@@ -376,4 +376,59 @@ it('allows removal of a known failed partial program without claiming a version 
   expect(apiClient.requestUninstall).toHaveBeenCalledWith('siril', { package_token: 'package-token' })
   expect(apiClient.requestInstall).not.toHaveBeenCalled()
   wrapper.unmount()
+})
+
+it('queries the original package after a lost proposal reply without submitting another proposal',async()=>{
+  const accepted={...pending,plan:{...pending.plan,target_bundle_version:release.bundle_version,target_commit:release.commit}}
+  const apiClient=client({getPackage:vi.fn().mockResolvedValueOnce(details).mockResolvedValue({...details,current_action:accepted}),
+    requestInstall:vi.fn().mockRejectedValue(new Error('Proposal receipt lost'))})
+  const confirmSoftware=vi.fn()
+  const wrapper=mount(SoftwarePanel,{props:{workspaceId:'/test-workspace',client:apiClient,confirmSoftware,confirmationAvailable:true,translate}})
+  try {
+    await flushPromises()
+    await wrapper.get('[data-testid="request-install"]').trigger('click');await flushPromises()
+    expect(apiClient.requestInstall).toHaveBeenCalledTimes(1)
+    expect(apiClient.getPackage).toHaveBeenCalledTimes(2)
+    expect(wrapper.get('[data-testid="software-plan"]').attributes('title')).toBe('apfSoftware.confirmInstall')
+    expect(wrapper.text()).toContain('Proposal receipt lost')
+    expect(confirmSoftware).not.toHaveBeenCalled()
+    expect(wrapper.find('progress').exists()).toBe(false)
+  } finally {wrapper.unmount()}
+})
+
+it('cancels a previous workspace detail read and ignores its late reply',async()=>{
+  let finishOld!: (value:SoftwarePackageDetails)=>void
+  const oldClient=client({getPackage:vi.fn(()=>new Promise<SoftwarePackageDetails>(resolve=>{finishOld=resolve}))})
+  const newClient=client({getPackage:vi.fn().mockResolvedValue({...details,package:{...packageInfo,name:'New workspace Siril'}})})
+  const wrapper=mount(SoftwarePanel,{props:{workspaceId:'/old-workspace',client:oldClient,confirmSoftware:vi.fn(),confirmationAvailable:true,translate}})
+  try {
+    await flushPromises()
+    const signal=vi.mocked(oldClient.getPackage).mock.calls[0][2]!
+    await wrapper.setProps({workspaceId:'/new-workspace',client:newClient});await flushPromises()
+    expect(signal.aborted).toBe(true)
+    finishOld({...details,package:{...packageInfo,name:'Old workspace Siril'}});await flushPromises()
+    expect(wrapper.text()).toContain('New workspace Siril')
+    expect(wrapper.text()).not.toContain('Old workspace Siril')
+    expect(oldClient.requestInstall).not.toHaveBeenCalled()
+    expect(newClient.requestInstall).not.toHaveBeenCalled()
+  } finally {wrapper.unmount()}
+})
+
+it.each(['install','uninstall'])('updates the version choice after an external %s without sending an action',async(change)=>{
+  vi.useFakeTimers();focusManager.setFocused(true)
+  const installed={...packageInfo,installed_version:'1.4.4',install_path:'C:/workspace/software/siril/bundle/app',availability:'ready' as const,bundle_version:release.bundle_version,bundle_commit:release.commit}
+  const apiClient=client({getPackage:vi.fn().mockResolvedValue({...details,package:change==='install'?packageInfo:installed})})
+  const confirmSoftware=vi.fn()
+  const wrapper=mount(SoftwarePanel,{props:{workspaceId:'/test-workspace',client:apiClient,confirmSoftware,confirmationAvailable:true,translate}})
+  try {
+    await flushPromises()
+    expect(wrapper.get('select').element.value).toBe(change==='install'?releaseValue:'__installed__')
+    vi.mocked(apiClient.getPackage).mockResolvedValue({...details,package:change==='install'?installed:packageInfo})
+    await vi.advanceTimersByTimeAsync(10_000);await flushPromises()
+    expect(wrapper.get('select').element.value).toBe(change==='install'?'__installed__':releaseValue)
+    expect(apiClient.listReleases).toHaveBeenCalledTimes(1)
+    expect(apiClient.requestInstall).not.toHaveBeenCalled()
+    expect(apiClient.requestUninstall).not.toHaveBeenCalled()
+    expect(confirmSoftware).not.toHaveBeenCalled()
+  } finally {wrapper.unmount();focusManager.setFocused(undefined);vi.useRealTimers()}
 })

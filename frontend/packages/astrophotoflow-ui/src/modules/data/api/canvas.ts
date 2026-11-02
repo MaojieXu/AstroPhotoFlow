@@ -1,92 +1,53 @@
-import { uiT } from '../../../core/i18n'
-import { z } from 'zod'
+import { createPlatformClient } from '../../../core/api/client'
+import type { FetchApi } from '../../../core/api/client'
+import { zCanvasInspectRequest } from '../../../generated/api/zod.gen'
+import {
+  canvasDataApiV1LibraryCanvasDataPost,
+  inspectCanvasApiV1LibraryCanvasDataInspectPost
+} from '../../../generated/api/sdk.gen'
+import type {
+  CanvasDataRequest,
+  CanvasDataOut
+} from '../../../generated/api/types.gen'
 
-import { ApiClientError, createApiClient } from '../../../core/client'
-import type { FetchApi } from '../../../core/client'
-import { displayPreviewSchema, importAcceptedSchema, taskSchema } from './contracts'
-
-export const canvasDataRequestSchema = z.object({
-  entry_type: z.enum(['asset', 'dataset']),
-  id: z.uuid(),
-  version_id: z.uuid(),
-  member_indexes: z.array(z.number().int().nonnegative()).nullable().optional()
-}).strict()
-
-const selection = z.object({
-  kind: z.enum(['whole_file', 'fits_hdu']),
-  hdu_index: z.number().int().nonnegative().nullable().optional()
-}).strict()
-
-export const scienceReferenceSchema = z.discriminatedUnion('kind', [
-  z.object({
-    kind: z.literal('asset_version'),
-    asset_version_id: z.uuid(),
-    selection
-  }).strict(),
-  z.object({
-    kind: z.literal('dataset_version'),
-    dataset_version_id: z.uuid(),
-    members: z.array(z.object({
-      member_index: z.number().int().nonnegative(),
-      asset_version_id: z.uuid(),
-      selection
-    }).strict()).min(1)
-  }).strict()
-])
-
-export const canvasDataSchema = z.object({
-  native_type: z.enum(['APF_DATA_REFERENCE', 'APF_FILE_REFERENCE']),
-  title: z.string(),
-  reference: scienceReferenceSchema
-}).strict()
-
-export const canvasInspectSchema = z.object({
-  title: z.string(), total: z.number().int().positive(), member_index: z.number().int().nonnegative(),
-  asset_id: z.uuid(), asset_version_id: z.uuid(), name: z.string(),
-  availability: z.enum(['unknown', 'available', 'changed', 'missing']),
-  parameters: z.record(z.string(), z.unknown()), equipment: z.record(z.string(), z.string().nullable()),
-  format: z.string().nullable(), width: z.number().int().nullable(), height: z.number().int().nullable(),
-  bitpix: z.number().int().nullable(), pixel_type: z.string().nullable(),
-  preview_status: z.enum(['available', 'pending', 'failed', 'unsupported', 'not_ready']),
-  preview_url: z.string().nullable(), preview_error: z.string().nullable(),
-  byte_size: z.number().int().nonnegative().nullable().optional(), content_hash: z.string().nullable().optional()
-}).strict()
-
-export type CanvasDataRequest = z.infer<typeof canvasDataRequestSchema>
-export type CanvasData = z.infer<typeof canvasDataSchema>
-export type CanvasInspect = z.infer<typeof canvasInspectSchema>
-export type ScienceReference = z.infer<typeof scienceReferenceSchema>
+export {
+  zCanvasDataRequest as canvasDataRequestSchema,
+  zCanvasDataOut as canvasDataSchema,
+  zCanvasInspectOut as canvasInspectSchema
+} from '../../../generated/api/zod.gen'
+export const scienceReferenceSchema = zCanvasInspectRequest.shape.reference
+export type {
+  CanvasDataRequest,
+  CanvasDataOut as CanvasData,
+  CanvasInspectOut as CanvasInspect
+} from '../../../generated/api/types.gen'
+export type ScienceReference = CanvasDataOut['reference']
 
 export function createCanvasDataClient(fetchApi: FetchApi) {
-  const client = createApiClient(fetchApi)
+  const options = {
+    client: createPlatformClient({ fetchApi }),
+    throwOnError: true
+  } as const
   return {
-    async importPath(path: string): Promise<CanvasData> {
-      const accepted = await client.send('/astrophotoflow/api/v1/imports', importAcceptedSchema, 'POST', {
-        sources: [{ path }], storage_mode: 'managed'
-      })
-      while (true) {
-        const task = await client.get('/astrophotoflow/api/v1/asset-tasks/' + accepted.task_id, taskSchema)
-        const item = task.items[0]
-        if (task.items_total === 1 && item?.content_status === 'available' && item.asset_id && item.asset_version_id) {
-          return client.send('/astrophotoflow/api/v1/library/canvas-data', canvasDataSchema, 'POST', {
-            entry_type: 'asset', id: item.asset_id, version_id: item.asset_version_id
-          })
-        }
-        if (!['queued', 'running'].includes(task.status)) {
-          const detail = item?.error ?? task.error
-          throw new ApiClientError(typeof detail?.message === 'string' ? detail.message : uiT('apfUi.image_import_is_incomplete_check_the_library_import_records'), 'service')
-        }
-        await new Promise<void>(resolve => setTimeout(resolve, 1000))
-      }
-    },
-    inspect: (reference: ScienceReference, memberIndex: number) => client.send(
-      '/astrophotoflow/api/v1/library/canvas-data/inspect', canvasInspectSchema, 'POST', { reference, member_index: memberIndex }
-    ),
-    getBlob: client.getBlob,
-    display: (base: string) => client.send(base + '/display', displayPreviewSchema, 'POST', {}),
-    displayStatus: (base: string) => client.get(base + '/display/status', displayPreviewSchema),
-    prepare: (body: CanvasDataRequest) => client.send(
-      '/astrophotoflow/api/v1/library/canvas-data', canvasDataSchema, 'POST', body
-    )
+    inspect: async (
+      reference: ScienceReference,
+      memberIndex: number,
+      signal?: AbortSignal
+    ) =>
+      (
+        await inspectCanvasApiV1LibraryCanvasDataInspectPost<true>({
+          ...options,
+          body: { reference, member_index: memberIndex },
+          signal
+        })
+      ).data,
+    prepare: async (body: CanvasDataRequest, signal?: AbortSignal) =>
+      (
+        await canvasDataApiV1LibraryCanvasDataPost<true>({
+          ...options,
+          body,
+          signal
+        })
+      ).data
   }
 }

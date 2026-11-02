@@ -107,6 +107,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/bootstrap.ps1 --work
 
 启动后按下方[页面展示](#页面展示)完成交接。只有用户明确要求仅准备开发依赖和空workspace时，省略`--build --start`；底层`pnpm dev:prepare`仍保持只准备依赖和workspace的语义，且要求当前进程PATH已选好工具。
 
+同一Worktree已有仍在使用的runtime时，可显式传`--runtime-dir .artifacts/runtimes/<本任务名称>`准备另一私有runtime；路径必须位于当前Worktree的`.artifacts`内。该参数仅作用于本次子进程环境及回执，不修改默认runtime或全局设置。新workspace仍需显式指定，启动前检查目标端口，不用旧成功回执判断进程已经停止。
+
 入口设置进程级隔离环境，使用本 Worktree 的 `.artifacts/venvs/dev`、`frontend/node_modules`、runtime 和 workspace；不借用其他 checkout 的 venv 或 node_modules，不共用可变 runtime。数据库、令牌、图、软件副本和输入输出独立；默认 workspace 与全局 MCP 不变。
 
 包缓存按`--cache-dir <已约定的长期缓存目录>`、`ASTROPHOTOFLOW_DEV_CACHE`、本Worktree的`.artifacts/cache`依次选择，bootstrap工具阶段与依赖阶段共用所选位置。由包管理器维护，不复制整套缓存、不直接修改其他Feature的缓存。托管Python安装在本空间`.artifacts/managed-python`，工具在`.artifacts/toolchains`，两者不互相链接。`--offline`明确使用离线包和元数据；缺失时根据日志补齐，不反复尝试网络。工具和权限问题在实际失败步骤处理，不改产品路径解析或全局Git配置。
@@ -194,9 +196,24 @@ pnpm test
 pnpm check:boundaries
 ```
 
-浏览器验收使用 core 返回的实际网页地址及独立 workspace、合成素材；已有 Chromium 可通过 `PLAYWRIGHT_CHROMIUM_EXECUTABLE` 指定。入口 `pnpm test:browser`，默认报告在 `.artifacts/reports/native-web`。不操作真实素材。
+浏览器验收统一使用Playwright Test。先通过固定准备入口启动自己的Feature预览，显式指定它的网页地址和workspace；fixture会先验证实际健康／配置路径与目标一致，拒绝dev／default。测试只用专属合成输入，不启动浏览器外的第二套调度或自动启动服务。
+
+```powershell
+$env:APF_WEB_URL = 'http://127.0.0.1:32588' # 使用自己的准备回执地址
+$env:APF_TEST_WORKSPACE = "$PWD/.artifacts/workspaces/modernization-current"
+pnpm test:browser --list
+pnpm test:browser
+```
+
+默认入口为[playwright.config.mjs](../../tests/browser/playwright.config.mjs)，报告在`.artifacts/reports/browser/`，失败保留trace／截图。并行执行其他发现／验证命令时，使用`APF_BROWSER_REPORT`指定本工作树`.artifacts/reports/`内的独立子目录，避免报告覆盖。并行worker为1，有写入的测试不自动重试。已有Chromium可通过`PLAYWRIGHT_CHROMIUM_EXECUTABLE`指定。
+
+原生队列测试需显式设置`APF_ALLOW_NATIVE_QUEUE=1`；配置真实重启测试需`APF_ALLOW_WORKBENCH_RESTART=1`，仅在队列为空、没有既有待采用配置时运行，完成后恢复本轮修改的配置。未启用的场景记为skip，不记为通过。不要在共享dev上运行。
+
+现代化的固定52成员场景另用`pnpm test:browser:modernization`，依赖该隔离workspace已准备的G2 seed；原生Siril／安装／画布专项用`pnpm test:browser:native`及对应显式opt-in。它们仍是Playwright Test，不是旧脚本别名。具体来源与断言去向见[浏览器迁移清单](browser-test-migration.md)。
 
 结果写[验证记录](test-matrix.md)，完整日志进 `.artifacts`；实现、构建、启动就绪、功能验证和用户验收分别报告，已通过检查不无故重复。
+
+并行执行pytest时，每个进程必须显式使用不同的`--basetemp=.artifacts/pytest-<任务>`，不使用默认目录或其子目录；pytest启动会清理指定目录，不能与另一个仍在运行的检查共享。
 
 ## 发行与安装验证
 

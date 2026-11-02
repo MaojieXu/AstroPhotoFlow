@@ -1,3 +1,4 @@
+import { PlatformQueryPlugin } from '@astrophotoflow/ui'
 import { definePreset } from '@primevue/themes'
 import Aura from '@primevue/themes/aura'
 import type { PaletteDesignToken } from '@primevue/themes/aura'
@@ -164,6 +165,7 @@ app
     }
   })
   .use(pinia)
+  .use(PlatformQueryPlugin)
   .use(i18n)
 
 markStoresReady()

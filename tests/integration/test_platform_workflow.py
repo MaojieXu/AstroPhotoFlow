@@ -1,3 +1,10 @@
+from astrophotoflow.core.workbench import control as wb_control
+from astrophotoflow.core.workbench import errors as wb_errors
+from astrophotoflow.core.workbench import observations as wb_observations
+from astrophotoflow.core.workbench import processes as wb_processes
+from astrophotoflow.core.workbench import state as wb_state
+import httpx
+from astrophotoflow.core.workbench import workspaces as wb_workspaces
 """Opt-in process acceptance; the native lifecycle case uses the planned maintenance window."""
 import os
 import io
@@ -26,18 +33,18 @@ def test_native_workspace_lifecycle_and_configuration_adoption():
     assert first != second and first.name != "dev" and second.name != "dev"
     a, b = first / "config.toml", second / "config.toml"
     before_default = config.CONFIG_PATH.read_bytes() if config.CONFIG_PATH.is_file() else None
-    preferred = workbench._load_config(a)[3]
+    preferred = wb_workspaces.load_workspace_config(a)[3]
     try:
-        other = workbench.start(b)
+        other = wb_control.start(b)
         assert other.state == "completed"
         with socket.socket() as occupied:
             occupied.bind(("127.0.0.1", preferred))
             occupied.listen()
-            started = workbench.start(a)
+            started = wb_control.start(a)
             assert started.state == "completed" and started.web_url != f"http://127.0.0.1:{preferred}"
             assert started.web_url != other.web_url and started.service_url != other.service_url
-            assert workbench.status(a).ready and workbench.status(b).ready
-            reused = workbench.start(a)
+            assert wb_observations.status(a).ready and wb_observations.status(b).ready
+            reused = wb_control.start(a)
             assert reused.reused and reused.web_url == started.web_url
         state = config.get_configuration(a)
         assert state.saved.service_port == state.effective.service_port
@@ -59,20 +66,20 @@ def test_native_workspace_lifecycle_and_configuration_adoption():
             assert invalid_prompt.status_code == 400
             queued = client.post("/api/v1/uploads", json={"files": [{"name": "m1-pending.png", "size": 10}]})
             assert queued.status_code == 202
-            rejected = workbench.restart(a)
+            rejected = wb_control.restart(a)
             assert rejected.state == "rejected" and rejected.blockers
-            assert workbench.status(b).ready
+            assert wb_observations.status(b).ready
             failed = client.post(f"/api/v1/uploads/{queued.json()['task_id']}/fail")
             assert failed.status_code == 200
-        restarted = workbench.restart(a)
+        restarted = wb_control.restart(a)
         assert restarted.state == "completed"
         current = config.get_configuration(a)
         assert current.effective.file_workers == target_workers and not current.restart_required
-        assert workbench.status(b).ready
+        assert wb_observations.status(b).ready
     finally:
-        workbench.stop(a)
-        workbench.stop(b)
-    assert workbench.status(a).state == "stopped" and workbench.status(b).state == "stopped"
+        wb_control.stop(a)
+        wb_control.stop(b)
+    assert wb_observations.status(a).state == "stopped" and wb_observations.status(b).state == "stopped"
     current_default = config.CONFIG_PATH.read_bytes() if config.CONFIG_PATH.is_file() else None
     assert current_default == before_default
 
@@ -100,8 +107,8 @@ def test_start_failure_drains_an_active_import_in_real_domain_process(tmp_path, 
     (support / "sitecustomize.py").write_text(
         "import os, time\n"
         "from pathlib import Path\n"
-        "from astrophotoflow.modules.data import ingestion\n"
-        "original = ingestion._content_item\n"
+        "from astrophotoflow.modules.data.imports import stages\n"
+        "original = stages.run_content_item\n"
         "def held_content(*args, **kwargs):\n"
         "    Path(os.environ['APF_TEST_IMPORT_STARTED']).write_text('started')\n"
         "    while not Path(os.environ['APF_TEST_IMPORT_RELEASE']).exists():\n"
@@ -109,13 +116,13 @@ def test_start_failure_drains_an_active_import_in_real_domain_process(tmp_path, 
         "    result = original(*args, **kwargs)\n"
         "    Path(os.environ['APF_TEST_IMPORT_DONE']).write_text('done')\n"
         "    return result\n"
-        "ingestion._content_item = held_content\n", encoding="utf-8",
+        "stages.run_content_item = held_content\n", encoding="utf-8",
     )
     started, release, done = (tmp_path / name for name in ("started", "release", "done"))
     buffer = io.BytesIO()
     Image.new("L", (8, 8), 128).save(buffer, format="PNG")
     image = buffer.getvalue()
-    original_launch, original_post = workbench._launch, httpx.post
+    original_launch, original_post = wb_processes.launch_process, httpx.post
     domain = []
     outcome = {}
     evidence = {}
@@ -131,7 +138,7 @@ def test_start_failure_drains_an_active_import_in_real_domain_process(tmp_path, 
             domain.append(original_launch(command, cwd, child_env, log_path))
             return domain[0]
 
-        state = workbench._read_state(workspace)
+        state = wb_state.read_state(workspace)
         token = settings.token_path.read_text(encoding="utf-8").strip()
         headers = {"Authorization": f"Bearer {token}"}
         with httpx.Client(base_url=state["service_url"], headers=headers, timeout=20) as client:
@@ -165,15 +172,15 @@ def test_start_failure_drains_an_active_import_in_real_domain_process(tmp_path, 
         if url.endswith("/internal/shutdown"):
             evidence["alive"] = domain[0].poll() is None
             evidence["running_before_release"] = started.is_file() and not done.is_file()
-            evidence["recorded"] = bool(workbench._read_state(workspace)["processes"])
+            evidence["recorded"] = bool(wb_state.read_state(workspace)["processes"])
             release.touch()
         return response
 
-    monkeypatch.setattr(workbench, "_launch", launch)
-    monkeypatch.setattr(workbench.httpx, "post", shutdown)
+    monkeypatch.setattr(wb_processes, 'launch_process', launch)
+    monkeypatch.setattr(httpx, "post", shutdown)
     try:
-        with pytest.raises(workbench.WorkbenchError, match="simulated native launch failure"):
-            workbench.start(path)
+        with pytest.raises(wb_errors.WorkbenchError, match="simulated native launch failure"):
+            wb_control.start(path)
         assert thread is not None
         thread.join(timeout=30)
         assert not thread.is_alive() and outcome.get("status") == 202, outcome
@@ -183,13 +190,13 @@ def test_start_failure_drains_an_active_import_in_real_domain_process(tmp_path, 
             status = database.execute("SELECT status FROM asset_task WHERE id = ?", (outcome["task_id"],)).fetchone()
             assets = database.execute("SELECT COUNT(*) FROM asset").fetchone()[0]
         assert status is not None and status[0] == "completed" and assets == 1
-        assert workbench._read_state(workspace)["processes"] == []
+        assert wb_state.read_state(workspace)["processes"] == []
     finally:
         release.touch()
         if thread is not None:
             thread.join(timeout=30)
         if domain and domain[0].poll() is None:
             token = settings.token_path.read_text(encoding="utf-8").strip()
-            service_url = workbench._read_state(workspace)["service_url"]
+            service_url = wb_state.read_state(workspace)["service_url"]
             original_post(service_url + "/internal/shutdown", headers={"Authorization": f"Bearer {token}"}, timeout=5).raise_for_status()
             domain[0].wait(timeout=30)

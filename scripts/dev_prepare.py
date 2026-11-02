@@ -1,22 +1,21 @@
 from __future__ import annotations
 
 import argparse
-from datetime import datetime, timezone
 import hashlib
 import json
 import os
-from pathlib import Path
 import shutil
 import subprocess
 import sys
 import time
+from datetime import UTC, datetime
+from pathlib import Path
 from uuid import uuid4
-
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def environment(workspace: Path, cache: Path | None = None) -> dict[str, str]:
+def environment(workspace: Path, cache: Path | None = None, runtime: Path | None = None) -> dict[str, str]:
     artifacts = ROOT / ".artifacts"
     cache = cache or Path(os.environ.get("ASTROPHOTOFLOW_DEV_CACHE", artifacts / "cache"))
     env = {**os.environ, "UV_PROJECT_ENVIRONMENT": str(artifacts / "venvs/dev"),
@@ -24,7 +23,7 @@ def environment(workspace: Path, cache: Path | None = None) -> dict[str, str]:
            "UV_PYTHON_BIN_DIR": str(artifacts / "python-bin"), "UV_PYTHON_INSTALL_REGISTRY": "0",
            "LOCALAPPDATA": str(artifacts / "local-app-data"), "APPDATA": str(artifacts / "app-data"),
            "TEMP": str(artifacts / "tmp"), "TMP": str(artifacts / "tmp"),
-           "ASTROPHOTOFLOW_RUNTIME": str(artifacts / "local-app-data/AstroPhotoFlow/runtime/native-web-0.1.0"),
+           "ASTROPHOTOFLOW_RUNTIME": str(runtime or artifacts / "local-app-data/AstroPhotoFlow/runtime/native-web-0.1.0"),
            "ASTROPHOTOFLOW_CONFIG": str(workspace / "config.toml"),
            "DISTRIBUTION": "localhost",
            "PYTHONUTF8": "1", "PYTHONIOENCODING": "utf-8"}
@@ -70,6 +69,7 @@ def prepare(report: dict) -> int:
     parser = argparse.ArgumentParser(description="Prepare this Worktree; build and start only when requested.")
     parser.add_argument("--workspace", type=Path, required=True)
     parser.add_argument("--cache-dir", type=Path)
+    parser.add_argument("--runtime-dir", type=Path, help="Use a private runtime below this worktree .artifacts")
     parser.add_argument("--frontend-assets", type=Path)
     parser.add_argument("--build", action="store_true", help="Build the current source instead of requiring existing assets")
     parser.add_argument("--start", action="store_true", help="Also prepare the CPU runtime and start the two services")
@@ -93,7 +93,10 @@ def prepare(report: dict) -> int:
         parser.error("--stop不能同时准备或启动预览。")
     if args.stop and (args.bundle_source or args.clear_bundle_source):
         parser.error('--stop cannot change Bundle source bindings.')
-    env = environment(workspace, args.cache_dir.resolve() if args.cache_dir else None)
+    runtime = args.runtime_dir.resolve() if args.runtime_dir else None
+    if runtime is not None and not runtime.is_relative_to((ROOT / ".artifacts").resolve()):
+        parser.error("Private Feature runtime must remain below this worktree .artifacts")
+    env = environment(workspace, args.cache_dir.resolve() if args.cache_dir else None, runtime)
     if args.offline:
         env["UV_OFFLINE"] = "1"
     for name in ("LOCALAPPDATA", "APPDATA", "TEMP", "UV_PYTHON_BIN_DIR"):
@@ -113,7 +116,7 @@ def prepare(report: dict) -> int:
         try:
             with Path(stage["log"]).open("w", encoding="utf-8") as log:
                 result = subprocess.run(command, cwd=ROOT, env=env, stdout=subprocess.PIPE,
-                                        stderr=log, text=True, encoding="utf-8")
+                                        stderr=log, text=True, encoding="utf-8", check=False)
                 log.write(result.stdout)
             stage["exit_code"] = result.returncode
         except OSError as exc:
@@ -241,7 +244,7 @@ def main() -> int:
         if previous.get("run_id") == run_id:
             report = previous
     report.update(run_id=report.get("run_id", uuid4().hex),
-                  started_at=report.get("started_at", datetime.now(timezone.utc).isoformat()),
+                  started_at=report.get("started_at", datetime.now(UTC).isoformat()),
                   arguments=sys.argv[1:], completed=False, ready=False)
     report.setdefault("stages", [])
     write_json(receipt, report)
@@ -256,10 +259,10 @@ def main() -> int:
         print(str(exc), file=sys.stderr)
         return 1
     finally:
-        finished = datetime.now(timezone.utc)
+        finished = datetime.now(UTC)
         report.update(finished_at=finished.isoformat(),
                       prepare_elapsed_seconds=round(time.perf_counter() - started, 3),
-                      elapsed_seconds=round((finished - datetime.fromisoformat(report["started_at"].replace("Z", "+00:00"))).total_seconds(), 3))
+                      elapsed_seconds=round((finished - datetime.fromisoformat(report["started_at"])).total_seconds(), 3))
         write_json(receipt, report)
         print(json.dumps({**report, "receipt": str(receipt)}, ensure_ascii=False, indent=2))
 

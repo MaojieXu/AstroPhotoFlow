@@ -217,7 +217,7 @@ B41、B42；B42真实list/get/create已发布，Python客户端签名/代理/Ope
 | `frontend/packages/astrophotoflow-ui/src/modules/software/index.ts` | R | 通过所属模块公开SoftwareClient读取包的node_definition_ids和准确installed_version，不导软件UI内部状态。 |
 | `frontend/packages/astrophotoflow-ui/src/core/client.ts` | R | B13共用FetchApi/ApiClientError/createApiClient及fields，不在节点模块复制请求实现。 |
 | `frontend/packages/astrophotoflow-ui/src/index.ts` | M | 包根公开NodeEditor/真实客户端/DTO，原生不导UI内路径。 |
-| `frontend/src/platform/astrophotoflow/NativeShell.vue`、`frontend/src/platform/astrophotoflow/workflowBridge.ts` | M | 在现宿主装配点挂载/关闭NodeEditor并桥接原生使用；继续保留GraphView和节点库→素材库→工作流顺序，不创建新应用。 |
+| `frontend/src/platform/astrophotoflow/sidebar/NativeShell.vue`、`frontend/src/platform/astrophotoflow/software/confirmation.ts` | M | 在现宿主装配点挂载/关闭NodeEditor并桥接原生使用；继续保留GraphView和节点库→素材库→工作流顺序，不创建新应用。 |
 | `frontend/src/services/litegraphService.ts`、`frontend/src/schemas/nodeDefSchema.ts` | R | 原生定义刷新/注册实际入口，节点交接用真实公开类型和既有Store，业务UI不导入。 |
 | `src/astrophotoflow/modules/nodes/public.py` | R | B41 preview_definition_update/remap规则单一权威；本卡不在UI再实现一套参数兼容/端口diff。 |
 | `tests/modules/nodes/test_service.py` | M | 若界面发现B41具体回归才补对应pure行为；不新增同一规则第二测试矩阵。 |

@@ -19,7 +19,12 @@
     <template #icon><slot name="icon" /></template>
   </SearchableSingleSelect>
 
-  <SelectRoot v-else v-model="selectedItem" v-model:open="isOpen" :disabled>
+  <SelectRoot
+    v-else
+    v-model="nativeSelectedItem"
+    v-model:open="isOpen"
+    :disabled
+  >
     <SelectTrigger
       v-bind="attrsWithoutClass"
       :aria-label="label || t('g.singleSelectDropdown')"
@@ -49,7 +54,12 @@
         />
         <slot v-else name="icon" />
         <SelectValue :placeholder="label" class="truncate">
-          {{ selectedLabel ?? (selectedItem == null || selectedItem === '' ? label : String(selectedItem)) }}
+          {{
+            selectedLabel ??
+            (selectedItem == null || selectedItem === ''
+              ? label
+              : String(selectedItem))
+          }}
         </SelectValue>
       </div>
       <div :class="selectDropdownClass">
@@ -63,7 +73,13 @@
         :side-offset="8"
         align="start"
         :style="[optionStyle, contentStyle, liftedContentStyle]"
-        :class="cn(selectContentClass, 'min-w-(--reka-select-trigger-width)')"
+        :class="
+          cn(
+            selectContentClass,
+            'min-w-(--reka-select-trigger-width)',
+            density === 'compact' && 'p-1'
+          )
+        "
         @keydown="onContentKeydown"
       >
         <SelectViewport
@@ -73,9 +89,15 @@
           <SelectItem
             v-for="opt in options"
             :key="opt.value"
-            :value="opt.value"
+            :value="opt.value === '' ? emptyOptionValue : opt.value"
             :disabled="opt.disabled"
-            :class="selectItemVariants({ layout: 'single' })"
+            :class="
+              cn(
+                selectItemVariants({ layout: 'single' }),
+                density === 'compact' &&
+                  'h-8 rounded-sm py-0 text-xs leading-[18px]'
+              )
+            "
           >
             <SelectItemText class="truncate">
               {{ opt.name }}
@@ -107,7 +129,7 @@ import {
   SelectValue,
   SelectViewport
 } from 'reka-ui'
-import { computed, ref } from 'vue'
+import { computed, ref, useId } from 'vue'
 import type { StyleValue } from 'vue'
 import { useI18n } from 'vue-i18n'
 
@@ -139,6 +161,7 @@ const {
   loading = false,
   disabled = false,
   searchable = false,
+  density = 'normal',
   searchPlaceholder,
   listMaxHeight = '28rem',
   popoverMinWidth,
@@ -156,6 +179,8 @@ const {
   /** Disable the select */
   disabled?: boolean
   searchable?: boolean
+  /** Compact non-searchable menu; other menus retain their existing density. */
+  density?: 'normal' | 'compact'
   searchPlaceholder?: string
   /** Maximum height of the dropdown panel (default: 28rem) */
   listMaxHeight?: string
@@ -169,7 +194,21 @@ const {
 const selectedItem = defineModel<string | number | undefined>({
   required: true
 })
-const selectedLabel = computed(() => options.find(option => option.value === selectedItem.value)?.name)
+
+// Reka reserves the empty string for clearing; public options may use it for "All".
+const emptyOptionValue = `empty-option-${useId()}`
+const nativeSelectedItem = computed({
+  get: () =>
+    selectedItem.value === '' && options.some((option) => option.value === '')
+      ? emptyOptionValue
+      : selectedItem.value,
+  set: (value: string | number | undefined) => {
+    selectedItem.value = value === emptyOptionValue ? '' : value
+  }
+})
+const selectedLabel = computed(
+  () => options.find((option) => option.value === selectedItem.value)?.name
+)
 
 const { t } = useI18n()
 const isOpen = ref(false)

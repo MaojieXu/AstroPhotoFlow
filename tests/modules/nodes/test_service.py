@@ -192,7 +192,8 @@ def test_package_replacement_stops_at_first_failed_file_without_rollback(tmp_pat
     settings = _settings(tmp_path)
     first = _definition(settings, source="package", name="First")
     second = _definition(settings, source="package", name="Second")
-    original = public._write
+    from astrophotoflow.modules.nodes import definitions
+    original = definitions.write_definition
     calls = 0
 
     def fail_second(path, definition, *, exclusive):
@@ -202,7 +203,7 @@ def test_package_replacement_stops_at_first_failed_file_without_rollback(tmp_pat
             raise OSError("disk full")
         return original(path, definition, exclusive=exclusive)
 
-    monkeypatch.setattr(public, "_write", fail_second)
+    monkeypatch.setattr(definitions, "write_definition", fail_second)
     results = public.replace_package_definitions(tmp_path, "siril", [first, second], {})
     assert len(results) == 2
     assert results[0].applied is True

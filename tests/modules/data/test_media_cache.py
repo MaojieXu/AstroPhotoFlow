@@ -7,8 +7,8 @@ from PIL import Image
 import pytest
 
 from astrophotoflow.contracts.media import MediaSelection
-from astrophotoflow.modules.data.media_cache import MediaCache
-from astrophotoflow.modules.data.media_view import MediaViews
+from astrophotoflow.modules.data.media.cache import MediaCache
+from astrophotoflow.modules.data.media.tiles import TileService
 
 
 def test_disk_lru_does_not_remove_active_view_or_original(tmp_path):
@@ -48,13 +48,11 @@ def test_native_tiles_reassemble_original_pixels_and_share_pending_work(tmp_path
     Image.fromarray(pixels).save(path)
     folder = tmp_path / "previews" / "version" / "media" / "key"
     folder.mkdir(parents=True)
-    service = MediaViews.__new__(MediaViews)
-    from threading import RLock
-    service.cache, service.lock, service.pending = MediaCache(tmp_path), RLock(), {}
+    cache = MediaCache(tmp_path)
     job = dict(key="key", path=path, category="image", selection=MediaSelection(), parameters={}, folder=folder,
                recipe={}, state={"kind": "image", "width": 1031, "height": 519, "max_level": 11})
     with ThreadPoolExecutor(1) as executor:
-        service.executor = executor
+        service = TileService(cache, executor)
         result = np.empty_like(pixels)
         for y in range(2):
             for x in range(3):
@@ -72,10 +70,9 @@ def test_native_tiles_reassemble_original_pixels_and_share_pending_work(tmp_path
 
 def test_shared_tile_only_cancels_when_last_reader_disconnects(tmp_path, monkeypatch):
     from concurrent.futures import CancelledError
-    from threading import Event, RLock
-    from astrophotoflow.modules.data.preview_executor import PreviewExecutor
-    service = MediaViews.__new__(MediaViews)
-    service.cache, service.lock, service.pending = MediaCache(tmp_path), RLock(), {}
+    from threading import Event
+    from astrophotoflow.modules.data.media.executor import PreviewExecutor
+    cache = MediaCache(tmp_path)
     entered, proceed = Event(), Event()
     def tile(job, level, x, y, target, stop):
         entered.set()
@@ -83,20 +80,79 @@ def test_shared_tile_only_cancels_when_last_reader_disconnects(tmp_path, monkeyp
         if stop.is_set():
             raise CancelledError()
         return b'tile'
-    monkeypatch.setattr(service, '_tile', tile)
     job = dict(key='shared', folder=tmp_path, state={'kind': 'image', 'width': 1024, 'height': 1024, 'max_level': 10})
     with PreviewExecutor(1) as executor:
-        service.executor = executor
+        service = TileService(cache, executor)
+        monkeypatch.setattr(service, "_tile", tile)
         first = service.tile_future(job, 10, 0, 0, tracked=True)
         try:
             assert entered.wait(5)
             second = service.tile_future(job, 10, 0, 0, tracked=True)
             assert second is first
             service.release_tile(job, 10, 0, 0, first)
-            assert not service.pending[('shared', 10, 0, 0)]['stop'].is_set()
+            assert not service.pending[('shared', 10, 0, 0)].stop.is_set()
             service.release_tile(job, 10, 0, 0, first)
-            assert service.pending[('shared', 10, 0, 0)]['stop'].is_set()
+            assert service.pending[('shared', 10, 0, 0)].stop.is_set()
         finally:
             proceed.set()
         with pytest.raises(CancelledError):
             first.result(timeout=5)
+
+
+@pytest.fixture
+def output_lease(tmp_path):
+    import json
+    from threading import RLock
+    from types import SimpleNamespace
+    from astrophotoflow.modules.data.media.leases import MediaLeases
+    path = tmp_path / "science.fits"
+    path.write_bytes(b"science")
+    key = "a" * 40
+    folder = tmp_path / "previews" / "run-outputs" / "media" / key
+    folder.mkdir(parents=True)
+    stat = path.stat()
+    manifest = {"key": key, "path": str(path), "stamp": [stat.st_size, stat.st_mtime_ns],
+                "selection": {}, "output_source": True}
+    (folder / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+    cache = MediaCache(tmp_path)
+    leases = MediaLeases(None, SimpleNamespace(data_dir=tmp_path), cache, RLock())
+    return leases, cache, SimpleNamespace(path=path), key, folder
+
+
+def test_repeated_release_does_not_unpin_another_response(output_lease):
+    leases, cache, checked, key, folder = output_lease
+    _, release_first = leases.acquire_output(checked, key)
+    _, release_second = leases.acquire_output(checked, key)
+    release_first()
+    release_first()
+    assert leases.active[key] == cache.active[folder] == 1
+    release_second()
+    assert leases.active == cache.active == {}
+
+
+def test_failed_lease_preparation_releases_cache_hold(output_lease, monkeypatch):
+    leases, cache, checked, key, folder = output_lease
+    original_touch = Path.touch
+    def fail_touch(path, *args, **kwargs):
+        if path == folder:
+            raise OSError("cache directory unavailable")
+        return original_touch(path, *args, **kwargs)
+    monkeypatch.setattr(Path, "touch", fail_touch)
+    with pytest.raises(OSError, match="unavailable"):
+        leases.acquire_output(checked, key)
+    assert leases.active == cache.active == {}
+
+
+def test_output_lease_refuses_foreign_file_even_with_same_stamp(output_lease, tmp_path):
+    import os
+    from types import SimpleNamespace
+    from astrophotoflow.core.errors import ApiError
+    leases, cache, checked, key, _ = output_lease
+    foreign = tmp_path / "foreign.fits"
+    foreign.write_bytes(checked.path.read_bytes())
+    stat = checked.path.stat()
+    os.utime(foreign, ns=(stat.st_atime_ns, stat.st_mtime_ns))
+    with pytest.raises(ApiError) as failure:
+        leases.acquire_output(SimpleNamespace(path=foreign), key)
+    assert failure.value.code == "SOURCE_CHANGED"
+    assert leases.active == cache.active == {}

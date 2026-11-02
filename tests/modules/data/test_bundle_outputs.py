@@ -1,3 +1,4 @@
+from astrophotoflow.modules.data.formats import pixels as codec_formats_pixels
 import numpy as np
 import pytest
 from astropy.io import fits

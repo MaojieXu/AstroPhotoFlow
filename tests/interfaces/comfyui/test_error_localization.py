@@ -8,7 +8,8 @@ import pytest
 
 from astrophotoflow.core.errors import ApiError
 from astrophotoflow.core.localization import error_message
-from astrophotoflow.interfaces import canvas_native, comfyui
+from astrophotoflow.interfaces.native import canvas as canvas_native, pages as comfyui
+from astrophotoflow.interfaces.native import context as native_context
 
 
 @pytest.fixture(params=['en', 'zh'])
@@ -34,7 +35,7 @@ def test_canvas_unknown_result_remains_unknown_in_both_languages(locale):
 def test_disconnected_native_bridge_sends_localized_failure(locale, tmp_path, monkeypatch):
     token = tmp_path / 'service.token'
     token.write_text('test-token', encoding='utf-8')
-    monkeypatch.setattr(comfyui, 'load_running_settings', lambda _: SimpleNamespace(token_path=token, workspace=tmp_path))
+    monkeypatch.setattr(native_context, 'load_running_settings', lambda _: SimpleNamespace(token_path=token, workspace=tmp_path))
     server = SimpleNamespace(sockets_metadata={'client': {'apf_page_id': str(uuid4()), 'apf_page_token': 'page-token'}},
                              client_session=None, send_json=AsyncMock())
     asyncio.run(comfyui.forward_page_event(server, object(), 'client', {
@@ -55,20 +56,16 @@ def test_proxy_errors_keep_request_identity(locale):
     assert result['error']['message'] == error_message(locale, '', 'proxy_unavailable')
 
 
-def test_mcp_platform_error_keeps_specific_reason_and_diagnostics(locale, monkeypatch):
-    from mcp.server.mcpserver.exceptions import ToolError
-    from astrophotoflow.interfaces.mcp import server
-    class Client:
-        def __enter__(self):
-            return self
-        def __exit__(self, *args):
-            pass
-    monkeypatch.setattr(server, 'AssetClient', Client)
-    def operation(client):
-        raise ApiError(409, 'SOFTWARE_ACTION_EXPIRED', '原始提示',
-                       fields=[{'path': 'graph.id', 'message': 'raw {diagnostic} 原文'}],
-                       message_key='action_package_changed')
+def test_mcp_platform_error_keeps_specific_reason_and_diagnostics(locale):
+    from fastmcp.exceptions import ToolError
+    from astrophotoflow.interfaces.mcp.errors import service_errors
+    from astrophotoflow.interfaces.client.errors import ServiceApiError
+    @service_errors
+    def operation():
+        raise ServiceApiError(409, 'SOFTWARE_ACTION_EXPIRED', error_message(locale, '', 'action_package_changed'),
+            request_id='diagnostic-request', fields=[{'path': 'graph.id', 'message': 'raw {diagnostic} 原文'}])
     with pytest.raises(ToolError) as failure:
-        server._call(operation, locale)
+        operation()
     assert error_message(locale, '', 'action_package_changed') in str(failure.value)
     assert 'graph.id' in str(failure.value) and 'raw {diagnostic} 原文' in str(failure.value)
+    assert 'diagnostic-request' in str(failure.value)

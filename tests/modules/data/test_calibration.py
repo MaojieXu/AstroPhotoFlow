@@ -1,16 +1,19 @@
 from pathlib import Path
 from uuid import uuid4
 
-from fastapi.testclient import TestClient
 import pytest
-from sqlalchemy import func, select
+from fastapi.testclient import TestClient
+from sqlalchemy import func, inspect, select
+from sqlalchemy.exc import IntegrityError
 
-from astrophotoflow.interfaces.http.app import create_app
-from astrophotoflow.modules.data.models import Asset, AssetTask, AssetTaskItem, AssetVersion, Dataset, DatasetMember, DatasetVersion
-from astrophotoflow.modules.data.ingestion import _publish_dataset
-from astrophotoflow.core.database.schema import upgrade_database
 from astrophotoflow.core.config import Settings
-
+from astrophotoflow.core.database.schema import upgrade_database
+from astrophotoflow.interfaces.http.app import create_app
+from astrophotoflow.modules.data.assets.metadata import classification_columns, set_asset_classification
+from astrophotoflow.modules.data.assets.models import Asset, AssetVersion
+from astrophotoflow.modules.data.datasets.models import Dataset, DatasetCalibration, DatasetMember, DatasetVersion, MemberCalibration
+from astrophotoflow.modules.data.imports.completion import publish_dataset
+from astrophotoflow.modules.data.imports.models import AssetTask, AssetTaskItem
 
 AUTH = {"Authorization": "Bearer calibration-test"}
 
@@ -22,7 +25,6 @@ def service(tmp_path):
     app = create_app(settings, "calibration-test")
     with TestClient(app) as client:
         yield client, app.state.database, settings
-    app.state.database.close()
 
 
 def photo(service, frame_type, master=False, *, version_type=None, scope="shared", project_id=None):
@@ -34,13 +36,13 @@ def photo(service, frame_type, master=False, *, version_type=None, scope="shared
     classification = {"frame_class": "masterframe" if master else "subframe", "frame_type": frame_type}
     with database.write_session() as session:
         asset = Asset(id=asset_id, name=f"{frame_type}-{version_id[:4]}", scope=scope, owner_project_id=project_id,
-                      role="calibration" if frame_type in {"bias", "dark", "flat", "dark_flat"} else "raw", classification=classification)
+                      role="calibration" if frame_type in {"bias", "dark", "flat", "dark_flat"} else "raw", **classification_columns(classification))
         session.add(asset)
         session.flush()
         session.add(AssetVersion(id=version_id, asset_id=asset_id, version_number=1, storage_mode="managed",
             storage_location=path.relative_to(settings.data_dir).as_posix(), availability="available",
             frame_type=frame_type if version_type is None else version_type,
-            calibration_level="master" if master else "individual", capture_snapshot={"original": True}))
+            calibration_level="master" if master else "individual", capture_snapshot={"parameters": {"gain": 0}}))
         session.flush()
         asset.current_version_id = version_id
     return asset_id, version_id, path
@@ -96,8 +98,9 @@ def test_explicit_groups_share_versions_and_preserve_mixed_original_and_notes(se
     targets = client.get("/api/v1/calibration/targets", headers=AUTH).json()["items"]
     assert {item["name"] for item in targets} == {first["name"], second["name"]}
     light_items = client.get("/api/v1/library/items", headers=AUTH, params={"frame_type": "light"}).json()["items"]
-    mixed = next(item for item in light_items if item["dataset"]["id"] == original["id"])
-    assert len(mixed["version"]["members"]) == 2
+    mixed = next(item for item in light_items if item["id"] == original["id"])
+    assert mixed["member_count"] == 2
+    assert client.get(f"/api/v1/datasets/{mixed['id']}/versions/{mixed['version_id']}/members", headers=AUTH).json()["total"] == 2
     assert mixed["matching_member_count"] == 1
 
 
@@ -170,7 +173,7 @@ def test_target_scope_type_historical_versions_and_sparse_validation(service):
         session.add(AssetVersion(id=newer, asset_id=asset_id, version_number=2, storage_mode="reference", storage_location="newer", frame_type="light"))
         session.flush()
         session.get(Asset, asset_id).current_version_id = newer
-        session.get(Asset, asset_id).classification = {"frame_class": "masterframe", "frame_type": "light"}
+        set_asset_classification(session.get(Asset, asset_id), {"frame_class": "masterframe", "frame_type": "light"})
     assert publish(client, consumer, [light], calibration_defaults={"dark": {"kind": "asset_version", "id": old}}).status_code == 201
     consumer = client.get(f"/api/v1/datasets/{consumer['id']}", headers=AUTH).json()
     assert publish(client, consumer, [light], calibration_defaults={"dark": {"kind": "asset_version", "id": newer}}).status_code == 422
@@ -361,8 +364,49 @@ def test_import_append_copies_group_defaults_and_member_override(service):
         session.add(AssetTaskItem(id=str(uuid4()), task_id=task_id, root_item_id=str(uuid4()), root_id="test", source_path="added.fit",
             source_identity="append-added", position=0, status="completed", content_status="available", metadata_status="available", preview_status="available",
             asset_id=added_asset, asset_version_id=added))
-    assert _publish_dataset(database, {"target_dataset_id": consumer["id"]}, task_id)
+    from astrophotoflow.modules.data.imports.context import ImportTaskContext
+    with database.read_session() as session:
+        context = ImportTaskContext.from_task(session.get(AssetTask, task_id))
+    assert publish_dataset(database, context, task_id)
     current = client.get(f"/api/v1/datasets/{consumer['id']}", headers=AUTH).json()
     appended = version(client, current)
     assert appended["calibration_defaults"] == defaults
     assert [member["calibration_overrides"] for member in appended["members"]] == [{"dark": None}, {}]
+
+
+def test_binding_rows_distinguish_inherit_disable_and_fixed_targets(service):
+    client, database, _ = service
+    _, light, _ = photo(service, "light")
+    _, dark, _ = photo(service, "dark", True)
+    consumer = group(client, "relational consumer", [light])
+    result = publish(client, consumer, [light], calibration_defaults={"dark": {"kind": "asset_version", "id": dark}},
+                     member_calibration_overrides={light: {"dark": None}})
+    assert result.status_code == 201, result.text
+    version_id = result.json()["id"]
+    with database.read_session() as session:
+        default = session.scalar(select(DatasetCalibration).where(DatasetCalibration.dataset_version_id == version_id))
+        member = session.scalar(select(DatasetMember).where(DatasetMember.dataset_version_id == version_id))
+        override = session.scalar(select(MemberCalibration).where(MemberCalibration.member_id == member.id))
+        assert not default.disabled and default.asset_version_id == dark and default.target_dataset_version_id is None
+        assert override.disabled and override.asset_version_id is None and override.target_dataset_version_id is None
+        assert session.scalar(select(MemberCalibration).where(MemberCalibration.member_id == member.id, MemberCalibration.frame_type == "bias")) is None
+    assert "calibration_defaults" not in {column["name"] for column in inspect(database.engine).get_columns("dataset_version")}
+    assert "calibration_overrides" not in {column["name"] for column in inspect(database.engine).get_columns("dataset_member")}
+    assert not hasattr(DatasetVersion, "calibration_defaults") and not hasattr(DatasetMember, "calibration_overrides")
+
+
+@pytest.mark.parametrize("owner", ["default", "member"])
+@pytest.mark.parametrize("both", [False, True])
+def test_database_requires_one_target_or_explicit_disable(service, owner, both):
+    client, database, _ = service
+    _, light, _ = photo(service, "light")
+    _, dark, _ = photo(service, "dark", True)
+    consumer = group(client, "invalid relation", [light])
+    fixed = version(client, consumer)
+    with pytest.raises(IntegrityError, match="_target"), database.write_session() as session:
+        values = {"frame_type": "dark", "disabled": False,
+                  "asset_version_id": dark if both else None,
+                  "target_dataset_version_id": fixed["id"] if both else None}
+        record = DatasetCalibration(dataset_version_id=fixed["id"], **values) if owner == "default" else MemberCalibration(member_id=fixed["members"][0]["id"], **values)
+        session.add(record)
+        session.flush()

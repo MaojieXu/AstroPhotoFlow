@@ -1,14 +1,14 @@
-from typing import Annotated, Literal
 import hashlib
 import json
+from typing import Annotated, Literal
 from uuid import UUID
 
 from pydantic import Field, JsonValue, field_validator, model_validator
 
-from astrophotoflow.contracts.common import ErrorDetail, StrictModel, UuidInput, check_name
-from astrophotoflow.contracts.software import BundleDevelopmentSource, ParameterDefinition, SoftwareOperation
 from astrophotoflow.contracts.bundles import BundlePreview
+from astrophotoflow.contracts.common import ErrorDetail, StrictModel, UuidInput, check_name
 from astrophotoflow.contracts.localization import CapabilityDisplay, Locale
+from astrophotoflow.contracts.software import BundleDevelopmentSource, ParameterDefinition, SoftwareOperation
 
 
 class NodePort(StrictModel):
@@ -136,3 +136,23 @@ def definition_content_token(definition: NodeDefinition) -> str:
         content.pop('category')
     encoded = json.dumps(content, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()
+
+
+class NodeCapabilitySummary(StrictModel):
+    definition_id: UuidInput
+    name: str
+    description: str
+    available: bool
+    reason: str | None
+    content_token: str
+
+
+class NodeSearchPage(StrictModel):
+    items: list[NodeCapabilitySummary]
+    total: int
+    limit: int
+    offset: int
+
+
+class NodeCapabilities(StrictModel):
+    items: list[NodeCapability]

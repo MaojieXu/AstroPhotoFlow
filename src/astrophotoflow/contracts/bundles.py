@@ -1,14 +1,14 @@
-"""Bundle SDK v1: declarative package metadata and process plans."""
+from pydantic import ConfigDict
+
+"""Bundle SDK v2: declarative package metadata and named process plans."""
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field, model_validator
-
-from pydantic import JsonValue
+from pydantic import Field, JsonValue, model_validator
 
 from astrophotoflow.contracts.common import StrictModel
-from astrophotoflow.contracts.localization import Locale
 from astrophotoflow.contracts.inputs import ScienceFormat, ScienceSelection
+from astrophotoflow.contracts.localization import Locale
 
 
 class BundleManifest(StrictModel):
@@ -19,7 +19,7 @@ class BundleManifest(StrictModel):
     release_channel: Literal['dev', 'stable'] = 'dev'
     software_version: str
     platform: Literal["windows-x86_64"]
-    host_api: Literal[1, 2]
+    host_api: Literal[2]
     executable: str
     version_args: list[str]
     version_output: str
@@ -34,19 +34,10 @@ class BundleManifest(StrictModel):
     @model_validator(mode='after')
     def channel_matches_version(self):
         import re
-        if 'release_channel' not in self.model_fields_set and self.bundle_version in {'0.1.0', '0.1.1'}:
-            return self
         pattern = r'\d+\.\d+\.\d+-dev\.\d+' if self.release_channel == 'dev' else r'\d+\.\d+\.\d+'
         if not re.fullmatch(pattern, self.bundle_version):
             raise ValueError('Bundle version must match its dev/stable release channel.')
         return self
-
-
-class ProcessPlan(StrictModel):
-    arguments: list[str]
-    outputs: list[Path]
-    output_format: str
-    linear_sample: Path | None = None
 
 
 class BundleInputMetadata(StrictModel):
@@ -87,6 +78,7 @@ class NamedProcessPlan(StrictModel):
 
 
 class AnalysisResult(StrictModel):
+    model_config = ConfigDict(json_schema_serialization_defaults_required=True)
     kind: Literal["metrics", "table", "series", "text", "json"]
     title: str
     source: str

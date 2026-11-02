@@ -1,8 +1,10 @@
-from astrophotoflow.contracts.common import StrictModel, UuidInput
 from datetime import datetime
-from pydantic import Field, model_validator
 from typing import Literal
 from uuid import UUID
+
+from pydantic import ConfigDict, Field, model_validator
+
+from astrophotoflow.contracts.common import PageMetadata, StrictModel, UuidInput
 
 
 class LibraryEntriesRemoveOut(StrictModel):
@@ -16,6 +18,8 @@ class LibraryTrashGroupOut(StrictModel):
 
 
 class LibraryTrashItemOut(StrictModel):
+    model_config = ConfigDict(json_schema_serialization_defaults_required=True)
+
     entry_type: Literal["asset", "dataset"]
     id: UUID
     name: str
@@ -30,11 +34,8 @@ class LibraryTrashItemOut(StrictModel):
     source_dataset_id: UUID | None = None
 
 
-class LibraryTrashPage(StrictModel):
+class LibraryTrashPage(PageMetadata):
     items: list[LibraryTrashItemOut]
-    total: int
-    limit: int
-    offset: int
 
 
 class LibraryTrashReferenceOut(StrictModel):
@@ -54,13 +55,22 @@ class LibraryTrashPreviewOut(StrictModel):
     preview_fingerprint: str
 
 
+class LibraryTrashFailure(StrictModel):
+    id: UuidInput
+    error: str
+
+
+class LibraryTrashRestoreOut(StrictModel):
+    restored_count: int = Field(ge=0)
+
+
 class LibraryTrashDeleteOut(StrictModel):
     deleted_count: int
     deleted_entry_count: int
     deleted_file_count: int
     deleted_bytes: int
     missing_file_count: int
-    failed: list[dict]
+    failed: list[LibraryTrashFailure]
 
 
 class LibraryEntryRemove(StrictModel):
@@ -144,11 +154,8 @@ class ManagementTrashItemOut(StrictModel):
     details: dict
 
 
-class ManagementTrashPage(StrictModel):
+class ManagementTrashPage(PageMetadata):
     items: list[ManagementTrashItemOut]
-    total: int
-    limit: int
-    offset: int
 
 
 class ManagementTrashDependencyOut(StrictModel):
@@ -189,3 +196,11 @@ class EquipmentDeleteSelection(StrictModel):
 
 class EquipmentDelete(EquipmentDeleteSelection):
     preview_fingerprint: str
+
+
+class ManagementArchiveResult(StrictModel):
+    archived_count: int = Field(ge=0)
+
+
+class ManagementRestoreResult(StrictModel):
+    restored_count: int = Field(ge=0)

@@ -5,7 +5,7 @@ import subprocess
 import numpy as np
 import pytest
 
-from astrophotoflow.modules.data.video_preview import first_video_frame
+from astrophotoflow.modules.data.formats.video import first_video_frame
 
 
 def write_ser(path, color_id, width, height, depth, frame, little_endian=1):

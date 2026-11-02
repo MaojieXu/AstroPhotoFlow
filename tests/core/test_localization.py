@@ -8,7 +8,7 @@ import pytest
 from astrophotoflow.core.config import ConfigurationError
 from astrophotoflow.core.errors import ApiError
 from astrophotoflow.core.localization import error_message, workspace_locale
-from astrophotoflow.interfaces.http.app import _error_response
+from astrophotoflow.interfaces.http.errors import error_response
 from astrophotoflow.interfaces.http.system import router
 
 
@@ -46,7 +46,7 @@ def test_locale_endpoint_authentication_and_corrupt_file(tmp_path):
 
     @app.exception_handler(ApiError)
     async def errors(request, exc):
-        return _error_response(request, exc.status_code, exc.code, exc.message, exc.fields,
+        return error_response(request, exc.status_code, exc.code, exc.message, exc.fields,
                                message_key=exc.message_key, message_params=exc.message_params)
 
     with TestClient(app) as client:

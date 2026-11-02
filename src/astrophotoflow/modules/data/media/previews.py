@@ -1,0 +1,42 @@
+"""Read owned display bytes; a preview is never a scientific input."""
+
+from dataclasses import dataclass
+from pathlib import Path
+
+from sqlalchemy import select
+
+from astrophotoflow.contracts.assets import PreviewReference
+from astrophotoflow.core.config import Settings
+from astrophotoflow.core.database.db import Database
+from astrophotoflow.core.errors import not_found
+from astrophotoflow.modules.data.formats.fits import PREVIEW_ALGORITHM_VERSION
+from astrophotoflow.modules.data.media.models import Preview
+
+
+@dataclass(frozen=True)
+class PreviewContent:
+    content: bytes
+    mime_type: str
+
+
+def read_preview_content(database: Database, settings: Settings, reference: PreviewReference, size: str) -> PreviewContent:
+    if size not in {"thumbnail", "display"} or reference.hdu_index is None:
+        raise not_found()
+    with database.read_session() as session:
+        algorithm = [Preview.algorithm_version == PREVIEW_ALGORITHM_VERSION] if size == "display" else []
+        preview = session.scalar(select(Preview).where(
+            *algorithm, Preview.asset_version_id == str(reference.asset_version_id), Preview.hdu_index == reference.hdu_index,
+            Preview.size == size, Preview.status == "available",
+        ).order_by(Preview.created_at.desc()).limit(1))
+        if preview is None:
+            raise not_found()
+        relative = Path(preview.storage_path)
+        if relative.is_absolute() or ".." in relative.parts:
+            raise not_found()
+        root = settings.data_dir.resolve()
+        path = (root / relative).resolve()
+        try:
+            path.relative_to(root)
+            return PreviewContent(path.read_bytes(), preview.mime_type)
+        except (OSError, ValueError) as exc:
+            raise not_found() from exc

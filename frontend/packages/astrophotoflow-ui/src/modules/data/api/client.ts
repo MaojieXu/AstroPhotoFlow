@@ -1,2 +1,2 @@
-export { ApiClientError, createApiClient } from '../../../core/client'
-export type { FetchApi } from '../../../core/client'
+export { ApiClientError } from '../../../core/api/errors'
+export type { FetchApi } from '../../../core/api/client'

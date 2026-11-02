@@ -1,3 +1,4 @@
+from astrophotoflow.modules.software.bundles import git as bundle_git
 import copy
 import json
 from pathlib import Path
@@ -53,7 +54,7 @@ def test_numeric_sort_and_independent_latest_badges(discovery):
 
 
 def test_remote_tags_use_peeled_commits_and_exclude_historical_experiments(monkeypatch):
-    monkeypatch.setattr(releases.bundles, 'git', lambda args, **kwargs: '\n'.join([
+    monkeypatch.setattr(releases.bundles, 'run_git', lambda args, **kwargs: '\n'.join([
         '1' * 40 + '\trefs/tags/v0.1.0', '2' * 40 + '\trefs/tags/v0.1.1',
         '3' * 40 + '\trefs/tags/v0.2.0-dev.1', '4' * 40 + '\trefs/tags/v0.2.0-dev.1^{}',
         '5' * 40 + '\trefs/tags/unreleased-work']))
@@ -127,7 +128,7 @@ def test_batch_metadata_fetch_requests_only_declared_blobs(tmp_path, monkeypatch
                'nodes/test.json': 'c' * 40, 'app/bin/siril.exe': 'd' * 40, 'adapter/siril.py': 'e' * 40}
     commands = []
     monkeypatch.setattr(releases, '_repository', lambda root, source, **kwargs: root / 'repository.git')
-    monkeypatch.setattr(releases.bundles, 'git', lambda args, **kwargs: commands.append(args) or '')
+    monkeypatch.setattr(releases.bundles, 'run_git', lambda args, **kwargs: commands.append(args) or '')
     from astrophotoflow.contracts.bundles import BundleManifest
     monkeypatch.setattr(releases, 'read_bundle', lambda root: (BundleManifest.model_validate(manifest), [], []))
     monkeypatch.setattr(releases, 'read_bundle_locales', lambda *args: {})
@@ -164,7 +165,7 @@ def test_release_discovery_and_resolution_use_workspace_managed_git(tmp_path, mo
         assert root == tool_root
         seen.append(root)
         return 'workspace-git'
-    monkeypatch.setattr(releases.bundles, 'ensure_git', managed_git)
+    monkeypatch.setattr(bundle_git, 'ensure_git', managed_git)
     manifest = header('0.2.0-dev.1')['manifest']
     paths = ['bundle.json', *header('0.2.0-dev.1')['paths']]
     def run(command, **kwargs):
@@ -177,7 +178,7 @@ def test_release_discovery_and_resolution_use_workspace_managed_git(tmp_path, mo
         else:
             output = ''
         return subprocess.CompletedProcess(command, 0, stdout=output, stderr='')
-    monkeypatch.setattr(releases.bundles.subprocess, 'run', run)
+    monkeypatch.setattr(releases.subprocess, 'run', run)
     monkeypatch.setattr(releases, 'read_bundle', lambda path: (BundleManifest.model_validate(manifest), [], []))
     monkeypatch.setattr(releases, 'read_bundle_locales', lambda *args: {})
     result = releases.list_releases(settings, 'siril')
@@ -207,7 +208,7 @@ def test_invalid_tag_metadata_does_not_hide_valid_releases(tmp_path, monkeypatch
             return '\0'.join('a' * 40 + '\t' + name for name in paths)
         assert 'show' in args
         return '{broken' if commit == bad else json.dumps(header('0.2.0-dev.1')['manifest'])
-    monkeypatch.setattr(releases.bundles, 'git', git)
+    monkeypatch.setattr(releases.bundles, 'run_git', git)
     result = releases.list_releases(settings, 'siril')
     assert not result.stale and result.error is None
     assert len(result.releases) == 2

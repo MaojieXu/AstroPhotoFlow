@@ -8,12 +8,11 @@ import { equipmentSchema, equipmentSetupSchema } from '@ui/modules/data/api/cont
 import type { Equipment, EquipmentSetup } from '@ui/modules/data/api/contracts'
 
 const { get, send } = vi.hoisted(() => ({ get: vi.fn(), send: vi.fn() }))
-vi.mock('@ui/modules/data/api/index', () => ({ assetApi: { get, send } }))
+vi.mock('@ui/modules/data/api/index', async () => ({ libraryApi: (await import('../../../fixtures/library-api')).createLibraryApiFixture(get), catalogApi: (await import('../../../fixtures/library-api')).createCatalogApiFixture(get), mutationApi: (await import('../../../fixtures/library-api')).createMutationApiFixture(send), trashApi: (await import('../../../fixtures/library-api')).createTrashApiFixture(get,send), importApi: (await import('../../../fixtures/library-api')).createImportApiFixture(get,send), datasetApi: (await import('../../../fixtures/library-api')).createDatasetApiFixture(get,send), assetApi: { get, send } }))
 const timestamp = '2026-10-28T12:00:00Z'
 const id = (index: number) => '00000000-0000-4000-8000-' + String(index).padStart(12, '0')
 const device = (index: number, kind: 'camera' | 'filter' = 'camera') => equipmentSchema.parse({
-  id: id(index), kind, name: 'Device ' + index, model: null, serial_number: null,
-  notes: null, specs: {}, status: 'active', revision: 1, created_at: timestamp, updated_at: timestamp
+  id: id(index), kind, name: 'Device ' + index, model: null, notes: null, specs: {}, status: 'active', revision: 1, created_at: timestamp, updated_at: timestamp
 })
 const setup = (index: number) => equipmentSetupSchema.parse({
   id: id(index), name: 'Rig ' + index, components: [], notes: null, status: 'active',

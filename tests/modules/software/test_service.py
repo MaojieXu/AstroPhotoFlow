@@ -1,10 +1,11 @@
+import astrophotoflow.modules.software.packages.state as software_packages_state
 import asyncio
 import pytest
 from types import SimpleNamespace
 from uuid import uuid4
 from pydantic import TypeAdapter
 
-from astrophotoflow.core.http import authenticate
+from astrophotoflow.interfaces.http.dependencies import authenticate
 from astrophotoflow.core.config import Settings
 from astrophotoflow.core.errors import ApiError
 from astrophotoflow.contracts.common import ErrorDetail
@@ -12,8 +13,8 @@ from astrophotoflow.contracts.software import SoftwarePackage, SoftwarePackageSt
 from astrophotoflow.contracts.software import SoftwareInstallRequest
 from astrophotoflow.comfyui.proxy import ROUTES
 from astrophotoflow.interfaces.http.app import create_app
-from astrophotoflow.modules.software.routes import get_software_packages, router as software_router
-from astrophotoflow.contracts.workflows import NativePageConfirmSoftwareEvent, NativePageEvent
+from astrophotoflow.interfaces.http.software import get_software_packages, router as software_router
+from astrophotoflow.contracts.native import NativePageConfirmSoftwareEvent, NativePageEvent
 from astrophotoflow.modules.software.public import (
     get_bundled_definitions, get_command_catalog, get_operation, list_packages, list_siril_commands,
 )
@@ -46,16 +47,13 @@ def test_expired_page_and_missing_handler_return_localized_errors(tmp_path, loca
         assert missing.error.code == 'SOFTWARE_ACTION_EXPIRED'
         assert missing.error.message == error_message(locale, '', 'no_pending_software_action')
         assert not app.state.software_tasks
-    try:
-        asyncio.run(scenario())
-    finally:
-        app.state.database.close()
+    asyncio.run(scenario())
 
 
 @pytest.mark.parametrize('locale', ['en', 'zh'])
 def test_changed_package_expires_plan_without_starting_install(tmp_path, monkeypatch, locale):
     import json
-    import astrophotoflow.interfaces.http.app as app_module
+    import astrophotoflow.interfaces.application.package_actions as app_module
     from astrophotoflow.core.localization import error_message
     ready = SimpleNamespace(ready=True, web_url='http://127.0.0.1:8188')
     monkeypatch.setattr(app_module, 'workbench_status', lambda _path: ready)
@@ -64,26 +62,23 @@ def test_changed_package_expires_plan_without_starting_install(tmp_path, monkeyp
     path.parent.mkdir(parents=True)
     path.write_text(json.dumps({'Comfy.Locale': locale}), encoding='utf-8')
     app = create_app(settings, TOKEN)
-    try:
-        package = list_packages(settings)[0]
-        pending = app.state.request_software_action('siril', SoftwareInstallRequest(version='1.4.4', package_token=package.package_token))
-        page = uuid4()
-        app.state.software_page_tokens[page] = 'page-token'
-        monkeypatch.setattr(app_module, 'get_package', lambda *args: package.model_copy(update={'package_token': 'changed'}))
-        with pytest.raises(ApiError):
-            app.state.start_software_action(pending, page_id=page, page_token='page-token', workbench=ready)
-        expired = app.state.software_actions['siril']
-        assert expired.state == 'expired'
-        assert expired.error.message == error_message(locale, '', 'action_package_changed')
-        assert not app.state.software_tasks
-    finally:
-        app.state.database.close()
+    package = list_packages(settings)[0]
+    pending = app.state.request_software_action('siril', SoftwareInstallRequest(version='1.4.4', package_token=package.package_token))
+    page = uuid4()
+    app.state.software_page_tokens[page] = 'page-token'
+    monkeypatch.setattr(app_module, 'get_package', lambda *args: package.model_copy(update={'package_token': 'changed'}))
+    with pytest.raises(ApiError):
+        app.state.start_software_action(pending, page_id=page, page_token='page-token', workbench=ready)
+    expired = app.state.software_actions['siril']
+    assert expired.state == 'expired'
+    assert expired.error.message == error_message(locale, '', 'action_package_changed')
+    assert not app.state.software_tasks
 
 
 @pytest.mark.parametrize('locale', ['en', 'zh'])
 def test_background_install_error_localizes_outer_message_and_nested_reason(tmp_path, monkeypatch, locale):
     import json
-    import astrophotoflow.interfaces.http.app as app_module
+    import astrophotoflow.interfaces.application.package_actions as app_module
     from astrophotoflow.core.localization import error_message
 
     ready = SimpleNamespace(ready=True, web_url='http://127.0.0.1:8188')
@@ -113,21 +108,19 @@ def test_background_install_error_localizes_outer_message_and_nested_reason(tmp_
         assert details.current_action.state == 'failed'
         assert details.current_action.error.message == details.result.error.message == expected
         assert details.result.error.code == failure.code and details.result.error.fields == failure.fields
-    try:
-        asyncio.run(scenario())
-    finally:
-        app.state.database.close()
+    asyncio.run(scenario())
 
 
-def test_siril_command_catalog_matches_its_source_manifest():
+def test_siril_command_catalog_matches_its_sourcesiril_manifest():
     from importlib.resources import files
 
-    from astrophotoflow.modules.software.public import _manifest
+    from astrophotoflow.modules.software.packages.catalog import siril_manifest
     import hashlib
     import json
 
-    manifest = _manifest()
+    manifest = siril_manifest()
     commands = list_siril_commands()
+    assert commands == get_command_catalog("siril", "1.4.4")
     names = [command.command for command in commands]
     assert len(names) == manifest["indexed_commands"]
     assert len(set(names)) == len(names)
@@ -146,14 +139,16 @@ def test_siril_command_catalog_matches_its_source_manifest():
     pyscript = next(command for command in commands if command.command == "pyscript")
     assert "High" in pyscript.assessment.security_risk
     assert "Python" in pyscript.assessment.security_risk
-    assert pyscript.assessment.node_definition_status == "not_generated"
+    assert pyscript.assessment.node_definition_status == "implemented_executable"
+    published = json.loads(files("astrophotoflow").joinpath("vendor/bundle-catalog.json").read_text(encoding="utf-8"))["siril"]
+    assert any(node["execution"]["operation_id"] == "pyscript" for node in published["nodes"])
 
 
 def test_siril_command_catalog_is_bound_to_package_version():
-    from astrophotoflow.modules.software.public import _manifest
+    from astrophotoflow.modules.software.packages.catalog import siril_manifest
 
     commands = get_command_catalog("siril", "1.4.4")
-    assert len(commands) == _manifest()["indexed_commands"]
+    assert len(commands) == siril_manifest()["indexed_commands"]
     with pytest.raises(ApiError) as wrong_version:
         get_command_catalog("siril", "1.4.3")
     assert wrong_version.value.code == "RESOURCE_NOT_FOUND"
@@ -207,16 +202,16 @@ def test_siril_operation_and_definition_are_version_bound(tmp_path):
     operation = get_operation(settings, "siril", "1.4.4", "autostretch")
     assert operation.syntax == "autostretch [-linked] [shadowsclip [targetbg]]"
     assert operation.ready is False
-    assert operation.cancel_supported is None
+    assert operation.cancel_supported is True
     assert operation.inputs[0].supports_hdu is False
     assert operation.inputs[0].supports_slice is False
     assert operation.inputs[0].cardinality == "many"
     assert operation.inputs[0].type == "APF_SCIENCE"
-    assert [parameter.name for parameter in operation.parameters] == ["linked", "shadowsclip", "targetbg"]
+    assert [parameter.name for parameter in operation.parameters] == ["linked", "shadowsclip", "targetbg", "runtime"]
     definition = get_bundled_definitions(settings, "siril", "1.4.4")[0]
     assert definition["execution"]["operation_id"] == operation.operation_id
     assert definition["execution"]["package_id"] == operation.package_id
-    assert len(get_bundled_definitions(settings, "siril", "1.4.4")) == 1
+    assert len(get_bundled_definitions(settings, "siril", "1.4.4")) == 160
     with pytest.raises(ApiError) as missing:
         get_operation(settings, "siril", "1.4.3", "autostretch")
     assert missing.value.status_code == 404
@@ -247,7 +242,6 @@ def test_software_package_route_requires_auth_and_returns_real_state(tmp_path):
     assert ("GET", "/software/packages/{package_id}/versions/{version}/commands",
             "/software/packages/{package_id}/versions/{version}/commands") in ROUTES
     assert "/api/v1/software/packages" in app.openapi()["paths"]
-    app.state.database.close()
 
 
 def test_native_page_confirmation_has_no_client_supplied_page_identity():
@@ -268,7 +262,7 @@ def test_native_page_confirmation_has_no_client_supplied_page_identity():
 def test_install_request_builds_replaceable_plan_without_side_effects(tmp_path, monkeypatch):
     from types import SimpleNamespace
 
-    import astrophotoflow.interfaces.http.app as app_module
+    import astrophotoflow.interfaces.application.package_actions as app_module
 
     apps = []
 
@@ -284,7 +278,7 @@ def test_install_request_builds_replaceable_plan_without_side_effects(tmp_path, 
     body = SoftwareInstallRequest(version="1.4.4", package_token=package.package_token)
     first = app.state.request_software_action("siril", body)
     assert first.state == "awaiting_confirmation"
-    assert "AstroPhotoFlow-Siril.git @ v0.1.2-dev.1" in first.plan.source
+    assert "AstroPhotoFlow-Siril.git @ v0.2.0-dev.2" in first.plan.source
     assert first.plan.restart_required is False
     assert first.plan.node_changes[0].action == "create"
     assert "operation_id=" + str(first.operation_id) in first.confirmation_url
@@ -303,45 +297,60 @@ def test_install_request_builds_replaceable_plan_without_side_effects(tmp_path, 
     with pytest.raises(ApiError) as expired:
         app.state.get_software_package_details("siril", operation_id=first.operation_id)
     assert expired.value.code == "SOFTWARE_ACTION_EXPIRED"
-    app.state.database.close()
 
 
 def test_bundle_update_plan_is_available_during_active_calls(tmp_path, monkeypatch, bundle_install):
-    import astrophotoflow.interfaces.http.app as app_module
+    import astrophotoflow.interfaces.application.package_actions as app_module
     monkeypatch.setattr(app_module, 'workbench_status', lambda _path: SimpleNamespace(ready=True, web_url='http://127.0.0.1:8188'))
-    monkeypatch.setattr(app_module, 'get_usage', lambda _package: [object()])
     settings = Settings('127.0.0.1', 8190, tmp_path/'data', (), workspace=tmp_path)
     bundle_install(settings)
     from astrophotoflow.modules.software import bundles
     original = bundles.release('siril')
-    newer = {**original, 'manifest': {**original['manifest'], 'bundle_version': '0.1.2-dev.2'}}
+    newer = {**original, 'manifest': {**original['manifest'], 'bundle_version': '0.3.0-dev.1'}}
     monkeypatch.setattr(bundles, 'release', lambda package_id: newer)
     app = create_app(settings, TOKEN)
-    try:
-        package = list_packages(settings)[0]
-        assert package.update_available
-        app.state.siril_calls[uuid4()] = SimpleNamespace(done=lambda: False)
-        pending = app.state.request_software_action('siril', SoftwareInstallRequest(version='1.4.4', package_token=package.package_token))
-        assert pending.state == 'awaiting_confirmation' and pending.plan.action == 'update'
-        assert not pending.plan.restart_required
-    finally:
-        app.state.database.close()
+    package = list_packages(settings)[0]
+    assert package.update_available
+    app.state.software_calls[uuid4()] = SimpleNamespace(done=lambda: False)
+    pending = app.state.request_software_action('siril', SoftwareInstallRequest(version='1.4.4', package_token=package.package_token))
+    assert pending.state == 'awaiting_confirmation' and pending.plan.action == 'update'
+    assert not pending.plan.restart_required
 
 
-def test_confirmed_install_reloads_native_nodes_without_scheduling_restart(tmp_path, monkeypatch, bundle_install):
+@pytest.mark.parametrize('native_mode', ['installed', 'development-ready', 'development-failed'])
+def test_confirmed_install_reloads_native_nodes_without_scheduling_restart(tmp_path, monkeypatch, bundle_install, native_mode):
     from unittest.mock import Mock
     import httpx
-    import astrophotoflow.interfaces.http.app as app_module
+    import astrophotoflow.interfaces.application.package_actions as app_module
     from astrophotoflow.contracts.nodes import NodeDefinition
     from astrophotoflow.core import workbench
     from astrophotoflow.modules.nodes.public import replace_package_definitions
     from astrophotoflow.modules.software import public
+    from astrophotoflow.contracts.software import BundleDevelopmentSource
 
     ready = SimpleNamespace(ready=True, web_url='http://127.0.0.1:8188')
     monkeypatch.setattr(app_module, 'workbench_status', lambda _path: ready)
     restart = Mock()
     monkeypatch.setattr(workbench, 'request_restart', restart)
     settings = Settings('127.0.0.1', 8190, tmp_path/'data', ('http://127.0.0.1:8188',), workspace=tmp_path)
+    observed_package = app_module.get_package
+
+    def effective_package(settings, package_id):
+        package = observed_package(settings, package_id)
+        if native_mode != 'installed' and (package.installed_version or native_mode == 'development-ready'):
+            source = BundleDevelopmentSource(root=tmp_path / 'development', head='a' * 40,
+                fingerprint='b' * 64, state='ready' if native_mode == 'development-ready' else 'failed',
+                software_version='1.4.4', bundle_version='0.2.0-dev.2',
+                error=None if native_mode == 'development-ready' else 'Development nodes failed to load.')
+            return package.model_copy(update={'availability': 'not_ready', 'reason': 'Published nodes are inactive.', 'development_source': source})
+        return package
+
+    monkeypatch.setattr(app_module, 'get_package', effective_package)
+    development_definitions = get_bundled_definitions(settings, 'siril', '1.4.4')
+    development_definitions[0]['name'] = 'Development stretch name'
+    development_definitions[0]['category'] = ['development']
+    if native_mode == 'development-ready':
+        monkeypatch.setattr(app_module, 'get_bundle_metadata', lambda *_: (None, [], development_definitions))
 
     async def install(*args):
         bundle_install(settings)
@@ -352,37 +361,46 @@ def test_confirmed_install_reloads_native_nodes_without_scheduling_restart(tmp_p
 
     def native(request):
         native_requests.append(request)
-        definitions = [NodeDefinition.model_validate(value) for value in get_bundled_definitions(settings, 'siril', '1.4.4')]
+        declarations = development_definitions if native_mode == 'development-ready' else get_bundled_definitions(settings, 'siril', '1.4.4')
+        definitions = [NodeDefinition.model_validate(value) for value in declarations]
         replace_package_definitions(tmp_path, 'siril', definitions, {})
         return httpx.Response(200, json={'status': 'loaded'})
 
     client_class = httpx.AsyncClient
     monkeypatch.setattr(httpx, 'AsyncClient', lambda **kwargs: client_class(transport=httpx.MockTransport(native), **kwargs))
+    from astrophotoflow.core.database.schema import upgrade_database
+    upgrade_database(settings)
     app = create_app(settings, TOKEN)
 
     async def scenario():
-        package = list_packages(settings)[0]
-        pending = app.state.request_software_action('siril', SoftwareInstallRequest(version='1.4.4', package_token=package.package_token))
-        page = uuid4()
-        app.state.software_page_tokens[page] = 'page-token'
-        app.state.start_software_action(pending, page_id=page, page_token='page-token', workbench=ready)
-        await app.state.software_tasks['siril']
-        result = app.state.get_software_package_details('siril')
-        assert result.current_action.state == 'completed' and result.package.availability == 'ready'
-        assert result.result.definition_results[0].applied
-        assert len(native_requests) == 1 and native_requests[0].url.path == '/astrophotoflow/internal/bundles/reload'
-        assert native_requests[0].headers['Authorization'] == f'Bearer {TOKEN}'
-        restart.assert_not_called()
-    try:
-        asyncio.run(scenario())
-    finally:
-        app.state.database.close()
+        async with app.router.lifespan_context(app):
+            package = list_packages(settings)[0]
+            pending = app.state.request_software_action('siril', SoftwareInstallRequest(version='1.4.4', package_token=package.package_token))
+            page = uuid4()
+            app.state.software_page_tokens[page] = 'page-token'
+            app.state.start_software_action(pending, page_id=page, page_token='page-token', workbench=ready)
+            await app.state.software_tasks['siril']
+            result = app.state.get_software_package_details('siril')
+            if native_mode == 'development-failed':
+                assert result.current_action.state == 'failed'
+                assert result.result.error.code == 'BUNDLE_LOAD_FAILED'
+                assert result.result.definition_results == []
+            else:
+                assert result.current_action.state == 'completed' and result.package.effective_availability == 'ready'
+                assert result.result.definition_results[0].applied
+                if native_mode == 'development-ready':
+                    assert result.package.availability == 'not_ready'
+                    assert any(item.content.definition.name == 'Development stretch name' for item in result.result.definition_results)
+            assert len(native_requests) == 1 and native_requests[0].url.path == '/astrophotoflow/internal/bundles/reload'
+            assert native_requests[0].headers['Authorization'] == f'Bearer {TOKEN}'
+            restart.assert_not_called()
+    asyncio.run(scenario())
 
 
 def test_confirmation_does_not_start_replaced_plan(tmp_path, monkeypatch):
     from types import SimpleNamespace
 
-    import astrophotoflow.interfaces.http.app as app_module
+    import astrophotoflow.interfaces.application.package_actions as app_module
 
     monkeypatch.setattr(app_module, "workbench_status", lambda _path: SimpleNamespace(ready=True, web_url="http://127.0.0.1:8188"))
     settings = Settings("127.0.0.1", 8190, tmp_path, (), workspace=tmp_path)
@@ -406,12 +424,11 @@ def test_confirmation_does_not_start_replaced_plan(tmp_path, monkeypatch):
     assert expired.value.code == "SOFTWARE_ACTION_EXPIRED"
     assert app.state.software_actions["siril"].operation_id == second.operation_id
     assert app.state.software_tasks == {}
-    app.state.database.close()
 
 
 def test_bundle_plan_includes_description_and_parameter_changes(tmp_path, monkeypatch):
     import json
-    import astrophotoflow.interfaces.http.app as app_module
+    import astrophotoflow.interfaces.application.package_actions as app_module
     monkeypatch.setattr(app_module, 'workbench_status', lambda _path: SimpleNamespace(ready=True, web_url='http://127.0.0.1:8188'))
     settings = Settings('127.0.0.1', 8190, tmp_path, (), workspace=tmp_path)
     definition = get_bundled_definitions(settings, 'siril', '1.4.4')[0].copy()
@@ -421,23 +438,20 @@ def test_bundle_plan_includes_description_and_parameter_changes(tmp_path, monkey
     path = directory/(definition['definition_id']+'.json')
     path.write_text(json.dumps(definition), encoding='utf-8')
     app = create_app(settings, TOKEN)
-    try:
-        package = list_packages(settings)[0]
-        body = SoftwareInstallRequest(version='1.4.4', package_token=package.package_token)
-        pending = app.state.request_software_action('siril', body)
-        assert pending.plan.node_changes[0].action == 'update'
-        changed = json.loads(path.read_text(encoding='utf-8'))
-        changed['parameters'][0]['default'] = True
-        path.write_text(json.dumps(changed), encoding='utf-8')
-        updated = app.state.request_software_action('siril', body)
-        assert updated.plan.node_changes[0].action == 'update'
-        assert updated.plan.node_changes[0].before_content_token != updated.plan.node_changes[0].after_content_token
-    finally:
-        app.state.database.close()
+    package = list_packages(settings)[0]
+    body = SoftwareInstallRequest(version='1.4.4', package_token=package.package_token)
+    pending = app.state.request_software_action('siril', body)
+    assert next(change for change in pending.plan.node_changes if str(change.definition_id) == definition['definition_id']).action == 'update'
+    changed = json.loads(path.read_text(encoding='utf-8'))
+    changed['parameters'][0]['default'] = True
+    path.write_text(json.dumps(changed), encoding='utf-8')
+    updated = app.state.request_software_action('siril', body)
+    assert next(change for change in updated.plan.node_changes if str(change.definition_id) == definition['definition_id']).action == 'update'
+    assert next(change for change in updated.plan.node_changes if str(change.definition_id) == definition['definition_id']).before_content_token != next(change for change in updated.plan.node_changes if str(change.definition_id) == definition['definition_id']).after_content_token
 
 
 def test_uninstall_plan_requires_confirmation_and_keeps_actual_definitions(tmp_path, monkeypatch):
-    import astrophotoflow.interfaces.http.app as app_module
+    import astrophotoflow.interfaces.application.package_actions as app_module
     from astrophotoflow.contracts.software import SoftwareUninstallRequest
     from astrophotoflow.modules.software import public
 
@@ -446,23 +460,20 @@ def test_uninstall_plan_requires_confirmation_and_keeps_actual_definitions(tmp_p
     app_path = tmp_path / "software/siril/app"
     (app_path / "bin").mkdir(parents=True)
     (app_path / "bin/siril-cli.exe").write_bytes(b"fixture")
-    public._write_package_state(settings, "siril", SoftwarePackageState(
+    software_packages_state.write_package_state(settings, "siril", SoftwarePackageState(
         installed_version="1.4.4", install_path=app_path, availability="ready", reason=None,
         operation="install", operation_state="completed", phase=None, progress=None,
         last_error=None, node_definition_ids=[],
     ))
     app = create_app(settings, TOKEN)
-    try:
-        package = public.get_package(settings, "siril")
-        request = SoftwareUninstallRequest(package_token=package.package_token)
-        pending = app.state.request_software_action("siril", request)
-        assert pending.state == "awaiting_confirmation" and pending.plan.action == "uninstall"
-        assert pending.plan.target_version is None and pending.plan.source is None
-        assert pending.plan.restart_required is False
-        assert app_path.exists() and not app.state.software_tasks
-        assert "/api/v1/software/packages/{package_id}/uninstall" in app.openapi()["paths"]
-        with pytest.raises(ApiError) as conflict:
-            app.state.request_software_action("siril", SoftwareUninstallRequest(package_token="obsolete"))
-        assert conflict.value.code == "SOFTWARE_CONTENT_CONFLICT"
-    finally:
-        app.state.database.close()
+    package = public.get_package(settings, "siril")
+    request = SoftwareUninstallRequest(package_token=package.package_token)
+    pending = app.state.request_software_action("siril", request)
+    assert pending.state == "awaiting_confirmation" and pending.plan.action == "uninstall"
+    assert pending.plan.target_version is None and pending.plan.source is None
+    assert pending.plan.restart_required is False
+    assert app_path.exists() and not app.state.software_tasks
+    assert "/api/v1/software/packages/{package_id}/uninstall" in app.openapi()["paths"]
+    with pytest.raises(ApiError) as conflict:
+        app.state.request_software_action("siril", SoftwareUninstallRequest(package_token="obsolete"))
+    assert conflict.value.code == "SOFTWARE_CONTENT_CONFLICT"

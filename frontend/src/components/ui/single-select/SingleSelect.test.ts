@@ -93,6 +93,33 @@ async function openSelect(triggerEl: HTMLElement) {
 
 let openModal: HTMLElement | undefined
 
+it('supports returning to an empty-valued All option without a search field', async () => {
+  const selected = ref<string | undefined>('camera')
+  const user = userEvent.setup()
+  const { unmount } = render(
+    {
+      components: { SingleSelect },
+      setup: () => ({ selected }),
+      template: `<SingleSelect v-model="selected" label="Category" size="md" density="compact" :options="[{ name: 'All equipment', value: '' }, { name: 'Camera', value: 'camera' }]" />`
+    },
+    { global: { plugins: [i18n] } }
+  )
+
+  await openSelect(screen.getByRole('combobox'))
+  expect(screen.queryByPlaceholderText('Search')).not.toBeInTheDocument()
+  expect(screen.getByRole('option', { name: 'Camera' })).toHaveAttribute(
+    'aria-selected',
+    'true'
+  )
+  await user.click(screen.getByRole('option', { name: 'All equipment' }))
+  expect(selected.value).toBe('')
+  expect(screen.getByRole('combobox')).toHaveTextContent('All equipment')
+  await openSelect(screen.getByRole('combobox'))
+  await user.click(screen.getByRole('option', { name: 'Camera' }))
+  expect(selected.value).toBe('camera')
+  unmount()
+})
+
 afterEach(() => {
   if (openModal) {
     ZIndex.clear(openModal)
@@ -105,8 +132,10 @@ describe('SingleSelect', () => {
     const updates: Array<string | number | undefined> = []
     const { rerender } = render(SingleSelect, {
       props: {
-        modelValue: 'a', options: [{ name: '中文标签', value: 'a' }],
-        'onUpdate:modelValue': (value: string | number | undefined) => updates.push(value)
+        modelValue: 'a',
+        options: [{ name: '中文标签', value: 'a' }],
+        'onUpdate:modelValue': (value: string | number | undefined) =>
+          updates.push(value)
       },
       global: { plugins: [i18n] }
     })

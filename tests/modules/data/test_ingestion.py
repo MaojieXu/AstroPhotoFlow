@@ -1,10 +1,17 @@
 from __future__ import annotations
+import astrophotoflow.modules.data.imports.stages as owner_stages
+import astrophotoflow.modules.data.imports.enumeration as owner_enumeration
+from astrophotoflow.modules.data.formats import layout as codec_formats_layout
+from astrophotoflow.modules.data.formats import pixels as codec_formats_pixels
+from astrophotoflow.modules.data.formats import fits as codec_formats_fits
+from astrophotoflow.modules.data.assets.metadata import classification_columns, parameter_columns
 
 from astrophotoflow.core.localization import error_message
 
 from pathlib import Path
 from io import BytesIO
 import struct
+import sqlite3
 import subprocess
 from uuid import uuid4
 
@@ -19,12 +26,14 @@ from sqlalchemy import select
 from xisf import XISF
 
 from astrophotoflow.interfaces.http.app import create_app
-from astrophotoflow.modules.data.models import Asset, AssetTask, AssetTaskItem, FitsHduMetadata, Preview
-from astrophotoflow.modules.data.ingestion import backfill_missing_previews, mark_interrupted_tasks, process_task
-from astrophotoflow.modules.data import ingestion
+from astrophotoflow.modules.data.assets.models import Asset, FitsHduMetadata
+from astrophotoflow.modules.data.media.models import Preview
+from astrophotoflow.modules.data.imports.models import AssetTask, AssetTaskItem
+from astrophotoflow.modules.data.media.import_previews import backfill_missing_previews
+from astrophotoflow.modules.data.imports.tasks import mark_interrupted_tasks
+from astrophotoflow.modules.data.imports.runner import run_import_task
 from astrophotoflow.core.database.schema import database_lock, upgrade_database
 from astrophotoflow.core.config import ImportRoot, Settings
-from astrophotoflow.modules.data.library import _rounded_temperature
 
 
 TOKEN = "test-token"
@@ -324,10 +333,10 @@ def test_browser_upload_creates_one_dataset_row_and_managed_assets(tmp_path):
         assert items["total"] == 1
         entry = items["items"][0]
         assert entry["entry_type"] == "dataset"
-        assert entry["dataset"]["name"] == "M31 session"
+        assert entry["name"] == "M31 session"
         assert client.get("/api/v1/library/items", headers=AUTH, params={"q": "first"}).json()["total"] == 1
-        assert len(entry["version"]["members"]) == 2
-        assert all(member["version"]["storage_mode"] == "managed" for member in entry["version"]["members"])
+        assert entry["member_count"] == 2
+        assert entry["summary"]["storage_mode"] == {"state": "consistent", "value": "managed"}
         assert not list((settings.data_dir / "upload-staging" / task_id).glob("*"))
 
         failed_batch = client.post("/api/v1/uploads", headers=AUTH, json={
@@ -351,7 +360,6 @@ def test_browser_upload_creates_one_dataset_row_and_managed_assets(tmp_path):
         assert resume.json()["error"]["code"]=="UPLOAD_REQUIRES_SELECTION"
     finally:
         client.__exit__(None, None, None)
-        app.state.database.close()
 
 
 def test_completed_upload_cancelled_items_can_retry_from_original_staging(tmp_path):
@@ -400,7 +408,6 @@ def test_completed_upload_cancelled_items_can_retry_from_original_staging(tmp_pa
         assert client.get("/api/v1/library/assets", headers=AUTH).json()["total"] == 1
     finally:
         client.__exit__(None, None, None)
-        app.state.database.close()
 
 
 def test_project_asset_and_dataset_reference_deletes_check_revision_without_deleting_data(tmp_path):
@@ -446,7 +453,6 @@ def test_project_asset_and_dataset_reference_deletes_check_revision_without_dele
         assert (root / "single.fits").read_bytes() == original
     finally:
         client.__exit__(None, None, None)
-        app.state.database.close()
 
 
 def test_import_without_override_uses_explicit_fits_classification(tmp_path):
@@ -465,12 +471,12 @@ def test_import_without_override_uses_explicit_fits_classification(tmp_path):
         assert asset['current_version']['scientific_metadata']['observed_parameters']['file_classification_header']['value']=='Light Frame'
     finally:
         client.__exit__(None,None,None)
-        app.state.database.close()
 
 
 @pytest.mark.parametrize(('raw','rounded'),[(0.49,0),(0.5,1),(1.5,2),(-0.49,0),(-0.5,-1),(-1.5,-2)])
 def test_temperature_rounding_uses_half_away_from_zero(raw,rounded):
-    assert _rounded_temperature(raw)==rounded
+    with sqlite3.connect(":memory:") as connection:
+        assert connection.execute("SELECT round(?)", (raw,)).fetchone()[0] == rounded
 
 
 def test_empty_import_info_and_folder_single_file_create_unclassified_dataset(tmp_path):
@@ -495,7 +501,6 @@ def test_empty_import_info_and_folder_single_file_create_unclassified_dataset(tm
         assert client.get("/api/v1/library/items",headers=AUTH).json()["items"][0]["entry_type"]=="dataset"
     finally:
         client.__exit__(None,None,None)
-        app.state.database.close()
 
 
 def test_dataset_member_parameter_update_is_atomic_and_creates_no_asset_versions(tmp_path):
@@ -536,7 +541,6 @@ def test_dataset_member_parameter_update_is_atomic_and_creates_no_asset_versions
         assert all(asset["parameters"]["gain"] is None for asset in current)
     finally:
         client.__exit__(None,None,None)
-        app.state.database.close()
 
 
 def test_backfill_records_missing_reference_and_continues_to_next_asset(tmp_path):
@@ -553,7 +557,6 @@ def test_backfill_records_missing_reference_and_continues_to_next_asset(tmp_path
         assert backfill_missing_previews(app.state.database,settings)=={"generated":1,"failed":1}
     finally:
         client.__exit__(None,None,None)
-        app.state.database.close()
 
 
 def test_non_bayer_cfa_stays_registered_and_reports_preview_unsupported(tmp_path):
@@ -584,11 +587,10 @@ def test_non_bayer_cfa_stays_registered_and_reports_preview_unsupported(tmp_path
         assert restored.json()["classification"]=={"frame_class":"subframe","frame_type":None}
     finally:
         client.__exit__(None,None,None)
-        app.state.database.close()
 
 
 def test_backfill_recognizes_previously_unsupported_pixinsight_rgb_without_reimport(tmp_path, monkeypatch):
-    from astrophotoflow.modules.data import fits_preview
+
 
     root = tmp_path / "science"
     root.mkdir()
@@ -602,7 +604,7 @@ def test_backfill_recognizes_previously_unsupported_pixinsight_rgb_without_reimp
     settings, app, client = make_client(tmp_path, (ImportRoot("science", root),))
     try:
         with monkeypatch.context() as legacy:
-            legacy.setattr(fits_preview, "_rgb_channel_first", lambda header: False)
+            legacy.setattr(codec_formats_layout, "rgb_channel_first", lambda header: False)
             accepted = start_import(client, "color.fits", storage_mode="managed")
         assert accepted.status_code == 202
         before = client.get("/api/v1/library/assets", headers=AUTH).json()["items"][0]
@@ -632,7 +634,6 @@ def test_backfill_recognizes_previously_unsupported_pixinsight_rgb_without_reimp
         assert path.read_bytes() == original
     finally:
         client.__exit__(None, None, None)
-        app.state.database.close()
 
 
 def test_ordinary_images_create_only_small_preview(tmp_path):
@@ -665,7 +666,6 @@ def test_ordinary_images_create_only_small_preview(tmp_path):
         assert source.read_bytes()==original
     finally:
         client.__exit__(None,None,None)
-        app.state.database.close()
 
 
 def test_fits_batch_stretches_each_photo_independently_and_restores_it_on_resume(tmp_path):
@@ -714,14 +714,13 @@ def test_fits_batch_stretches_each_photo_independently_and_restores_it_on_resume
             session.get(AssetTaskItem, items["b.fit"]["id"]).status = "interrupted"
             session.get(AssetTaskItem, items["b.fit"]["id"]).preview_status = "pending"
             session.get(AssetTask, task_id).status = "running"
-        process_task(app.state.database, settings, task_id)
+        run_import_task(app.state.database, settings, task_id)
         with app.state.database.read_session() as session:
             resumed = session.scalar(select(Preview).where(Preview.asset_version_id == items["b.fit"]["asset_version_id"], Preview.size == "thumbnail"))
             assert resumed.display_parameters == displays["b.fit"]
         assert len(list((settings.data_dir / "previews" / items["b.fit"]["asset_version_id"]).glob("*.jpg"))) == 1
     finally:
         client.__exit__(None, None, None)
-        app.state.database.close()
 
 
 def test_xisf_and_high_depth_images_stretch_each_photo_independently(tmp_path):
@@ -756,7 +755,6 @@ def test_xisf_and_high_depth_images_stretch_each_photo_independently(tmp_path):
             assert "stretch_group" not in displays[second]
     finally:
         client.__exit__(None, None, None)
-        app.state.database.close()
 
 
 def test_xisf_and_heif_imports_create_slot_zero_previews_for_assets_and_references(tmp_path):
@@ -833,7 +831,6 @@ def test_xisf_and_heif_imports_create_slot_zero_previews_for_assets_and_referenc
         assert {path.name: path.read_bytes() for path in import_paths} == source_bytes
     finally:
         client.__exit__(None, None, None)
-        app.state.database.close()
 
 
 def test_interrupted_unpublished_copy_is_removed_before_retry(tmp_path, monkeypatch):
@@ -841,15 +838,15 @@ def test_interrupted_unpublished_copy_is_removed_before_retry(tmp_path, monkeypa
     write_fits(root / "partial.fits")
     _, app, client = make_client(tmp_path, (ImportRoot("science", root),))
     try:
-        enumerate_source = ingestion._enumerate_task
-        def leave_partial_copy(database, settings, task_id, task_data):
-            enumerate_source(database, settings, task_id, task_data)
+        enumerate_source = owner_enumeration.enumerate_task
+        def leave_partial_copy(database, settings, task_id, sources, **options):
+            enumerate_source(database, settings, task_id, sources, **options)
             with database.read_session() as session:
                 item_id = session.scalar(select(AssetTaskItem.id).where(AssetTaskItem.task_id == task_id))
             stage = settings.data_dir / "staging" / task_id / f"{item_id}.part"
             stage.parent.mkdir(parents=True, exist_ok=True)
             stage.write_bytes(b"interrupted copy")
-        monkeypatch.setattr(ingestion, "_enumerate_task", leave_partial_copy)
+        monkeypatch.setattr(owner_enumeration, "enumerate_task", leave_partial_copy)
 
         accepted = start_import(client, "partial.fits", storage_mode="managed")
         task = client.get(f"/api/v1/asset-tasks/{accepted.json()['task_id']}", headers=AUTH).json()
@@ -858,7 +855,6 @@ def test_interrupted_unpublished_copy_is_removed_before_retry(tmp_path, monkeypa
         assert not (app.state.settings.data_dir / "staging" / task["id"] / f"{task['items'][0]['id']}.part").exists()
     finally:
         client.__exit__(None, None, None)
-        app.state.database.close()
 
 
 @pytest.mark.parametrize("kind", ["fits", "image", "video"])
@@ -873,7 +869,7 @@ def test_resume_finishes_preview_after_content_was_registered(tmp_path, monkeypa
     else:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(b"test SER source")
-        monkeypatch.setattr(ingestion, "first_video_frame", lambda *_args: (Image.new("RGB", (12, 8), (20, 100, 200)), {"video_frame_index": 0}))
+        monkeypatch.setattr(owner_stages, "first_video_frame", lambda *_args: (Image.new("RGB", (12, 8), (20, 100, 200)), {"video_frame_index": 0}))
     _, app, client = make_client(tmp_path, (ImportRoot("science", root),))
     try:
         task_id = str(uuid4())
@@ -898,12 +894,11 @@ def test_resume_finishes_preview_after_content_was_registered(tmp_path, monkeypa
                 root_id="science", source_path=path.name, source_identity="resume:"+kind, position=0,
                 status="running", content_status="pending", metadata_status="pending", preview_status="pending",
             ))
-        task_data = {
-            "id":task_id,"sources":[],"storage_mode":"reference","classification":{},"parameters":parameters,
-            "notes":None,"dataset_name":None,"target_dataset_id":None,"dataset_base_revision":None,
-            "retry_of_task_id":root_id,"upload_manifest":False,"upload_files":[],"upload_source_task_id":task_id,
-        }
-        assert ingestion._create_asset_content(app.state.database, app.state.settings, task_data, child_item_id) is None
+        from astrophotoflow.modules.data.imports.context import ImportTaskContext
+        with app.state.database.read_session() as session:
+            task_data = ImportTaskContext.from_task(session.get(AssetTask, task_id))
+        task_data.parameters = parameters
+        assert owner_stages.materialize_content(app.state.database, app.state.settings, task_data, child_item_id) is None
         with app.state.database.read_session() as session:
             interrupted_item = session.get(AssetTaskItem, child_item_id)
             asset_id = interrupted_item.asset_id
@@ -914,7 +909,7 @@ def test_resume_finishes_preview_after_content_was_registered(tmp_path, monkeypa
         with app.state.database.write_session() as session:
             session.get(AssetTask, task_id).status = "queued"
             session.get(AssetTaskItem, child_item_id).status = "queued"
-        process_task(app.state.database, app.state.settings, task_id)
+        run_import_task(app.state.database, app.state.settings, task_id)
         task = client.get(f"/api/v1/asset-tasks/{task_id}", headers=AUTH).json()
         assert task["status"] == "completed"
         assert task["items_completed"] == 1
@@ -924,7 +919,6 @@ def test_resume_finishes_preview_after_content_was_registered(tmp_path, monkeypa
         assert client.get("/api/v1/library/assets", headers=AUTH).json()["total"] == 1
     finally:
         client.__exit__(None, None, None)
-        app.state.database.close()
 
 
 def test_dataset_filters_require_one_member_to_match_all_conditions(tmp_path):
@@ -977,7 +971,6 @@ def test_dataset_filters_require_one_member_to_match_all_conditions(tmp_path):
         assert {item["id"] for item in facets["equipment"]["camera_id"]}=={camera["id"] for camera in cameras}
     finally:
         client.__exit__(None,None,None)
-        app.state.database.close()
 
 
 def test_library_sort_runs_before_paging_and_uses_numeric_values(tmp_path):
@@ -987,7 +980,7 @@ def test_library_sort_runs_before_paging_and_uses_numeric_values(tmp_path):
             for exposure in range(55):
                 session.add(Asset(
                     id=str(uuid4()), name=f"asset-{54-exposure:03d}", scope="shared", role="raw",
-                    classification={}, parameters={"exposure_seconds": exposure}, value_sources={},
+                    **classification_columns({}), **parameter_columns({"exposure_seconds": exposure}), value_sources={},
                     status="active", revision=1,
                 ))
 
@@ -998,19 +991,18 @@ def test_library_sort_runs_before_paging_and_uses_numeric_values(tmp_path):
             "sort_by": "exposure_seconds", "order": "asc", "limit": 50, "offset": 50,
         }).json()
         assert first["total"] == second["total"] == 55
-        assert first["items"][0]["asset"]["name"] == "asset-054"
-        assert first["items"][-1]["asset"]["name"] == "asset-005"
-        assert second["items"][0]["asset"]["name"] == "asset-004"
-        assert second["items"][-1]["asset"]["name"] == "asset-000"
+        assert first["items"][0]["name"] == "asset-054"
+        assert first["items"][-1]["name"] == "asset-005"
+        assert second["items"][0]["name"] == "asset-004"
+        assert second["items"][-1]["name"] == "asset-000"
 
         filtered = client.get("/api/v1/library/items", headers=AUTH, params={
             "sort_by": "exposure_seconds", "order": "desc", "exposure_min": 52,
         }).json()
         assert filtered["total"] == 3
-        assert [item["asset"]["parameters"]["exposure_seconds"] for item in filtered["items"]] == [54, 53, 52]
+        assert [item["summary"]["parameters"]["exposure_seconds"]["value"] for item in filtered["items"]] == [54, 53, 52]
     finally:
         client.__exit__(None, None, None)
-        app.state.database.close()
 
 
 def test_ser_import_previews_survive_decode_failure_and_backfill_each_item(tmp_path):
@@ -1064,7 +1056,6 @@ def test_ser_import_previews_survive_decode_failure_and_backfill_each_item(tmp_p
         assert broken.read_bytes()==original[:178]
     finally:
         client.__exit__(None,None,None)
-        app.state.database.close()
 
 
 def test_queued_cancel_and_selected_retry_keep_task_lineage(tmp_path):
@@ -1117,7 +1108,6 @@ def test_queued_cancel_and_selected_retry_keep_task_lineage(tmp_path):
         assert client.get(f"/api/v1/asset-tasks/{failed_task_id}", headers=AUTH).json()["status"] == "failed"
     finally:
         client.__exit__(None, None, None)
-        app.state.database.close()
 
 
 def test_empty_folder_import_does_not_publish_dataset(tmp_path):
@@ -1132,7 +1122,6 @@ def test_empty_folder_import_does_not_publish_dataset(tmp_path):
         assert client.get("/api/v1/datasets", headers=AUTH).json()["total"] == 0
     finally:
         client.__exit__(None, None, None)
-        app.state.database.close()
 
 
 def test_import_records_persist_after_service_restart(tmp_path):
@@ -1145,7 +1134,6 @@ def test_import_records_persist_after_service_restart(tmp_path):
     asset_id = task["items"][0]["asset_id"]
     version_id = task["items"][0]["asset_version_id"]
     client.__exit__(None, None, None)
-    app.state.database.close()
 
     restarted_app = create_app(settings, TOKEN)
     with TestClient(restarted_app) as restarted:
@@ -1155,7 +1143,6 @@ def test_import_records_persist_after_service_restart(tmp_path):
         assert persisted_task["items"][0]["asset_version_id"] == version_id
         assert persisted_asset["current_version"]["id"] == version_id
         assert persisted_asset["current_version"]["content_hash"].startswith("blake3:")
-    restarted_app.state.database.close()
 
 
 def test_service_restart_preserves_import_progress_for_resume(tmp_path):
@@ -1197,7 +1184,6 @@ def test_service_restart_preserves_import_progress_for_resume(tmp_path):
         assert task["error"]["code"] == "SERVICE_INTERRUPTED"
     finally:
         client.__exit__(None, None, None)
-        app.state.database.close()
 
 
 def test_resume_uses_interrupted_task_id(tmp_path):
@@ -1223,7 +1209,6 @@ def test_resume_uses_interrupted_task_id(tmp_path):
         assert len(result["items"]) == 1
     finally:
         client.__exit__(None, None, None)
-        app.state.database.close()
 
 
 def test_cancel_during_enumeration_keeps_only_registered_items(tmp_path, monkeypatch):
@@ -1242,16 +1227,16 @@ def test_cancel_during_enumeration_keeps_only_registered_items(tmp_path, monkeyp
             retry_of_task_id=None, report={}, error=None,
         ))
 
-    original = ingestion._source_item
+    original = owner_enumeration.register_source_item
 
     def register_then_cancel(database, current_task_id, entry, position, known, **kwargs):
         original(database, current_task_id, entry, position, known, **kwargs)
         with database.write_session() as session:
             session.get(AssetTask, current_task_id).status = "cancelling"
 
-    monkeypatch.setattr(ingestion, "_source_item", register_then_cancel)
+    monkeypatch.setattr(owner_enumeration, "register_source_item", register_then_cancel)
     try:
-        process_task(app.state.database, settings, task_id)
+        run_import_task(app.state.database, settings, task_id)
         task = client.get(f"/api/v1/asset-tasks/{task_id}", headers=AUTH).json()
         assert task["status"] == "cancelled"
         assert task["enumeration_completed"] is False
@@ -1260,7 +1245,6 @@ def test_cancel_during_enumeration_keeps_only_registered_items(tmp_path, monkeyp
         assert task["dataset_id"] is None
     finally:
         client.__exit__(None, None, None)
-        app.state.database.close()
 
 
 def test_metadata_failure_keeps_content_and_retry_does_not_recreate_asset(tmp_path, monkeypatch):
@@ -1268,12 +1252,12 @@ def test_metadata_failure_keeps_content_and_retry_does_not_recreate_asset(tmp_pa
     original_bytes = write_fits(root / "retry.fits")
     _, app, client = make_client(tmp_path, (ImportRoot("science", root),))
     try:
-        original_inspect_fits = ingestion.inspect_fits
+        original_inspect_fits = owner_stages.inspect_fits
         def fail_metadata(*_args, **_kwargs):
             raise ValueError("injected metadata failure")
-        monkeypatch.setattr(ingestion, "inspect_fits", fail_metadata)
+        monkeypatch.setattr(owner_stages, "inspect_fits", fail_metadata)
         accepted = start_import(client, "retry.fits")
-        monkeypatch.setattr(ingestion, "inspect_fits", original_inspect_fits)
+        monkeypatch.setattr(owner_stages, "inspect_fits", original_inspect_fits)
         original = client.get(f"/api/v1/asset-tasks/{accepted.json()['task_id']}", headers=AUTH).json()
         original_item = original["items"][0]
         assert original["status"] == "completed_with_errors"
@@ -1310,7 +1294,6 @@ def test_metadata_failure_keeps_content_and_retry_does_not_recreate_asset(tmp_pa
         assert client.get("/api/v1/library/assets", headers=AUTH).json()["total"] == 1
     finally:
         client.__exit__(None, None, None)
-        app.state.database.close()
 
 
 def test_dataset_revision_conflict_keeps_assets_for_manual_append(tmp_path):
@@ -1334,7 +1317,7 @@ def test_dataset_revision_conflict_keeps_assets_for_manual_append(tmp_path):
                 enumeration_completed=False, retry_of_task_id=None, report={}, error=None,
             ))
 
-        process_task(app.state.database, settings, task_id)
+        run_import_task(app.state.database, settings, task_id)
         failed_publication = client.get(f"/api/v1/asset-tasks/{task_id}", headers=AUTH).json()
         conflict = failed_publication["report"]["dataset_publish_error"]
         assert failed_publication["status"] == "completed_with_errors"
@@ -1369,7 +1352,6 @@ def test_dataset_revision_conflict_keeps_assets_for_manual_append(tmp_path):
 
     finally:
         client.__exit__(None, None, None)
-        app.state.database.close()
 
 
 def test_library_removal_is_atomic_persistent_and_preserves_shared_data(tmp_path):
@@ -1431,7 +1413,7 @@ def test_library_removal_is_atomic_persistent_and_preserves_shared_data(tmp_path
         removed_a = client.request("DELETE", "/api/v1/library/items", headers=AUTH, json={"items":[row_a]})
         assert removed_a.status_code == 200 and removed_a.json()["removed_count"] == 1
         visible = client.get("/api/v1/library/items", headers=AUTH).json()
-        assert visible["total"] == 1 and visible["items"][0]["dataset"]["id"] == dataset_b["id"]
+        assert visible["total"] == 1 and visible["items"][0]["id"] == dataset_b["id"]
         assert all(item["entry_type"] == "dataset" for item in visible["items"])
         assert client.get(f"/api/v1/projects/{project['id']}/asset-references/{asset_reference['id']}", headers=AUTH).status_code == 200
         assert client.get(f"/api/v1/projects/{project['id']}/dataset-references/{dataset_reference['id']}", headers=AUTH).status_code == 200
@@ -1470,14 +1452,12 @@ def test_library_removal_is_atomic_persistent_and_preserves_shared_data(tmp_path
         ]})
         assert conflict.status_code == 409
         remaining = client.get("/api/v1/library/items", headers=AUTH).json()
-        assert remaining["total"] == 1 and remaining["items"][0]["asset"]["id"] == rollback_asset["id"]
+        assert remaining["total"] == 1 and remaining["items"][0]["id"] == rollback_asset["id"]
         assert (settings.data_dir / rollback_asset["current_version"]["storage_location"]).read_bytes() == rollback_bytes
 
         client.__exit__(None, None, None)
-        app.state.database.close()
         settings, app, client = make_client(tmp_path, (ImportRoot("science", root),))
         persisted = client.get("/api/v1/library/items", headers=AUTH).json()
-        assert persisted["total"] == 1 and persisted["items"][0]["asset"]["id"] == rollback_asset["id"]
+        assert persisted["total"] == 1 and persisted["items"][0]["id"] == rollback_asset["id"]
     finally:
         client.__exit__(None, None, None)
-        app.state.database.close()

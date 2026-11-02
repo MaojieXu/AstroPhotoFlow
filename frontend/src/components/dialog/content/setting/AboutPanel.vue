@@ -42,7 +42,7 @@
 <script setup lang="ts">
 import { cn } from '@comfyorg/tailwind-utils'
 
-import AstroPhotoFlowAboutPanel from '@/platform/astrophotoflow/AstroPhotoFlowAboutPanel.vue'
+import AstroPhotoFlowAboutPanel from '@/platform/astrophotoflow/sidebar/AstroPhotoFlowAboutPanel.vue'
 import { isCloud, isDesktop } from '@/platform/distribution/types'
 import SystemStatsPanel from '@/components/common/SystemStatsPanel.vue'
 import Badge from '@/components/ui/badge/Badge.vue'

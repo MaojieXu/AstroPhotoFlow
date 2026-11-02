@@ -23,7 +23,7 @@
 | 文件 | 操作／职责 | 依赖 |
 |---|---|---|
 | `frontend/packages/astrophotoflow-ui/src/modules/data/workspace/Workspace.vue` | M：修改既有设备字段展示及创建/内联保存映射；其他数据逻辑复用 | 既有equipment API/DTO |
-| `frontend/packages/astrophotoflow-ui/src/modules/data/workspace/SettingsPage.vue` | M：修改单像元输入和既有设备字段展示；不新建EquipmentForm | Workspace公开context |
+| `frontend/packages/astrophotoflow-ui/src/modules/data/library/SettingsPage.vue` | M：修改单像元输入和既有设备字段展示；不新建EquipmentForm | Workspace公开context |
 | `frontend/packages/astrophotoflow-ui/src/modules/data/workspace/EquipmentSetupManager.vue` | M：修改组合内设备相同输入映射；保留组合快照不回写注册设备 | 既有context.specFields |
 | `src/astrophotoflow/contracts/equipment.py` | R：复用全部字段/类型；本卡不新增schema | 既有x/y/光学说明 |
 | `frontend/packages/astrophotoflow-ui/tests/modules/data/workspace/Workspace.regression.test.ts` | M：修改/新增单像元明确编辑与未编辑保旧值行为断言 | 既有组件夹具 |
@@ -133,7 +133,7 @@ def observe_reference_inputs(settings: Settings, inputs: ResolvedInputs) -> list
 | `frontend/packages/astrophotoflow-ui/src/modules/data/api/client.ts` | M：修改新增2个具名TS方法，消费core HTTP同一实现/错误fields | 已确认FetchApi公共归属 |
 | `frontend/packages/astrophotoflow-ui/src/modules/data/index.ts` | M：修改必要DTO/具名操作导出 | 实际消费者 |
 | `frontend/packages/astrophotoflow-ui/src/modules/data/workspace/Workspace.vue` | M：修改素材详情操作/观察状态/明确确认/刷新同Asset | 具名client，不读原生Store |
-| `frontend/packages/astrophotoflow-ui/src/modules/data/workspace/WorkspaceRecords.vue` | 仅若详情入口位于此处作按钮/观察展示，不重组列表 | Workspace现有context |
+| `frontend/packages/astrophotoflow-ui/src/modules/data/library/WorkspaceRecords.vue` | 仅若详情入口位于此处作按钮/观察展示，不重组列表 | Workspace现有context |
 | `tests/modules/data/test_workflow_handoffs.py` | M：修改新增reference/managed接纳/冲突/旧引用事实断言 | B22实际文件夹具 |
 | `tests/integration/test_client_operations.py` | M：修改新具名HTTP方法/真实错误结构 | 实际client/DTO |
 | `frontend/packages/astrophotoflow-ui/tests/modules/data/api/client.test.ts` | M：修改新TS方法路径/响应/fields断言 | 现有fetch测试 |

@@ -122,7 +122,7 @@ initialize保留activate含义但写唯一默认TOML；start移除旧activate参
 
 1. **结果、分支和追踪**：`codex/workbench-settings-ui`。网页显示当前workspace保存值/采用值/实际地址/需重启，允许保存，保存不自动重启或改连接。FR-13/14；NFR-03/04/07；A13-1～3、V02、G01网页部分。
 
-2. **必须读**：[FR-13](../../../../requirements/README.md#fr-13-环境检测安装与恢复)、[①数据配置](../../architecture/data-models/01-foundation.md#31-配置)、[①详设](../../api/platform-contracts.md#foundation-design)、[前端具名客户端](../../api/platform-contracts.md#前端具名客户端公开面)。指定源代码：`src/astrophotoflow/interfaces/http/system.py`、`src/astrophotoflow/comfyui/proxy.py`、`frontend/packages/astrophotoflow-ui/src/modules/data/api/client.ts`／`frontend/packages/astrophotoflow-ui/src/modules/data/api/contracts.ts`、`frontend/src/platform/astrophotoflow/NativeShell.vue`。
+2. **必须读**：[FR-13](../../../../requirements/README.md#fr-13-环境检测安装与恢复)、[①数据配置](../../architecture/data-models/01-foundation.md#31-配置)、[①详设](../../api/platform-contracts.md#foundation-design)、[前端具名客户端](../../api/platform-contracts.md#前端具名客户端公开面)。指定源代码：`src/astrophotoflow/interfaces/http/system.py`、`src/astrophotoflow/comfyui/proxy.py`、`frontend/packages/astrophotoflow-ui/src/modules/data/api/client.ts`／`frontend/packages/astrophotoflow-ui/src/modules/data/api/contracts.ts`、`frontend/src/platform/astrophotoflow/sidebar/NativeShell.vue`。
 
 3. **前置及Ready**：B11、B12集成。用户已确认共用HTTP代码窄移至计划内core/client.ts，errorSchema至core/contracts.ts，data直接重导出/消费同一实现；B13主责，不新增文件框架。同步④后不再把此项列为Choice。本卡未开工，依确认后的基点及前置集成判Ready；真实浏览器按已确认维护窗口执行。
 
@@ -140,7 +140,7 @@ initialize保留activate含义但写唯一默认TOML；start移除旧activate参
 | `frontend/packages/astrophotoflow-ui/src/index.ts` | M：修改公开组件/客户端/必要类型 | 新core实现 |
 | `frontend/packages/astrophotoflow-ui/src/modules/data/api/client.ts` | M：修改为直接重导出/消费core同一HTTP实现，既有数据方法行为保持 | 已确认窄搬迁 |
 | `frontend/packages/astrophotoflow-ui/src/modules/data/api/contracts.ts` | M：修改仅重导出/消费core唯一errorSchema，其他数据schema保持 | core/contracts.ts |
-| `frontend/src/platform/astrophotoflow/NativeShell.vue` | M：修改经UI包公开导出挂工作台配置入口/面板，GraphView保持挂载 | 包公开面、原生宿主 |
+| `frontend/src/platform/astrophotoflow/sidebar/NativeShell.vue` | M：修改经UI包公开导出挂工作台配置入口/面板，GraphView保持挂载 | 包公开面、原生宿主 |
 | `tests/modules/data/test_service.py` | M：修改认证/GET/PATCH/OpenAPI一致性 | TestClient |
 | `tests/interfaces/comfyui/test_proxy.py` | M：修改新增准确路由/同源与错误透传 | proxy |
 | `tests/integration/test_client_operations.py` | M：修改新增具名配置客户端请求/响应/错误断言 | 实际client及DTO |

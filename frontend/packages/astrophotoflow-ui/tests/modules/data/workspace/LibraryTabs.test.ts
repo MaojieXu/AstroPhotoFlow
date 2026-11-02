@@ -1,7 +1,7 @@
 import { mount } from '@vue/test-utils'
 import { defineComponent, h } from 'vue'
 import { describe, expect, it } from 'vitest'
-import LibraryTabs from '@ui/modules/data/workspace/LibraryTabs.vue'
+import LibraryTabs from '@ui/modules/data/components/LibraryTabs.vue'
 import { libraryControlsKey } from '@ui/modules/data/workspace/libraryControls'
 
 const native = defineComponent({ setup(_, { slots, attrs }) { return () => h('div', attrs, slots.default?.()) } })

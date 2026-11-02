@@ -34,3 +34,6 @@ pydantic~=2.0
 pydantic-settings~=2.0
 PyOpenGL>=3.1.8
 comfy-angle
+
+# AstroPhotoFlow native bridge
+httpx==0.28.1

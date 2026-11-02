@@ -1,10 +1,12 @@
+from astrophotoflow.contracts.common import PageMetadata
+
 """Agent source inspection and explicitly confirmed batch imports."""
 from typing import Literal
 
 from pydantic import Field, field_validator, model_validator
 
 from astrophotoflow.contracts.common import StrictModel, UuidInput, check_name
-from astrophotoflow.contracts.assets import AssetClassification, AssetParameters
+from astrophotoflow.contracts.metadata import AssetClassification, AssetParameters
 
 
 class ConfirmedImportOptions(StrictModel):
@@ -57,11 +59,8 @@ class ImportBatchProjectRetry(StrictModel):
     base_revision: int = Field(ge=1)
 
 
-class InspectionPage(StrictModel):
+class InspectionPage(PageMetadata):
     items: list[dict]
-    total: int
-    limit: int
-    offset: int
 
 
 class InspectionOut(StrictModel):

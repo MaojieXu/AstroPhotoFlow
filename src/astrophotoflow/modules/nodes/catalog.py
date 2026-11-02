@@ -1,7 +1,10 @@
+from uuid import UUID
+
 from astrophotoflow.contracts.nodes import NodeCapability
-from astrophotoflow.modules.nodes.public import list_definitions, get_definition
-from astrophotoflow.modules.software.public import get_package, list_operations, get_bundle_metadata, get_bundle_display
+from astrophotoflow.core.config import Settings
 from astrophotoflow.core.localization import error_message, workspace_locale
+from astrophotoflow.modules.nodes.storage import get_definition, list_definitions
+from astrophotoflow.modules.software.public import get_bundle_display, get_bundle_metadata, get_package, list_operations
 
 
 def _package_context(settings, package_id):
@@ -37,12 +40,12 @@ def _describe_node(node, context):
             if node.definition.source == 'package' else {})
 
 
-def describe_node(settings, definition_id):
+def describe_node(settings: Settings, definition_id: UUID) -> NodeCapability:
     node = get_definition(settings.workspace, definition_id)
     return _describe_node(node, _package_context(settings, node.definition.execution.package_id))
 
 
-def list_nodes(settings, query=None):
+def list_nodes(settings: Settings, query: str | None = None) -> list[NodeCapability]:
     contexts = {}
     values = []
     for node in list_definitions(settings.workspace):

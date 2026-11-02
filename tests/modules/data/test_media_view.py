@@ -1,3 +1,4 @@
+from astrophotoflow.modules.data.formats import pixels as codec_formats_pixels
 from io import BytesIO
 from pathlib import Path
 from threading import Event
@@ -15,9 +16,10 @@ from astrophotoflow.core.config import ImportRoot, Settings
 from astrophotoflow.core.database.schema import database_lock, upgrade_database
 from astrophotoflow.contracts.media import MediaSelection
 from astrophotoflow.interfaces.http.app import create_app
-from astrophotoflow.modules.data.models import Asset, Preview
+from astrophotoflow.modules.data.assets.models import Asset
+from astrophotoflow.modules.data.media.models import Preview
 from astrophotoflow.modules.data.public import check_output
-from astrophotoflow.modules.data.previews import owned_preview_locations
+from astrophotoflow.modules.data.media.ownership import owned_preview_locations
 
 
 AUTH = {"Authorization": "Bearer media-view-test"}
@@ -33,7 +35,6 @@ def media_service(tmp_path):
     app = create_app(settings, "media-view-test")
     with TestClient(app) as client:
         yield settings, app, client, source
-    app.state.database.close()
 
 
 def add(client, name):
@@ -117,7 +118,7 @@ def test_checked_output_view_uses_thresholds_and_hdu_without_registering_assets(
     assert [(hdu.index, hdu.name) for hdu in state.hdus] == [(0, None), (1, 'SCI')]
     job, release = views.acquire_output(checked, state.key)
     try:
-        tile = np.asarray(Image.open(BytesIO(views.tile(job, state.max_level, 0, 0))))
+        tile = np.asarray(Image.open(BytesIO(views.tiles.tile(job, state.max_level, 0, 0))))
         assert np.all(tile[0, 0] == 0) and np.all(tile[0, 2] == 255)
         assert np.all(np.abs(tile[0, 1].astype(int) - 127) <= 1)
     finally:
@@ -131,7 +132,7 @@ def test_checked_output_view_uses_thresholds_and_hdu_without_registering_assets(
         assert balanced_state.status == 'available'
         job, release = views.acquire_output(checked, balanced_state.key)
         try:
-            displayed = np.asarray(Image.open(BytesIO(views.tile(job, balanced_state.max_level, 0, 0))))
+            displayed = np.asarray(Image.open(BytesIO(views.tiles.tile(job, balanced_state.max_level, 0, 0))))
             np.testing.assert_array_equal(displayed, tile)
         finally:
             release()
@@ -183,6 +184,32 @@ def test_numpy_array_selection_is_display_only_and_non_numeric_is_explicit(media
     assert "slices" not in str(current.get("capture_snapshot"))
 
 
+def test_failed_acquisition_transaction_does_not_leak_file_lease(media_service, monkeypatch):
+    from contextlib import contextmanager
+
+    _, app, client, source = media_service
+    fits.PrimaryHDU(np.ones((32, 48), dtype=np.float32)).writeto(source / "source.fits")
+    base, item = add(client, "source.fits")
+    state = prepare(client, base)
+    views = app.state.media_views
+    original = views.database.write_session
+    fail = True
+
+    @contextmanager
+    def failed_commit():
+        nonlocal fail
+        with original() as session:
+            yield session
+            if fail:
+                fail = False
+                raise RuntimeError("acquisition transaction failed")
+
+    monkeypatch.setattr(views.database, "write_session", failed_commit)
+    with pytest.raises(RuntimeError, match="acquisition transaction failed"):
+        views.acquire(item["asset_version_id"], state["key"])
+    assert views.leases.active == views.cache.active == {}
+
+
 def test_source_change_after_prepare_refuses_cached_tile(media_service):
     settings, app, client, source = media_service
     fits.PrimaryHDU(np.ones((32, 48), dtype=np.float32)).writeto(source / "source.fits")
@@ -223,7 +250,7 @@ def test_superseded_queued_view_does_not_decode_original(media_service, monkeypa
 
 def test_video_stream_supports_ranges_without_buffering_entire_original(media_service, monkeypatch):
     _, app, client, source = media_service
-    from astrophotoflow.modules.data import media_view
+    from astrophotoflow.modules.data.media import views as media_view
     payload = b"0123456789" * 1000
     (source / "clip.mp4").write_bytes(payload)
     base, _ = add(client, "clip.mp4")
@@ -251,7 +278,7 @@ def test_project_viewer_uses_fixed_reference_and_a_live_read_blocks_cleanup(medi
     assert client.post(wrong + "/viewer", headers=AUTH, json={}).status_code == 404
     _, release = app.state.media_views.acquire(item["asset_version_id"], state["key"])
     from astrophotoflow.modules.data.public import data_busy
-    from astrophotoflow.modules.data.previews import assert_no_preview_jobs
+    from astrophotoflow.modules.data.media.ownership import assert_no_preview_jobs
     from astrophotoflow.core.errors import ApiError
     try:
         assert data_busy(app.state.database).busy
@@ -266,18 +293,18 @@ def test_project_viewer_uses_fixed_reference_and_a_live_read_blocks_cleanup(medi
 @pytest.mark.parametrize("keep_second", [True, False])
 def test_running_preparation_tracks_all_consumers_and_retries_after_cancel(media_service, monkeypatch, keep_second):
     from uuid import uuid4
-    from astrophotoflow.modules.data.media_sources import PixelSource
+    from astrophotoflow.modules.data.formats.source import PixelSource
     _, app, client, source = media_service
     fits.PrimaryHDU(np.arange(64 * 80, dtype=np.float32).reshape(64, 80)).writeto(source / "shared.fits")
     base, item = add(client, "shared.fits")
     first, second = str(uuid4()), str(uuid4())
     entered, proceed = Event(), Event()
-    original = PixelSource._fits_region
+    original = PixelSource.read_fits_region
     def blocked(self, *args):
         entered.set()
         assert proceed.wait(5)
         return original(self, *args)
-    monkeypatch.setattr(PixelSource, "_fits_region", blocked)
+    monkeypatch.setattr(PixelSource, "read_fits_region", blocked)
     service = app.state.media_views
     one = client.post(base + "/viewer", headers=AUTH, json={"consumer_id": first}).json()
     try:
@@ -297,7 +324,7 @@ def test_running_preparation_tracks_all_consumers_and_retries_after_cancel(media
     assert state.phase is None
     assert state.status == ("available" if keep_second else "failed")
     if keep_second:
-        monkeypatch.setattr(PixelSource, "_fits_region", lambda *args: pytest.fail("valid cache was regenerated"))
+        monkeypatch.setattr(PixelSource, "read_fits_region", lambda *args: pytest.fail("valid cache was regenerated"))
     retried = prepare(client, base, {"consumer_id": str(uuid4())})
     assert retried["status"] == "available"
     assert retried["key"] == one["key"]

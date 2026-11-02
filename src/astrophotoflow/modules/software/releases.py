@@ -1,21 +1,20 @@
 """Discover official tags and resolve immutable, display-independent install targets."""
-from datetime import datetime, timezone
 import hashlib
 import json
 import os
-from pathlib import Path, PurePosixPath
 import re
 import subprocess
+from datetime import UTC, datetime
+from pathlib import PurePosixPath
 
 from filelock import FileLock, Timeout
 
 from astrophotoflow.contracts.bundles import BundleManifest
 from astrophotoflow.contracts.software import SoftwareRelease, SoftwareReleaseListing
 from astrophotoflow.core.errors import ApiError
-from astrophotoflow.core.localization import error_message, workspace_locale, localized_error
+from astrophotoflow.core.localization import localized_error, workspace_locale
 from astrophotoflow.modules.software import bundles
 from astrophotoflow.modules.software.metadata import read_bundle, read_bundle_locales
-
 
 VERSION = re.compile(r'^(\d+)\.(\d+)\.(\d+)(?:-dev\.(\d+))?$')
 
@@ -40,7 +39,7 @@ def _root(settings, package_id, repository):
 
 
 def remote_tags(repository, *, tool_root=None):
-    raw = bundles.git(['ls-remote', '--tags', '--', repository], tool_root=tool_root)
+    raw = bundles.run_git(['ls-remote', '--tags', '--', repository], tool_root=tool_root)
     tags, peeled = {}, {}
     for line in raw.splitlines():
         commit, ref = line.split(maxsplit=1)
@@ -57,19 +56,19 @@ def remote_tags(repository, *, tool_root=None):
 def _repository(root, repository, *, tool_root=None):
     path = root / 'repository.git'
     if not path.is_dir():
-        bundles.git(['init', '--bare', str(path)], tool_root=tool_root)
-        bundles.git(['--git-dir', str(path), 'config', 'remote.origin.url', repository], tool_root=tool_root)
-        bundles.git(['--git-dir', str(path), 'config', 'remote.origin.promisor', 'true'], tool_root=tool_root)
-        bundles.git(['--git-dir', str(path), 'config', 'remote.origin.partialclonefilter', 'blob:none'], tool_root=tool_root)
+        bundles.run_git(['init', '--bare', str(path)], tool_root=tool_root)
+        bundles.run_git(['--git-dir', str(path), 'config', 'remote.origin.url', repository], tool_root=tool_root)
+        bundles.run_git(['--git-dir', str(path), 'config', 'remote.origin.promisor', 'true'], tool_root=tool_root)
+        bundles.run_git(['--git-dir', str(path), 'config', 'remote.origin.partialclonefilter', 'blob:none'], tool_root=tool_root)
     return path
 
 
 def _fetch(path, commit, *, tool_root=None):
-    bundles.git(['--git-dir', str(path), 'fetch', '--no-tags', '--depth=1', '--filter=blob:none', 'origin', commit], tool_root=tool_root)
+    bundles.run_git(['--git-dir', str(path), 'fetch', '--no-tags', '--depth=1', '--filter=blob:none', 'origin', commit], tool_root=tool_root)
 
 
 def _tree_objects(repo, commit, *, tool_root=None):
-    raw = bundles.git(['--git-dir', str(repo), 'ls-tree', '-rz', '--format=%(objectname)%x09%(path)', commit], tool_root=tool_root)
+    raw = bundles.run_git(['--git-dir', str(repo), 'ls-tree', '-rz', '--format=%(objectname)%x09%(path)', commit], tool_root=tool_root)
     return {name: oid for record in raw.split('\0') if record for oid, name in [record.split('\t', 1)]}
 
 
@@ -92,7 +91,7 @@ def _header(root, repository, commit, *, tool_root=None):
     objects = _tree_objects(repo, commit, tool_root=tool_root)
     raw = None
     if 'bundle.json' in objects:
-        contents = bundles.git(['--git-dir', str(repo), 'show', commit + ':bundle.json'], tool_root=tool_root)
+        contents = bundles.run_git(['--git-dir', str(repo), 'show', commit + ':bundle.json'], tool_root=tool_root)
         try:
             raw = json.loads(contents)
         except json.JSONDecodeError:
@@ -119,7 +118,7 @@ def _describe(package_id, repository, tag, commit, header):
         reason = 'invalid_metadata'
     elif raw.get('schema_version') != 1:
         reason, parameters = 'unsupported_schema', {'required': str(raw.get('schema_version'))}
-    elif raw.get('host_api') not in (1, 2):
+    elif raw.get('host_api') != 2:
         reason, parameters = 'unsupported_sdk', {'required': str(raw.get('host_api'))}
     elif raw.get('platform') != 'windows-x86_64' or os.name != 'nt':
         reason, parameters = 'unsupported_platform', {'required': str(raw.get('platform'))}
@@ -158,7 +157,7 @@ def list_releases(settings, package_id):
                 if value.reason_code != 'invalid_metadata' and value.channel not in channels:
                     value.is_latest = True
                     channels.add(value.channel)
-            listing = SoftwareReleaseListing(package_id=package_id, releases=values, checked_at=datetime.now(timezone.utc))
+            listing = SoftwareReleaseListing(package_id=package_id, releases=values, checked_at=datetime.now(UTC))
             _write(root / 'listing.json', listing.model_dump(mode='json'))
             return listing
     except (ApiError, OSError, ValueError, KeyError, TypeError, Timeout, subprocess.SubprocessError) as exc:
@@ -180,15 +179,15 @@ def _snapshot(root, source, tag, commit, header, *, tool_root=None):
     repo = _repository(root, source, tool_root=tool_root)
     objects = header.get('objects') or _tree_objects(repo, commit, tool_root=tool_root)
     blobs = sorted({objects[name] for name in names})
-    bundles.git(['--git-dir', str(repo), 'fetch', '--no-tags', '--filter=blob:none', 'origin', *blobs], tool_root=tool_root)
+    bundles.run_git(['--git-dir', str(repo), 'fetch', '--no-tags', '--filter=blob:none', 'origin', *blobs], tool_root=tool_root)
     destination = root / commit / 'metadata'
     destination.mkdir(parents=True, exist_ok=True)
-    bundles.git(['--git-dir', str(repo), '--work-tree', str(destination), 'checkout', commit, '--', *names], tool_root=tool_root)
+    bundles.run_git(['--git-dir', str(repo), '--work-tree', str(destination), 'checkout', commit, '--', *names], tool_root=tool_root)
     actual, operations, nodes = read_bundle(destination)
-    value = dict(repository=source, tag=tag, commit=commit, manifest=actual.model_dump(), operations=operations, nodes=nodes,
-        localizations=read_bundle_locales(destination, actual, operations),
-        reference_files={name: (destination / name).read_bytes().decode('utf-8').replace('\r\n', '\n')
-                         for name in (actual.commands, actual.assessments) if name is not None})
+    value = {'repository': source, 'tag': tag, 'commit': commit, 'manifest': actual.model_dump(), 'operations': operations, 'nodes': nodes,
+        'localizations': read_bundle_locales(destination, actual, operations),
+        'reference_files': {name: (destination / name).read_bytes().decode('utf-8').replace('\r\n', '\n')
+                         for name in (actual.commands, actual.assessments) if name is not None}}
     _write(path, value)
     return value
 

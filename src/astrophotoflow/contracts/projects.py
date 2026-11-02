@@ -1,10 +1,12 @@
-from astrophotoflow.contracts.assets import AssetOut, AssetVersionOut
-from astrophotoflow.contracts.common import StrictModel, UuidInput, check_name
-from astrophotoflow.contracts.datasets import DatasetOut, DatasetVersionOut
 from datetime import datetime
-from pydantic import Field, field_validator
 from typing import Literal
 from uuid import UUID
+
+from pydantic import Field, field_validator
+
+from astrophotoflow.contracts.assets import AssetOut, AssetVersionOut, LibraryMetadataSummary
+from astrophotoflow.contracts.common import PageMetadata, StrictModel, UuidInput, check_name
+from astrophotoflow.contracts.datasets import DatasetOut, DatasetVersionSummary
 
 
 class ProjectCreate(StrictModel):
@@ -43,26 +45,24 @@ class ProjectAssetReferenceOut(StrictModel):
     id: UUID
     project_id: UUID
     asset_version_id: UUID
+    view_base: str
     added_at: datetime
     asset: AssetOut
     version: AssetVersionOut
 
 
-class ProjectPage(StrictModel):
+class ProjectPage(PageMetadata):
     items: list[ProjectOut]
-    total: int
-    limit: int
-    offset: int
 
 
-class ProjectAssetReferencePage(StrictModel):
+class ProjectAssetReferencePage(PageMetadata):
     items: list[ProjectAssetReferenceOut]
-    total: int
-    limit: int
-    offset: int
 
 
 class ProjectDatasetReferenceOut(StrictModel):
+    summary: LibraryMetadataSummary
+    input_ready: bool
+    member_count: int
     id: UUID
     project_id: UUID
     dataset_id: UUID
@@ -70,14 +70,11 @@ class ProjectDatasetReferenceOut(StrictModel):
     base_revision: int
     added_at: datetime
     dataset: DatasetOut
-    version: DatasetVersionOut
+    version: DatasetVersionSummary
 
 
-class ProjectDatasetReferencePage(StrictModel):
+class ProjectDatasetReferencePage(PageMetadata):
     items: list[ProjectDatasetReferenceOut]
-    total: int
-    limit: int
-    offset: int
 
 
 class ProjectReferenceCreate(StrictModel):
@@ -93,3 +90,18 @@ class ProjectDatasetReferenceCreate(StrictModel):
 
 class ProjectReferenceDelete(StrictModel):
     base_revision: int = Field(ge=1)
+
+
+class ProjectReferenceDeleteResult(StrictModel):
+    deleted_id: UuidInput
+    revision: int = Field(ge=1)
+
+
+class ProjectQuery(StrictModel):
+    limit: int = Field(default=50,ge=1,le=200,strict=False)
+    offset: int = Field(default=0,ge=0,strict=False)
+    sort_by: Literal['created_at','name'] = 'created_at'
+    order: Literal['asc','desc'] = 'desc'
+    q: str | None = None
+    status: Literal['active','archived','all'] = 'active'
+    target_name: str | None = None

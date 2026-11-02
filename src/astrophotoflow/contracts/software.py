@@ -1,11 +1,10 @@
 from datetime import datetime
+from math import isfinite
 from pathlib import Path
 from typing import Literal
 from uuid import UUID
 
-from math import isfinite
-
-from pydantic import Field, JsonValue, field_validator, model_validator
+from pydantic import ConfigDict, Field, JsonValue, field_validator, model_validator
 
 from astrophotoflow.contracts.common import ErrorDetail, JsonObject, StrictModel, UuidInput, check_name
 from astrophotoflow.contracts.inputs import InputReference, OutputLocator, ResolvedInput, ScienceFormat
@@ -288,48 +287,6 @@ class SoftwareUse(StrictModel):
     state: Literal["running", "unknown"]
 
 
-class AutostretchParameters(StrictModel):
-    linked: bool = Field(default=False, strict=True)
-    shadowsclip: float = Field(default=-2.8, strict=True)
-    targetbg: float = Field(default=0.25, ge=0, le=1, strict=True)
-
-    @field_validator("shadowsclip", "targetbg")
-    @classmethod
-    def finite_parameter(cls, value: float):
-        if not isfinite(value):
-            raise ValueError("Siril 参数必须为有限数值。")
-        return value
-
-
-class NativeSirilCall(AutostretchParameters):
-    call_id: UuidInput
-    prompt_id: UuidInput
-    node_id: str
-    reference: InputReference | OutputLocator
-
-
-class SirilPreviewRequest(AutostretchParameters):
-    reference: InputReference
-    member_index: int = Field(default=0, ge=0)
-    consumer_id: UuidInput
-    generation: int = Field(ge=0)
-    preview_max_edge: Literal[512, 1024, 2048] | None = 1024
-    display_balance: Literal['auto', 'preserve'] | None = None
-
-
-class AutomaticResultSnapshot(StrictModel):
-    workflow: dict[str, JsonValue]
-    targets: list[str] = Field(min_length=1)
-    signatures: dict[str, str]
-
-    @model_validator(mode='after')
-    def valid_targets(self):
-        if not set(self.targets).issubset(self.signatures) or any(len(value) != 64 or any(c not in '0123456789abcdef' for c in value) for value in self.signatures.values()):
-            raise ValueError('Automatic result targets require content signatures.')
-        UUID(str(self.workflow.get('id')))
-        return self
-
-
 class NativeBundleCall(StrictModel):
     call_id: UuidInput
     prompt_id: UuidInput
@@ -338,17 +295,9 @@ class NativeBundleCall(StrictModel):
     definition_token: str
     workflow_id: UuidInput | None = None
     calculation_signature: str | None = None
-    reference: InputReference | OutputLocator | None = None
-    inputs: dict[str, InputReference | OutputLocator | list[InputReference | OutputLocator]] = Field(default_factory=dict)
+    inputs: dict[str, InputReference | OutputLocator | list[InputReference | OutputLocator]]
     parameters: dict[str, JsonValue]
 
-    @model_validator(mode="after")
-    def one_input_form(self):
-        if self.reference is not None and "inputs" in self.model_fields_set:
-            raise ValueError("单输入引用与具名输入不能同时提供。")
-        if self.reference is None and "inputs" not in self.model_fields_set:
-            raise ValueError("必须明确提供具名输入；无输入操作使用空字典。")
-        return self
 
 
 class BundlePreviewRequest(StrictModel):
@@ -363,17 +312,25 @@ class BundlePreviewRequest(StrictModel):
     display_balance: Literal['auto', 'preserve'] | None = None
 
 
+class RunOutputMember(StrictModel):
+    name: str
+    format: ScienceFormat
+    view_base: str
+    file_url: str
+
+
 class RunOutputPort(StrictModel):
+    model_config = ConfigDict(json_schema_serialization_defaults_required=True)
     name: str
     type: str
-    members: int = Field(ge=0)
-    formats: list[ScienceFormat] = Field(default_factory=list)
-    names: list[str] = Field(default_factory=list)
+    members: list[RunOutputMember]
 
 
-class RunCallResult(StrictModel):
+class SoftwareCallResult(StrictModel):
+    model_config = ConfigDict(json_schema_serialization_defaults_required=True)
     prompt_id: UUID
     call_id: UUID
+    log_url: str
     node_id: str
     workflow_id: UUID | None = None
     calculation_signature: str | None = None

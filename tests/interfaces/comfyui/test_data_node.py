@@ -3,7 +3,7 @@ import pytest
 from pydantic import ValidationError
 from uuid import uuid4
 
-from astrophotoflow.interfaces.data_reference_node import DataReferenceNode, FileReferenceNode
+from astrophotoflow.interfaces.native.data import DataReferenceNode, FileReferenceNode
 from astrophotoflow.contracts.data_nodes import NativeDataExecute
 
 

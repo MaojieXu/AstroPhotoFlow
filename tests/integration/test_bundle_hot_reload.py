@@ -19,7 +19,8 @@ args.cpu=True
 import nodes
 from aiohttp import web
 from astrophotoflow.core.config import Settings
-from astrophotoflow.interfaces import bundle_nodes as native
+from astrophotoflow.interfaces.native.bundles import catalog as native
+from astrophotoflow.interfaces.native.bundles.watcher import watch_bundle_nodes
 from astrophotoflow.modules.nodes.public import list_definitions
 from importlib.resources import files
 workspace=Path(sys.argv[2])
@@ -47,6 +48,7 @@ async def scenario():
   path.parent.mkdir(parents=True,exist_ok=True)
   path.write_text(json.dumps(value),encoding='utf-8')
  write('bundle.json',release['manifest'])
+ for locale,name in release['manifest'].get('locales',{}).items():write(name,release['localizations'][locale])
  for name,value in zip(release['manifest']['operations'],release['operations'],strict=True):write(name,value)
  for name,value in zip(release['manifest']['nodes'],release['nodes'],strict=True):write(name,value)
  executable=root/release['manifest']['executable']
@@ -58,13 +60,13 @@ async def scenario():
  (root.parent/'bundle-lock.json').write_text(json.dumps({'commit':'fixture','bundle_version':release['manifest']['bundle_version']}))
  await native.reload_bundle_nodes(server)
  await notifications.get()
- saved=list_definitions(workspace)[0]
+ saved=next(item for item in list_definitions(workspace) if item.definition.execution.operation_id=='autostretch')
  key=saved.native_type
  original=nodes.NODE_CLASS_MAPPINGS[key]
  assert original.GET_SCHEMA().category=='siril'
  assert original.GET_NODE_INFO_V1()['python_module']=='custom_nodes.siril'
  assert json.loads((root.parent/'native-load.json').read_text())['ready']
- native.watch_bundle_nodes(server)
+ watch_bundle_nodes(server)
  operation=root/release['manifest']['operations'][0]
  changed=json.loads(operation.read_text(encoding='utf-8'))
  changed['operation']['parameters'][2]['default']=0.3
@@ -75,19 +77,19 @@ async def scenario():
  await asyncio.wait_for(notifications.get(),timeout=10)
  assert nodes.NODE_CLASS_MAPPINGS[key] is not original
  assert nodes.NODE_CLASS_MAPPINGS[key].definition.parameters[2].default==0.3
- assert list_definitions(workspace)[0].definition.parameters[2].default==0.3
+ assert next(item for item in list_definitions(workspace) if item.definition.execution.operation_id=='autostretch').definition.parameters[2].default==0.3
  await asyncio.wait_for(notifications.get(),timeout=10)
  assert nodes.NODE_CLASS_MAPPINGS[key].definition.parameters[2].default==0.4
- assert list_definitions(workspace)[0].definition.parameters[2].default==0.4
+ assert next(item for item in list_definitions(workspace) if item.definition.execution.operation_id=='autostretch').definition.parameters[2].default==0.4
  server.app.freeze()
  await server.app.cleanup()
- updated_manifest=dict(release['manifest'],bundle_version='0.1.2-dev.2')
+ updated_manifest=dict(release['manifest'],bundle_version='0.3.0-dev.1')
  write('bundle.json',updated_manifest)
- (root.parent/'bundle-lock.json').write_text(json.dumps({'commit':'updated-fixture','bundle_version':'0.1.2-dev.2'}))
+ (root.parent/'bundle-lock.json').write_text(json.dumps({'commit':'updated-fixture','bundle_version':'0.3.0-dev.1'}))
  await native.reload_bundle_nodes(server)
  assert json.loads((root.parent/'native-load.json').read_text())['commit']=='updated-fixture'
  assert nodes.NODE_CLASS_MAPPINGS[key].definition.parameters[2].default==0.4
- manifest=dict(updated_manifest,operations=[],nodes=[],output_nodes=[])
+ manifest=dict(updated_manifest,operations=[],nodes=[],output_nodes=[],locales={})
  write('bundle.json',manifest)
  await native.reload_bundle_nodes(server)
  assert key not in nodes.NODE_CLASS_MAPPINGS and list_definitions(workspace)

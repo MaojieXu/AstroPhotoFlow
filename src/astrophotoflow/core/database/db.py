@@ -1,10 +1,14 @@
+from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Iterator
 
 from sqlalchemy import create_engine, event
-from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
+
+
+def _compare_casefold(left: str, right: str) -> int:
+    first, second = left.casefold(), right.casefold()
+    return (first > second) - (first < second)
 
 
 class Database:
@@ -16,6 +20,7 @@ class Database:
 
     @staticmethod
     def _configure_sqlite(dbapi_connection, _connection_record) -> None:
+        dbapi_connection.create_collation("apf_casefold", _compare_casefold)
         cursor = dbapi_connection.cursor()
         cursor.execute("PRAGMA foreign_keys=ON")
         cursor.execute("PRAGMA journal_mode=WAL")

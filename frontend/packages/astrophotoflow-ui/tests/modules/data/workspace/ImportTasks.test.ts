@@ -1,12 +1,13 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { h } from 'vue'
+import { focusManager } from '@tanstack/vue-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import ImportTasks from '@ui/modules/data/workspace/ImportTasks.vue'
+import ImportTasks from '@ui/modules/data/imports/ImportTasks.vue'
 import { taskSchema } from '@ui/modules/data/api/contracts'
 import { ApiClientError } from '@ui/modules/data/api/client'
 
 const {get,send}=vi.hoisted(()=>({get:vi.fn(),send:vi.fn()}))
-vi.mock('@ui/modules/data/api/index',()=>({assetApi:{get,send}}))
+vi.mock('@ui/modules/data/api/index',async () => ({ libraryApi: (await import('../../../fixtures/library-api')).createLibraryApiFixture(get), catalogApi: (await import('../../../fixtures/library-api')).createCatalogApiFixture(get), mutationApi: (await import('../../../fixtures/library-api')).createMutationApiFixture(send), trashApi: (await import('../../../fixtures/library-api')).createTrashApiFixture(get,send), importApi: (await import('../../../fixtures/library-api')).createImportApiFixture(get,send), datasetApi: (await import('../../../fixtures/library-api')).createDatasetApiFixture(get,send),assetApi:{get,send}}))
 const id='00000000-0000-4000-8000-000000000001'
 const base=taskSchema.parse({id,status:'running',sources:[],storage_mode:'managed',classification:{},parameters:{},notes:null,
   dataset_name:'Night',target_dataset_id:null,dataset_base_revision:null,dataset_id:null,enumeration_completed:true,retry_of_task_id:null,
@@ -16,7 +17,7 @@ const preview={total:2,available:0,failed:0,unsupported:0,completed:false}
 const page=(value:ReturnType<typeof taskSchema.parse>)=>({items:[value],total:1,limit:50,offset:0})
 let wrapper:ReturnType<typeof mount>|undefined
 beforeEach(()=>{localStorage.clear();get.mockReset().mockResolvedValue(page(base));send.mockReset().mockResolvedValue({task_id:id,status:'queued'})})
-afterEach(()=>{wrapper?.unmount();wrapper=undefined;localStorage.clear();vi.useRealTimers()})
+afterEach(()=>{wrapper?.unmount();wrapper=undefined;localStorage.clear();focusManager.setFocused(undefined);vi.useRealTimers()})
 
 describe('managed import stages and one-time notices',()=>{
   it('does not present complete registration as completed original transfer',async()=>{
@@ -103,7 +104,7 @@ describe('managed import stages and one-time notices',()=>{
     send.mockRejectedValue(new ApiClientError('来源当前不可访问','service',409))
     wrapper=mount(ImportTasks,{props:{refreshToken:0}});await flushPromises()
     await wrapper.get('button').trigger('click');await flushPromises()
-    expect(send).toHaveBeenCalledWith('/astrophotoflow/api/v1/asset-tasks/'+id+'/resume',expect.anything(),'POST',{})
+    expect(send).toHaveBeenCalledWith('/astrophotoflow/api/v1/asset-tasks/'+id+'/resume',expect.anything(),'POST',undefined)
     expect(wrapper.get('[role="alert"]').text()).toContain('来源当前不可访问')
   })
 
@@ -119,4 +120,91 @@ describe('managed import stages and one-time notices',()=>{
     wrapper=mount(ImportTasks,{props:{refreshToken:0}});await flushPromises()
     expect(wrapper.get('[role="alert"]').text()).toContain('服务不可用')
   })
+  it('stops active polling after completion even when the parent retains watched identities', async () => {
+    vi.useFakeTimers()
+    focusManager.setFocused(true)
+    wrapper = mount(ImportTasks, { props: { refreshToken: 0, workspace: '/one', watchTaskIds: [id] } })
+    await flushPromises()
+    get.mockResolvedValue(page({ ...base, status: 'completed' }))
+    await vi.advanceTimersByTimeAsync(1_500)
+    await flushPromises()
+    expect(get).toHaveBeenCalledTimes(2)
+    expect(wrapper.emitted('completed')).toEqual([[id]])
+    await vi.advanceTimersByTimeAsync(6_000)
+    expect(get).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps interrupted imports visible without fast polling of a paused process', async () => {
+    vi.useFakeTimers()
+    focusManager.setFocused(true)
+    get.mockResolvedValue(page({ ...base, status: 'interrupted' }))
+    wrapper = mount(ImportTasks, { props: { refreshToken: 0, watchTaskIds: [id] } })
+    await flushPromises()
+    expect(wrapper.text()).toContain('继续导入')
+    await vi.advanceTimersByTimeAsync(6_000)
+    expect(get).toHaveBeenCalledTimes(1)
+  })
+
+  it('aborts the old workspace read and cannot replace new workspace results with a late response', async () => {
+    let finishOld!: (value: ReturnType<typeof page>) => void
+    get.mockImplementationOnce(() => new Promise(resolve => { finishOld = resolve }))
+    wrapper = mount(ImportTasks, { props: { refreshToken: 0, workspace: '/one' } })
+    await flushPromises()
+    const oldSignal = get.mock.calls[0][2] as AbortSignal
+    get.mockResolvedValue(page({ ...base, dataset_name: 'New workspace' }))
+    await wrapper.setProps({ workspace: '/two' })
+    await flushPromises()
+    expect(oldSignal.aborted).toBe(true)
+    expect(wrapper.text()).toContain('New workspace')
+    finishOld(page({ ...base, dataset_name: 'Old workspace' }))
+    await flushPromises()
+    expect(wrapper.text()).not.toContain('Old workspace')
+  })
+
+  it('cancels a pending transport read when the progress view is closed', async () => {
+    get.mockImplementationOnce(() => new Promise(() => {}))
+    wrapper = mount(ImportTasks, { props: { refreshToken: 0 } })
+    await flushPromises()
+    const signal = get.mock.calls[0][2] as AbortSignal
+    expect(signal.aborted).toBe(false)
+    wrapper.unmount()
+    wrapper = undefined
+    expect(signal.aborted).toBe(true)
+  })
+
+  it('discovers a task submitted by another entry and returns to directory polling after it completes', async () => {
+    vi.useFakeTimers()
+    focusManager.setFocused(true)
+    get.mockResolvedValue({ items: [], total: 0, limit: 50, offset: 0 })
+    wrapper = mount(ImportTasks, { props: { refreshToken: 0, workspace: '/one' } })
+    await flushPromises()
+    expect(get).toHaveBeenCalledTimes(1)
+    get.mockResolvedValue(page(base))
+    await vi.advanceTimersByTimeAsync(10_000)
+    await flushPromises()
+    expect(wrapper.text()).toContain('Night')
+    expect(get).toHaveBeenCalledTimes(2)
+    get.mockResolvedValue(page({ ...base, status: 'completed' }))
+    await vi.advanceTimersByTimeAsync(1_500)
+    await flushPromises()
+    expect(get).toHaveBeenCalledTimes(3)
+    await vi.advanceTimersByTimeAsync(1_500)
+    expect(get).toHaveBeenCalledTimes(3)
+    await vi.advanceTimersByTimeAsync(8_500)
+    await flushPromises()
+    expect(get).toHaveBeenCalledTimes(4)
+  })
+
+  it('stops directory discovery when the task view is unmounted', async () => {
+    vi.useFakeTimers()
+    focusManager.setFocused(true)
+    get.mockResolvedValue({ items: [], total: 0, limit: 50, offset: 0 })
+    wrapper = mount(ImportTasks, { props: { refreshToken: 0, workspace: '/one' } })
+    await flushPromises()
+    wrapper.unmount()
+    wrapper = undefined
+    await vi.advanceTimersByTimeAsync(30_000)
+    expect(get).toHaveBeenCalledTimes(1)
+  })
+
 })

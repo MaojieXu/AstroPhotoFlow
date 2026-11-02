@@ -1,0 +1,1524 @@
+{
+  "schema_version": 1,
+  "scope": "Verified target refinements and explicit semantic/deletion resolutions. Current signatures, dependencies and static callers are exported separately in source-inventory.json.",
+  "symbol_refinements": [
+    {
+      "source": "src/astrophotoflow/client.py",
+      "old_target": "src/astrophotoflow/client.py::AssetClient.__enter__",
+      "target": "src/astrophotoflow/interfaces/client/transport.py::HttpTransport.__enter__"
+    },
+    {
+      "source": "src/astrophotoflow/client.py",
+      "old_target": "src/astrophotoflow/client.py::AssetClient.__exit__",
+      "target": "src/astrophotoflow/interfaces/client/transport.py::HttpTransport.__exit__"
+    },
+    {
+      "source": "src/astrophotoflow/comfyui/proxy.py",
+      "old_target": "src/astrophotoflow/comfyui/proxy.py::register_proxy_routes.handler",
+      "target": "src/astrophotoflow/interfaces/http/native_pages.py::register_native_pages.receive_native_page.handler"
+    },
+    {
+      "source": "src/astrophotoflow/contracts/assets.py",
+      "old_target": "src/astrophotoflow/contracts/assets.py::AssetClassification",
+      "target": "src/astrophotoflow/contracts/metadata.py::AssetClassification"
+    },
+    {
+      "source": "src/astrophotoflow/contracts/assets.py",
+      "old_target": "src/astrophotoflow/contracts/assets.py::AssetParameters",
+      "target": "src/astrophotoflow/contracts/metadata.py::AssetParameters"
+    },
+    {
+      "source": "src/astrophotoflow/contracts/assets.py",
+      "old_target": "src/astrophotoflow/contracts/assets.py::AssetParameters.finite_values",
+      "target": "src/astrophotoflow/contracts/metadata.py::CaptureParametersPatch.finite_values"
+    },
+    {
+      "source": "src/astrophotoflow/contracts/assets.py",
+      "old_target": "src/astrophotoflow/contracts/assets.py::AssetParametersPatch",
+      "target": "src/astrophotoflow/contracts/metadata.py::AssetParametersPatch"
+    },
+    {
+      "source": "src/astrophotoflow/contracts/assets.py",
+      "old_target": "src/astrophotoflow/contracts/assets.py::AssetParametersPatch.finite_values",
+      "target": "src/astrophotoflow/contracts/metadata.py::CaptureParametersPatch.finite_values"
+    },
+    {
+      "source": "src/astrophotoflow/contracts/datasets.py",
+      "old_target": "src/astrophotoflow/contracts/datasets.py::LibraryItemPage",
+      "target": "src/astrophotoflow/contracts/assets.py::LibraryItemPage"
+    },
+    {
+      "source": "src/astrophotoflow/contracts/equipment.py",
+      "old_target": "src/astrophotoflow/contracts/equipment.py::CameraSpecsPatch.validate_pixel_size",
+      "target": "src/astrophotoflow/contracts/equipment.py::CameraSpecs.validate_pixel_size"
+    },
+    {
+      "source": "src/astrophotoflow/contracts/equipment.py",
+      "old_target": "src/astrophotoflow/contracts/equipment.py::OpticalSystemSpecsPatch.validate_optics",
+      "target": "src/astrophotoflow/contracts/equipment.py::OpticalSystemSpecs.validate_optics"
+    },
+    {
+      "source": "src/astrophotoflow/contracts/equipment.py",
+      "old_target": "src/astrophotoflow/contracts/equipment.py::FilterSpecsPatch.validate_band",
+      "target": "src/astrophotoflow/contracts/equipment.py::FilterSpecs.validate_band"
+    },
+    {
+      "source": "src/astrophotoflow/core/workbench.py",
+      "old_target": "src/astrophotoflow/core/workbench/runtime.py::WorkbenchError",
+      "target": "src/astrophotoflow/core/workbench/errors.py::WorkbenchError"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/bundle_nodes.py",
+      "old_target": "src/astrophotoflow/interfaces/native/bundles/node.py::_request",
+      "target": "src/astrophotoflow/interfaces/native/client.py::NativeClient._request"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/bundle_nodes.py",
+      "old_target": "src/astrophotoflow/interfaces/native/bundles/watcher.py::watch_bundle_nodes.watch",
+      "target": "src/astrophotoflow/contracts/development.py::BundleDevelopmentConfig.watch"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/client/library.py",
+      "old_target": "src/astrophotoflow/interfaces/client/library.py::LibraryOperations.export_display_preview",
+      "target": "src/astrophotoflow/interfaces/client/exports.py::ExportOperations.export_display_preview"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/data_reference_node.py",
+      "old_target": "src/astrophotoflow/interfaces/native/data_nodes.py::DataReferenceNode",
+      "target": "src/astrophotoflow/interfaces/native/data.py::DataReferenceNode"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/data_reference_node.py",
+      "old_target": "src/astrophotoflow/interfaces/native/data_nodes.py::FileReferenceNode",
+      "target": "src/astrophotoflow/interfaces/native/data.py::FileReferenceNode"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/http/app.py",
+      "old_target": "src/astrophotoflow/interfaces/http/maintenance.py::set_maintenance",
+      "target": "src/astrophotoflow/interfaces/http/maintenance.py::register_maintenance.set_maintenance"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/http/app.py",
+      "old_target": "src/astrophotoflow/interfaces/application/package_actions.py::bundle_definition_plan",
+      "target": "src/astrophotoflow/interfaces/application/package_actions.py::register_package_actions.bundle_definition_plan"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/http/app.py",
+      "old_target": "src/astrophotoflow/interfaces/application/package_actions.py::validate_install_request",
+      "target": "src/astrophotoflow/interfaces/application/package_actions.py::register_package_actions.validate_install_request"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/http/app.py",
+      "old_target": "src/astrophotoflow/interfaces/application/package_actions.py::request_software_action",
+      "target": "src/astrophotoflow/interfaces/application/package_actions.py::register_package_actions.request_software_action"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/http/app.py",
+      "old_target": "src/astrophotoflow/interfaces/application/package_actions.py::get_software_package_details",
+      "target": "src/astrophotoflow/interfaces/application/package_actions.py::register_package_actions.get_software_package_details"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/http/app.py",
+      "old_target": "src/astrophotoflow/interfaces/application/package_actions.py::execute_software_action",
+      "target": "src/astrophotoflow/interfaces/application/package_actions.py::register_package_actions.execute_software_action"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/http/app.py",
+      "old_target": "src/astrophotoflow/interfaces/application/package_actions.py::confirm_software_action",
+      "target": "src/astrophotoflow/interfaces/application/package_actions.py::register_package_actions.confirm_software_action"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/http/app.py",
+      "old_target": "src/astrophotoflow/interfaces/application/package_actions.py::resolve_plan_release",
+      "target": "src/astrophotoflow/interfaces/application/package_actions.py::register_package_actions.resolve_plan_release"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/http/app.py",
+      "old_target": "src/astrophotoflow/interfaces/application/package_actions.py::start_software_action",
+      "target": "src/astrophotoflow/interfaces/application/package_actions.py::register_package_actions.start_software_action"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/http/app.py",
+      "old_target": "src/astrophotoflow/interfaces/application/package_actions.py::_confirm_software_action_locked",
+      "target": "src/astrophotoflow/interfaces/application/package_actions.py::register_package_actions._confirm_software_action_locked"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/http/app.py",
+      "old_target": "src/astrophotoflow/interfaces/http/maintenance.py::maintenance",
+      "target": "src/astrophotoflow/interfaces/http/maintenance.py::register_maintenance.maintenance"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/http/app.py",
+      "old_target": "src/astrophotoflow/interfaces/native/pages.py::receive_native_page",
+      "target": "src/astrophotoflow/interfaces/http/native_pages.py::register_native_pages.receive_native_page"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/http/app.py",
+      "old_target": "src/astrophotoflow/interfaces/http/errors.py::add_request_id",
+      "target": "src/astrophotoflow/interfaces/http/errors.py::register_error_handlers.add_request_id"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/http/app.py",
+      "old_target": "src/astrophotoflow/interfaces/http/errors.py::api_error_handler",
+      "target": "src/astrophotoflow/interfaces/http/errors.py::register_error_handlers.api_error_handler"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/http/app.py",
+      "old_target": "src/astrophotoflow/interfaces/http/errors.py::validation_error_handler",
+      "target": "src/astrophotoflow/interfaces/http/errors.py::register_error_handlers.validation_error_handler"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/http/app.py",
+      "old_target": "src/astrophotoflow/interfaces/http/errors.py::http_error_handler",
+      "target": "src/astrophotoflow/interfaces/http/errors.py::register_error_handlers.http_error_handler"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/http/app.py",
+      "old_target": "src/astrophotoflow/interfaces/http/errors.py::internal_error_handler",
+      "target": "src/astrophotoflow/interfaces/http/errors.py::register_error_handlers.internal_error_handler"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/tools/canvas.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/graph/nodes.py::get_nodes",
+      "target": "src/astrophotoflow/interfaces/mcp/graph/nodes.py::build_server.get_nodes"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/tools/canvas.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/graph/nodes.py::get_node",
+      "target": "src/astrophotoflow/interfaces/mcp/graph/nodes.py::build_server.get_node"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/tools/canvas.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/software/calls.py::list_run_calls",
+      "target": "src/astrophotoflow/interfaces/mcp/software/calls.py::build_server.list_run_calls"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/tools/canvas.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/software/calls.py::get_run_call",
+      "target": "src/astrophotoflow/interfaces/mcp/software/calls.py::build_server.get_run_call"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/tools/canvas.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/software/calls.py::get_run_analysis",
+      "target": "src/astrophotoflow/interfaces/mcp/software/calls.py::build_server.get_run_analysis"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/tools/canvas.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/graph/canvas.py::get_canvas",
+      "target": "src/astrophotoflow/interfaces/mcp/graph/canvas.py::build_server.get_canvas"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/tools/canvas.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/graph/canvas.py::edit_canvas",
+      "target": "src/astrophotoflow/interfaces/mcp/graph/canvas.py::build_server.edit_canvas"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/tools/canvas.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/graph/canvas.py::list_canvas_pages",
+      "target": "src/astrophotoflow/interfaces/mcp/graph/canvas.py::build_server.list_canvas_pages"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/tools/canvas.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/graph/canvas.py::add_canvas_data",
+      "target": "src/astrophotoflow/interfaces/mcp/graph/canvas.py::build_server.add_canvas_data"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/tools/canvas.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/graph/receipts.py::get_canvas_request",
+      "target": "src/astrophotoflow/interfaces/mcp/graph/receipts.py::build_server.get_canvas_request"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/tools/exports.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/data/exports.py::get_data_result",
+      "target": "src/astrophotoflow/interfaces/mcp/data/results.py::build_server.get_data_result"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/tools/exports.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/data/exports.py::submit_export",
+      "target": "src/astrophotoflow/interfaces/mcp/data/exports.py::build_server.submit_export"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/tools/exports.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/data/exports.py::get_export",
+      "target": "src/astrophotoflow/interfaces/mcp/data/exports.py::build_server.get_export"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/tools/exports.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/data/exports.py::cancel_export",
+      "target": "src/astrophotoflow/interfaces/mcp/data/exports.py::build_server.cancel_export"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/tools/imports.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/data/imports.py::import_photo",
+      "target": "src/astrophotoflow/interfaces/mcp/data/imports.py::build_server.import_photo"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/tools/imports.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/data/imports.py::import_photos",
+      "target": "src/astrophotoflow/interfaces/mcp/data/imports.py::build_server.import_photos"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/tools/imports.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/data/imports.py::list_import_roots",
+      "target": "src/astrophotoflow/interfaces/mcp/data/imports.py::build_server.list_import_roots"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/tools/imports.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/data/imports.py::browse_import_root",
+      "target": "src/astrophotoflow/interfaces/mcp/data/imports.py::build_server.browse_import_root"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/tools/imports.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/data/imports.py::import_local",
+      "target": "src/astrophotoflow/interfaces/mcp/data/imports.py::build_server.import_local"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/tools/imports.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/data/imports.py::list_import_tasks",
+      "target": "src/astrophotoflow/interfaces/mcp/data/tasks.py::build_server.list_import_tasks"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/tools/imports.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/data/imports.py::get_import_task",
+      "target": "src/astrophotoflow/interfaces/mcp/data/tasks.py::build_server.get_import_task"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/tools/imports.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/data/imports.py::cancel_import_task",
+      "target": "src/astrophotoflow/interfaces/mcp/data/tasks.py::build_server.cancel_import_task"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/tools/imports.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/data/imports.py::resume_import_task",
+      "target": "src/astrophotoflow/interfaces/mcp/data/tasks.py::build_server.resume_import_task"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/tools/imports.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/data/imports.py::retry_import_items",
+      "target": "src/astrophotoflow/interfaces/mcp/data/tasks.py::build_server.retry_import_items"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/tools/intake.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/data/imports.py::inspect_sources",
+      "target": "src/astrophotoflow/interfaces/mcp/data/imports.py::build_server.inspect_sources"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/tools/intake.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/data/imports.py::get_inspection",
+      "target": "src/astrophotoflow/interfaces/mcp/data/imports.py::build_server.get_inspection"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/tools/intake.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/data/imports.py::inspection_entries",
+      "target": "src/astrophotoflow/interfaces/mcp/data/imports.py::build_server.inspection_entries"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/tools/intake.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/data/imports.py::submit_batch",
+      "target": "src/astrophotoflow/interfaces/mcp/data/imports.py::build_server.submit_batch"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/tools/intake.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/data/imports.py::batch_status",
+      "target": "src/astrophotoflow/interfaces/mcp/data/tasks.py::build_server.batch_status"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/tools/intake.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/data/imports.py::wait_batch",
+      "target": "src/astrophotoflow/interfaces/mcp/data/tasks.py::build_server.wait_batch"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/tools/intake.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/data/projects.py::retry_batch_project_links",
+      "target": "src/astrophotoflow/interfaces/mcp/data/projects.py::build_server.retry_batch_project_links"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/tools/library.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/graph/canvas.py::prepare_canvas_data",
+      "target": "src/astrophotoflow/interfaces/mcp/data/assets.py::build_server.prepare_canvas_data"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/tools/library.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/data/assets.py::list_assets",
+      "target": "src/astrophotoflow/interfaces/mcp/data/assets.py::build_server.list_assets"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/tools/library.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/data/library.py::list_library_items",
+      "target": "src/astrophotoflow/interfaces/mcp/data/library.py::build_server.list_library_items"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/tools/library.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/data/assets.py::get_asset",
+      "target": "src/astrophotoflow/interfaces/mcp/data/assets.py::build_server.get_asset"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/tools/library.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/data/assets.py::update_asset",
+      "target": "src/astrophotoflow/interfaces/mcp/data/assets.py::build_server.update_asset"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/tools/library.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/data/assets.py::update_asset_parameters",
+      "target": "src/astrophotoflow/interfaces/mcp/data/assets.py::build_server.update_asset_parameters"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/tools/library.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/data/assets.py::list_asset_versions",
+      "target": "src/astrophotoflow/interfaces/mcp/data/assets.py::build_server.list_asset_versions"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/tools/library.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/data/assets.py::get_asset_version",
+      "target": "src/astrophotoflow/interfaces/mcp/data/assets.py::build_server.get_asset_version"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/tools/library.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/data/datasets.py::create_dataset",
+      "target": "src/astrophotoflow/interfaces/mcp/data/datasets.py::build_server.create_dataset"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/tools/library.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/data/datasets.py::list_datasets",
+      "target": "src/astrophotoflow/interfaces/mcp/data/datasets.py::build_server.list_datasets"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/tools/library.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/data/datasets.py::get_dataset",
+      "target": "src/astrophotoflow/interfaces/mcp/data/datasets.py::build_server.get_dataset"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/tools/library.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/data/datasets.py::update_dataset",
+      "target": "src/astrophotoflow/interfaces/mcp/data/datasets.py::build_server.update_dataset"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/tools/library.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/data/datasets.py::list_dataset_versions",
+      "target": "src/astrophotoflow/interfaces/mcp/data/datasets.py::build_server.list_dataset_versions"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/tools/library.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/data/datasets.py::get_dataset_version",
+      "target": "src/astrophotoflow/interfaces/mcp/data/datasets.py::build_server.get_dataset_version"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/tools/library.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/data/datasets.py::publish_dataset_version",
+      "target": "src/astrophotoflow/interfaces/mcp/data/datasets.py::build_server.publish_dataset_version"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/tools/library.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/data/datasets.py::update_dataset_members",
+      "target": "src/astrophotoflow/interfaces/mcp/data/datasets.py::build_server.update_dataset_members"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/tools/library.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/data/calibration.py::list_calibration_targets",
+      "target": "src/astrophotoflow/interfaces/mcp/data/calibration.py::build_server.list_calibration_targets"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/tools/library.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/data/trash.py::remove_library_items",
+      "target": "src/astrophotoflow/interfaces/mcp/data/trash.py::build_server.remove_library_items"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/tools/library.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/data/trash.py::list_trash",
+      "target": "src/astrophotoflow/interfaces/mcp/data/trash.py::build_server.list_trash"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/tools/library.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/data/trash.py::restore_trash",
+      "target": "src/astrophotoflow/interfaces/mcp/data/trash.py::build_server.restore_trash"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/tools/library.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/data/trash.py::preview_trash_delete",
+      "target": "src/astrophotoflow/interfaces/mcp/data/trash.py::build_server.preview_trash_delete"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/tools/library.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/data/trash.py::delete_trash",
+      "target": "src/astrophotoflow/interfaces/mcp/data/trash.py::build_server.delete_trash"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/tools/library.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/data/library.py::schedule_display_preview",
+      "target": "src/astrophotoflow/interfaces/mcp/data/media.py::build_server.schedule_display_preview"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/tools/library.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/data/library.py::get_display_preview_status",
+      "target": "src/astrophotoflow/interfaces/mcp/data/media.py::build_server.get_display_preview_status"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/tools/library.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/data/library.py::read_display_preview",
+      "target": "src/astrophotoflow/interfaces/mcp/data/media.py::build_server.read_display_preview"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/tools/organization.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/data/projects.py::list_projects",
+      "target": "src/astrophotoflow/interfaces/mcp/data/projects.py::build_server.list_projects"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/tools/organization.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/data/projects.py::create_project",
+      "target": "src/astrophotoflow/interfaces/mcp/data/projects.py::build_server.create_project"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/tools/organization.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/data/projects.py::get_project",
+      "target": "src/astrophotoflow/interfaces/mcp/data/projects.py::build_server.get_project"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/tools/organization.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/data/projects.py::update_project",
+      "target": "src/astrophotoflow/interfaces/mcp/data/projects.py::build_server.update_project"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/tools/organization.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/data/projects.py::list_project_assets",
+      "target": "src/astrophotoflow/interfaces/mcp/data/projects.py::build_server.list_project_assets"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/tools/organization.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/data/projects.py::get_project_asset",
+      "target": "src/astrophotoflow/interfaces/mcp/data/projects.py::build_server.get_project_asset"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/tools/organization.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/data/projects.py::add_project_asset",
+      "target": "src/astrophotoflow/interfaces/mcp/data/projects.py::build_server.add_project_asset"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/tools/organization.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/data/projects.py::remove_project_asset",
+      "target": "src/astrophotoflow/interfaces/mcp/data/projects.py::build_server.remove_project_asset"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/tools/organization.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/data/projects.py::list_project_datasets",
+      "target": "src/astrophotoflow/interfaces/mcp/data/projects.py::build_server.list_project_datasets"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/tools/organization.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/data/projects.py::get_project_dataset",
+      "target": "src/astrophotoflow/interfaces/mcp/data/projects.py::build_server.get_project_dataset"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/tools/organization.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/data/projects.py::add_project_dataset",
+      "target": "src/astrophotoflow/interfaces/mcp/data/projects.py::build_server.add_project_dataset"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/tools/organization.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/data/projects.py::remove_project_dataset",
+      "target": "src/astrophotoflow/interfaces/mcp/data/projects.py::build_server.remove_project_dataset"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/tools/organization.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/data/equipment.py::list_equipment",
+      "target": "src/astrophotoflow/interfaces/mcp/data/equipment.py::build_server.list_equipment"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/tools/organization.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/data/equipment.py::create_equipment",
+      "target": "src/astrophotoflow/interfaces/mcp/data/equipment.py::build_server.create_equipment"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/tools/organization.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/data/equipment.py::get_equipment",
+      "target": "src/astrophotoflow/interfaces/mcp/data/equipment.py::build_server.get_equipment"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/tools/organization.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/data/equipment.py::update_equipment",
+      "target": "src/astrophotoflow/interfaces/mcp/data/equipment.py::build_server.update_equipment"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/tools/organization.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/data/equipment.py::list_equipment_setups",
+      "target": "src/astrophotoflow/interfaces/mcp/data/setups.py::build_server.list_equipment_setups"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/tools/organization.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/data/equipment.py::create_equipment_setup",
+      "target": "src/astrophotoflow/interfaces/mcp/data/setups.py::build_server.create_equipment_setup"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/tools/organization.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/data/equipment.py::get_equipment_setup",
+      "target": "src/astrophotoflow/interfaces/mcp/data/setups.py::build_server.get_equipment_setup"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/tools/organization.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/data/equipment.py::update_equipment_setup",
+      "target": "src/astrophotoflow/interfaces/mcp/data/setups.py::build_server.update_equipment_setup"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/tools/organization.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/data/equipment.py::list_capture_presets",
+      "target": "src/astrophotoflow/interfaces/mcp/data/presets.py::build_server.list_capture_presets"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/tools/organization.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/data/equipment.py::create_capture_preset",
+      "target": "src/astrophotoflow/interfaces/mcp/data/presets.py::build_server.create_capture_preset"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/tools/organization.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/data/equipment.py::get_capture_preset",
+      "target": "src/astrophotoflow/interfaces/mcp/data/presets.py::build_server.get_capture_preset"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/tools/organization.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/data/equipment.py::update_capture_preset",
+      "target": "src/astrophotoflow/interfaces/mcp/data/presets.py::build_server.update_capture_preset"
+    },
+    {
+      "source": "src/astrophotoflow/modules/data/ingestion.py",
+      "old_target": "src/astrophotoflow/modules/data/imports/stages.py::IngestionError",
+      "target": "src/astrophotoflow/modules/data/imports/errors.py::IngestionError"
+    },
+    {
+      "source": "src/astrophotoflow/modules/data/ingestion.py",
+      "old_target": "src/astrophotoflow/modules/data/imports/stages.py::_sort_task_items.order",
+      "target": "src/astrophotoflow/modules/data/imports/enumeration.py::sort_task_items.order"
+    },
+    {
+      "source": "src/astrophotoflow/modules/data/local_selection.py",
+      "old_target": "src/astrophotoflow/modules/data/imports/local_selection.py::LocalSelectionBusy",
+      "target": "src/astrophotoflow/modules/data/local_selection.py::LocalSelectionBusy"
+    },
+    {
+      "source": "src/astrophotoflow/modules/data/local_selection.py",
+      "old_target": "src/astrophotoflow/modules/data/imports/local_selection.py::_Desktop",
+      "target": "src/astrophotoflow/modules/data/local_selection.py::_Desktop"
+    },
+    {
+      "source": "src/astrophotoflow/modules/data/media_view.py",
+      "old_target": "src/astrophotoflow/modules/data/media/views.py::MediaViews._pixels",
+      "target": "src/astrophotoflow/modules/data/media/display.py::DisplayPreviews._pixels"
+    },
+    {
+      "source": "src/astrophotoflow/modules/data/media_view.py",
+      "old_target": "src/astrophotoflow/modules/data/media/views.py::MediaViews._tile.check_cancel",
+      "target": "src/astrophotoflow/modules/data/media/tiles.py::TileService._tile.check_cancel"
+    },
+    {
+      "source": "src/astrophotoflow/modules/data/media_view.py",
+      "old_target": "src/astrophotoflow/modules/data/media/views.py::_base",
+      "target": "src/astrophotoflow/modules/data/formats/video.py::frame_times.base"
+    },
+    {
+      "source": "src/astrophotoflow/modules/data/previews.py",
+      "old_target": "src/astrophotoflow/modules/data/media/previews.py::DisplayPreviews",
+      "target": "src/astrophotoflow/modules/data/media/display.py::DisplayPreviews"
+    },
+    {
+      "source": "src/astrophotoflow/modules/software/bundles.py",
+      "old_target": "src/astrophotoflow/modules/software/bundles/git.py::git",
+      "target": "src/astrophotoflow/modules/software/development/builder.py::refresh_source.git"
+    },
+    {
+      "source": "src/astrophotoflow/modules/software/public.py",
+      "old_target": "src/astrophotoflow/modules/software/execution/state.py::_Call",
+      "target": "src/astrophotoflow/modules/software/execution/state.py::Call"
+    },
+    {
+      "source": "src/astrophotoflow/modules/software/public.py",
+      "old_target": "src/astrophotoflow/modules/software/execution/state.py::_ObservationFailed",
+      "target": "src/astrophotoflow/modules/software/execution/state.py::ObservationFailed"
+    },
+    {
+      "source": "src/astrophotoflow/modules/workflows/data_nodes.py",
+      "old_target": "src/astrophotoflow/modules/data/results/records.py::_save",
+      "target": "src/astrophotoflow/modules/data/exports/service.py::DataExports._save"
+    },
+    {
+      "source": "src/astrophotoflow/modules/workflows/software_calls.py",
+      "old_target": "src/astrophotoflow/modules/software/execution/records.py::_save",
+      "target": "src/astrophotoflow/modules/data/exports/service.py::DataExports._save"
+    },
+    {
+      "source": "src/astrophotoflow/modules/workflows/software_calls.py",
+      "old_target": "src/astrophotoflow/modules/software/execution/records.py::_read",
+      "target": "src/astrophotoflow/modules/data/formats/source.py::PixelSource.read"
+    },
+    {
+      "source": "src/astrophotoflow/modules/workflows/software_calls.py",
+      "old_target": "src/astrophotoflow/modules/data/results/service.py::_resolve_previous.resolve",
+      "target": "src/astrophotoflow/modules/data/results/service.py::resolve_result_inputs.resolve"
+    },
+    {
+      "source": "src/astrophotoflow/modules/workflows/software_calls.py",
+      "old_target": "src/astrophotoflow/interfaces/http/data/results.py::output_analysis",
+      "target": "src/astrophotoflow/interfaces/http/data/result_media.py::output_analysis"
+    },
+    {
+      "source": "src/astrophotoflow/modules/workflows/software_calls.py",
+      "old_target": "src/astrophotoflow/interfaces/http/data/results.py::output_file",
+      "target": "src/astrophotoflow/interfaces/http/data/result_media.py::output_file"
+    },
+    {
+      "source": "src/astrophotoflow/modules/workflows/software_calls.py",
+      "old_target": "src/astrophotoflow/interfaces/http/data/results.py::output_thumbnail",
+      "target": "src/astrophotoflow/interfaces/http/data/result_media.py::output_thumbnail"
+    },
+    {
+      "source": "src/astrophotoflow/modules/workflows/software_calls.py",
+      "old_target": "src/astrophotoflow/interfaces/http/data/results.py::prepare_output_view",
+      "target": "src/astrophotoflow/interfaces/http/data/result_media.py::prepare_output_view"
+    },
+    {
+      "source": "src/astrophotoflow/modules/workflows/software_calls.py",
+      "old_target": "src/astrophotoflow/interfaces/http/data/results.py::release_output_view",
+      "target": "src/astrophotoflow/interfaces/http/data/result_media.py::release_output_view"
+    },
+    {
+      "source": "src/astrophotoflow/modules/workflows/software_calls.py",
+      "old_target": "src/astrophotoflow/interfaces/http/data/results.py::output_view_status",
+      "target": "src/astrophotoflow/interfaces/http/data/result_media.py::output_view_status"
+    },
+    {
+      "source": "src/astrophotoflow/modules/workflows/software_calls.py",
+      "old_target": "src/astrophotoflow/interfaces/http/data/results.py::output_view_tile",
+      "target": "src/astrophotoflow/interfaces/http/data/result_media.py::output_view_tile"
+    },
+    {
+      "source": "src/astrophotoflow/modules/workflows/software_calls.py",
+      "old_target": "src/astrophotoflow/interfaces/http/data/results.py::output_view_file",
+      "target": "src/astrophotoflow/interfaces/http/data/result_media.py::output_view_file"
+    },
+    {
+      "source": "src/astrophotoflow/modules/workflows/software_calls.py",
+      "old_target": "src/astrophotoflow/modules/software/execution/records.py::recover_software_calls",
+      "target": "src/astrophotoflow/interfaces/application/software_calls.py::recover_software_calls"
+    },
+    {
+      "source": "bundle:adapter/recipes.py",
+      "old_target": "bundle:adapter/recipes/factories.py::add",
+      "target": "bundle:adapter/recipes/catalog.py::add"
+    }
+  ],
+  "semantic_resolutions": [
+    {
+      "source": "src/astrophotoflow/client.py",
+      "old_target": "src/astrophotoflow/client.py::AssetClient.__init__",
+      "target": "src/astrophotoflow/interfaces/client/transport.py::HttpTransport.__init__",
+      "reason": "连接与解析由唯一HttpTransport实现，AssetClient只组合能力"
+    },
+    {
+      "source": "src/astrophotoflow/client.py",
+      "old_target": "src/astrophotoflow/interfaces/client/transport.py::ApiTransport.request",
+      "target": "src/astrophotoflow/interfaces/client/transport.py::HttpTransport.request",
+      "reason": "连接与解析由唯一HttpTransport实现，AssetClient只组合能力"
+    },
+    {
+      "source": "src/astrophotoflow/client.py",
+      "old_target": "src/astrophotoflow/interfaces/client/transport.py::ApiTransport.parse_response",
+      "target": "src/astrophotoflow/interfaces/client/transport.py::HttpTransport._result",
+      "reason": "连接与解析由唯一HttpTransport实现，AssetClient只组合能力"
+    },
+    {
+      "source": "src/astrophotoflow/client.py",
+      "old_target": "src/astrophotoflow/client.py::AssetClient.close",
+      "target": "src/astrophotoflow/interfaces/client/transport.py::HttpTransport.close",
+      "reason": "连接与解析由唯一HttpTransport实现，AssetClient只组合能力"
+    },
+    {
+      "source": "src/astrophotoflow/contracts/assets.py",
+      "old_target": "src/astrophotoflow/contracts/assets.py::LibraryAssetItemOut",
+      "target": "src/astrophotoflow/contracts/assets.py::LibraryItemSummary",
+      "reason": "列表改为统一判别摘要，删除全成员响应"
+    },
+    {
+      "source": "src/astrophotoflow/contracts/assets.py",
+      "old_target": "src/astrophotoflow/contracts/assets.py::AssetClassificationPatch",
+      "target": "src/astrophotoflow/contracts/metadata.py::AssetClassification",
+      "reason": "分类约束由共享资料模型承担，不保留旧重复模型／validator"
+    },
+    {
+      "source": "src/astrophotoflow/contracts/assets.py",
+      "old_target": "src/astrophotoflow/contracts/assets.py::AssetClassificationPatch.video_has_no_frame_type",
+      "target": "src/astrophotoflow/contracts/metadata.py::AssetClassification",
+      "reason": "分类约束由共享资料模型承担，不保留旧重复模型／validator"
+    },
+    {
+      "source": "src/astrophotoflow/contracts/bundles.py",
+      "old_target": "src/astrophotoflow/contracts/bundles.py::ProcessPlan",
+      "target": null,
+      "reason": "删除SDK v1；唯一计划为contracts/bundles.py的NamedProcessPlan"
+    },
+    {
+      "source": "src/astrophotoflow/contracts/datasets.py",
+      "old_target": "src/astrophotoflow/contracts/datasets.py::LibraryDatasetItemOut",
+      "target": "src/astrophotoflow/contracts/assets.py::LibraryItemSummary",
+      "reason": "集合与素材共用判别摘要"
+    },
+    {
+      "source": "src/astrophotoflow/contracts/equipment.py",
+      "old_target": "src/astrophotoflow/contracts/equipment.py::CameraSpecsPatch",
+      "target": "src/astrophotoflow/contracts/equipment.py::CameraPatch",
+      "reason": "设备patch由kind区分，规格不另维护第二套更新契约"
+    },
+    {
+      "source": "src/astrophotoflow/contracts/equipment.py",
+      "old_target": "src/astrophotoflow/contracts/equipment.py::OpticalSystemSpecsPatch",
+      "target": "src/astrophotoflow/contracts/equipment.py::OpticalSystemPatch",
+      "reason": "设备patch由kind区分，规格不另维护第二套更新契约"
+    },
+    {
+      "source": "src/astrophotoflow/contracts/equipment.py",
+      "old_target": "src/astrophotoflow/contracts/equipment.py::FilterSpecsPatch",
+      "target": "src/astrophotoflow/contracts/equipment.py::FilterPatch",
+      "reason": "设备patch由kind区分，规格不另维护第二套更新契约"
+    },
+    {
+      "source": "src/astrophotoflow/contracts/software.py",
+      "old_target": "src/astrophotoflow/contracts/software.py::AutostretchParameters",
+      "target": "src/astrophotoflow/modules/software/execution/validation.py::validate_parameters",
+      "reason": "删除平台Siril专属参数模型；按Bundle唯一操作目录验证"
+    },
+    {
+      "source": "src/astrophotoflow/contracts/software.py",
+      "old_target": "src/astrophotoflow/contracts/software.py::AutostretchParameters.finite_parameter",
+      "target": "src/astrophotoflow/modules/software/execution/validation.py::validate_parameters",
+      "reason": "删除平台Siril专属参数模型；按Bundle唯一操作目录验证"
+    },
+    {
+      "source": "src/astrophotoflow/contracts/software.py",
+      "old_target": "src/astrophotoflow/contracts/software.py::NativeSirilCall",
+      "target": "src/astrophotoflow/contracts/software.py::NativeBundleCall",
+      "reason": "具名输入的通用SDK v2调用替代Siril专用调用"
+    },
+    {
+      "source": "src/astrophotoflow/contracts/software.py",
+      "old_target": "src/astrophotoflow/contracts/software.py::SirilPreviewRequest",
+      "target": "src/astrophotoflow/contracts/software.py::BundlePreviewRequest",
+      "reason": "删除Siril专用预览分支，使用通用Bundle预览"
+    },
+    {
+      "source": "src/astrophotoflow/contracts/software.py",
+      "old_target": "src/astrophotoflow/contracts/software.py::NativeBundleCall.one_input_form",
+      "target": null,
+      "reason": "删除单输入兼容形式；NativeBundleCall仅接收具名inputs"
+    },
+    {
+      "source": "src/astrophotoflow/contracts/software.py",
+      "old_target": "src/astrophotoflow/contracts/software.py::RunCallResult",
+      "target": "src/astrophotoflow/contracts/software.py::SoftwareCallResult",
+      "reason": "摘要表示具体软件调用，不是自研Run聚合"
+    },
+    {
+      "source": "src/astrophotoflow/core/database/schema.py",
+      "old_target": "src/astrophotoflow/core/database/schema.py::_backup_before_upgrade",
+      "target": null,
+      "reason": "新数据库初始基线，不编写旧库备份／转换迁移链"
+    },
+    {
+      "source": "src/astrophotoflow/core/workbench.py",
+      "old_target": "src/astrophotoflow/core/workbench/paths.py::active_config_path",
+      "target": null,
+      "reason": "删除未使用的旧active配置路径助手，入口使用显式workspace配置"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/bundle_nodes.py",
+      "old_target": "src/astrophotoflow/interfaces/native/bundles/catalog.py::_bundle_files",
+      "target": "src/astrophotoflow/modules/software/development/watching.py::bundle_watch_paths",
+      "reason": "源码监听范围由software公开能力提供"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/canvas_native.py",
+      "old_target": "src/astrophotoflow/interfaces/native/canvas.py::_locale",
+      "target": "src/astrophotoflow/interfaces/native/context.py::native_locale",
+      "reason": "原生配置与语言只从共享接入上下文读取"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/cli/commands.py",
+      "old_target": "src/astrophotoflow/interfaces/cli/generated.py::read_body",
+      "target": null,
+      "reason": "删除手工业务命令树与参数表；FastMCP生成CLI，Cyclopts装配本机命令"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/cli/commands.py",
+      "old_target": "src/astrophotoflow/interfaces/cli/generated.py::_command",
+      "target": null,
+      "reason": "删除手工业务命令树与参数表；FastMCP生成CLI，Cyclopts装配本机命令"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/cli/commands.py",
+      "old_target": "src/astrophotoflow/interfaces/cli/generated.py::_group",
+      "target": null,
+      "reason": "删除手工业务命令树与参数表；FastMCP生成CLI，Cyclopts装配本机命令"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/cli/commands.py",
+      "old_target": "src/astrophotoflow/interfaces/cli/generated.py::register",
+      "target": null,
+      "reason": "删除手工业务命令树与参数表；FastMCP生成CLI，Cyclopts装配本机命令"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/cli/main.py",
+      "old_target": "src/astrophotoflow/interfaces/cli/main.py::_parameters_parser",
+      "target": null,
+      "reason": "删除旧解析／分发实现，调用生成CLI与Cyclopts根app"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/cli/main.py",
+      "old_target": "src/astrophotoflow/interfaces/cli/main.py::_parser",
+      "target": null,
+      "reason": "删除旧解析／分发实现，调用生成CLI与Cyclopts根app"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/cli/main.py",
+      "old_target": "src/astrophotoflow/interfaces/cli/main.py::_run_asset_command",
+      "target": null,
+      "reason": "删除旧解析／分发实现，调用生成CLI与Cyclopts根app"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/cli/main.py",
+      "old_target": "src/astrophotoflow/interfaces/cli/main.py::_mcp_registration",
+      "target": "src/astrophotoflow/interfaces/cli/local.py::register_local.mcp_config",
+      "reason": "只输出选定workspace的注册命令，不修改全局MCP"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/client/canvas.py",
+      "old_target": "src/astrophotoflow/interfaces/client/canvas.py::CanvasOperations.list_run_calls",
+      "target": "src/astrophotoflow/interfaces/client/software.py::SoftwareOperations.list_run_calls",
+      "reason": "软件调用查询归软件客户端"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/client/canvas.py",
+      "old_target": "src/astrophotoflow/interfaces/client/canvas.py::CanvasOperations.get_run_call",
+      "target": "src/astrophotoflow/interfaces/client/software.py::SoftwareOperations.get_run_call",
+      "reason": "软件调用查询归软件客户端"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/client/canvas.py",
+      "old_target": "src/astrophotoflow/interfaces/client/canvas.py::CanvasOperations.get_run_analysis",
+      "target": "src/astrophotoflow/interfaces/client/software.py::SoftwareOperations.get_run_analysis",
+      "reason": "软件调用查询归软件客户端"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/comfyui.py",
+      "old_target": "src/astrophotoflow/interfaces/native/pages.py::_locale",
+      "target": "src/astrophotoflow/interfaces/native/context.py::native_locale",
+      "reason": "原生配置与语言只从共享接入上下文读取"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/http/app.py",
+      "old_target": "src/astrophotoflow/interfaces/http/maintenance.py::shutdown",
+      "target": "src/astrophotoflow/interfaces/http/maintenance.py::register_maintenance.shutdown",
+      "reason": "工厂只装配，关闭HTTP适配归维护模块"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/localization.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/localization.py::chinese_descriptions",
+      "target": null,
+      "reason": "删除双网关翻译映射；工具声明维护双语描述，节点消费生成的CapabilityDisplay"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/localization.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/localization.py::tool_description",
+      "target": null,
+      "reason": "删除双网关翻译映射；工具声明维护双语描述，节点消费生成的CapabilityDisplay"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/localization.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/localization.py::node_display",
+      "target": null,
+      "reason": "删除双网关翻译映射；工具声明维护双语描述，节点消费生成的CapabilityDisplay"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/server.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/server.py::_result",
+      "target": null,
+      "reason": "删除旧结果包装、反射分发及双网关；FastMCP类型工具与统一错误中间件承担协议"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/server.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/server.py::_call",
+      "target": null,
+      "reason": "删除旧结果包装、反射分发及双网关；FastMCP类型工具与统一错误中间件承担协议"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/server.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/server.py::create_server.data_management",
+      "target": null,
+      "reason": "删除旧结果包装、反射分发及双网关；FastMCP类型工具与统一错误中间件承担协议"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/server.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/server.py::create_server.node_canvas_management",
+      "target": null,
+      "reason": "删除旧结果包装、反射分发及双网关；FastMCP类型工具与统一错误中间件承担协议"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/tools/canvas.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/graph/nodes.py::list_nodes",
+      "target": "src/astrophotoflow/interfaces/mcp/graph/nodes.py::build_server.get_nodes",
+      "reason": "归属／名称按当前定义修订"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/tools/canvas.py",
+      "old_target": "src/astrophotoflow/interfaces/mcp/graph/nodes.py::search",
+      "target": "src/astrophotoflow/interfaces/mcp/graph/nodes.py::build_server.search_nodes",
+      "reason": "归属／名称按当前定义修订"
+    },
+    {
+      "source": "src/astrophotoflow/modules/data/common.py",
+      "old_target": "src/astrophotoflow/modules/data/equipment/service.py::_check_equipment_ref",
+      "target": "src/astrophotoflow/modules/data/equipment/snapshots.py::snapshot_equipment",
+      "reason": "设备引用和规格在建立类型化快照时校验，不跨文件调用common私有函数"
+    },
+    {
+      "source": "src/astrophotoflow/modules/data/common.py",
+      "old_target": "src/astrophotoflow/modules/data/assets/mapping.py::_current_calibration_level",
+      "target": "src/astrophotoflow/modules/data/assets/mapping.py::asset_out",
+      "reason": "校准级别使用明确模型列并在素材装配中输出"
+    },
+    {
+      "source": "src/astrophotoflow/modules/data/common.py",
+      "old_target": "src/astrophotoflow/modules/data/projects/references.py::_reference_out",
+      "target": "src/astrophotoflow/modules/data/projects/mapping.py::project_asset_reference_out",
+      "reason": "归属／名称按当前定义修订"
+    },
+    {
+      "source": "src/astrophotoflow/modules/data/common.py",
+      "old_target": "src/astrophotoflow/interfaces/http/data/media.py::read_preview_response",
+      "target": "src/astrophotoflow/interfaces/http/responses.py::preview_response",
+      "reason": "data提供PreviewContent，只有HTTP层构造Response"
+    },
+    {
+      "source": "src/astrophotoflow/modules/data/common.py",
+      "old_target": "src/astrophotoflow/modules/data/projects/references.py::_dataset_reference_out",
+      "target": "src/astrophotoflow/modules/data/projects/mapping.py::project_dataset_reference_out",
+      "reason": "归属／名称按当前定义修订"
+    },
+    {
+      "source": "src/astrophotoflow/modules/data/equipment.py",
+      "old_target": "src/astrophotoflow/interfaces/http/data/equipment.py::patch_equipment_route",
+      "target": "src/astrophotoflow/interfaces/http/data/equipment.py::patch_equipment",
+      "reason": "归属／名称按当前定义修订"
+    },
+    {
+      "source": "src/astrophotoflow/modules/data/import_batches.py",
+      "old_target": "src/astrophotoflow/interfaces/http/data/imports.py::submit_route",
+      "target": "src/astrophotoflow/interfaces/http/data/batches.py::submit",
+      "reason": "归属／名称按当前定义修订"
+    },
+    {
+      "source": "src/astrophotoflow/modules/data/import_batches.py",
+      "old_target": "src/astrophotoflow/interfaces/http/data/imports.py::status_route",
+      "target": "src/astrophotoflow/interfaces/http/data/batches.py::status",
+      "reason": "归属／名称按当前定义修订"
+    },
+    {
+      "source": "src/astrophotoflow/modules/data/ingestion.py",
+      "old_target": "src/astrophotoflow/modules/data/imports/metadata.py::role_from_classification",
+      "target": "src/astrophotoflow/modules/data/assets/metadata.py::capture_role",
+      "reason": "归属／名称按当前定义修订"
+    },
+    {
+      "source": "src/astrophotoflow/modules/data/ingestion.py",
+      "old_target": "src/astrophotoflow/modules/data/imports/stages.py::_item_error",
+      "target": "src/astrophotoflow/modules/data/imports/errors.py::import_error",
+      "reason": "共享已分类异常转为任务错误，不保留旧重复字符串包装"
+    },
+    {
+      "source": "src/astrophotoflow/modules/data/ingestion.py",
+      "old_target": "src/astrophotoflow/modules/data/imports/stages.py::_enumerate_task.stopped",
+      "target": "src/astrophotoflow/modules/data/imports/enumeration.py::enumerate_task.stopped",
+      "reason": "归属／名称按当前定义修订"
+    },
+    {
+      "source": "src/astrophotoflow/modules/data/library.py",
+      "old_target": "src/astrophotoflow/modules/data/assets/queries.py::_asset_page",
+      "target": "src/astrophotoflow/modules/data/assets/queries.py::list_assets",
+      "reason": "数据库筛选／排序／分页替代全库Python装配"
+    },
+    {
+      "source": "src/astrophotoflow/modules/data/library.py",
+      "old_target": "src/astrophotoflow/modules/data/library/queries.py::_rounded_temperature",
+      "target": "src/astrophotoflow/modules/data/assets/queries.py::get_filter_options",
+      "reason": "筛选选项由SQL聚合，不再展开全库ORM对象"
+    },
+    {
+      "source": "src/astrophotoflow/modules/data/library.py",
+      "old_target": "src/astrophotoflow/modules/data/library/queries.py::search_library.matches_member",
+      "target": "src/astrophotoflow/modules/data/library/queries.py::search_library",
+      "reason": "成员匹配由SQL EXISTS和关系查询承担"
+    },
+    {
+      "source": "src/astrophotoflow/modules/data/library.py",
+      "old_target": "src/astrophotoflow/modules/data/library/queries.py::get_filter_options.values",
+      "target": "src/astrophotoflow/modules/data/assets/queries.py::get_filter_options",
+      "reason": "筛选选项由SQL聚合，不再展开全库ORM对象"
+    },
+    {
+      "source": "src/astrophotoflow/modules/data/media_sources.py",
+      "old_target": "src/astrophotoflow/modules/data/formats/source.py::PixelSource._fits_region",
+      "target": "src/astrophotoflow/modules/data/formats/source.py::PixelSource.read_fits_region",
+      "reason": "归属／名称按当前定义修订"
+    },
+    {
+      "source": "src/astrophotoflow/modules/data/media_view.py",
+      "old_target": "src/astrophotoflow/modules/data/media/views.py::MediaViews.tile_future.complete",
+      "target": "src/astrophotoflow/modules/data/media/tiles.py::TileService.tile_future.complete",
+      "reason": "归属／名称按当前定义修订"
+    },
+    {
+      "source": "src/astrophotoflow/modules/data/media_view.py",
+      "old_target": "src/astrophotoflow/modules/data/media/views.py::_version",
+      "target": "src/astrophotoflow/interfaces/http/data/media.py::_version",
+      "reason": "媒体URL／HTTP作用域适配不进入data服务"
+    },
+    {
+      "source": "src/astrophotoflow/modules/data/media_view.py",
+      "old_target": "src/astrophotoflow/modules/data/media/views.py::_urls",
+      "target": "src/astrophotoflow/interfaces/http/data/media.py::_urls",
+      "reason": "媒体URL／HTTP作用域适配不进入data服务"
+    },
+    {
+      "source": "src/astrophotoflow/modules/data/presets.py",
+      "old_target": "src/astrophotoflow/modules/data/equipment/snapshots.py::_preset_snapshot",
+      "target": "src/astrophotoflow/modules/data/equipment/snapshots.py::capture_defaults_snapshot",
+      "reason": "归属／名称按当前定义修订"
+    },
+    {
+      "source": "src/astrophotoflow/modules/data/previews.py",
+      "old_target": "src/astrophotoflow/modules/data/media/previews.py::_library_version",
+      "target": "src/astrophotoflow/modules/data/media/references.py::library_preview_version",
+      "reason": "归属／名称按当前定义修订"
+    },
+    {
+      "source": "src/astrophotoflow/modules/data/previews.py",
+      "old_target": "src/astrophotoflow/modules/data/media/previews.py::_project_version",
+      "target": "src/astrophotoflow/modules/data/media/references.py::project_preview_version",
+      "reason": "归属／名称按当前定义修订"
+    },
+    {
+      "source": "src/astrophotoflow/modules/data/projects.py",
+      "old_target": "src/astrophotoflow/interfaces/http/data/projects.py::patch_project_route",
+      "target": "src/astrophotoflow/interfaces/http/data/projects.py::patch_project",
+      "reason": "归属／名称按当前定义修订"
+    },
+    {
+      "source": "src/astrophotoflow/modules/data/projects.py",
+      "old_target": "src/astrophotoflow/modules/data/projects/service.py::_update_project_revision",
+      "target": "src/astrophotoflow/modules/data/projects/references.py::add_project_asset_reference",
+      "reason": "修订更新与各引用写入在同一事务内完成，删除另行提交的助手"
+    },
+    {
+      "source": "src/astrophotoflow/modules/data/setups.py",
+      "old_target": "src/astrophotoflow/modules/data/equipment/setups.py::_check_components",
+      "target": "src/astrophotoflow/modules/data/equipment/setups.py::_replace_members",
+      "reason": "明确成员关系和互斥来源替代旧JSON组件校验"
+    },
+    {
+      "source": "src/astrophotoflow/modules/data/setups.py",
+      "old_target": "src/astrophotoflow/modules/data/equipment/presets.py::_preset_page",
+      "target": "src/astrophotoflow/modules/data/equipment/presets.py::list_capture_presets",
+      "reason": "预设按组合范围查询，不复制列表装配"
+    },
+    {
+      "source": "src/astrophotoflow/modules/data/setups.py",
+      "old_target": "src/astrophotoflow/modules/data/equipment/presets.py::list_setup_presets",
+      "target": "src/astrophotoflow/modules/data/equipment/presets.py::list_capture_presets",
+      "reason": "预设按组合范围查询，不复制列表装配"
+    },
+    {
+      "source": "src/astrophotoflow/modules/data/setups.py",
+      "old_target": "src/astrophotoflow/modules/data/equipment/presets.py::list_presets",
+      "target": "src/astrophotoflow/modules/data/equipment/presets.py::list_capture_presets",
+      "reason": "预设按组合范围查询，不复制列表装配"
+    },
+    {
+      "source": "src/astrophotoflow/modules/data/setups.py",
+      "old_target": "src/astrophotoflow/modules/data/equipment/presets.py::create_preset",
+      "target": "src/astrophotoflow/modules/data/equipment/presets.py::create_capture_preset",
+      "reason": "归属／名称按当前定义修订"
+    },
+    {
+      "source": "src/astrophotoflow/modules/data/setups.py",
+      "old_target": "src/astrophotoflow/modules/data/equipment/presets.py::get_preset",
+      "target": "src/astrophotoflow/modules/data/equipment/presets.py::get_capture_preset",
+      "reason": "归属／名称按当前定义修订"
+    },
+    {
+      "source": "src/astrophotoflow/modules/data/setups.py",
+      "old_target": "src/astrophotoflow/modules/data/equipment/presets.py::update_preset",
+      "target": "src/astrophotoflow/modules/data/equipment/presets.py::update_capture_preset",
+      "reason": "归属／名称按当前定义修订"
+    },
+    {
+      "source": "src/astrophotoflow/modules/data/siril_preview.py",
+      "old_target": "src/astrophotoflow/modules/data/media/samples.py::fits_sample",
+      "target": "src/astrophotoflow/modules/data/media/rendering.py::read_fits_sample",
+      "reason": "归属／名称按当前定义修订"
+    },
+    {
+      "source": "src/astrophotoflow/modules/nodes/public.py",
+      "old_target": "src/astrophotoflow/modules/nodes/storage.py::_saved",
+      "target": "src/astrophotoflow/modules/nodes/changes.py::saved_definition",
+      "reason": "public只导出，存储／变化实现各自维护"
+    },
+    {
+      "source": "src/astrophotoflow/modules/nodes/public.py",
+      "old_target": "src/astrophotoflow/modules/nodes/storage.py::_directory",
+      "target": "src/astrophotoflow/modules/nodes/storage.py::definition_directory",
+      "reason": "public只导出，存储／变化实现各自维护"
+    },
+    {
+      "source": "src/astrophotoflow/modules/nodes/public.py",
+      "old_target": "src/astrophotoflow/modules/nodes/storage.py::_path",
+      "target": "src/astrophotoflow/modules/nodes/storage.py::definition_path",
+      "reason": "public只导出，存储／变化实现各自维护"
+    },
+    {
+      "source": "src/astrophotoflow/modules/nodes/public.py",
+      "old_target": "src/astrophotoflow/modules/nodes/storage.py::_read",
+      "target": "src/astrophotoflow/modules/nodes/storage.py::read_definition",
+      "reason": "public只导出，存储／变化实现各自维护"
+    },
+    {
+      "source": "src/astrophotoflow/modules/nodes/public.py",
+      "old_target": "src/astrophotoflow/modules/nodes/storage.py::_write",
+      "target": "src/astrophotoflow/modules/nodes/storage.py::write_definition",
+      "reason": "public只导出，存储／变化实现各自维护"
+    },
+    {
+      "source": "src/astrophotoflow/modules/nodes/public.py",
+      "old_target": "src/astrophotoflow/modules/nodes/storage.py::_lock",
+      "target": "src/astrophotoflow/modules/nodes/storage.py::definition_lock",
+      "reason": "public只导出，存储／变化实现各自维护"
+    },
+    {
+      "source": "src/astrophotoflow/modules/software/development.py",
+      "old_target": "src/astrophotoflow/modules/software/development/fingerprints.py::_digest",
+      "target": "src/astrophotoflow/modules/software/development/fingerprints.py::digest_files",
+      "reason": "归属／名称按当前定义修订"
+    },
+    {
+      "source": "src/astrophotoflow/modules/software/development.py",
+      "old_target": "src/astrophotoflow/modules/software/development/fingerprints.py::_inputs",
+      "target": "src/astrophotoflow/modules/software/development/fingerprints.py::build_inputs",
+      "reason": "归属／名称按当前定义修订"
+    },
+    {
+      "source": "src/astrophotoflow/modules/software/development.py",
+      "old_target": "src/astrophotoflow/modules/software/development/builder.py::_refresh",
+      "target": "src/astrophotoflow/modules/software/development/builder.py::refresh_source",
+      "reason": "归属／名称按当前定义修订"
+    },
+    {
+      "source": "src/astrophotoflow/modules/workflows/canvas.py",
+      "old_target": "src/astrophotoflow/interfaces/native/client.py::_native",
+      "target": "src/astrophotoflow/interfaces/native/client.py::NativeClient",
+      "reason": "共享长期HTTPX客户端，明确list_pages/send/receipt类型入口"
+    },
+    {
+      "source": "src/astrophotoflow/modules/workflows/data_nodes.py",
+      "old_target": "src/astrophotoflow/modules/data/results/records.py::result_directory",
+      "target": "src/astrophotoflow/modules/data/results/records.py::data_execution_directory",
+      "reason": "归属／名称按当前定义修订"
+    },
+    {
+      "source": "src/astrophotoflow/modules/workflows/data_nodes.py",
+      "old_target": "src/astrophotoflow/modules/data/results/records.py::get_data_result",
+      "target": "src/astrophotoflow/modules/data/results/data_node.py::get_data_result",
+      "reason": "归属／名称按当前定义修订"
+    },
+    {
+      "source": "src/astrophotoflow/modules/workflows/data_nodes.py",
+      "old_target": "src/astrophotoflow/modules/data/results/service.py::resolve_result_member",
+      "target": "src/astrophotoflow/modules/data/results/service.py::get_result_member",
+      "reason": "归属／名称按当前定义修订"
+    },
+    {
+      "source": "src/astrophotoflow/modules/workflows/siril_preview.py",
+      "old_target": "src/astrophotoflow/interfaces/application/software_previews.py::SirilPreviews",
+      "target": "src/astrophotoflow/interfaces/application/software_previews.py::BundlePreviews",
+      "reason": "跨模块预览编排归接入层，不恢复workflow业务模块"
+    },
+    {
+      "source": "src/astrophotoflow/modules/workflows/siril_preview.py",
+      "old_target": "src/astrophotoflow/interfaces/application/software_previews.py::SirilPreviews.__init__",
+      "target": "src/astrophotoflow/interfaces/application/software_previews.py::BundlePreviews.__init__",
+      "reason": "跨模块预览编排归接入层，不恢复workflow业务模块"
+    },
+    {
+      "source": "src/astrophotoflow/modules/workflows/siril_preview.py",
+      "old_target": "src/astrophotoflow/interfaces/application/software_previews.py::SirilPreviews.start",
+      "target": "src/astrophotoflow/interfaces/application/software_previews.py::BundlePreviews.start",
+      "reason": "跨模块预览编排归接入层，不恢复workflow业务模块"
+    },
+    {
+      "source": "src/astrophotoflow/modules/workflows/siril_preview.py",
+      "old_target": "src/astrophotoflow/interfaces/application/software_previews.py::SirilPreviews.render",
+      "target": "src/astrophotoflow/interfaces/application/software_previews.py::BundlePreviews.render",
+      "reason": "跨模块预览编排归接入层，不恢复workflow业务模块"
+    },
+    {
+      "source": "src/astrophotoflow/modules/workflows/siril_preview.py",
+      "old_target": "src/astrophotoflow/interfaces/application/software_previews.py::SirilPreviews._render",
+      "target": "src/astrophotoflow/interfaces/application/software_previews.py::BundlePreviews._render",
+      "reason": "跨模块预览编排归接入层，不恢复workflow业务模块"
+    },
+    {
+      "source": "src/astrophotoflow/modules/workflows/siril_preview.py",
+      "old_target": "src/astrophotoflow/interfaces/application/software_previews.py::SirilPreviews._render.checkpoint",
+      "target": "src/astrophotoflow/interfaces/application/software_previews.py::BundlePreviews._render.checkpoint",
+      "reason": "跨模块预览编排归接入层，不恢复workflow业务模块"
+    },
+    {
+      "source": "src/astrophotoflow/modules/workflows/siril_preview.py",
+      "old_target": "src/astrophotoflow/interfaces/application/software_previews.py::SirilPreviews.cancel",
+      "target": "src/astrophotoflow/interfaces/application/software_previews.py::BundlePreviews.cancel",
+      "reason": "跨模块预览编排归接入层，不恢复workflow业务模块"
+    },
+    {
+      "source": "src/astrophotoflow/modules/workflows/siril_preview.py",
+      "old_target": "src/astrophotoflow/interfaces/application/software_previews.py::SirilPreviews.close",
+      "target": "src/astrophotoflow/interfaces/application/software_previews.py::BundlePreviews.close",
+      "reason": "跨模块预览编排归接入层，不恢复workflow业务模块"
+    },
+    {
+      "source": "src/astrophotoflow/modules/workflows/siril_preview.py",
+      "old_target": "src/astrophotoflow/interfaces/application/software_previews.py::legacy_preview",
+      "target": null,
+      "reason": "删除Siril专用旧预览端点，现有通用Bundle预览保留"
+    },
+    {
+      "source": "src/astrophotoflow/modules/workflows/siril_preview.py",
+      "old_target": "src/astrophotoflow/interfaces/application/software_previews.py::legacy_release",
+      "target": null,
+      "reason": "删除Siril专用旧预览端点，现有通用Bundle预览保留"
+    },
+    {
+      "source": "src/astrophotoflow/modules/workflows/software_calls.py",
+      "old_target": "src/astrophotoflow/modules/software/execution/records.py::_record_path",
+      "target": "src/astrophotoflow/modules/software/execution/records.py::call_record_path",
+      "reason": "具体调用记录由software拥有"
+    },
+    {
+      "source": "src/astrophotoflow/modules/workflows/software_calls.py",
+      "old_target": "src/astrophotoflow/modules/data/results/service.py::_record_ports",
+      "target": "src/astrophotoflow/modules/data/results/service.py::publish_checked_result",
+      "reason": "删除software重复端口事实，data为唯一已检查文件来源"
+    },
+    {
+      "source": "src/astrophotoflow/modules/workflows/software_calls.py",
+      "old_target": "src/astrophotoflow/interfaces/http/data/results.py::_analysis_values",
+      "target": "src/astrophotoflow/modules/data/results/service.py::read_result_analysis",
+      "reason": "由data校验和读取真实分析文件"
+    },
+    {
+      "source": "src/astrophotoflow/modules/workflows/software_calls.py",
+      "old_target": "src/astrophotoflow/modules/software/execution/records.py::_observed_call",
+      "target": "src/astrophotoflow/interfaces/application/software_calls.py::observe_software_call",
+      "reason": "观察保持任务拥有者写入权，不覆盖完成事实"
+    },
+    {
+      "source": "src/astrophotoflow/modules/workflows/software_calls.py",
+      "old_target": "src/astrophotoflow/modules/data/results/service.py::_resolve_previous",
+      "target": "src/astrophotoflow/modules/data/results/service.py::resolve_result_inputs",
+      "reason": "按精确输出引用解析，不扫描其他模块私有文件"
+    },
+    {
+      "source": "src/astrophotoflow/modules/workflows/software_calls.py",
+      "old_target": "src/astrophotoflow/interfaces/http/software_calls.py::register_siril_calls",
+      "target": "src/astrophotoflow/interfaces/http/software_calls.py::router",
+      "reason": "删除嵌套路由注册，HTTP适配独立装配"
+    },
+    {
+      "source": "src/astrophotoflow/modules/workflows/software_calls.py",
+      "old_target": "src/astrophotoflow/interfaces/application/software_calls.py::start",
+      "target": "src/astrophotoflow/interfaces/http/software_calls.py::start",
+      "reason": "原生任务受理归HTTP，执行组合归application"
+    },
+    {
+      "source": "src/astrophotoflow/modules/workflows/software_calls.py",
+      "old_target": "src/astrophotoflow/interfaces/http/software_calls.py::register_siril_calls.status",
+      "target": "src/astrophotoflow/interfaces/http/software_calls.py::status",
+      "reason": "原生状态适配独立定义"
+    },
+    {
+      "source": "bundle:adapter/siril.py",
+      "old_target": "bundle:adapter/planning/files.py::_build_non_image.replace",
+      "target": "bundle:adapter/planning/files.py::build_file_plan.replace",
+      "reason": "脚本占位替换留在文件模式构造内部"
+    },
+    {
+      "source": "bundle:tools/build_catalog.py",
+      "old_target": "bundle:tools/catalog/operations.py::output",
+      "target": "bundle:adapter/recipes/types.py::Recipe",
+      "reason": "删除生成器重复端口模式判断；输入输出端口由类型化Recipe唯一来源提供"
+    },
+    {
+      "source": "bundle:tools/build_catalog.py",
+      "old_target": "bundle:tools/catalog/operations.py::outputs",
+      "target": "bundle:adapter/recipes/types.py::Recipe",
+      "reason": "删除生成器重复端口模式判断；输入输出端口由类型化Recipe唯一来源提供"
+    }
+  ],
+  "file_resolutions": [
+    {
+      "source": "src/astrophotoflow/interfaces/data_reference_node.py",
+      "targets": [
+        "src/astrophotoflow/interfaces/native/data.py"
+      ],
+      "reason": "按实际职责归属与已验证调用方更新"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/locales/zh.json",
+      "targets": [],
+      "reason": "删除旧双网关翻译表；工具双语描述在类型化声明中维护。"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/localization.py",
+      "targets": [],
+      "reason": "删除旧双网关翻译分发；节点使用生成的CapabilityDisplay。"
+    },
+    {
+      "source": "src/astrophotoflow/interfaces/mcp/registry.py",
+      "targets": [],
+      "reason": "删除手工Registry、动态参数模型与操作映射，使用FastMCP组合目录。"
+    },
+    {
+      "source": "frontend/packages/astrophotoflow-ui/src/core/bundleDevelopmentSource.ts",
+      "targets": [
+        "frontend/packages/astrophotoflow-ui/src/generated/api/types.gen.ts",
+        "frontend/packages/astrophotoflow-ui/src/generated/api/zod.gen.ts"
+      ],
+      "reason": "按实际职责归属与已验证调用方更新"
+    },
+    {
+      "source": "frontend/packages/astrophotoflow-ui/src/modules/data/workspace/AssetEditor.vue",
+      "targets": [
+        "frontend/packages/astrophotoflow-ui/src/modules/data/assets/AssetDetails.vue",
+        "frontend/packages/astrophotoflow-ui/src/modules/data/assets/mutations.ts"
+      ],
+      "reason": "按实际职责归属与已验证调用方更新"
+    },
+    {
+      "source": "frontend/packages/astrophotoflow-ui/src/modules/data/workspace/CalibrationBindingsEditor.vue",
+      "targets": [
+        "frontend/packages/astrophotoflow-ui/src/modules/data/datasets/CalibrationBindingsEditor.vue"
+      ],
+      "reason": "按实际职责归属与已验证调用方更新"
+    },
+    {
+      "source": "frontend/packages/astrophotoflow-ui/src/modules/data/workspace/CapturePresetPicker.vue",
+      "targets": [
+        "frontend/packages/astrophotoflow-ui/src/modules/data/equipment/CapturePresetPicker.vue"
+      ],
+      "reason": "按实际职责归属与已验证调用方更新"
+    },
+    {
+      "source": "frontend/packages/astrophotoflow-ui/src/modules/data/workspace/DatasetEditor.vue",
+      "targets": [
+        "frontend/packages/astrophotoflow-ui/src/modules/data/datasets/DatasetDetails.vue",
+        "frontend/packages/astrophotoflow-ui/src/modules/data/datasets/mutations.ts"
+      ],
+      "reason": "按实际职责归属与已验证调用方更新"
+    },
+    {
+      "source": "frontend/packages/astrophotoflow-ui/src/modules/data/workspace/FixedDatasetMembers.vue",
+      "targets": [
+        "frontend/packages/astrophotoflow-ui/src/modules/data/datasets/FixedDatasetMembers.vue"
+      ],
+      "reason": "按实际职责归属与已验证调用方更新"
+    },
+    {
+      "source": "frontend/packages/astrophotoflow-ui/src/modules/data/workspace/ImportDialog.vue",
+      "targets": [
+        "frontend/packages/astrophotoflow-ui/src/modules/data/imports/ImportDialog.vue"
+      ],
+      "reason": "按实际职责归属与已验证调用方更新"
+    },
+    {
+      "source": "frontend/packages/astrophotoflow-ui/src/modules/data/workspace/ImportIssueDialog.vue",
+      "targets": [
+        "frontend/packages/astrophotoflow-ui/src/modules/data/imports/ImportIssueDialog.vue"
+      ],
+      "reason": "按实际职责归属与已验证调用方更新"
+    },
+    {
+      "source": "frontend/packages/astrophotoflow-ui/src/modules/data/workspace/LibraryTrashDialog.vue",
+      "targets": [
+        "frontend/packages/astrophotoflow-ui/src/modules/data/trash/LibraryTrashDialog.vue"
+      ],
+      "reason": "按实际职责归属与已验证调用方更新"
+    },
+    {
+      "source": "frontend/packages/astrophotoflow-ui/src/modules/data/workspace/PhotoPreviewDialog.vue",
+      "targets": [
+        "frontend/packages/astrophotoflow-ui/src/modules/data/media/PhotoPreviewDialog.vue"
+      ],
+      "reason": "按实际职责归属与已验证调用方更新"
+    },
+    {
+      "source": "frontend/packages/astrophotoflow-ui/src/modules/data/workspace/SettingsTrashDialog.vue",
+      "targets": [],
+      "reason": "删除原未接入主路径的组件；不为历史占位恢复一套管理流程。"
+    },
+    {
+      "source": "frontend/packages/astrophotoflow-ui/tests/modules/data/workspace/DatasetEditor.test.ts",
+      "targets": [
+        "frontend/packages/astrophotoflow-ui/tests/modules/data/workspace/Workspace.dataset-groups.test.ts"
+      ],
+      "reason": "按实际职责归属与已验证调用方更新"
+    },
+    {
+      "source": "tests/modules/workflows/test_canvas.py",
+      "targets": [
+        "tests/interfaces/http/test_canvas.py",
+        "tests/interfaces/comfyui/test_canvas_native.py"
+      ],
+      "reason": "按实际职责归属与已验证调用方更新"
+    },
+    {
+      "source": "tests/modules/workflows/test_siril_preview.py",
+      "targets": [
+        "tests/interfaces/application/test_software_previews.py",
+        "tests/modules/data/test_siril_preview.py"
+      ],
+      "reason": "按实际职责归属与已验证调用方更新"
+    },
+    {
+      "source": "tests/modules/workflows/test_software_calls.py",
+      "targets": [
+        "tests/interfaces/application/test_software_calls.py"
+      ],
+      "reason": "按实际职责归属与已验证调用方更新"
+    },
+    {
+      "source": "tests/browser/native-web.mjs",
+      "targets": [
+        "tests/browser/native-web.spec.ts",
+        "tests/browser/native.fixtures.ts"
+      ],
+      "reason": "有效断言转入Playwright Test场景与fixture；旧手工启动浏览器入口删除。"
+    },
+    {
+      "source": "tests/browser/platform-workflows.mjs",
+      "targets": [
+        "tests/browser/workbench-settings.spec.ts",
+        "tests/browser/native.fixtures.ts"
+      ],
+      "reason": "有效断言转入Playwright Test场景与fixture；旧手工启动浏览器入口删除。"
+    },
+    {
+      "source": "tests/browser/m2-layout.mjs",
+      "targets": [
+        "tests/browser/native-layout.spec.ts",
+        "tests/browser/native.fixtures.ts"
+      ],
+      "reason": "有效断言转入Playwright Test场景与fixture；旧手工启动浏览器入口删除。"
+    }
+  ]
+}

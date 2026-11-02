@@ -5,12 +5,12 @@ from pathlib import Path
 from typing import Annotated, Literal
 from uuid import UUID
 
-from pydantic import Field, model_validator
+from pydantic import ConfigDict, Field, model_validator
 
-from astrophotoflow.contracts.assets import AssetClassification
 from astrophotoflow.contracts.calibration import CalibrationBindings
 from astrophotoflow.contracts.common import ErrorDetail, StrictModel, UuidInput
-
+from astrophotoflow.contracts.metadata import AssetClassification
+from astrophotoflow.contracts.snapshots import VersionCaptureSnapshot
 
 InputMode = Literal["reproducible", "reference"]
 ScienceFormat = Literal["fits", "xisf", "image", "raw", "video", "numpy", "other"]
@@ -66,6 +66,8 @@ class CanvasDataRequest(StrictModel):
 
 
 class CanvasDataOut(StrictModel):
+    model_config = ConfigDict(json_schema_serialization_defaults_required=True)
+
     native_type: Literal["APF_DATA_REFERENCE", 'APF_FILE_REFERENCE'] = "APF_DATA_REFERENCE"
     title: str
     reference: InputReference
@@ -82,6 +84,7 @@ class CanvasInspectOut(StrictModel):
     member_index: int
     asset_id: UuidInput
     asset_version_id: UuidInput
+    view_base: str
     name: str
     availability: Literal["unknown", "available", "changed", "missing"]
     parameters: dict
@@ -115,7 +118,7 @@ class ResolvedAssetInput(StrictModel):
     parameters: dict
     classification: AssetClassification | None
     value_sources: dict[str, Literal["manual", "file", "preset", "unknown"]]
-    capture_snapshot: dict | None
+    capture_snapshot: VersionCaptureSnapshot | None
     equipment_snapshot: dict
     effective_calibration: CalibrationBindings
     read_path: Path
@@ -131,7 +134,7 @@ class ResolvedAssetInput(StrictModel):
 class OutputLocator(StrictModel):
     kind: Literal["run_output"]
     run_id: UuidInput
-    node_execution_id: str
+    execution_id: UuidInput
     output_index: int = Field(ge=0)
     member_index: int | None = Field(default=None, ge=0)
 

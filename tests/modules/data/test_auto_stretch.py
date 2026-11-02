@@ -1,7 +1,12 @@
+from astrophotoflow.modules.data.formats import pixels as codec_formats_pixels
 import numpy as np
 import pytest
 
-from astrophotoflow.modules.data.auto_stretch import STATISTICS_SAMPLES, calculate_stretch, render_stretch, sample_statistics, statistics_indices
+from astrophotoflow.modules.data.formats.pixels import STATISTICS_SAMPLES
+from astrophotoflow.modules.data.formats.pixels import calculate_stretch
+from astrophotoflow.modules.data.formats.pixels import render_stretch
+from astrophotoflow.modules.data.formats.pixels import sample_statistics
+from astrophotoflow.modules.data.formats.pixels import statistics_indices
 
 
 def test_mono_estimates_its_own_float_background_and_targets_quarter_brightness():

@@ -23,7 +23,7 @@
 
 <script setup lang="ts">
 import SettingItem from '@/platform/settings/components/SettingItem.vue'
-import { settingCategoryLabelKey } from '@/platform/astrophotoflow/settingsPresentation'
+import { settingCategoryLabelKey } from '@/platform/astrophotoflow/settings/settingsPresentation'
 import type { SettingParams } from '@/platform/settings/types'
 import { normalizeI18nKey } from '@/utils/formatUtil'
 

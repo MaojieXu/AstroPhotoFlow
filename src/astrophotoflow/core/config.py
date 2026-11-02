@@ -1,15 +1,15 @@
-from dataclasses import dataclass, field
+import base64
 import hashlib
 import ipaddress
 import json
 import logging
 import os
-import base64
 import subprocess
+import time
+import tomllib
+from dataclasses import dataclass, field
 from pathlib import Path
 from tempfile import NamedTemporaryFile
-import tomllib
-import time
 from urllib.parse import urlsplit
 
 from filelock import FileLock, Timeout
@@ -17,7 +17,6 @@ from pydantic import ValidationError
 
 from astrophotoflow.contracts.workbench import ConfigState, ConfigValues
 from astrophotoflow.core.errors import ApiError
-
 
 CONFIG_PATH = Path.home() / ".config/astrophotoflow/config.toml"
 logger = logging.getLogger("astrophotoflow.configuration")
@@ -266,7 +265,7 @@ try {
     return Path(selected).resolve() if selected else None
 
 
-def _write_configuration_file(path: Path, text: str) -> None:
+def write_configuration_file(path: Path, text: str) -> None:
     temporary = None
     try:
         with NamedTemporaryFile(mode="w", encoding="utf-8", newline="\n", dir=path.parent, delete=False) as stream:
@@ -287,16 +286,16 @@ def _write_configuration_file(path: Path, text: str) -> None:
 
 
 def _write_default_workspace(workspace: Path) -> None:
-    _write_configuration_file(CONFIG_PATH, '[workspace]\ndefault = ' + json.dumps(str(workspace), ensure_ascii=False) + '\n')
+    write_configuration_file(CONFIG_PATH, '[workspace]\ndefault = ' + json.dumps(str(workspace), ensure_ascii=False) + '\n')
 
 
-def _set_default_workspace(workspace: Path) -> None:
+def set_default_workspace(workspace: Path) -> None:
     CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
     with FileLock(str(CONFIG_PATH) + ".lock", timeout=0):
         _write_default_workspace(workspace.expanduser().resolve())
 
 
-def _configuration_text(values: ConfigValues) -> str:
+def configuration_text(values: ConfigValues) -> str:
     quote = json.dumps
     roots = ", ".join("{ id = " + quote(root.id) + ", path = " + quote(root.path) + " }" for root in values.import_roots)
     return (
@@ -308,14 +307,6 @@ def _configuration_text(values: ConfigValues) -> str:
     )
 
 
-def _update_running_state(workspace: Path, changes: dict) -> None:
-    path = workspace / "run/processes.json"
-    with FileLock(str(workspace / "run/processes.lock"), timeout=5):
-        record = json.loads(path.read_text(encoding="utf-8"))
-        if Path(record["workspace"]).resolve() != workspace.resolve():
-            raise ConfigurationError("运行记录不属于目标workspace。")
-        record.update(changes)
-        _write_configuration_file(path, json.dumps(record, ensure_ascii=False, indent=2))
 
 
 def save_configuration(config_path: Path, values: ConfigValues, config_token: str, *,
@@ -333,7 +324,7 @@ def save_configuration(config_path: Path, values: ConfigValues, config_token: st
         with FileLock(str(CONFIG_PATH) + ".lock", timeout=0):
             if get_configuration(config_path).config_token != config_token:
                 raise ApiError(409, "CONFIGURATION_CONFLICT", "配置已被修改，请重新读取。", message_key='configuration_has_changed_read_it_again')
-            _write_configuration_file(config_path, _configuration_text(values))
+            write_configuration_file(config_path, configuration_text(values))
             if default_workspace is not None:
                 try:
                     _write_default_workspace(default_workspace.expanduser().resolve())
@@ -365,3 +356,7 @@ def ensure_service_token(settings: Settings) -> str:
         raise ConfigurationError(f"服务令牌文件为空：{settings.token_path}")
     os.chmod(settings.token_path, 0o600)
     return token
+
+
+def settings_from_values(values: ConfigValues, config_path: Path) -> Settings:
+    return _settings_from_raw(_raw_from_values(values), config_path)

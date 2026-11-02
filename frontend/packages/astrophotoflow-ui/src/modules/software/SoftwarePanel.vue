@@ -1,12 +1,15 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, watch } from 'vue'
+import { useQueryClient } from '@tanstack/vue-query'
+import { softwareQueryKey, useSoftwareCatalog } from './queries'
 import type { Component } from 'vue'
 
 import type { SoftwareClient } from './api/client'
-import type { SoftwareConfirmationResult, SoftwarePackage } from './api/contracts'
+import type { SoftwareConfirmationResult } from './api/contracts'
 import SoftwarePackageRow from './SoftwarePackageRow.vue'
 
 const props = defineProps<{
+  workspaceId: string
   client: SoftwareClient
   confirmSoftware: (operationId: string) => Promise<SoftwareConfirmationResult>
   confirmationAvailable: boolean
@@ -17,27 +20,18 @@ const props = defineProps<{
   refreshKey?: number
 }>()
 
-const packages = ref<SoftwarePackage[]>([])
-const loading = ref(true)
-const failure = ref('')
+const cache = useQueryClient()
+const query = useSoftwareCatalog(() => ({workspaceId:props.workspaceId,client:props.client}))
+const packages = computed(() => query.data.value ?? [])
+const loading = query.isPending
+const failure = computed(() => query.error.value instanceof Error ? query.error.value.message : query.isError.value ? props.translate('apfSoftware.loadError') : '')
 const visiblePackages = computed(() => props.packageId ? packages.value.filter(value => value.package_id === props.packageId) : packages.value)
-let disposed = false
-
-async function load() {
-  loading.value = true
-  failure.value = ''
-  try {
-    const values = await props.client.listPackages()
-    if (!disposed) packages.value = values
-  } catch (error) {
-    if (!disposed) failure.value = error instanceof Error ? error.message : props.translate('apfSoftware.loadError')
-  } finally {
-    if (!disposed) loading.value = false
-  }
-}
-
-onMounted(() => void load())
-onBeforeUnmount(() => { disposed = true })
+function load() { return query.refetch() }
+watch(() => props.refreshKey, () => {
+  const key=softwareQueryKey(props.workspaceId)
+  void cache.invalidateQueries({queryKey:[...key,'catalog']})
+  void cache.invalidateQueries({queryKey:[...key,'details']})
+})
 </script>
 
 <template>
@@ -51,8 +45,7 @@ onBeforeUnmount(() => { disposed = true })
     <template v-else>
       <SoftwarePackageRow
         v-for="entry in visiblePackages" :key="entry.package_id"
-        :client="client" :package-id="entry.package_id" :operation-id="operationId"
-        :refresh-key="refreshKey"
+        :client="client" :workspace-id="workspaceId" :package-id="entry.package_id" :operation-id="operationId"
         :confirm-software="confirmSoftware" :confirmation-available="confirmationAvailable"
         :translate="translate" :controls="controls" />
     </template>

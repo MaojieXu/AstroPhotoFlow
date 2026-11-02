@@ -1,17 +1,23 @@
-from astrophotoflow.core.localization import workspace_locale
 import argparse
-from contextlib import contextmanager
+import os
 import sys
+from contextlib import contextmanager
+from pathlib import Path
 
 import uvicorn
 
-from astrophotoflow.interfaces.http.app import create_app
-from astrophotoflow.core.database.schema import SCHEMA_REVISION, SchemaError, database_status, database_lock, ensure_schema_for_serve, upgrade_database
+from astrophotoflow.core.config import ConfigurationError, ensure_service_token, load_running_settings, load_settings
 from astrophotoflow.core.database.db import Database
-from astrophotoflow.modules.data.public import backfill_missing_previews, mark_interrupted_tasks
-from astrophotoflow.core.config import ConfigurationError, ensure_service_token, load_settings, load_running_settings
-import os
-from pathlib import Path
+from astrophotoflow.core.database.schema import (
+    SCHEMA_REVISION,
+    SchemaError,
+    database_lock,
+    database_status,
+    ensure_schema_for_serve,
+    upgrade_database,
+)
+from astrophotoflow.interfaces.http.app import create_app
+from astrophotoflow.modules.data.public import backfill_missing_previews
 
 
 @contextmanager
@@ -43,12 +49,8 @@ def main() -> None:
             return
         if args.command == "db" and args.db_command == "upgrade":
             with hold_database_lock(settings):
-                backup = upgrade_database(settings)
+                upgrade_database(settings)
             print(f"schema_revision: {SCHEMA_REVISION}")
-            if backup:
-                print(f"backup: {backup}")
-            else:
-                print("backup: not needed (new database or already current)")
             return
         if args.command == "previews" and args.preview_command == "backfill":
             with hold_database_lock(settings):
@@ -65,9 +67,6 @@ def main() -> None:
         with hold_database_lock(settings):
             ensure_schema_for_serve(settings)
             app = create_app(settings, token)
-            interrupted = mark_interrupted_tasks(app.state.database, locale=workspace_locale(settings.workspace))
-            if interrupted:
-                print(f"interrupted_tasks: {interrupted}")
             server = uvicorn.Server(uvicorn.Config(app, host=settings.host, port=settings.port, log_level="info"))
             app.state.shutdown = lambda: setattr(server, "should_exit", True)
             server.run()

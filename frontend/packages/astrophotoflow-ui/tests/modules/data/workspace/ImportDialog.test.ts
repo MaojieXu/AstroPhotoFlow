@@ -1,9 +1,9 @@
 import {flushPromises,mount} from '@vue/test-utils'
 import {beforeEach,describe,expect,it,vi} from 'vitest'
-import ImportDialog from '@ui/modules/data/workspace/ImportDialog.vue'
+import ImportDialog from '@ui/modules/data/imports/ImportDialog.vue'
 
 const {get,send,upload}=vi.hoisted(()=>({get:vi.fn(),send:vi.fn(),upload:vi.fn()}))
-vi.mock('@ui/modules/data/api/index',()=>({assetApi:{get,send,upload}}))
+vi.mock('@ui/modules/data/api/index',async () => ({ libraryApi: (await import('../../../fixtures/library-api')).createLibraryApiFixture(get), catalogApi: (await import('../../../fixtures/library-api')).createCatalogApiFixture(get), mutationApi: (await import('../../../fixtures/library-api')).createMutationApiFixture(send), trashApi: (await import('../../../fixtures/library-api')).createTrashApiFixture(get,send), importApi: (await import('../../../fixtures/library-api')).createImportApiFixture(get,send), datasetApi: (await import('../../../fixtures/library-api')).createDatasetApiFixture(get,send),assetApi:{get,send,upload}}))
 
 beforeEach(()=>{
   get.mockReset().mockResolvedValue({items:[],total:0,limit:200,offset:0})
@@ -12,10 +12,27 @@ beforeEach(()=>{
 })
 
 describe('import dialog defaults',()=>{
+  it.each(['reopen','workspace'])('does not close a fresh %s import draft with an older acknowledgement or duplicate its request',async(change)=>{
+    let finish!:(value:unknown)=>void
+    send.mockImplementation(()=>new Promise(resolve=>{finish=resolve}))
+    const wrapper=mount(ImportDialog,{props:{workspaceId:'/one',open:true,files:[{path:'C:/synthetic/old.fits',name:'old.fits',size:4}],createDataset:true,datasetName:'Old'}})
+    try{
+      await flushPromises()
+      await Promise.all([wrapper.get('form').trigger('submit'),wrapper.get('form').trigger('submit')]);await flushPromises()
+      expect(send).toHaveBeenCalledTimes(1)
+      if(change==='reopen')await wrapper.setProps({open:false})
+      await wrapper.setProps({workspaceId:change==='workspace'?'/two':'/one',open:true,
+        files:[{path:'C:/synthetic/new.fits',name:'new.fits',size:4}],datasetName:'Fresh'})
+      finish({task_id:'00000000-0000-4000-8000-000000000001',status:'queued'});await flushPromises()
+      expect(wrapper.emitted('submitted')).toBeUndefined()
+      expect(wrapper.get<HTMLInputElement>('#import-dataset-name').element.value).toBe('Fresh')
+      expect(send).toHaveBeenCalledTimes(1)
+    }finally{wrapper.unmount()}
+  })
   it('submits selected absolute paths without a configured root',async()=>{
     send.mockResolvedValue({task_id:'00000000-0000-4000-8000-000000000001',status:'queued'})
     const path='D:\\Night\\one.fits'
-    const wrapper=mount(ImportDialog,{props:{open:true,files:[{path,name:'one.fits',size:4}]}})
+    const wrapper=mount(ImportDialog,{props:{workspaceId:'/test-workspace',open:true,files:[{path,name:'one.fits',size:4}]}})
     await flushPromises()
     await wrapper.get('form').trigger('submit')
     await flushPromises()
@@ -26,7 +43,7 @@ describe('import dialog defaults',()=>{
   })
   it('clears prior metadata when a new import dialog opens',async()=>{
     const file={root_id:'science',path:'first.fits',name:'first.fits',size:4}
-    const wrapper=mount(ImportDialog,{props:{open:false,files:[file],createDataset:true,datasetName:'M31'}})
+    const wrapper=mount(ImportDialog,{props:{workspaceId:'/test-workspace',open:false,files:[file],createDataset:true,datasetName:'M31'}})
     await wrapper.setProps({open:true})
     await flushPromises()
     const bin=wrapper.findAll('label').find(label=>label.text().startsWith('Bin'))!.get('select').element as HTMLSelectElement
@@ -60,7 +77,7 @@ describe('import overrides',()=>{
   it('omits blank manual values and classification so file metadata and presets can supply them',async()=>{
     send.mockResolvedValue({task_id:'00000000-0000-4000-8000-000000000001',status:'queued'})
     upload.mockResolvedValue(undefined)
-    const wrapper=mount(ImportDialog,{props:{open:false,files:[{root_id:'science',path:'one.fits',name:'one.fits',size:4}]}})
+    const wrapper=mount(ImportDialog,{props:{workspaceId:'/test-workspace',open:false,files:[{root_id:'science',path:'one.fits',name:'one.fits',size:4}]}})
     await wrapper.setProps({open:true})
     await wrapper.get('form').trigger('submit')
     await flushPromises()
@@ -75,7 +92,7 @@ describe('import overrides',()=>{
   it('submits a whole-batch manual classification including an intentional unknown frame type',async()=>{
     send.mockResolvedValue({task_id:'00000000-0000-4000-8000-000000000001',status:'queued'})
     upload.mockResolvedValue(undefined)
-    const wrapper=mount(ImportDialog,{props:{open:false,files:[{root_id:'science',path:'one.fits',name:'one.fits',size:4}]}})
+    const wrapper=mount(ImportDialog,{props:{workspaceId:'/test-workspace',open:false,files:[{root_id:'science',path:'one.fits',name:'one.fits',size:4}]}})
     await wrapper.setProps({open:true})
     await wrapper.get('input[type="checkbox"]').setValue(true)
     await wrapper.findAll('label').find(label=>label.text().startsWith('素材形态'))!.get('select').setValue('masterframe')

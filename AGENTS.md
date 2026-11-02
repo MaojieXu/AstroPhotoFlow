@@ -26,6 +26,7 @@
 
 - 基于 ComfyUI 的本地网页工作台，两个常驻服务。外部 Agent 经平台 MCP 操作；不内置聊天、推理、模型会话或生成式模型凭据管理。
 - 复用原生 Vue／Pinia、画布、JSON、自动保存、本地草稿、撤销、转换、队列、进度及取消。
+- 工作流归属以[有效需求](docs/requirements/README.md#native-workflow-ownership)为准。自研workflows已在本候选中拆除，不从旧文档恢复已取消的项目图管理或完整运行库；具体调用／结果能力分别归software／data，跨模块装配归interfaces。
 - `contracts` 只依赖标准库与 Pydantic；`core` 不依赖业务，显式迁移元数据装配除外。
 - 业务通过模块公开入口合作，不读其他模块私有 ORM。HTTP／CLI／MCP 共用服务能力，不直接写 SQLite；本机启停使用 core 控制入口。
 - 自研 UI 在 `frontend/packages/astrophotoflow-ui`；原生通过包导出消费。原生 Store、画布及事件协调在 `frontend/src/platform/astrophotoflow`，UI 包不能反向导入原生单例。

@@ -1,3 +1,4 @@
+from astrophotoflow.modules.data.assets.metadata import parameter_columns, set_asset_parameters
 import json
 from uuid import uuid4
 
@@ -16,7 +17,12 @@ from astrophotoflow.core.errors import ApiError
 from astrophotoflow.core.database.db import Database
 from astrophotoflow.contracts.data_nodes import ScienceReference
 from astrophotoflow.interfaces.http.app import create_app
-from astrophotoflow.modules.data.models import Asset, AssetVersion, Base, Dataset, DatasetMember, DatasetVersion, LibraryEntryRemoval, FitsHduMetadata, Preview, Equipment
+from astrophotoflow.modules.data.equipment.models import Equipment
+from astrophotoflow.modules.data.assets.models import Asset, AssetVersion, FitsHduMetadata
+from astrophotoflow.modules.data.datasets.models import Dataset, DatasetMember, DatasetVersion
+from astrophotoflow.modules.data.media.models import Preview
+from astrophotoflow.core.database.base import Base
+from astrophotoflow.modules.data.trash.models import LibraryEntryRemoval
 
 
 @pytest.fixture
@@ -31,7 +37,7 @@ def canvas_library(tmp_path):
             asset_id, version_id = str(uuid4()), str(uuid4())
             asset_ids.append(asset_id)
             version_ids.append(version_id)
-            session.add(Asset(id=asset_id, name=f"frame-{index}.fits", scope="shared", role="raw", parameters={"gain": 0}))
+            session.add(Asset(id=asset_id, name=f"frame-{index}.fits", scope="shared", role="raw", **parameter_columns({"gain": 0})))
             session.flush()
             session.add(AssetVersion(id=version_id, asset_id=asset_id, version_number=1, storage_mode="managed", storage_location=f"objects/{index}.fits", byte_size=100, content_hash="b3:" + "a" * 64, availability="available"))
         session.flush()
@@ -44,7 +50,6 @@ def canvas_library(tmp_path):
     app = create_app(settings, "canvas-test")
     with TestClient(app, headers={"Authorization": "Bearer canvas-test"}) as client:
         yield client, database, asset_ids, version_ids, group_id, group_version_id
-    app.state.database.close()
     database.close()
 
 
@@ -128,9 +133,9 @@ def test_native_siril_inputs_resolve_complete_fixed_members_and_preserve_gain_ze
 
 
 def test_live_siril_sample_reuses_linear_data_and_participates_in_cleanup_protection(canvas_library):
-    from astrophotoflow.contracts.software import SirilPreviewRequest
+    from astrophotoflow.contracts.software import BundlePreviewRequest
     from astrophotoflow.modules.data.public import prepare_siril_sample
-    from astrophotoflow.modules.data.previews import assert_no_preview_jobs, owned_preview_locations
+    from astrophotoflow.modules.data.media.ownership import assert_no_preview_jobs, owned_preview_locations
 
     client, database, _, versions, _, _ = canvas_library
     settings = client.app.state.settings
@@ -144,8 +149,8 @@ def test_live_siril_sample_reuses_linear_data_and_participates_in_cleanup_protec
         version.byte_size = source.stat().st_size
         version.content_hash = "blake3:" + blake3.blake3(before).hexdigest()
         version.scientific_metadata = {"format": "fits", "selected_hdu": 0}
-    body = SirilPreviewRequest(reference={"kind": "asset_version", "asset_version_id": versions[0], "selection": {"kind": "whole_file"}},
-                              member_index=0, consumer_id=uuid4(), generation=1, targetbg=0)
+    body = BundlePreviewRequest(reference={"kind": "asset_version", "asset_version_id": versions[0], "selection": {"kind": "whole_file"}},
+                              member_index=0, consumer_id=uuid4(), generation=1, package_id="siril", operation_id="autostretch", parameters={"targetbg":0})
     cache = client.app.state.media_views.cache
     sample = prepare_siril_sample(database, settings, cache, body, lambda: None)
     try:
@@ -202,9 +207,10 @@ def test_inspect_uses_original_dimensions_and_current_parameters_without_reading
     with database.write_session() as session:
         session.add(Equipment(id=camera_id, kind="camera", name="Camera", specs={}))
         session.flush()
-        session.get(Asset, assets[0]).parameters = {"camera_id": camera_id, "gain": 0, "offset": 0, "exposure_seconds": 0, "sensor_temperature_c": 0}
+        set_asset_parameters(session.get(Asset, assets[0]), {"camera_id": camera_id, "gain": 0, "offset": 0, "exposure_seconds": 0, "sensor_temperature_c": 0})
         version = session.get(AssetVersion, versions[0])
-        version.capture_snapshot = {"gain": 100}
+        version.capture_snapshot = {"parameters": {"gain": 100}}
+        session.get(Asset, assets[0]).current_version_id = versions[0]
         version.scientific_metadata = {"format": "fits"}
         session.add(FitsHduMetadata(id=str(uuid4()), asset_version_id=versions[0], hdu_index=0, hdu_type="PRIMARY", shape=[4000, 6000], bitpix=-32, pixel_type="float32", header_cards=[], parser_version="test", supported_kind="mono", is_selected=True))
         session.add(Preview(id=str(uuid4()), asset_version_id=versions[0], hdu_index=0, size="thumbnail", width=60, height=40, storage_path="previews/missing-test.jpg", display_parameters={}, algorithm_version="test", status="available"))
@@ -216,7 +222,14 @@ def test_inspect_uses_original_dimensions_and_current_parameters_without_reading
     assert value["parameters"]["gain"] == value["parameters"]["offset"] == 0
     assert value["equipment"]["camera"] == "Camera"
     assert value["preview_status"] == "available"
+    assert value["view_base"] == f"/astrophotoflow/api/v1/library/assets/{assets[0]}/versions/{versions[0]}/previews"
     assert versions[0] in value["preview_url"]
+    listing = client.get("/api/v1/library/items?limit=50&offset=0")
+    assert listing.status_code == 200, listing.text
+    thumbnails = [item["thumbnail"] for item in listing.json()["items"] if item["thumbnail"]]
+    assert thumbnails
+    assert thumbnails[0]["asset_version_id"] == versions[0]
+    assert thumbnails[0]["view_base"] == value["view_base"]
     assert not (database.path.parent / "objects/0.fits").exists()
 
 
@@ -229,6 +242,7 @@ def test_inspect_group_index_selects_within_the_fixed_subset(canvas_library):
     assert (value["total"], value["member_index"], value["asset_id"], value["asset_version_id"]) == (2, 1, assets[2], versions[2])
     assert value["width"] is None
     assert value["preview_status"] == "not_ready"
+    assert value["view_base"] == f"/astrophotoflow/api/v1/library/assets/{assets[2]}/versions/{versions[2]}/previews"
     assert client.post("/api/v1/library/canvas-data/inspect", json={"reference": reference, "member_index": 2}).status_code == 422
     reference["members"][1]["asset_version_id"] = versions[1]
     assert client.post("/api/v1/library/canvas-data/inspect", json={"reference": reference}).status_code == 422

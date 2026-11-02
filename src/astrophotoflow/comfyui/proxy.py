@@ -1,7 +1,8 @@
 import asyncio
-import os
 import json
+import os
 import sys
+from importlib.resources import files
 from pathlib import Path
 from urllib.parse import quote
 from uuid import uuid4
@@ -9,130 +10,16 @@ from uuid import uuid4
 import aiohttp
 from aiohttp import web
 
-
-from astrophotoflow.core.config import ConfigurationError, load_settings, load_running_settings
+from astrophotoflow.core.config import ConfigurationError
 from astrophotoflow.core.localization import localized_error, workspace_locale
+from astrophotoflow.interfaces.native.context import service_context
+
 BASE_PATH = "/astrophotoflow/api/v1"
 
-# Public route, corresponding API path, and method. No wildcard proxy route is registered.
-ROUTES = [
-    ("POST", "/imports/select-local", "/imports/select-local"),
-    ("POST", "/library/canvas-data/inspect", "/library/canvas-data/inspect"),
-    ("POST", "/library/canvas-data", "/library/canvas-data"),
-    ("GET", "/settings/workbench", "/settings/workbench"),
-    ("GET", "/settings/locale", "/settings/locale"),
-    ('GET', '/software/packages/{package_id}/releases', '/software/packages/{package_id}/releases'),
-    ("POST", "/settings/workbench/restart", "/settings/workbench/restart"),
-    ("GET", "/settings/workbench/restart/{operation_id}", "/settings/workbench/restart/{operation_id}"),
-    ("PATCH", "/settings/workbench", "/settings/workbench"),
-    ("POST", "/settings/workbench/select-directory", "/settings/workbench/select-directory"),
-    ("GET", "/health", "/health"),
-    ("GET", "/software/packages", "/software/packages"),
-    ("GET", "/nodes", "/nodes"),
-    ("GET", "/nodes/{definition_id}", "/nodes/{definition_id}"),
-    ('GET', '/runs/{prompt_id}/calls', '/runs/{prompt_id}/calls'),
-    ('GET', '/runs/{prompt_id}/calls/{call_id}', '/runs/{prompt_id}/calls/{call_id}'),
-    ('GET', '/runs/{prompt_id}/calls/{call_id}/log', '/runs/{prompt_id}/calls/{call_id}/log'),
-    ("POST", "/software/preview", "/software/preview"),
-    ("DELETE", "/software/preview/{consumer_id}", "/software/preview/{consumer_id}"),
-    (
-        "GET",
-        "/software/packages/{package_id}/versions/{version}/commands",
-        "/software/packages/{package_id}/versions/{version}/commands",
-    ),
-    ("GET", "/software/packages/{package_id}", "/software/packages/{package_id}"),
-    ("POST", "/software/packages/{package_id}/install", "/software/packages/{package_id}/install"),
-    ("POST", "/software/packages/{package_id}/uninstall", "/software/packages/{package_id}/uninstall"),
-    ("POST", "/software/packages/siril/autostretch-preview", "/software/packages/siril/autostretch-preview"),
-    ("DELETE", "/software/packages/siril/autostretch-preview/{consumer_id}", "/software/packages/siril/autostretch-preview/{consumer_id}"),
-    ("POST", "/software/packages/{package_id}/prepare", "/software/packages/{package_id}/prepare"),
-    ("GET", "/capabilities", "/capabilities"),
-    ('GET', '/data-nodes/{run_id}/{execution_id}', '/data-nodes/{run_id}/{execution_id}'),
-    ('POST', '/exports/select-local', '/exports/select-local'),
-    ('POST', '/exports', '/exports'),
-    ('GET', '/exports/{request_id}', '/exports/{request_id}'),
-    ('POST', '/exports/{request_id}/cancel', '/exports/{request_id}/cancel'),
-    ("GET", "/projects", "/projects"),
-    ("POST", "/projects", "/projects"),
-    ("GET", "/projects/{project_id}", "/projects/{project_id}"),
-    ("PATCH", "/projects/{project_id}", "/projects/{project_id}"),
-    ("GET", "/equipment", "/equipment"),
-    ("POST", "/equipment", "/equipment"),
-    ("GET", "/equipment/{equipment_id}", "/equipment/{equipment_id}"),
-    ("PATCH", "/equipment/{equipment_id}", "/equipment/{equipment_id}"),
-    ("GET", "/settings/trash", "/settings/trash"),
-    ("POST", "/settings/trash/archive", "/settings/trash/archive"),
-    ("POST", "/settings/trash/restore", "/settings/trash/restore"),
-    ("POST", "/settings/trash/delete-preview", "/settings/trash/delete-preview"),
-    ("POST", "/settings/trash/delete", "/settings/trash/delete"),
-    ("POST", "/equipment-management/delete-preview", "/equipment-management/delete-preview"),
-    ("POST", "/equipment-management/delete", "/equipment-management/delete"),
-    ("GET", "/equipment-setups", "/equipment-setups"),
-    ("POST", "/equipment-setups", "/equipment-setups"),
-    ("GET", "/equipment-setups/{setup_id}", "/equipment-setups/{setup_id}"),
-    ("PATCH", "/equipment-setups/{setup_id}", "/equipment-setups/{setup_id}"),
-    ("GET", "/equipment-setups/{setup_id}/presets", "/equipment-setups/{setup_id}/presets"),
-    ("POST", "/equipment-setups/{setup_id}/presets", "/equipment-setups/{setup_id}/presets"),
-    ("GET", "/capture-presets", "/capture-presets"),
-    ("GET", "/capture-presets/{preset_id}", "/capture-presets/{preset_id}"),
-    ("PATCH", "/capture-presets/{preset_id}", "/capture-presets/{preset_id}"),
-    ("GET", "/library/assets", "/library/assets"),
-    ("GET", "/library/items", "/library/items"),
-    ("DELETE", "/library/items", "/library/items"),
-    ("GET", "/library/trash", "/library/trash"),
-    ("POST", "/library/trash/restore", "/library/trash/restore"),
-    ("POST", "/library/trash/delete-preview", "/library/trash/delete-preview"),
-    ("POST", "/library/trash/delete", "/library/trash/delete"),
-    ("GET", "/library/filter-options", "/library/filter-options"),
-    ("GET", "/library/assets/{asset_id}", "/library/assets/{asset_id}"),
-    ("POST", "/library/assets/{asset_id}/content-observation", "/library/assets/{asset_id}/content-observation"),
-    ("POST", "/library/assets/{asset_id}/content-accept", "/library/assets/{asset_id}/content-accept"),
-    ("GET", "/projects/{project_id}/assets", "/projects/{project_id}/assets"),
-    ("GET", "/projects/{project_id}/asset-references/{reference_id}", "/projects/{project_id}/asset-references/{reference_id}"),
-    ("GET", "/projects/{project_id}/asset-references/{reference_id}/previews/{size}", "/projects/{project_id}/asset-references/{reference_id}/previews/{size}"),
-    ("GET", "/projects/{project_id}/asset-references/{reference_id}/versions/{version_id}/hdus", "/projects/{project_id}/asset-references/{reference_id}/versions/{version_id}/hdus"),
-    ("GET", "/projects/{project_id}/asset-references/{reference_id}/versions/{version_id}/hdus/{hdu_index}/header", "/projects/{project_id}/asset-references/{reference_id}/versions/{version_id}/hdus/{hdu_index}/header"),
-    ("GET", "/import-roots", "/import-roots"),
-    ("GET", "/import-roots/{root_id}/entries", "/import-roots/{root_id}/entries"),
-    ("POST", "/imports", "/imports"),
-    ("POST", "/uploads", "/uploads"),
-    ("PUT", "/uploads/{task_id}/{index}", "/uploads/{task_id}/{index}"),
-    ("POST", "/uploads/{task_id}/start", "/uploads/{task_id}/start"),
-    ("POST", "/uploads/{task_id}/fail", "/uploads/{task_id}/fail"),
-    ("GET", "/asset-tasks", "/asset-tasks"),
-    ("GET", "/asset-tasks/{task_id}", "/asset-tasks/{task_id}"),
-    ("POST", "/asset-tasks/{task_id}/cancel", "/asset-tasks/{task_id}/cancel"),
-    ("POST", "/asset-tasks/{task_id}/resume", "/asset-tasks/{task_id}/resume"),
-    ("POST", "/asset-tasks/{task_id}/retry", "/asset-tasks/{task_id}/retry"),
-    ("PATCH", "/library/assets/{asset_id}", "/library/assets/{asset_id}"),
-    ("GET", "/library/assets/{asset_id}/versions", "/library/assets/{asset_id}/versions"),
-    ("GET", "/library/assets/{asset_id}/versions/{version_id}", "/library/assets/{asset_id}/versions/{version_id}"),
-    ("GET", "/library/assets/{asset_id}/versions/{version_id}/hdus", "/library/assets/{asset_id}/versions/{version_id}/hdus"),
-    ("GET", "/library/assets/{asset_id}/versions/{version_id}/hdus/{hdu_index}/header", "/library/assets/{asset_id}/versions/{version_id}/hdus/{hdu_index}/header"),
-    ("GET", "/library/assets/{asset_id}/versions/{version_id}/previews/{size}", "/library/assets/{asset_id}/versions/{version_id}/previews/{size}"),
-    ("POST", "/library/assets/{asset_id}/versions/{version_id}/previews/display", "/library/assets/{asset_id}/versions/{version_id}/previews/display"),
-    ("GET", "/library/assets/{asset_id}/versions/{version_id}/previews/display/status", "/library/assets/{asset_id}/versions/{version_id}/previews/display/status"),
-    ("POST", "/library/assets/{asset_id}/versions/{version_id}/previews/display/auto-stretch", "/library/assets/{asset_id}/versions/{version_id}/previews/display/auto-stretch"),
-    ("POST", "/projects/{project_id}/asset-references/{reference_id}/previews/display", "/projects/{project_id}/asset-references/{reference_id}/previews/display"),
-    ("GET", "/projects/{project_id}/asset-references/{reference_id}/previews/display/status", "/projects/{project_id}/asset-references/{reference_id}/previews/display/status"),
-    ("POST", "/projects/{project_id}/asset-references/{reference_id}/previews/display/auto-stretch", "/projects/{project_id}/asset-references/{reference_id}/previews/display/auto-stretch"),
-    ("GET", "/datasets", "/datasets"),
-    ("POST", "/datasets", "/datasets"),
-    ("GET", "/calibration/targets", "/calibration/targets"),
-    ("GET", "/datasets/{dataset_id}", "/datasets/{dataset_id}"),
-    ("PATCH", "/datasets/{dataset_id}", "/datasets/{dataset_id}"),
-    ("PATCH", "/datasets/{dataset_id}/member-parameters", "/datasets/{dataset_id}/member-parameters"),
-    ("GET", "/datasets/{dataset_id}/versions", "/datasets/{dataset_id}/versions"),
-    ("POST", "/datasets/{dataset_id}/versions", "/datasets/{dataset_id}/versions"),
-    ("GET", "/datasets/{dataset_id}/versions/{version_id}", "/datasets/{dataset_id}/versions/{version_id}"),
-    ("GET", "/projects/{project_id}/datasets", "/projects/{project_id}/datasets"),
-    ("GET", "/projects/{project_id}/dataset-references", "/projects/{project_id}/dataset-references"),
-    ("POST", "/projects/{project_id}/dataset-references", "/projects/{project_id}/dataset-references"),
-    ("GET", "/projects/{project_id}/dataset-references/{reference_id}", "/projects/{project_id}/dataset-references/{reference_id}"),
-    ("DELETE", "/projects/{project_id}/dataset-references/{reference_id}", "/projects/{project_id}/dataset-references/{reference_id}"),
-    ("POST", "/projects/{project_id}/asset-references", "/projects/{project_id}/asset-references"),
-    ("DELETE", "/projects/{project_id}/asset-references/{reference_id}", "/projects/{project_id}/asset-references/{reference_id}"),
-]
+# Generated from the backend OpenAPI by scripts/export_openapi.py. Keep an
+# explicit public allowlist; never expose native/internal paths via a wildcard.
+_ROUTE_MANIFEST = json.loads(files("astrophotoflow").joinpath("vendor/http-routes.json").read_text(encoding="utf-8"))
+ROUTES = [(item["method"], item["path"], item["path"]) for item in _ROUTE_MANIFEST["routes"]]
 
 
 class ProxyError(Exception):
@@ -143,34 +30,10 @@ class ProxyError(Exception):
         self.message_key = message_key
 
 
-for _scope in ("/library/assets/{asset_id}/versions/{version_id}/previews", "/projects/{project_id}/asset-references/{reference_id}/previews"):
-    for _method, _suffix in (("POST", "/viewer"), ("DELETE", "/viewer/consumer/{consumer_id}"), ("GET", "/viewer/{key}/status"), ("GET", "/viewer/{key}/tiles/{level}/{x}/{y}"), ("GET", "/viewer/{key}/{file}")):
-        ROUTES.append((_method, _scope + _suffix, _scope + _suffix))
-
-_output_scope = '/runs/{prompt_id}/calls/{call_id}/outputs/{output_index}/members/{member_index}'
-for _method, _suffix in [('GET', '/analysis'), ('GET', '/file'), ('GET', '/thumbnail'),
-                         ('POST', '/viewer'), ('DELETE', '/viewer/consumer/{consumer_id}'),
-                         ('GET', '/viewer/{key}/status'), ('GET', '/viewer/{key}/tiles/{level}/{x}/{y}'),
-                         ('GET', '/viewer/{key}/{file}')]:
-    ROUTES.append((_method, _output_scope + _suffix, _output_scope + _suffix))
-
-
 def _configuration(*, allow_missing_token: bool = False):
     try:
-        settings = load_running_settings(Path(os.environ["APF_WORKSPACE"])) if "APF_WORKSPACE" in os.environ else load_settings()
-        token_path = settings.token_path
-        try:
-            token = token_path.read_text(encoding="utf-8").strip()
-        except FileNotFoundError:
-            if not allow_missing_token:
-                raise
-            token = None
-        if token is not None and not token:
-            if allow_missing_token:
-                token = None
-            else:
-                raise ValueError("服务令牌为空")
-        return settings.service_url, set(settings.allowed_origins), token
+        context = service_context(allow_missing_token=allow_missing_token)
+        return context.settings.service_url, set(context.settings.allowed_origins), context.token
     except (OSError, ConfigurationError, ValueError) as exc:
         raise ProxyError(503, "SERVICE_NOT_CONFIGURED", "AstroPhotoFlow 本机服务配置或令牌不可用。", message_key='proxy_unconfigured') from exc
 
@@ -248,15 +111,15 @@ async def forward(request: web.Request, path_template: str) -> web.StreamRespons
                 await asyncio.gather(pending, return_exceptions=True)
     except ProxyError as exc:
         return _error_response(request_id, exc.status, exc.code, exc.message_key)
-    except (asyncio.TimeoutError, TimeoutError):
+    except TimeoutError:
         return _error_response(request_id, 504, "SERVICE_TIMEOUT", 'proxy_timeout')
     except aiohttp.ClientError:
         return _error_response(request_id, 503, "SERVICE_UNAVAILABLE", 'proxy_unavailable')
 
 
 def register_proxy_routes(routes: web.RouteTableDef) -> None:
-    from astrophotoflow.interfaces.canvas_native import register_canvas_routes
-    from astrophotoflow.interfaces.comfyui import register_bundle_routes
+    from astrophotoflow.interfaces.native.bootstrap import register_bundle_routes
+    from astrophotoflow.interfaces.native.canvas import register_canvas_routes
 
     register_canvas_routes(routes)
     register_bundle_routes(routes)

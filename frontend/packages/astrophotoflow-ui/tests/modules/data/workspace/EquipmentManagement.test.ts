@@ -1,12 +1,13 @@
+import { zEquipmentSetupCreate } from '@ui/generated/api/zod.gen'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from '@ui/modules/data/App.vue'
-import EquipmentDeleteDialog from '@ui/modules/data/workspace/EquipmentDeleteDialog.vue'
+import EquipmentDeleteDialog from '@ui/modules/data/equipment/EquipmentDeleteDialog.vue'
 import { equipmentSchema, equipmentSetupSchema, type Equipment, type EquipmentSetup } from '@ui/modules/data/api/contracts'
 
 const {get,send} = vi.hoisted(()=>({get:vi.fn(),send:vi.fn()}))
-vi.mock('@ui/modules/data/api/index',()=>({assetApi:{get,send}}))
+vi.mock('@ui/modules/data/api/index',async () => ({ libraryApi: (await import('../../../fixtures/library-api')).createLibraryApiFixture(get), catalogApi: (await import('../../../fixtures/library-api')).createCatalogApiFixture(get), mutationApi: (await import('../../../fixtures/library-api')).createMutationApiFixture(send), trashApi: (await import('../../../fixtures/library-api')).createTrashApiFixture(get,send), importApi: (await import('../../../fixtures/library-api')).createImportApiFixture(get,send), datasetApi: (await import('../../../fixtures/library-api')).createDatasetApiFixture(get,send),assetApi:{get,send}}))
 const id=(n:number)=>'00000000-0000-4000-8000-'+String(n).padStart(12,'0')
 const timestamp='2026-10-28T12:00:00Z'
 const page=(items:unknown[])=>({items,total:items.length,limit:200,offset:0})
@@ -31,7 +32,7 @@ beforeEach(()=>{
       devices.push(saved);return saved
     }
     if(path.endsWith('/equipment-setups')){
-      const saved=equipmentSetupSchema.parse({...data,id:id(100+setups.length),status:'active',revision:1,created_at:timestamp,updated_at:timestamp})
+      const saved=equipmentSetupSchema.parse({...data,components:(zEquipmentSetupCreate.shape.components.parse(data.components)??[]).map((component,index)=>({...component,id:component.id??id(500+setups.length*100+index)})),id:id(100+setups.length),status:'active',revision:1,created_at:timestamp,updated_at:timestamp})
       setups.push(saved);return saved
     }
     if(path.endsWith('/delete-preview'))return preview
@@ -50,7 +51,7 @@ describe('equipment management',()=>{
     {name:'Main camera',model:null,subtitle:'相机'},
     {name:'Main camera',model:'  ',subtitle:'相机'}
   ])('shows only useful category and model information for $name / $model',async({name,model,subtitle})=>{
-    devices=[equipmentSchema.parse({id:id(1),kind:'camera',name,model,serial_number:null,notes:null,specs:{},status:'active',revision:1,created_at:timestamp,updated_at:timestamp})]
+    devices=[equipmentSchema.parse({id:id(1),kind:'camera',name,model,notes:null,specs:{},status:'active',revision:1,created_at:timestamp,updated_at:timestamp})]
     await open();await click('我的设备')
     const row=wrapper!.get('button[aria-label="选择设备 '+name+'"]')
     expect(row.get('strong').text()).toBe(name)
@@ -70,14 +71,14 @@ describe('equipment management',()=>{
     expect(get.mock.calls.some(([path])=>String(path).includes('/projects'))).toBe(false)
   })
 
-  it.each([['camera','相机'],['telescope','望远镜'],['filter','滤镜'],['mount','赤道仪'],['accessory','配件']])('registers %s inside a combination and keeps it after abandoning the combination',async(kind,label)=>{
+  it.each([['camera','相机'],['telescope','望远镜'],['filter','滤镜']])('registers %s inside a combination and keeps it after abandoning the combination',async(kind,label)=>{
     await open();await click('新建设备组合');await click('新建'+label)
     await field('设备名称').setValue('Saved '+kind)
     if(kind==='camera')await field('像元尺寸（μm）').setValue('3.76')
     await wrapper!.get('form[aria-label="新建设备表单"]').trigger('submit');await flushPromises()
     expect(devices).toHaveLength(1)
     expect(devices[0]).toMatchObject({kind,name:'Saved '+kind})
-    if(kind==='camera')expect(devices[0].specs).toMatchObject({pixel_size_x_um:3.76,pixel_size_y_um:3.76})
+    if(kind==='camera')expect(devices[0].specs).toMatchObject({pixel_size_um:3.76})
     expect(wrapper!.text()).toContain('取消组合仍会保留此设备')
     vi.spyOn(window,'confirm').mockReturnValue(true)
     await click('取消');await click('我的设备')
@@ -91,7 +92,7 @@ describe('equipment management',()=>{
   })
 
   it('shows edit only in the selected device row and opens the shared form for that device',async()=>{
-    devices=[equipmentSchema.parse({id:id(1),kind:'filter',name:'Ha filter',model:'7 nm',serial_number:null,notes:null,specs:{bandwidth_nm:7},status:'active',revision:3,created_at:timestamp,updated_at:timestamp})]
+    devices=[equipmentSchema.parse({id:id(1),kind:'filter',name:'Ha filter',model:'7 nm',notes:null,specs:{bandwidth_nm:7},status:'active',revision:3,created_at:timestamp,updated_at:timestamp})]
     devices.push({...devices[0],id:id(2),name:'OIII filter'})
     await open();await click('我的设备')
     expect(wrapper!.find('button[aria-label^="编辑设备 "]').exists()).toBe(false)
@@ -123,7 +124,7 @@ describe('equipment management',()=>{
   })
 
   it('keeps checkbox deletion separate from opening an editor',async()=>{
-    devices=[equipmentSchema.parse({id:id(1),kind:'filter',name:'Ha filter',model:null,serial_number:null,notes:null,specs:{},status:'active',revision:1,created_at:timestamp,updated_at:timestamp})]
+    devices=[equipmentSchema.parse({id:id(1),kind:'filter',name:'Ha filter',model:null,notes:null,specs:{},status:'active',revision:1,created_at:timestamp,updated_at:timestamp})]
     await open();await click('我的设备')
     expect(wrapper!.find('input[type="checkbox"]').exists()).toBe(false)
     await click('批量管理')
@@ -134,14 +135,14 @@ describe('equipment management',()=>{
   })
 
   it('saves the shared device form explicitly with its revision and preserves failed input',async()=>{
-    devices=[equipmentSchema.parse({id:id(1),kind:'filter',name:'Ha filter',model:null,serial_number:null,notes:null,specs:{},status:'active',revision:3,created_at:timestamp,updated_at:timestamp})]
+    devices=[equipmentSchema.parse({id:id(1),kind:'filter',name:'Ha filter',model:null,notes:null,specs:{},status:'active',revision:3,created_at:timestamp,updated_at:timestamp})]
     await open();await click('我的设备');await wrapper!.get('button[aria-label="选择设备 Ha filter"]').trigger('click');await flushPromises();await click('编辑')
     const form=wrapper!.get('form[aria-label="记录编辑表单"]')
     await form.get('#device-name').setValue('Revised Ha')
     expect(send).not.toHaveBeenCalled()
     send.mockRejectedValueOnce(new Error('Device save failed'))
     await form.trigger('submit');await flushPromises()
-    expect(form.text()).toContain('请求失败。')
+    expect(form.text()).toContain('Device save failed')
     expect(form.get('#device-name').element).toHaveProperty('value','Revised Ha')
     send.mockImplementationOnce(async()=>{devices=[{...devices[0],name:'Revised Ha',revision:4}];return devices[0]})
     await form.trigger('submit');await flushPromises()
@@ -153,7 +154,7 @@ describe('equipment management',()=>{
   })
 
   it('preserves untouched camera specs and saves only the changed name and cleared model',async()=>{
-    devices=[equipmentSchema.parse({id:id(1),kind:'camera',name:'Camera',model:'Old',serial_number:null,notes:null,specs:{pixel_size_x_um:3.76,pixel_size_y_um:3.8,native_bit_depth:16},status:'active',revision:5,created_at:timestamp,updated_at:timestamp})]
+    devices=[equipmentSchema.parse({id:id(1),kind:'camera',name:'Camera',model:'Old',notes:null,specs:{pixel_size_um:3.76,native_bit_depth:16},status:'active',revision:5,created_at:timestamp,updated_at:timestamp})]
     await open();await click('我的设备');await wrapper!.get('button[aria-label="选择设备 Camera"]').trigger('click');await flushPromises();await click('编辑')
     await field('名称').setValue('Renamed')
     await field('型号').setValue('')
@@ -163,12 +164,12 @@ describe('equipment management',()=>{
   })
 
   it('keeps unsaved changes when cancelling is declined and discards them without a write when confirmed',async()=>{
-    devices=[equipmentSchema.parse({id:id(1),kind:'mount',name:'Mount',model:null,serial_number:null,notes:null,specs:{},status:'active',revision:1,created_at:timestamp,updated_at:timestamp})]
+    devices=[equipmentSchema.parse({id:id(1),kind:'mount',name:'Mount',model:null,notes:null,specs:{},status:'active',revision:1,created_at:timestamp,updated_at:timestamp})]
     await open();await click('我的设备');await wrapper!.get('button[aria-label="选择设备 Mount"]').trigger('click');await flushPromises();await click('编辑')
-    await field('名称').setValue('Unsaved mount')
+    await field('名称').setValue('Unsaved telescope')
     const confirm=vi.spyOn(window,'confirm').mockReturnValue(false)
     await click('取消')
-    expect(field('名称').element).toHaveProperty('value','Unsaved mount')
+    expect(field('名称').element).toHaveProperty('value','Unsaved telescope')
     confirm.mockReturnValue(true)
     await click('取消')
     expect(wrapper!.find('form[aria-label="记录编辑表单"]').exists()).toBe(false)
@@ -184,7 +185,7 @@ describe('equipment management',()=>{
     await click('新建设备组合');await field('组合名称').setValue('Long rig')
     await wrapper!.get('select[aria-label="选择相机"]').setValue([id(1)]);await flushPromises()
     await wrapper!.get('form[aria-label="设备组合表单"]').trigger('submit');await flushPromises()
-    expect(setups.map(row=>row.components)).toEqual([[{source:'registered',equipment_id:id(1)}],[{source:'registered',equipment_id:id(1)}]])
+    expect(setups.map(row=>row.components)).toEqual([[{id:id(500),source:'registered',equipment_id:id(1)}],[{id:id(600),source:'registered',equipment_id:id(1)}]])
     expect(send.mock.calls.filter(([path])=>String(path).endsWith('/equipment'))).toHaveLength(1)
   })
 
@@ -207,31 +208,35 @@ describe('equipment management',()=>{
   })
 
   it.each([['camera','相机'],['filter','滤镜']])('updates multiple %s selections directly and preserves the order of retained components',async(kind,label)=>{
-    devices=[1,2,3].map(index=>equipmentSchema.parse({id:id(index),kind,name:label+' '+index,model:null,serial_number:null,notes:null,specs:{},status:'active',revision:1,created_at:timestamp,updated_at:timestamp}))
-    setups=[{id:id(100),name:'Ordered rig',components:[{source:'registered',equipment_id:id(2)},{source:'registered',equipment_id:id(1)}],notes:null,status:'active',revision:1,created_at:timestamp,updated_at:timestamp}]
+    devices=[1,2,3].map(index=>equipmentSchema.parse({id:id(index),kind,name:label+' '+index,model:null,notes:null,specs:{},status:'active',revision:1,created_at:timestamp,updated_at:timestamp}))
+    setups=[{id:id(100),name:'Ordered rig',components:[{id:id(201),source:'registered',equipment_id:id(2)},{id:id(202),source:'registered',equipment_id:id(1)}],notes:null,status:'active',revision:1,created_at:timestamp,updated_at:timestamp}]
     await open();await wrapper!.get('button[aria-label="查看组合 Ordered rig"]').trigger('click');await flushPromises();await click('编辑设备组合')
     await wrapper!.get('select[aria-label="选择'+label+'"]').setValue([id(1),id(2),id(3)])
     await wrapper!.get('form[aria-label="设备组合表单"]').trigger('submit');await flushPromises()
-    expect(send.mock.calls.at(-1)![3].components).toEqual([2,1,3].map(index=>({source:'registered',equipment_id:id(index)})))
+    expect(send.mock.calls.at(-1)![3].components).toEqual([
+      {id:id(201),source:'registered',equipment_id:id(2)},
+      {id:id(202),source:'registered',equipment_id:id(1)},
+      {source:'registered',equipment_id:id(3)}
+    ])
     expect(wrapper!.findAll('button').some(button=>button.text()==='加入'+label)).toBe(false)
   })
 
   it('keeps failed device input and guards switching away from it',async()=>{
-    await open();await click('新建设备组合');await click('新建赤道仪')
-    await field('设备名称').setValue('Unsaved mount')
+    await open();await click('新建设备组合');await click('新建望远镜')
+    await field('设备名称').setValue('Unsaved telescope')
     send.mockRejectedValueOnce(new Error('Device save failed'))
     await wrapper!.get('form[aria-label="新建设备表单"]').trigger('submit');await flushPromises()
     expect(wrapper!.text()).toContain('Device save failed')
-    expect(field('设备名称').element).toHaveProperty('value','Unsaved mount')
+    expect(field('设备名称').element).toHaveProperty('value','Unsaved telescope')
     const confirm=vi.spyOn(window,'confirm').mockReturnValue(false)
     await click('返回组合')
     expect(confirm).toHaveBeenCalledOnce()
-    expect(field('设备名称').element).toHaveProperty('value','Unsaved mount')
+    expect(field('设备名称').element).toHaveProperty('value','Unsaved telescope')
     expect(devices).toHaveLength(0)
   })
 
   it('previews the impact once and cancels without deleting or archiving',async()=>{
-    wrapper=mount(EquipmentDeleteDialog,{props:{items:[{entry_type:'equipment',id:id(1),revision:1}]}})
+    wrapper=mount(EquipmentDeleteDialog,{props:{workspaceId:'/fixture',viewKey:'one',items:[{entry_type:'equipment',id:id(1),revision:1}]}})
     await flushPromises()
     expect(wrapper.text()).toContain('Wide rig')
     await click('取消')
@@ -239,9 +244,38 @@ describe('equipment management',()=>{
     expect(send.mock.calls.map(([path])=>path)).toEqual(['/astrophotoflow/api/v1/equipment-management/delete-preview'])
   })
 
+  it('does not apply a deletion acknowledgement to a different management view',async()=>{
+    const items=[{entry_type:'equipment' as const,id:id(1),revision:1}]
+    wrapper=mount(EquipmentDeleteDialog,{props:{workspaceId:'/fixture',viewKey:'one',items}})
+    await flushPromises()
+    let finish!:(value:unknown)=>void
+    send.mockImplementationOnce(()=>new Promise(resolve=>{finish=resolve}))
+    await wrapper.findAll('button').find(button=>button.text()==='确认删除')!.trigger('click')
+    await flushPromises()
+    await wrapper.setProps({viewKey:'two'})
+    finish({deleted_count:1,detached_material_count:0})
+    await flushPromises()
+    expect(wrapper.emitted('deleted')).toBeUndefined()
+    expect(wrapper.emitted('close')).toBeUndefined()
+    expect(send.mock.calls.filter(([path])=>String(path).endsWith('/delete'))).toHaveLength(1)
+  })
+
+  it('does not enable deletion from a late preview after the confirmation closes',async()=>{
+    let finish!:(value:unknown)=>void
+    send.mockImplementationOnce(()=>new Promise(resolve=>{finish=resolve}))
+    wrapper=mount(EquipmentDeleteDialog,{props:{workspaceId:'/fixture',viewKey:'one',items:[{entry_type:'equipment',id:id(1),revision:1}]}})
+    await flushPromises()
+    await wrapper.setProps({items:undefined})
+    finish(preview)
+    await flushPromises()
+    expect(wrapper.emitted('deleted')).toBeUndefined()
+    expect(wrapper.text()).not.toContain('Wide rig')
+    expect(send.mock.calls).toHaveLength(1)
+  })
+
   it('selects multiple owned presets for one direct deletion confirmation',async()=>{
     setups=[{id:id(100),name:'Wide rig',components:[],notes:null,status:'active',revision:1,created_at:timestamp,updated_at:timestamp}]
-    const presets=[1,2].map(index=>({id:id(200+index),equipment_setup_id:id(100),name:'Preset '+index,classification:{},parameters:{},notes:null,status:'active',revision:index,created_at:timestamp,updated_at:timestamp}))
+    const presets=[1,2].map(index=>({id:id(200+index),equipment_setup_id:id(100),name:'Preset '+index,equipment_selection:{},parameters:{},status:'active',revision:index,created_at:timestamp,updated_at:timestamp}))
     const original=get.getMockImplementation()!
     get.mockImplementation(async(path:string)=>path.includes('/presets?')?page(presets):original(path))
     await open();await wrapper!.get('button[aria-label="查看组合 Wide rig"]').trigger('click');await flushPromises()
@@ -255,7 +289,7 @@ describe('equipment management',()=>{
 
   it('requires a fresh preview after a deletion conflict and never resends automatically',async()=>{
     const items=[{entry_type:'equipment' as const,id:id(1),revision:1}]
-    wrapper=mount(EquipmentDeleteDialog,{props:{items}});await flushPromises()
+    wrapper=mount(EquipmentDeleteDialog,{props:{workspaceId:'/fixture',viewKey:'one',items}});await flushPromises()
     send.mockRejectedValueOnce(new Error('PREVIEW_STALE'))
     await click('确认删除')
     expect(wrapper.text()).toContain('PREVIEW_STALE')

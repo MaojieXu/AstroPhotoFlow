@@ -1,10 +1,10 @@
 import base64
 import ctypes
-from ctypes import wintypes
 import json
 import os
-from pathlib import Path
 import subprocess
+from ctypes import wintypes
+from pathlib import Path
 from threading import Event, Lock
 
 from astrophotoflow.core.config import ConfigurationError

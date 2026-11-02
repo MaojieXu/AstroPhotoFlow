@@ -1,18 +1,19 @@
-from pathlib import Path
 import json
-import tomllib
 import os
+import tomllib
+from pathlib import Path
 
 import pytest
 from filelock import FileLock
 from pydantic import ValidationError
 
-from astrophotoflow.core import config
-from astrophotoflow.contracts.workbench import ConfigSave, ConfigValues, ImportRootValue
-from astrophotoflow.core.errors import ApiError
 from astrophotoflow.client import AssetClient
 from astrophotoflow.comfyui import proxy
-from astrophotoflow.core.workbench import _load_config
+from astrophotoflow.contracts.workbench import ConfigSave, ConfigValues, ImportRootValue
+from astrophotoflow.core import config
+from astrophotoflow.core.errors import ApiError
+from astrophotoflow.core.workbench import update_running_state
+from astrophotoflow.core.workbench.workspaces import load_workspace_config
 
 
 @pytest.fixture(autouse=True)
@@ -37,7 +38,7 @@ def test_config_path_precedence_and_selected_missing_file(tmp_path, monkeypatch)
     active = write_config(tmp_path / "active/config.toml", 31002)
     environment = write_config(tmp_path / "environment/config.toml", 31003)
     explicit = write_config(tmp_path / "explicit/config.toml", 31004)
-    config._set_default_workspace(default.parent)
+    config.set_default_workspace(default.parent)
     assert config.load_settings().port == 31001
     (config.CONFIG_PATH.parent / "active-workspace").write_text(str(active), encoding="utf-8")
     assert config.load_settings().port == 31001
@@ -62,7 +63,7 @@ def test_all_entrypoints_share_resolved_settings(tmp_path, monkeypatch):
     assert settings.workspace == path.parent
     assert settings.data_dir == data.resolve()
     assert proxy._configuration() == (settings.service_url, set(settings.allowed_origins), "test-token")
-    parsed, port, host, comfy_port = _load_config(path)
+    parsed, port, host, comfy_port = load_workspace_config(path)
     assert parsed == settings
     assert (port, host, comfy_port) == (31390, "127.0.0.1", 31388)
     with AssetClient() as client:
@@ -168,7 +169,7 @@ def test_startup_can_read_adopted_values_before_child_processes_are_recorded(tmp
 def test_saving_default_does_not_retarget_current_workspace_or_move_data(tmp_path):
     path = write_config(tmp_path / "one/config.toml")
     second = write_config(tmp_path / "two/config.toml", 31490)
-    config._set_default_workspace(path.parent)
+    config.set_default_workspace(path.parent)
     initial = config.get_configuration(path)
     run_path = write_running_configuration(path, initial.saved)
     before = run_path.read_bytes()
@@ -199,7 +200,7 @@ def test_token_includes_default_location_and_target_workspace(tmp_path):
     second = write_config(tmp_path / "two/config.toml")
     state = config.get_configuration(first)
     assert state.config_token != config.get_configuration(second).config_token
-    config._set_default_workspace(second.parent)
+    config.set_default_workspace(second.parent)
     with pytest.raises(ApiError) as error:
         config.save_configuration(first, state.saved, state.config_token)
     assert error.value.status_code == 409
@@ -247,7 +248,7 @@ def test_invalid_saved_values_leave_configuration_unchanged(tmp_path, change):
 
 def test_explicit_null_or_empty_default_rejected_and_omission_keeps_default(tmp_path):
     path = write_config(tmp_path / "workspace/config.toml")
-    config._set_default_workspace(path.parent)
+    config.set_default_workspace(path.parent)
     state = config.get_configuration(path)
     body = {"config_token": state.config_token, "values": state.saved.model_dump()}
     assert ConfigSave(**body).model_fields_set == {"config_token", "values"}
@@ -322,10 +323,10 @@ def test_windows_atomic_replacement_waits_briefly_and_reports_persistent_failure
     monkeypatch.setattr(config.os, "replace", occupied)
     if persistent:
         with pytest.raises(PermissionError):
-            config._write_configuration_file(path, "new")
+            config.write_configuration_file(path, "new")
         assert len(calls) == 5 and path.read_text(encoding="utf-8") == "old"
     else:
-        config._write_configuration_file(path, "new")
+        config.write_configuration_file(path, "new")
         assert len(calls) == 2 and path.read_text(encoding="utf-8") == "new"
     assert "Windows读句柄" in caplog.text
     assert list(tmp_path.iterdir()) == [path]
@@ -335,8 +336,8 @@ def test_startup_process_registration_preserves_an_entered_maintenance_marker(tm
     path = write_config(tmp_path / "workspace/config.toml")
     marker = write_running_configuration(path, config.get_configuration(path).saved)
     owner = "6d26f2a0-66d8-4c2d-a10f-e3eb2e38814b"
-    config._update_running_state(path.parent, {"maintenance_operation_id": owner})
-    config._update_running_state(path.parent, {"processes": [{"role": "asset-service"}, {"role": "comfyui"}]})
+    update_running_state(path.parent, {"maintenance_operation_id": owner})
+    update_running_state(path.parent, {"processes": [{"role": "asset-service"}, {"role": "comfyui"}]})
     current = json.loads(marker.read_text(encoding="utf-8"))
     assert current["maintenance_operation_id"] == owner and len(current["processes"]) == 2
 

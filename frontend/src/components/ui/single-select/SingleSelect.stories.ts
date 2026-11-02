@@ -20,6 +20,10 @@ const meta: Meta<typeof SingleSelect> = {
       control: { type: 'select' },
       options: ['lg', 'md']
     },
+    density: {
+      control: { type: 'select' },
+      options: ['normal', 'compact']
+    },
     invalid: { control: 'boolean' },
     loading: { control: 'boolean' }
   },
@@ -57,7 +61,7 @@ export const Default: Story = {
       return { selected, args }
     },
     template:
-      '<SingleSelect v-model="selected" :options="args.options" :label="args.label" :size="args.size" :invalid="args.invalid" :loading="args.loading" />'
+      '<SingleSelect v-model="selected" :options="args.options" :label="args.label" :size="args.size" :density="args.density" :invalid="args.invalid" :loading="args.loading" />'
   })
 }
 

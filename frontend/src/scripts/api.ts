@@ -1,3 +1,5 @@
+import { nativePageReplySchema } from '@astrophotoflow/ui'
+import type { NativePageReply as PlatformNativePageReply } from '@astrophotoflow/ui'
 import type {
   GetEmbeddingsResponse,
   GetExtensionsResponse,
@@ -275,17 +277,11 @@ interface BackendApiCalls {
   'apf.page_result': NativePageReply
 }
 
-export interface NativePageReply {
-  event_id: string
-  page_id: string
-  page_token: string
-  result: unknown
-  error: { code: string; message: string; fields: { path: string; message: string }[] } | null
-}
+export type NativePageReply = PlatformNativePageReply
 
 export type NativePageSendResult =
   | { ok: true; reply: NativePageReply }
-  | { ok: false; reason: 'unsupported' | 'offline' | 'connection_closed' | 'send_failed' }
+  | { ok: false; reason: 'unsupported' | 'offline' | 'connection_closed' | 'send_failed' | 'invalid_response' }
 
 /** Dictionary of all api calls */
 interface ApiCalls extends BackendApiCalls, FrontendApiCalls {
@@ -1175,10 +1171,21 @@ export class ComfyApi extends EventTarget {
               this.dispatchCustomEvent('feature_flags', msg.data)
               if (this.serverSupportsFeature('apf_page')) void this.sendNativePage('open', null)
               break
-            case 'apf.page_result':
-              this.settleNativePageReply(msg.data)
-              this.dispatchCustomEvent('apf.page_result', msg.data)
+            case 'apf.page_result': {
+              const reply = nativePageReplySchema.safeParse(msg.data)
+              if (!reply.success) {
+                const eventId = typeof msg.data?.event_id === 'string' ? msg.data.event_id : undefined
+                const resolve = eventId ? this.pendingNativePage.get(eventId) : undefined
+                if (eventId && resolve) {
+                  this.pendingNativePage.delete(eventId)
+                  resolve({ ok: false, reason: 'invalid_response' })
+                }
+                break
+              }
+              this.settleNativePageReply(reply.data)
+              this.dispatchCustomEvent('apf.page_result', reply.data)
               break
+            }
             default:
               if (this._registered.has(msg.type)) {
                 // Fallback for custom types - calls super direct.

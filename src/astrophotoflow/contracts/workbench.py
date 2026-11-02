@@ -1,8 +1,9 @@
 from datetime import datetime
-from typing import Literal
+from typing import Annotated, Literal
 from uuid import UUID
 
 from pydantic import Field, model_validator
+from pydantic.json_schema import SkipJsonSchema
 
 from astrophotoflow.contracts.common import StrictModel, UuidInput
 
@@ -25,13 +26,14 @@ class ConfigValues(StrictModel):
 class ConfigSave(StrictModel):
     config_token: str
     values: ConfigValues
-    default_workspace: str | None = None
+    default_workspace: Annotated[str, Field(min_length=1, pattern=r"\S")] | SkipJsonSchema[None] = Field(
+        default=None, json_schema_extra=lambda schema: schema.pop("default", None)
+    )
 
     @model_validator(mode="after")
     def check_default_workspace(self):
-        if "default_workspace" in self.model_fields_set:
-            if self.default_workspace is None or not self.default_workspace.strip():
-                raise ValueError("默认 workspace 必须为非空路径；省略字段以保持原值。")
+        if "default_workspace" in self.model_fields_set and (self.default_workspace is None or not self.default_workspace.strip()):
+            raise ValueError("默认 workspace 必须为非空路径；省略字段以保持原值。")
         return self
 
 
@@ -99,3 +101,8 @@ class WorkbenchState(StrictModel):
     versions: dict[str, str]
     reason: str | None
     recent: WorkbenchResult | None
+
+
+class MaintenanceAction(StrictModel):
+    action: Literal["enter", "release"]
+    operation_id: UuidInput

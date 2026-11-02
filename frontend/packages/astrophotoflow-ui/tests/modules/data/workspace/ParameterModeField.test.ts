@@ -1,7 +1,7 @@
 import {flushPromises,mount} from '@vue/test-utils'
 import {describe,expect,it,vi} from 'vitest'
 import {nextTick} from 'vue'
-import ParameterModeField from '@ui/modules/data/workspace/ParameterModeField.vue'
+import ParameterModeField from '@ui/modules/data/equipment/ParameterModeField.vue'
 
 async function open(wrapper:ReturnType<typeof mount>){
   const button=wrapper.get('button').element

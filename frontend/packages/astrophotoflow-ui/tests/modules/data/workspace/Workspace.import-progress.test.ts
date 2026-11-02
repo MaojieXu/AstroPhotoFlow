@@ -1,3 +1,4 @@
+import { libraryAsset, libraryDataset } from '../../../fixtures/library-summary'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -5,7 +6,7 @@ import App from '@ui/modules/data/App.vue'
 import Workspace from '@ui/modules/data/workspace/Workspace.vue'
 
 const { get, send } = vi.hoisted(() => ({ get: vi.fn(), send: vi.fn() }))
-vi.mock('@ui/modules/data/api/index', () => ({ assetApi: { get, send } }))
+vi.mock('@ui/modules/data/api/index', async () => ({ libraryApi: (await import('../../../fixtures/library-api')).createLibraryApiFixture(get), catalogApi: (await import('../../../fixtures/library-api')).createCatalogApiFixture(get), mutationApi: (await import('../../../fixtures/library-api')).createMutationApiFixture(send), trashApi: (await import('../../../fixtures/library-api')).createTrashApiFixture(get,send), importApi: (await import('../../../fixtures/library-api')).createImportApiFixture(get,send), datasetApi: (await import('../../../fixtures/library-api')).createDatasetApiFixture(get,send), assetApi: { get, send } }))
 const capabilities = {
   stage: 'ingestion', shared_library_read: true, project_assets_read: true,
   project_management: true, equipment_management: true, asset_import: true, asset_reference_write: false, asset_preview: false,
@@ -28,13 +29,14 @@ afterEach(() => { wrapper?.unmount(); wrapper=undefined; vi.useRealTimers(); loc
 describe('workspace import registration progress', () => {
   it('keeps material processing issues while suppressing historical task banners', async () => {
     get.mockImplementation(async (path: string) => {
+      if (path.endsWith('/health')) return {status:'ok',api_version:'v1',database:'ready',schema_revision:'0001',workspace:'/isolated-test-workspace'}
       if (path.endsWith('/capabilities')) return capabilities
       if (path.includes('/asset-tasks?')) return { ...emptyPage, items: [{ ...baseTask, status: 'completed_with_errors', error: null, report: { counts: { failed: 1, processing_issues: 1 } } }], total: 1 }
-      if (path.includes('/library/items?')) return { ...emptyPage, total: 1, items: [{ entry_type: 'asset', import_issue: '解析失败；预览不可用', asset: {
+      if (path.includes('/library/items?')) return { ...emptyPage, total: 1, items: [{...libraryAsset({
         id: baseTask.id, name: 'invalid.fit', scope: 'shared', owner_project_id: null, role: 'raw', calibration_level: null,
         current_version_id: null, classification: {}, parameters: {}, equipment_snapshot: {}, value_sources: {}, notes: null,
         status: 'active', revision: 1, created_at: baseTask.created_at, current_version: null
-      } }] }
+      }), import_issue: '解析失败；预览不可用'}] }
       return emptyPage
     })
     wrapper = mount(App, { global: { plugins: [createPinia()] } })
@@ -51,6 +53,7 @@ describe('workspace import registration progress', () => {
   it('uses registration counts in the actual row and refreshes on registration and background completion', async () => {
     let current = structuredClone(baseTask)
     get.mockImplementation(async (path: string) => {
+      if (path.endsWith('/health')) return {status:'ok',api_version:'v1',database:'ready',schema_revision:'0001',workspace:'/isolated-test-workspace'}
       if (path.endsWith('/capabilities')) return capabilities
       if (path.includes('/asset-tasks?')) return { ...emptyPage, items: [current], total: 1 }
       return emptyPage

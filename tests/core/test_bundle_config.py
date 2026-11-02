@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from astrophotoflow.contracts.assets import AssetParametersPatch
+from astrophotoflow.contracts.metadata import AssetParametersPatch
 from astrophotoflow.core.config import load_settings
 
 

@@ -1,6 +1,5 @@
-from datetime import datetime, timezone
-from pathlib import Path
 import sqlite3
+from pathlib import Path
 
 from alembic import command
 from alembic.config import Config
@@ -9,8 +8,7 @@ from sqlalchemy.engine import URL
 
 from astrophotoflow.core.config import Settings, ensure_data_dir
 
-
-SCHEMA_REVISION = "0009_remove_legacy_capture_profiles"
+SCHEMA_REVISION = "0001_baseline"
 _PACKAGE_ALEMBIC_INI = Path(__file__).resolve().parent / "alembic.ini"
 ALEMBIC_INI = _PACKAGE_ALEMBIC_INI
 
@@ -55,32 +53,19 @@ def database_status(settings: Settings) -> dict[str, str | bool | None]:
     return {"database_path": str(settings.database_path), "exists": exists, "current_revision": revision, "expected_revision": SCHEMA_REVISION}
 
 
-def _backup_before_upgrade(settings: Settings) -> Path:
-    settings.data_dir.joinpath("backups").mkdir(parents=True, exist_ok=True, mode=0o700)
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
-    destination = settings.data_dir / "backups" / f"astrophotoflow-{stamp}-to-{SCHEMA_REVISION}.sqlite3"
-    with sqlite3.connect(f"file:{settings.database_path}?mode=ro", uri=True) as source, sqlite3.connect(destination) as target:
-        source.backup(target)
-    return destination
-
-
-def upgrade_database(settings: Settings) -> Path | None:
+def upgrade_database(settings: Settings) -> None:
     ensure_data_dir(settings)
-    exists = settings.database_path.exists()
-    if exists:
+    if settings.database_path.exists():
         revision = current_revision(settings.database_path)
         if revision == SCHEMA_REVISION:
-            return None
-        if revision is None:
-            raise SchemaError("数据库没有可识别的 Alembic revision；不会对未知数据库执行迁移。")
-    backup = _backup_before_upgrade(settings) if exists else None
+            return
+        raise SchemaError(f"Database revision {revision!r} does not match {SCHEMA_REVISION!r}; create a new workspace or rebuild this database. Historical upgrades are unsupported.")
     try:
         command.upgrade(_alembic_config(settings), "head")
     except Exception as exc:
-        raise SchemaError(f"数据库迁移失败；数据库及备份均已保留。诊断：{exc}") from exc
+        raise SchemaError(f"New database initialization failed: {exc}") from exc
     if current_revision(settings.database_path) != SCHEMA_REVISION:
-        raise SchemaError("迁移命令结束，但数据库 revision 与预期不符。")
-    return backup
+        raise SchemaError("Database initialization ended with an unexpected revision.")
 
 
 def ensure_schema_for_serve(settings: Settings) -> None:
@@ -90,6 +75,5 @@ def ensure_schema_for_serve(settings: Settings) -> None:
     revision = current_revision(settings.database_path)
     if revision != SCHEMA_REVISION:
         raise SchemaError(
-            f"数据库 revision 为 {revision!r}，服务要求 {SCHEMA_REVISION!r}。请检查后显式运行："
-            "uv run --project . apf-service db upgrade"
+            f"Database revision {revision!r} does not match {SCHEMA_REVISION!r}; create a new workspace or rebuild this database. Historical upgrades are unsupported."
         )

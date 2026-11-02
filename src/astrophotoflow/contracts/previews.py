@@ -1,7 +1,9 @@
-from astrophotoflow.contracts.common import StrictModel
-from pydantic import Field
 from typing import Literal
 from uuid import UUID
+
+from pydantic import Field
+
+from astrophotoflow.contracts.common import StrictModel
 
 
 class AutoStretch(StrictModel):

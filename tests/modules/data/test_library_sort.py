@@ -1,6 +1,14 @@
-from functools import cmp_to_key
+from datetime import UTC, datetime
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from uuid import NAMESPACE_URL, uuid5
 
-from astrophotoflow.modules.data.library import _compare_library_entries
+from astrophotoflow.contracts.assets import LibraryQuery
+from astrophotoflow.core.database.db import Database
+from astrophotoflow.modules.data.assets.models import Asset, AssetVersion
+from astrophotoflow.modules.data.datasets.models import Dataset, DatasetMember, DatasetVersion
+from astrophotoflow.modules.data.library.queries import search_library
+from astrophotoflow.modules.data.persistence import schema_metadata
 
 
 def asset_entry(record_id, *, name=None, parameters=None, classification=None, storage_mode="managed"):
@@ -24,9 +32,51 @@ def dataset_entry(record_id, members):
 
 
 def ordered(entries, sort_by, order):
-    return sorted(entries, key=cmp_to_key(
-        lambda left, right: _compare_library_entries(left, right, sort_by, order)
-    ))
+    def identity(value):
+        return str(uuid5(NAMESPACE_URL, "library-sort/" + value))
+
+    with TemporaryDirectory(prefix="apf-library-order-") as temporary:
+        database = Database(Path(temporary) / "catalog.sqlite3")
+        schema_metadata().create_all(database.engine)
+        labels = {}
+        try:
+            with database.write_session() as session:
+                for entry in entries:
+                    kind, label = entry["entry_type"], entry["id"]
+                    entry_id = identity(kind + "/" + label)
+                    labels[kind, entry_id] = label
+                    inputs = [{"asset": entry["asset"], "version": entry["asset"]["current_version"]}] if kind == "asset" else entry["version"]["members"]
+                    if kind == "dataset":
+                        dataset = Dataset(id=entry_id, name=entry["dataset"]["name"], created_at=datetime(2026, 10, 23, tzinfo=UTC))
+                        session.add(dataset); session.flush()
+                        fixed = DatasetVersion(id=identity("fixed/" + label), dataset_id=entry_id, version_number=1)
+                        session.add(fixed); session.flush()
+                        dataset.current_version_id = fixed.id
+                    for position, member in enumerate(inputs):
+                        source = member["asset"]
+                        asset_id = entry_id if kind == "asset" else identity("member/" + label + "/" + str(position))
+                        parameters = dict(source["parameters"])
+                        snapshots = {}
+                        for key in ("camera_id", "optical_system_id", "filter_id"):
+                            if parameters.get(key):
+                                parameters[key] = identity("device/" + parameters[key])
+                            if source.get("equipment_snapshot", {}).get(key):
+                                snapshots[key] = {**source["equipment_snapshot"][key], "id": parameters.get(key)}
+                        asset = Asset(id=asset_id, name=source["name"], scope="shared", role="raw", equipment_snapshot=snapshots,
+                                      created_at=datetime(2026, 10, 23, tzinfo=UTC), **parameters, **source["classification"])
+                        session.add(asset); session.flush()
+                        version = AssetVersion(id=identity("version/" + asset_id), asset_id=asset_id, version_number=1,
+                            storage_mode=member["version"]["storage_mode"], storage_location="unused.fit", byte_size=1,
+                            content_hash="b3:" + "a" * 64, availability="available")
+                        session.add(version); session.flush(); asset.current_version_id = version.id
+                        if kind == "dataset":
+                            session.add(DatasetMember(id=identity("membership/" + asset_id), dataset_version_id=fixed.id,
+                                                      asset_version_id=version.id, position=position))
+            with database.read_session() as session:
+                page = search_library(session, LibraryQuery(sort_by=sort_by, order=order))
+            return [{"id": labels[item.entry_type, str(item.id)], "entry_type": item.entry_type} for item in page.items]
+        finally:
+            database.close()
 
 
 def test_bin_compares_numeric_axes_and_descending_does_not_reverse_missing_partition():

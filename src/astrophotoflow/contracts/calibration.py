@@ -1,5 +1,6 @@
-from astrophotoflow.contracts.common import StrictModel, UuidInput
 from typing import Literal
+
+from astrophotoflow.contracts.common import PageMetadata, StrictModel, UuidInput
 
 
 class CalibrationTarget(StrictModel):
@@ -18,8 +19,5 @@ class CalibrationTargetOption(StrictModel):
     member_count: int
 
 
-class CalibrationTargetPage(StrictModel):
+class CalibrationTargetPage(PageMetadata):
     items: list[CalibrationTargetOption]
-    total: int
-    limit: int
-    offset: int

@@ -1,3 +1,8 @@
+from astrophotoflow.core import files as core_files
+from astrophotoflow.modules.software.bundles import install as bundle_installation, git as bundle_git, catalog as bundle_catalog
+from astrophotoflow.modules.software import metadata as bundle_metadata
+import astrophotoflow.modules.software.packages.install as software_packages_install
+import astrophotoflow.modules.software.packages.state as software_package_state
 import asyncio
 import json
 import os
@@ -14,11 +19,11 @@ from astrophotoflow.modules.software.environment import bundle_environment
 
 @pytest.mark.parametrize('exit_code', [0, 7])
 def test_git_streams_transfer_progress_and_keeps_process_errors(monkeypatch, exit_code):
-    monkeypatch.setattr(bundles, 'ensure_git', lambda _root: sys.executable)
+    monkeypatch.setattr(bundle_git, 'ensure_git', lambda _root: sys.executable)
     updates = []
     script = "import sys;sys.stderr.write('Receiving objects: 42% (42/100)\\rReceiving objects: 42% (42/100)\\rUpdating files: 75% (3/4)\\n');sys.stderr.flush();sys.exit(" + str(exit_code) + ")"
     def run():
-        return bundles.git(['-c', script], on_progress=lambda phase, value: updates.append((phase, value)))
+        return bundles.run_git(['-c', script], on_progress=lambda phase, value: updates.append((phase, value)))
     if exit_code:
         with pytest.raises(ApiError) as failed:
             run()
@@ -47,7 +52,7 @@ def test_checkout_rejects_tag_moving_before_loading_code(tmp_path, monkeypatch):
     def git(args, **kwargs):
         calls.append(args)
         return 'different-commit' if args[0]=='rev-parse' else ''
-    monkeypatch.setattr(bundles,'git',git)
+    monkeypatch.setattr(bundle_installation, 'run_git',git)
     with pytest.raises(ApiError, match='tag'):
         bundles.checkout('siril',tmp_path/'bundle')
     assert calls[0][:4]==['clone','--depth','1','--branch']
@@ -71,11 +76,11 @@ def test_reference_snapshot_allows_git_eol_conversion_but_rejects_content_change
     adapter = tmp_path / manifest.adapter
     adapter.parent.mkdir(parents=True, exist_ok=True)
     adapter.write_bytes(b'fixture')
-    monkeypatch.setattr(bundles, 'git', lambda args, **kwargs: selected['commit'] if args[0] == 'rev-parse' else '')
-    monkeypatch.setattr(bundles, 'read_bundle', lambda root: (manifest, selected['operations'], selected['nodes']))
-    monkeypatch.setattr(bundles, 'read_bundle_locales', lambda *args: selected.get('localizations', {}))
-    monkeypatch.setattr(bundles.subprocess, 'run', lambda *args, **kwargs: SimpleNamespace(returncode=0, stdout=manifest.version_output))
-    monkeypatch.setattr(bundles, '_adapter', lambda *args: SimpleNamespace(**{name: lambda: None for name in ['build_plan', 'parse_result', 'parse_progress', 'parse_failure']}))
+    monkeypatch.setattr(bundle_installation, 'run_git', lambda args, **kwargs: selected['commit'] if args[0] == 'rev-parse' else '')
+    monkeypatch.setattr(bundle_installation, 'read_bundle', lambda root: (manifest, selected['operations'], selected['nodes']))
+    monkeypatch.setattr(bundle_installation, 'read_bundle_locales', lambda *args: selected.get('localizations', {}))
+    monkeypatch.setattr(bundle_installation.subprocess, 'run', lambda *args, **kwargs: SimpleNamespace(returncode=0, stdout=manifest.version_output))
+    monkeypatch.setattr(bundle_installation, 'load_adapter', lambda *args: SimpleNamespace(**{name: lambda: None for name in ['build_plan', 'parse_result', 'parse_progress', 'parse_failure']}))
     if changed:
         with pytest.raises(ApiError) as failure:
             bundles.checkout('siril', tmp_path, release_record=selected)
@@ -133,7 +138,7 @@ def test_install_uses_verified_checkout_and_waits_for_native_load(tmp_path,monke
         observed = public.get_package(settings, 'siril')
         assert observed.progress == 0.42 and observed.phase == 'downloading'
         shutil.copytree(source,destination)
-        return bundles.read_bundle(destination)[0], 'pinned-commit'
+        return bundle_metadata.read_bundle(destination)[0], 'pinned-commit'
     monkeypatch.setattr(bundles,'checkout',clone)
     before=public.get_package(settings,'siril')
     after=asyncio.run(public.install_package(settings,'siril','1.4.4',before.package_token))
@@ -155,7 +160,7 @@ def test_install_continues_when_a_progress_write_is_blocked(tmp_path, monkeypatc
         kwargs['on_progress']('downloading', 0.75)
         assert public.get_package(settings, 'siril').progress == 0.75
         shutil.copytree(source, destination)
-        return bundles.read_bundle(destination)[0], 'pinned-commit'
+        return bundle_metadata.read_bundle(destination)[0], 'pinned-commit'
     monkeypatch.setattr(bundles, 'checkout', clone)
     before = public.get_package(settings, 'siril')
     after = asyncio.run(public.install_package(settings, 'siril', '1.4.4', before.package_token))
@@ -172,8 +177,8 @@ def test_install_final_save_failure_reports_need_to_verify(tmp_path, monkeypatch
     def clone(package_id, destination, **kwargs):
         calls.append(package_id)
         shutil.copytree(source, destination)
-        return bundles.read_bundle(destination)[0], 'pinned-commit'
-    replace = public.os.replace
+        return bundle_metadata.read_bundle(destination)[0], 'pinned-commit'
+    replace = software_package_state.os.replace
     def blocked_final(part, path):
         if json.loads(Path(part).read_text(encoding='utf-8'))['operation_state'] == 'completed':
             error = PermissionError('final state is busy')
@@ -181,8 +186,8 @@ def test_install_final_save_failure_reports_need_to_verify(tmp_path, monkeypatch
             raise error
         replace(part, path)
     monkeypatch.setattr(bundles, 'checkout', clone)
-    monkeypatch.setattr(public.os, 'replace', blocked_final)
-    monkeypatch.setattr(public.time, 'sleep', lambda _: None)
+    monkeypatch.setattr(software_package_state.os, 'replace', blocked_final)
+    monkeypatch.setattr(core_files.time, 'sleep', lambda _: None)
     before = public.get_package(settings, 'siril')
     with pytest.raises(ApiError, match='安装结果未能保存，需核对') as failed:
         asyncio.run(public.install_package(settings, 'siril', '1.4.4', before.package_token))
@@ -195,7 +200,7 @@ def test_install_final_save_failure_reports_need_to_verify(tmp_path, monkeypatch
 
 def test_manifest_paths_cannot_escape_checkout(tmp_path):
     with pytest.raises(ValueError):
-        bundles.contained(tmp_path,'../outside.py')
+        bundle_metadata.contained(tmp_path,'../outside.py')
 
 
 def test_adapter_changes_apply_without_commit_timestamp_or_size_changes(tmp_path, bundle_install):
@@ -203,7 +208,7 @@ def test_adapter_changes_apply_without_commit_timestamp_or_size_changes(tmp_path
     settings = Settings('127.0.0.1', 8190, tmp_path/'data', (), workspace=tmp_path)
     root = bundle_install(settings)
     path = root/'adapter/siril.py'
-    source = "from astrophotoflow.contracts.bundles import ProcessPlan\ndef build_plan(operation_id,sources,parameters,directory,**options):\n return ProcessPlan(arguments=['A'],outputs=[directory/'result.fit'],output_format='fits')\n"
+    source = "from astrophotoflow.contracts.bundles import NamedProcessPlan, ProcessOutput, BundleFile\ndef build_plan(operation_id,sources,parameters,directory,**options):\n return NamedProcessPlan(arguments=['A'],temporary_directory=directory/'tmp',outputs={'image':ProcessOutput(files=[BundleFile(path=directory/'result.fit',format='fits')])})\n"
     path.write_text(source, encoding='utf-8')
     timestamp = path.stat()
     first = bundles.adapter_plan(tmp_path, 'siril', 'autostretch', [], {}, tmp_path/'runs/first')
@@ -233,14 +238,14 @@ def test_update_switches_installed_metadata_and_adapter_without_touching_user_fi
     settings = Settings('127.0.0.1', 8190, tmp_path/'workspace/data', (), workspace=tmp_path/'workspace')
     root = bundle_install(settings)
     adapter = root/'adapter/siril.py'
-    implementation = "from astrophotoflow.contracts.bundles import ProcessPlan\ndef build_plan(operation_id,sources,parameters,directory,**options):\n return ProcessPlan(arguments=['before'],outputs=[directory/'result.fit'],output_format='fits')\n"
+    implementation = "from astrophotoflow.contracts.bundles import NamedProcessPlan, ProcessOutput, BundleFile\ndef build_plan(operation_id,sources,parameters,directory,**options):\n return NamedProcessPlan(arguments=['before'],temporary_directory=directory/'tmp',outputs={'image':ProcessOutput(files=[BundleFile(path=directory/'result.fit',format='fits')])})\n"
     adapter.write_text(implementation, encoding='utf-8')
     first = bundles.adapter_plan(settings.workspace, 'siril', 'autostretch', [], {}, tmp_path/'runs/before')
     upstream = tmp_path/'updated-bundle'
     shutil.copytree(root, upstream)
     manifest_path = upstream/'bundle.json'
     manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
-    manifest['bundle_version'] = '0.1.2-dev.2'
+    manifest['bundle_version'] = '0.3.0-dev.1'
     manifest_path.write_text(json.dumps(manifest), encoding='utf-8')
     operation_path = upstream/manifest['operations'][0]
     operation = json.loads(operation_path.read_text(encoding='utf-8'))
@@ -248,11 +253,11 @@ def test_update_switches_installed_metadata_and_adapter_without_touching_user_fi
     operation_path.write_text(json.dumps(operation), encoding='utf-8')
     (upstream/'adapter/siril.py').write_text(implementation.replace("['before']", "['after']"), encoding='utf-8')
     release = json.loads(json.dumps(bundles.release('siril')))
-    release.update(manifest=manifest, tag='v0.1.2-dev.2', commit='updated-fixture', operations=[operation])
-    monkeypatch.setattr(bundles, 'catalog', lambda: {'siril': release})
+    release.update(manifest=manifest, tag='v0.3.0-dev.1', commit='updated-fixture', operations=[operation, *release['operations'][1:]])
+    monkeypatch.setattr(bundle_catalog, 'catalog', lambda: {'siril': release})
     def checkout(package_id, destination, **kwargs):
         shutil.copytree(upstream, destination)
-        return bundles.read_bundle(destination)[0], release['commit']
+        return bundle_metadata.read_bundle(destination)[0], release['commit']
     monkeypatch.setattr(bundles, 'checkout', checkout)
     original = settings.workspace/'science.fit'
     workflow = settings.workspace/'workflow.json'
@@ -274,7 +279,7 @@ def test_update_switches_installed_metadata_and_adapter_without_touching_user_fi
     after = asyncio.run(public.install_package(settings, 'siril', '1.4.4', before.package_token))
     second = bundles.adapter_plan(settings.workspace, 'siril', 'autostretch', [], {}, tmp_path/'runs/after')
     assert first.arguments == ['before'] and second.arguments == ['after']
-    assert after.bundle_version == '0.1.2-dev.2' and after.bundle_commit == 'updated-fixture'
+    assert after.bundle_version == '0.3.0-dev.1' and after.bundle_commit == 'updated-fixture'
     assert after.availability == 'not_ready' and not after.update_available and not after.restart_required
     assert bundles.metadata(settings.workspace, 'siril')[1][0]['operation']['parameters'][2]['default'] == 0.4
     assert not (root.parent/'previous-bundle').exists() and not list(root.parent.glob('.bundle-install-*'))
@@ -297,9 +302,9 @@ def test_bundle_rename_persistent_lock_is_bounded_and_preserves_files(tmp_path, 
         attempts.append((path, destination))
         raise failure
     monkeypatch.setattr(Path, 'rename', locked)
-    monkeypatch.setattr(public.time, 'sleep', waits.append)
+    monkeypatch.setattr(core_files.time, 'sleep', waits.append)
     with pytest.raises(OSError) as caught:
-        public._rename_bundle(source, target)
+        software_packages_install.rename_bundle(source, target)
     assert caught.value is failure
     assert len(attempts) == (6 if winerror is not None else 1)
     assert sum(waits) <= 1.55 + 1e-9
@@ -314,7 +319,7 @@ def test_failed_stage_activation_restores_original_bundle(tmp_path, monkeypatch,
     original_lock = (root.parent / 'bundle-lock.json').read_bytes()
     def checkout(package_id, destination, **kwargs):
         shutil.copytree(root, destination)
-        return bundles.read_bundle(destination)[0], 'staged'
+        return bundle_metadata.read_bundle(destination)[0], 'staged'
     monkeypatch.setattr(bundles, 'checkout', checkout)
     rename = Path.rename
     def locked_stage(path, destination):
@@ -324,7 +329,7 @@ def test_failed_stage_activation_restores_original_bundle(tmp_path, monkeypatch,
             raise failure
         return rename(path, destination)
     monkeypatch.setattr(Path, 'rename', locked_stage)
-    monkeypatch.setattr(public.time, 'sleep', lambda delay: None)
+    monkeypatch.setattr(core_files.time, 'sleep', lambda delay: None)
     package = public.get_package(settings, 'siril')
     with pytest.raises(ApiError) as failure:
         asyncio.run(public.install_package(settings, 'siril', '1.4.4', package.package_token))

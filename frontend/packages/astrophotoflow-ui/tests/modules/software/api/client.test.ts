@@ -42,7 +42,24 @@ describe('SoftwareClient', () => {
     ])
     expect(fetchApi).toHaveBeenCalledWith(
       '/astrophotoflow/api/v1/software/packages/siril/versions/1.4.4/commands',
-      undefined
+      expect.objectContaining({ method: 'GET' })
     )
   })
+})
+
+it('forwards directory cancellation through the real generated Fetch transport',async()=>{
+  const controller=new AbortController()
+  let requestSignal:AbortSignal|undefined
+  let finish!: (response:Response)=>void
+  const fetchApi=vi.fn((_path:string,init?:RequestInit)=>{
+    requestSignal=init?.signal??undefined
+    return new Promise<Response>(resolve=>{finish=resolve})
+  })
+  const request=createSoftwareClient(fetchApi).listPackages(controller.signal)
+  await new Promise(resolve=>setTimeout(resolve,0))
+  expect(requestSignal?.aborted).toBe(false)
+  controller.abort()
+  expect(requestSignal?.aborted).toBe(true)
+  finish(Response.json([]))
+  await expect(request).resolves.toEqual([])
 })

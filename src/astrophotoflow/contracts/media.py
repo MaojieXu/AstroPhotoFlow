@@ -1,6 +1,6 @@
 from typing import Literal
 
-from pydantic import Field, FiniteFloat, field_validator, model_validator
+from pydantic import ConfigDict, Field, FiniteFloat, field_validator, model_validator
 
 from astrophotoflow.contracts.common import StrictModel
 from astrophotoflow.contracts.previews import PreviewIssue
@@ -55,6 +55,8 @@ class MediaHdu(StrictModel):
 
 
 class MediaState(StrictModel):
+    model_config = ConfigDict(json_schema_serialization_defaults_required=True)
+
     key: str
     status: Literal["generating", "available", "failed", "unsupported"]
     phase: Literal["queued", "preparing"] | None = None

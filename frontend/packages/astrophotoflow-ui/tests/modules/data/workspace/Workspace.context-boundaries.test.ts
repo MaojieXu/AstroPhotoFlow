@@ -1,16 +1,17 @@
+import { libraryAsset, libraryDataset } from '../../../fixtures/library-summary'
 import {flushPromises,mount} from '@vue/test-utils'
 import {createPinia} from 'pinia'
 import {afterEach,beforeEach,describe,expect,it,vi} from 'vitest'
 import App from '@ui/modules/data/App.vue'
-import Workspace from '@ui/modules/data/workspace/Workspace.vue'
+import Workspace from '@ui/modules/data/workspace/WorkspacePage.vue'
 const {get,send,getBlob}=vi.hoisted(()=>({get:vi.fn(),send:vi.fn(),getBlob:vi.fn()}))
-vi.mock('@ui/modules/data/api/index',()=>({assetApi:{get,send,getBlob}}))
+vi.mock('@ui/modules/data/api/index',async () => ({ libraryApi: (await import('../../../fixtures/library-api')).createLibraryApiFixture(get), catalogApi: (await import('../../../fixtures/library-api')).createCatalogApiFixture(get), mutationApi: (await import('../../../fixtures/library-api')).createMutationApiFixture(send), trashApi: (await import('../../../fixtures/library-api')).createTrashApiFixture(get,send), importApi: (await import('../../../fixtures/library-api')).createImportApiFixture(get,send), datasetApi: (await import('../../../fixtures/library-api')).createDatasetApiFixture(get,send),assetApi:{get,send,getBlob}}))
 const id=(n:number)=>'00000000-0000-4000-8000-'+String(n).padStart(12,'0')
 const timestamp='2026-10-25T06:00:00Z'
 const cap={stage:'ingestion',shared_library_read:true,project_assets_read:true,project_management:true,equipment_management:true,asset_import:true,asset_reference_write:true,asset_preview:false,asset_metadata_edit:true,dataset_management:true,asset_task_management:true,calibration_matching:false,asset_publish:false}
-const camera={id:id(1),kind:'camera',name:'Camera',model:null,serial_number:null,notes:null,specs:{},status:'active',revision:1,created_at:timestamp,updated_at:timestamp}
+const camera={id:id(1),kind:'camera',name:'Camera',model:null,notes:null,specs:{},status:'active',revision:1,created_at:timestamp,updated_at:timestamp}
 const setup={id:id(2),name:'Saved rig',components:[],notes:null,status:'active',revision:1,created_at:timestamp,updated_at:timestamp}
-const assetVersion={id:id(10),asset_id:id(9),version_number:1,storage_mode:'reference',storage_location:'root/photo.png',byte_size:10,content_hash:null,availability:'available',camera_id:null,optical_system_id:null,filter_id:null,frame_type:'light',calibration_level:'individual',capture_snapshot:{},scientific_metadata:{},created_at:timestamp}
+const assetVersion={view_base: `/astrophotoflow/api/v1/library/assets/${id(9)}/versions/${id(10)}/previews`, id:id(10),asset_id:id(9),version_number:1,storage_mode:'reference',storage_location:'root/photo.png',byte_size:10,content_hash:null,availability:'available',camera_id:null,optical_system_id:null,filter_id:null,frame_type:'light',calibration_level:'individual',capture_snapshot:{},scientific_metadata:{},created_at:timestamp}
 const asset={id:id(9),name:'Photo.png',scope:'shared',owner_project_id:null,role:'raw',calibration_level:'individual',current_version_id:assetVersion.id,classification:{frame_class:'subframe',frame_type:'light'},parameters:{parameter_mode:'standard'},equipment_snapshot:{},value_sources:{},notes:null,status:'active',revision:1,created_at:timestamp,current_version:assetVersion}
 const page=(items:unknown[])=>({items,total:items.length,limit:200,offset:0})
 let wrapper:ReturnType<typeof mount>
@@ -46,12 +47,12 @@ describe('workspace async view boundaries',()=>{
   get.mockImplementation(async(path:string)=>{
    const url=new URL(path,'http://test')
    if(url.pathname.endsWith('/capabilities'))return cap
-   if(url.pathname.endsWith('/library/items'))return page([{entry_type:'asset',asset,import_issue:null}])
+   if(url.pathname.endsWith('/library/items'))return page([libraryAsset(asset)])
    return page([])
   })
   await flushPromises()
-  const vm=wrapper.getComponent(Workspace).vm as unknown as {loadRecords:()=>Promise<void>;activeArea:string}
-  await vm.loadRecords();await flushPromises()
+  const vm=wrapper.getComponent(Workspace).vm as unknown as {refreshRecords:()=>Promise<void>;activeArea:string}
+  await vm.refreshRecords();await flushPromises()
   let resolveSave!:(value:unknown)=>void
   send.mockImplementationOnce(()=>new Promise(resolve=>{resolveSave=resolve})).mockResolvedValue({asset_version_id:assetVersion.id,size:'display',status:'not_ready',error:{code:'NOT_READY',message:'not ready'},width:null,height:null})
   const row=wrapper.get('.apf-assets-table tbody tr')
@@ -122,7 +123,7 @@ describe('workspace async view boundaries',()=>{
  it('does not silently replace an explicit frame filter with the category filter',async()=>{
   get.mockImplementation(async(path:string)=>{
    if(path.endsWith('/capabilities'))return cap
-   if(path.includes('/library/items'))return page([{entry_type:'asset',asset,import_issue:null}])
+   if(path.includes('/library/items'))return page([libraryAsset(asset)])
    return page([])
   })
   await flushPromises();await click('亮场')
@@ -143,7 +144,7 @@ describe('workspace async view boundaries',()=>{
  it('returns an empty intersection instead of ignoring Raw inside calibration',async()=>{
   get.mockImplementation(async(path:string)=>{
    if(path.endsWith('/capabilities'))return cap
-   if(path.includes('/library/items'))return page([{entry_type:'asset',asset:{...asset,role:'calibration',classification:{frame_class:'masterframe',frame_type:'flat'}},import_issue:null}])
+   if(path.includes('/library/items'))return page([libraryAsset({...asset,role:'calibration',classification:{frame_class:'masterframe',frame_type:'flat'}})])
    return page([])
   })
   await flushPromises();await click('校准库')
@@ -163,7 +164,7 @@ describe('workspace async view boundaries',()=>{
   get.mockImplementation(async(path:string)=>{
    if(path.endsWith('/capabilities'))return cap
    if(path.includes('/library/assets'))return page([dark])
-   if(path.includes('/library/items'))return page(persisted?[{entry_type:'dataset',dataset:group,version,matching_member_count:1,import_issue:null}]:[])
+   if(path.includes('/library/items'))return page(persisted?[libraryDataset(group,version)]:[])
    if(path.endsWith('/versions/'+version.id))return version
    return page([])
   })

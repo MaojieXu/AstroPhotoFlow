@@ -34,7 +34,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { isAdvancedSetting } from '@/platform/astrophotoflow/settingsPresentation'
+import { isAdvancedSetting } from '@/platform/astrophotoflow/settings/settingsPresentation'
 import NoResultsPlaceholder from '@/components/common/NoResultsPlaceholder.vue'
 import SettingGroup from '@/platform/settings/components/SettingGroup.vue'
 import type { ISettingGroup } from '@/platform/settings/types'
