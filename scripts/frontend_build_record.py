@@ -40,8 +40,7 @@ def inputs(root: Path, node: str, pnpm: str, env: dict[str, str]) -> dict:
     paths = {root / name for name in names if name and (root / name).is_file()
              and not name.startswith('frontend/docs/')
              and not (name.startswith('frontend/') and Path(name).name in {'README.md', 'AGENTS.md'})}
-    for directory in (root, root / 'frontend'):
-        paths.update(path for path in directory.glob('.env*') if path.is_file())
+    paths.update(path for path in (root / 'frontend').glob('.env*') if path.is_file())
     relevant = {key: value for key, value in env.items()
                 if key in ENV_KEYS or key.startswith(('VITE_', 'SENTRY_', 'COMFY_'))}
     relevant.setdefault('DISTRIBUTION', 'localhost')
