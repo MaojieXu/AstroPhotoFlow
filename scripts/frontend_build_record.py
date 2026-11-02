@@ -23,6 +23,8 @@ def digest_files(root: Path, paths: list[Path]) -> str:
     for path in sorted(paths):
         relative = path.relative_to(root).as_posix().encode()
         data = path.read_bytes()
+        if path.name == 'frontend_build_record.py':
+            data = data.replace(b'\r\n', b'\n')
         digest.update(len(relative).to_bytes(8, 'big'))
         digest.update(relative)
         digest.update(len(data).to_bytes(8, 'big'))
@@ -35,7 +37,9 @@ def inputs(root: Path, node: str, pnpm: str, env: dict[str, str]) -> dict:
                                      '--exclude-standard', '--', 'frontend', 'package.json',
                                      'pyproject.toml', 'scripts/build_engine.py',
                                      'scripts/frontend_build_record.py'], cwd=root).decode().split('\0')
-    paths = {root / name for name in names if name and (root / name).is_file()}
+    paths = {root / name for name in names if name and (root / name).is_file()
+             and not name.startswith('frontend/docs/')
+             and not (name.startswith('frontend/') and Path(name).name in {'README.md', 'AGENTS.md'})}
     for directory in (root, root / 'frontend'):
         paths.update(path for path in directory.glob('.env*') if path.is_file())
     relevant = {key: value for key, value in env.items()
