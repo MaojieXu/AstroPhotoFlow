@@ -19,4 +19,3 @@ class ServiceApiError(RuntimeError):
     @property
     def fields(self) -> list[dict[str, str]]:
         return self.detail.fields
-

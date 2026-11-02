@@ -32,4 +32,3 @@ def write_package_state(settings, package_id, state, *, progress_only=False):
 
 def state_from_package(package):
     return SoftwarePackageState.model_validate(package.model_dump(include=set(SoftwarePackageState.model_fields)))
-

@@ -73,7 +73,7 @@ def test_invalid_success_is_a_response_error_with_identity_and_field_diagnostics
 
 def test_equipment_response_uses_the_shared_discriminator():
     payload = {
-        "id": IDENTITY, "name": "Camera", "model": None, 
+        "id": IDENTITY, "name": "Camera", "model": None,
         "notes": None, "status": "active", "revision": 1,
         "created_at": ASSET["created_at"], "updated_at": ASSET["created_at"],
         "kind": "camera", "specs": {"pixel_size_um": 3.76},

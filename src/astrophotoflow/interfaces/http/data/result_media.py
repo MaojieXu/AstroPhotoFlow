@@ -112,4 +112,3 @@ def output_view_file(prompt_id: UUID, call_id: UUID, output_index: int, member_i
     except Exception:
         release()
         raise
-

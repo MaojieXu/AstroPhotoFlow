@@ -80,4 +80,3 @@ def validate_invocation(settings: Settings, invocation: SoftwareInvocation):
         if item.read_path.resolve().is_relative_to(work):
             raise ApiError(422, "INVALID_REFERENCE", "科学输入不能位于即将创建的调用输出目录内。", message_key='scientific_inputs_must_not_be_inside_the_invocation_output_directory_that_w')
     return package, work, operation
-

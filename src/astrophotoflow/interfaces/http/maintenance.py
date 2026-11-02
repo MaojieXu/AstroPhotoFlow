@@ -85,4 +85,3 @@ def register_maintenance(app: FastAPI, settings: Settings) -> None:
             app.state.shutdown_started = True
             request.app.state.shutdown()
         return {"status": "stopping"}
-

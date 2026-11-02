@@ -48,4 +48,3 @@ def register_native_pages(app: FastAPI, settings: Settings) -> None:
         return NativePageReply(
             event_id=body.event_id, page_id=body.page_id, page_token=body.page_token, result=result, error=None,
         )
-

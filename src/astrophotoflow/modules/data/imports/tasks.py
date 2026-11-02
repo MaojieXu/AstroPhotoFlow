@@ -116,4 +116,3 @@ def mark_interrupted_tasks(database: Database, *, locale='en') -> int:
             item.status = "interrupted"
             item.updated_at = datetime.now(UTC)
     return count
-

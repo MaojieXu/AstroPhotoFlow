@@ -53,7 +53,7 @@ describe('complete result ownership', () => {
       prompt: string,
       signature: string,
       workflow = graph.id
-    ): SoftwareCallResult => ({log_url: `/astrophotoflow/api/v1/runs/${prompt}/calls/${'00000000-0000-4000-8000-000000000004'}/log`, 
+    ): SoftwareCallResult => ({log_url: `/astrophotoflow/api/v1/runs/${prompt}/calls/${'00000000-0000-4000-8000-000000000004'}/log`,
       prompt_id: prompt,
       call_id: '00000000-0000-4000-8000-000000000004',
       node_id: String(node.id),

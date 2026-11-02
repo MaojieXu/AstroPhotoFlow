@@ -38,4 +38,3 @@ def aggregate_values(statement: Select, fields: Iterable[str], name: str, *, gro
         columns.extend((state.label(field + "__state"), minimum(column).label(field + "__value")))
     result = select(*columns)
     return result.group_by(rows.c.entry_type, rows.c.id) if grouped else result
-

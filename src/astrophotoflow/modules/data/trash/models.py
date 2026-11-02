@@ -22,4 +22,3 @@ class LibraryEntryRemoval(Base):
     cleanup_status: Mapped[str] = mapped_column(String(16), nullable=False, default="trash")
     cleanup_error: Mapped[str | None] = mapped_column(Text)
     removed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.current_timestamp())
-

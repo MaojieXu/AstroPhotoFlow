@@ -81,4 +81,3 @@ async def preview_operation(settings: Settings, source: Path, directory: Path, p
     finally:
         if process is None or process.returncode is not None:
             LIVE_PREVIEWS.pop(job_id, None)
-

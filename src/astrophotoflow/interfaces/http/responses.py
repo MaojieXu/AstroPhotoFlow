@@ -21,4 +21,3 @@ class LeasedFileResponse(FileResponse):
             await super().__call__(scope, receive, send)
         finally:
             self.release()
-

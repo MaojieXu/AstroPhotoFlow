@@ -77,12 +77,16 @@ SirilAutostretchNode.hidden=SimpleNamespace(extra_pnginfo=None)
 sessions=[]
 async def request(session, method, path, body=None):
     assert session._loop is asyncio.get_running_loop() and not session.closed
+    if method == 'GET':
+        return {"prompt_id":path.split('/')[-3],"call_id":path.split('/')[-1],"log_url":path+'/log',"node_id":"65","state":"completed","ports":[]}
     sessions.append(session)
     return {"state":"completed","images":[],"outputs":[{}],"preview_error":None,"ports":[],"operation":{"package_id":"siril","version":"1.4.4","operation_id":"autostretch"},"bundle":{"version":"0.1.2-dev.1","commit":"test"}}
-adapter._request=request
+adapter.request_service=request
 adapter.get_executing_context=lambda:SimpleNamespace(prompt_id="00000000-0000-4000-8000-000000000001",node_id="65",list_index=0)
 for _ in range(2):
-    asyncio.run(SirilAutostretchNode.execute(image={},linked=False,shadowsclip=-2.8,targetbg=0.25))
+    parameters={parameter.name:parameter.default for parameter in SirilAutostretchNode.definition.parameters}
+    parameters.update(linked=False,shadowsclip=-2.8,targetbg=0.25)
+    asyncio.run(SirilAutostretchNode.execute(image={},**parameters))
 assert len(sessions)==2 and sessions[0] is not sessions[1] and all(session.closed for session in sessions)
 print("APF_SCHEMA="+json.dumps({"id":schema.node_id,"inputs":SirilAutostretchNode.INPUT_TYPES(),"outputs":SirilAutostretchNode.RETURN_TYPES,"object_info":SirilAutostretchNode.GET_NODE_INFO_V1()}))
 '''

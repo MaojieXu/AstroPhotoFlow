@@ -110,4 +110,3 @@ def runtime_active(runtime) -> bool | None:
         except psutil.AccessDenied:
             unknown = True
     return None if unknown else False
-

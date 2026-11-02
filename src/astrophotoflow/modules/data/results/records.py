@@ -54,5 +54,3 @@ def save_data_execution(path, value):
     part = path.with_suffix('.part')
     part.write_text(json.dumps(value, ensure_ascii=False, indent=2), encoding='utf-8')
     part.replace(path)
-
-

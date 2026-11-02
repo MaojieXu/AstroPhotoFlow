@@ -24,4 +24,3 @@ LIVE_PREVIEWS: dict[UUID, tuple[str, asyncio.subprocess.Process | None]] = {}
 
 class ObservationFailed(RuntimeError):
     pass
-

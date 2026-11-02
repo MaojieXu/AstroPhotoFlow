@@ -121,4 +121,3 @@ async def uninstall_package(settings, package_id, expected_package_token):
         "installed_version": None, "install_path": None, "availability": "not_installed", "reason": "尚未安装 Bundle。",
         "operation": "uninstall", "operation_state": "completed", "phase": None, "last_error": None}))
     return get_package(settings, package_id)
-

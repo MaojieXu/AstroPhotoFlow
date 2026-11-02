@@ -38,5 +38,3 @@ async def preview(body: BundlePreviewRequest, request: Request):
 async def release(consumer_id: UUID, request: Request):
     await request.app.state.bundle_previews.cancel(consumer_id)
     return Response(status_code=204)
-
-

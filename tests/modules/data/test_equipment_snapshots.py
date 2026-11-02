@@ -207,7 +207,7 @@ def test_accepted_import_keeps_frozen_equipment(service, via, entry, mutation):
     task = checked(client.get("/api/v1/asset-tasks/" + task_id, headers=AUTH))
     assert task["status"] == "completed", task
     asset = checked(client.get("/api/v1/library/assets/" + task["items"][0]["asset_id"], headers=AUTH))
-    expected = frozen["equipment_snapshots"][camera["id"]]
+    expected = frozen["selected_equipment"]["camera_id"] if via == "preset" else frozen["equipment_snapshots"][camera["id"]]
     assert asset["equipment_snapshot"]["camera_id"] == expected
     assert asset["parameters"]["camera_id"] == camera["id"]
     assert asset["parameters"]["gain"] == asset["parameters"]["exposure_seconds"] == 0
@@ -305,3 +305,27 @@ def test_legacy_api_and_project_field_are_removed(service):
     assert client.post("/api/v1/projects", headers=AUTH, json={"name": "Project", "capture_profile_ids": []}).status_code == 422
     project = checked(client.post("/api/v1/projects", headers=AUTH, json={"name": "Project"}), 201)
     assert "capture_profile_ids" not in project
+
+
+def test_preset_freezes_actual_equipment_revision_after_later_update(service):
+    client, app, settings, root = service
+    camera = equipment(client)
+    camera = checked(client.patch('/api/v1/equipment/' + camera['id'], headers=AUTH,
+        json={'kind':'camera','base_revision':1,'name':'Revision two'}))
+    assert camera['revision']==2
+    task_id, content=accept(client,root,camera,'preset','root')
+    with app.state.database.read_session() as session:
+        frozen=deepcopy(session.get(AssetTask,task_id).import_defaults_snapshot)
+    checked(client.patch('/api/v1/equipment/' + camera['id'],headers=AUTH,
+        json={'kind':'camera','base_revision':2,'name':'Revision three'}))
+    owner_runner.run_import_task(app.state.database,settings,task_id,app.state.import_workers)
+    task=checked(client.get('/api/v1/asset-tasks/'+task_id,headers=AUTH))
+    assert task['status']=='completed'
+    asset=checked(client.get('/api/v1/library/assets/'+task['items'][0]['asset_id'],headers=AUTH))
+    expected=frozen['selected_equipment']['camera_id']
+    assert expected['revision']==2 and expected['name']=='Revision two'
+    assert asset['equipment_snapshot']['camera_id']==expected
+    assert asset['current_version']['capture_snapshot']['equipment_snapshot']['camera_id']==expected
+    assert (root/'photo-0.png').read_bytes()==content
+    with app.state.database.read_session() as session:
+        assert session.get(AssetTask,task_id).import_defaults_snapshot==frozen

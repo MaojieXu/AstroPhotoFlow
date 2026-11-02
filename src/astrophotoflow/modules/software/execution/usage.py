@@ -26,4 +26,3 @@ def get_preview_usage(package_id: str) -> list[UUID]:
         if process is not None and process.returncode is not None:
             LIVE_PREVIEWS.pop(key, None)
     return [key for key, (package, _) in LIVE_PREVIEWS.items() if package == package_id]
-

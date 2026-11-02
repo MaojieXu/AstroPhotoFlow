@@ -485,8 +485,3 @@ class MediaViews:
 
     def acquire_output(self, checked, key):
         return self.leases.acquire_output(checked, key)
-
-
-
-
-

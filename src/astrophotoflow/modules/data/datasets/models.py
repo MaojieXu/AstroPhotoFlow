@@ -87,5 +87,3 @@ class MemberCalibration(Base):
     disabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     asset_version_id: Mapped[str | None] = mapped_column(ForeignKey("asset_version.id", ondelete="CASCADE"))
     target_dataset_version_id: Mapped[str | None] = mapped_column(ForeignKey("dataset_version.id", ondelete="CASCADE"))
-
-

@@ -137,7 +137,7 @@ def register_package_actions(app: FastAPI, settings: Settings, token: str) -> No
             restart_required=False,
             restart_reason=None,
             node_changes=node_changes,
-            
+
             current_bundle_version=package.bundle_version,
             target_bundle_version=target['manifest']['bundle_version'] if target else None,
             target_tag=target['tag'] if target else None,
@@ -221,7 +221,7 @@ def register_package_actions(app: FastAPI, settings: Settings, token: str) -> No
         except ApiError as exc:
             result = PackageMutationResult(
                 package=get_package(settings, pending.plan.package_id), definition_results=definition_results,
-                loads=[], 
+                loads=[],
                 error=exception_error(workspace_locale(settings.workspace), exc, code='INTERNAL_ERROR', message_key='software_install_or_definition_write_failed'),
             )
             final_state = "failed"
@@ -309,4 +309,3 @@ def register_package_actions(app: FastAPI, settings: Settings, token: str) -> No
     app.state.get_software_package_details = get_software_package_details
     app.state.confirm_software_action = confirm_software_action
     app.state.start_software_action = start_software_action
-

@@ -93,4 +93,3 @@ def registration_progress(database: Database, task_id: str, total: int, register
             "completed": completed,
         }}
         task.updated_at = datetime.now(UTC)
-

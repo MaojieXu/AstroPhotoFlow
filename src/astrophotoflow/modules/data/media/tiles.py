@@ -114,4 +114,3 @@ class TileService:
         check_cancel()
         self.cache.write(target, value)
         return value
-

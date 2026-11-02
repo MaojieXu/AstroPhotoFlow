@@ -210,4 +210,3 @@ async def cancel_operation(call_id: UUID) -> SoftwareCancelResult:
                                 stop_state='stopped' if active is False else 'running' if active is True else 'unknown',
                                 observed_at=datetime.now(UTC),
                                 reason=None if active is False else '停止请求已发送，尚未确认整个调用进程树退出。')
-

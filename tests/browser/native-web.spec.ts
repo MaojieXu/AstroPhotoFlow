@@ -290,3 +290,33 @@ test('native image workflow saves, reloads and executes through the original que
     )
   }
 })
+
+
+test('filter Channel saves free text and can be cleared without renaming the device', async ({ page, request }) => {
+  const name = 'Manager filter ' + randomUUID()
+  await page.goto('/')
+  await expect(page.getByTestId('library-sidebar')).toBeVisible()
+  await page.getByRole('button', { name: '设备管理', exact: true }).click()
+  await page.getByRole('button', { name: '新建设备组合', exact: true }).click()
+  await page.getByRole('button', { name: '新建滤镜', exact: true }).click()
+  const form = page.getByRole('form', { name: '新建设备表单' })
+  await form.getByLabel('设备名称', { exact: true }).fill(name)
+  const channel = form.getByLabel('Channel（通道）', { exact: true })
+  await expect(channel).toHaveAttribute('type', 'text')
+  await expect(channel).not.toHaveAttribute('list', /.+/)
+  await channel.fill('Custom Ha')
+  await form.getByLabel('带宽', { exact: true }).fill('7')
+  await expect(form.getByLabel('组合标签预览', { exact: true })).toHaveText('Custom Ha 7nm')
+  await form.getByRole('button', { name: '保存设备并加入', exact: true }).click()
+  await expect(form).toHaveCount(0)
+  const response = await request.get('/astrophotoflow/api/v1/equipment?limit=200')
+  expect(response.ok()).toBeTruthy()
+  const devices = (await response.json()).items
+  const device = devices.find((item: { name: string }) => item.name === name)
+  expect(device).toMatchObject({ kind: 'filter', name, specs: { channel: 'Custom Ha', bandwidth_nm: 7 } })
+  const cleared = await request.patch('/astrophotoflow/api/v1/equipment/' + device.id, {
+    data: { kind: 'filter', base_revision: device.revision, specs: { channel: null } }
+  })
+  expect(cleared.ok()).toBeTruthy()
+  expect(await cleared.json()).toMatchObject({ id: device.id, name, specs: { channel: null, bandwidth_nm: 7 } })
+})
