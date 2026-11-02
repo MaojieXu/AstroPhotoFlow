@@ -13,7 +13,7 @@
 一个长期 Git Manager Chat、多个独立 Feature Chat；集成分支为 `dev`。默认模型 GPT-6.1 Sol High，独立 Reviewer 不继承开发聊天历史。
 
 1. Manager 核对 dev、工作区和已有 Worktree，从确认的已提交 SHA 创建 `codex/<feature>`；复用 Codex 创建的空间并核对实际分支。用户要求时才创建 Feature Chat。
-2. Feature空间默认准备到可见的独立前端：源码空间、开发依赖、空workspace、前端构建、私有CPU runtime、双服务启动及页面展示连续完成。用户明确要求源码空间或依赖等较低等级时才提前结束。交接基点、分支、路径、工具／缓存位置及实际完成等级。
+2. Feature空间默认准备到可见的独立前端：源码空间、开发依赖、空workspace、前端产物复用或构建、私有CPU runtime、双服务启动及页面展示连续完成。Manager先按下方产物复用规则选择固定入口参数，并把选择交给执行准备的一方；页面展示固定使用内部browser。用户明确要求源码空间或依赖等较低等级时才提前结束。交接基点、分支、路径、工具／缓存位置及实际完成等级。
 3. 指定一方执行下方固定入口，另一方读取回执。Manager 使用带 cursor 的状态等待，失败、需用户处理或完成时再读详情；初始化交接不重复整套核对。Manager 交接原 Manager Chat 和对应 Feature Chat 的准确标识及可用的 host 标识；准备完成后，主动向该 Feature Chat 发送下方开发指令并启动开发，用户无需再发送开始指令。发送失败时明确报告，不将准备就绪描述为开发已启动。
 4. Feature 按最终需求实现、编写必要测试、构建及提供独立预览，默认不执行测试套件或综合验收。用户在 Feature Chat 反馈、试用和调整需求，满意后授权整理本地待审提交。Feature 冻结准确 SHA，整理完整 Brief，主动发送回原 Manager Chat，并在 Feature Chat 展示 Brief 和发送结果；用户无需手动复制。继续修改须另作提交并回传更新后的 Brief。无法定位原 Chat 或发送失败时明确报告，不将未发送描述为已交接。
 5. Brief 回传仅为交接，不代表授权集成；Manager 收到后等待用户确认。用户可用下方一次交付 Prompt 一并授权审查、测试、修复、本地合并、普通推送、Feature 空间清理及 Feature Chat 归档，Manager 使用对应 Feature 最新冻结的 Brief，不要求用户再次粘贴。Manager 按此顺序串行执行，不再逐步请求相同授权；审查或验证未通过则不合并、不推送，远端 dev 未包含最终提交则不清理。清理时删除该 Feature 的 workspace、私有 runtime、已合并分支及可安全删除的 Worktree，包含其中的证据、运行数据、依赖和缓存，不额外备份或迁移保留副本；已提交到 Git 的源码和验证记录继续保留。归档对应 Feature Chat，保留 Git Manager Chat 和其他 Feature。只删除本 Feature 私有路径，不删除外部引用的原始素材或共享缓存。用户明确要求暂不推送或保留空间时，以该要求为准。main、tag 和正式发布仍须另行授权；demo 只表示验收环境。Git 忽略的运行数据删除后不能靠 Git 恢复。
@@ -48,8 +48,10 @@ Branch / Base / Commit:
 核对当前 dev、未提交内容及已有 Worktree，优先复用对应空间。
 从确认的已提交 dev 基点准备 codex/<feature> 分支及独立 Worktree。
 准备等级：默认完整准备并展示独立前端；仅在这里明确指定较低等级时提前结束。
-由指定的一方使用bootstrap固定入口，默认传入--build --start，连续完成依赖、网页构建、私有runtime和双服务启动。
-就绪后使用回执返回的web_url打开页面并确认加载，交接准确SHA、分支、路径、环境、回执和实际地址。
+由指定的一方使用bootstrap固定入口，传入--build --start；入口自动核验并优先复用主仓库前端产物，未匹配时构建。
+连续完成依赖、网页准备、私有runtime和双服务启动。
+就绪后仅使用Codex内部browser打开回执返回的preview.web_url并确认加载；内部入口不可用时报告，不转用Brave等外部浏览器。
+交接准确SHA、分支、路径、环境、回执和实际地址。
 分别报告服务就绪、页面打开请求及实际展示结果；queued不等于页面已展示。如涉及独立Bundle仓库，分别交接准确基点。
 准备完成后，由你向对应 Feature Chat 发送开发指令并启动开发，
 同时交接原 Git Manager Chat 的准确标识，供完成后主动回传 Brief。
@@ -116,7 +118,15 @@ Branch / Base / Commit:
 
 ## 安装与构建
 
-在当前Worktree根目录执行。Feature默认通过bootstrap选择本地工具、安装／复用依赖、构建网页、准备私有CPU runtime并启动两个服务：
+在当前Worktree根目录执行。普通 `pnpm build` 成功后生成前端输入及产物指纹记录；`bootstrap --build` 自动检查主仓库产物的记录、基点、发行类型、输入、工具版本和产物完整性，一致时复制到私有workspace并跳过构建，否则执行构建。不要遍历所有workspace、依赖和历史日志。显式指定 `--frontend-assets` 时仍由调用方负责确认输入一致；仅HEAD相同或HTTP成功不足以证明有效。
+
+有匹配产物时，Manager交接准确来源和版本，使用现有固定入口直接复制到本Feature私有workspace，不共享可变运行目录，也不写入来源产物：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/bootstrap.ps1 --workspace .artifacts/workspaces/feature --service-port 32590 --comfyui-port 32588 --frontend-assets <已核对的产物绝对路径> --start
+```
+
+没有可验证的匹配产物时，才选择完整构建：
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/bootstrap.ps1 --workspace .artifacts/workspaces/feature --service-port 32590 --comfyui-port 32588 --build --start
@@ -128,7 +138,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/bootstrap.ps1 --work
 
 入口设置进程级隔离环境，使用本 Worktree 的 `.artifacts/venvs/dev`、`frontend/node_modules`、runtime 和 workspace；不借用其他 checkout 的 venv 或 node_modules，不共用可变 runtime。数据库、令牌、图、软件副本和输入输出独立；默认 workspace 与全局 MCP 不变。
 
-包缓存按`--cache-dir <已约定的长期缓存目录>`、`ASTROPHOTOFLOW_DEV_CACHE`、本Worktree的`.artifacts/cache`依次选择，bootstrap工具阶段与依赖阶段共用所选位置。由包管理器维护，不复制整套缓存、不直接修改其他Feature的缓存。托管Python安装在本空间`.artifacts/managed-python`，工具在`.artifacts/toolchains`，两者不互相链接。`--offline`明确使用离线包和元数据；缺失时根据日志补齐，不反复尝试网络。工具和权限问题在实际失败步骤处理，不改产品路径解析或全局Git配置。
+包缓存按`--cache-dir <已约定的长期缓存目录>`、`ASTROPHOTOFLOW_DEV_CACHE`、主仓库`.artifacts/cache`依次选择；独立仓库使用自己的缓存。bootstrap工具阶段与依赖阶段共用所选位置。由包管理器维护，不复制整套缓存、不直接修改其他Feature的缓存。托管Python安装在本空间`.artifacts/managed-python`，工具在`.artifacts/toolchains`，两者不互相链接。`--offline`明确使用离线包和元数据；缺失时根据日志补齐，不反复尝试网络。工具和权限问题在实际失败步骤处理，不改产品路径解析或全局Git配置。
+
+Manager在首次写入前根据当前权限范围选择执行方式：创建／切换分支会写入受保护的Git元数据；共享缓存可能位于Feature可写范围之外；缺包安装可能需要网络。已知需要权限时直接使用工具提供的审批／提权入口，不先执行必然失败的受限命令，不修改全局权限或安全设置。bootstrap先检查所选缓存及npm日志目录能否写入，失败明确报告路径，不静默换缓存；准备固定版本pnpm默认优先缓存，缺失时才联网，`--offline`仍禁止联网。
 
 `.artifacts/dev-prepare.json`是最新调用回执，包含调用标识、参数、起止时间、从bootstrap开始的总耗时、SHA、脏状态、路径、阶段日志及实际地址。开始即清除旧成功状态；日志按调用标识保存在`.artifacts/logs/dev-prepare/<run_id>`。终端Python结果输出后bootstrap还会补齐最终总耗时，交接以磁盘最终回执为准。`completed`表示本次请求完成，`ready`表示服务就绪，都不表示页面已经展示。相同输入和完整本地依赖再次准备会跳过安装。成功读取回执，失败读取对应阶段日志；不为等长命令不断搜索源码。
 
@@ -142,7 +154,7 @@ pnpm build
 
 ## 隔离运行与预览
 
-默认完整准备使用上述`--build --start`。已有经过确认的同SHA网页时，可省略`--build`或传`--frontend-assets <同HEAD的构建目录>`复用；缺少或版本不匹配时明确失败，不把unknown或其他提交当作当前版本：
+默认完整准备按上方规则选择产物复用或构建。已有经过确认的同SHA网页时，可省略`--build`或传`--frontend-assets <同HEAD的构建目录>`复用；缺少或版本不匹配时明确失败，不把unknown或其他提交当作当前版本：
 
 ```powershell
 pnpm dev:prepare --workspace .artifacts/workspaces/feature --start
@@ -153,7 +165,7 @@ pnpm build:watch --workspace .artifacts/workspaces/feature --port 32589 --strict
 
 ### 页面展示
 
-Agent读取本次调用回执，核对源码SHA、workspace、`completed`及`ready`，使用`preview.web_url`打开页面，不猜测配置端口。页面打开属于Agent交接动作，不在产品启动脚本中调用系统默认浏览器。
+Agent读取本次调用回执，核对源码SHA、workspace、`completed`及`ready`，仅使用Codex内部browser直接创建标签页并打开`preview.web_url`，不猜测配置端口。优先发现并调用内部浏览器入口，不先枚举桌面应用或选择Brave／Chrome窗口；浏览器列表为空不等于不能创建内部标签页。内部入口确实不可用时报告服务已就绪、页面未确认，不转用外部浏览器或Windows桌面自动化。页面打开属于Agent交接动作，不在产品启动脚本中调用系统默认浏览器。
 
 通过浏览器工具确认实际URL、工作台已渲染且没有停在加载或错误页，再报告展示完成。仅HTTP成功或打开请求返回`queued`时，只报告服务就绪／打开请求已提交，保留可点击地址；不能声称页面已经展示。此检查只确认预览加载，不替代功能或用户验收。
 

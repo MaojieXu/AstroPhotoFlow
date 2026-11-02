@@ -13,7 +13,7 @@
     "generate:database-baseline": "python scripts/generate_database_baseline.py",
     "benchmark:library": "python scripts/benchmark_library.py",
     "typecheck": "pnpm --dir frontend --filter @astrophotoflow/ui typecheck",
-    "build": "python scripts/build_engine.py && pnpm typecheck && pnpm --dir frontend build",
+    "build": "python scripts/frontend_build_record.py",
     "dev:prepare": "python scripts/dev_prepare.py",
     "build:watch": "python scripts/dev_frontend.py",
     "test": "pnpm --dir frontend --filter @astrophotoflow/ui test",

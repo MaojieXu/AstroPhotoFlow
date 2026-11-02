@@ -2260,3 +2260,32 @@ SQLite 旧备份 SHA256 b44fa505c54052ea17e0a6e821cc2bcb17f1988de9ed4c4237126f15
 限制与未执行项：未执行真实 Siril 科学处理、十种 live 预览的全部真实交互、全项目浏览器综合验收、sdist 无 Node 重建、全新无缓存安装或跨平台验证；这些不因测试/构建通过而宣称完成。bootstrap 首次 Python 解释器/导入路径问题仍在原 Brief 的已知限制内，本轮用进程级 venv/PYTHONPATH，不扩大修复范围。平台固定发布目录仍指向 v0.2.0-dev.2 / `5d16fb6fc10b4ee57de428d6eba522c918b1b441`，本轮配套开发 Bundle 并非新发布版本。
 
 完整临时日志曾在本 Feature `.artifacts/reports/ownership-*` 与 `.artifacts/logs/dev-prepare`；按本次授权，交付后随私有 workspace/runtime/Worktree 删除，不另行备份。已提交的本条记录和源码继续由 Git 保留。
+
+<a id="bootstrap-first-python-import-fix"></a>
+
+## 首次 bootstrap 的 Python 导入修复（2026-11-02）
+
+本轮实现并验证，未提交、合并或推送。基点 `56c376ed2ca784a18acbbd2e8ba39a778533f8a7`。首次准备由系统 Python 执行，uv 创建 venv 后父进程不会自动切换；旧入口在父进程直接导入软件模块，连无 Bundle 绑定也会失败。本轮将该阶段放入固定内部脚本 `scripts/dev_bundle_sources.py`，只由已准备的本 Worktree venv Python 执行，沿用原绑定/解除/状态读取能力和 JSON 结果，接入 `bundle-sources` 阶段日志；异常和生成失败阻止后续启动。公共准备参数与全局环境配置不变。
+
+- `tests/packaging/test_dev_prepare.py`：**34 通过**，含新增的私有 Python/参数传递、子进程失败、生成失败、非法 JSON 及无绑定/绑定/解除/已有绑定读取场景。两个真实无 pip venv 的子进程回归中，启动解释器无法导入平台，仅私有解释器安装合成软件模块，用于验证解释器隔离与传输；实际平台导入由下述完整准备验证。首次沙箱运行有一个既有 PowerShell 授权限制失败，正常执行上下文复测及最终整文件均通过，未改全局执行策略。
+- 既有 `tests/modules/software/test_development_sources.py`：**6 通过**，覆盖真实绑定、恢复安装来源、生成失败恢复和缓存/指纹行为。
+- 两份产品脚本 Ruff 通过；测试文件与基点比较无新增 lint 问题，保留既有 1 条 I001 和 3 条 PLW1510。差异空白检查通过。
+- 在独立临时 detached Worktree 中，未预置 venv、PYTHONPATH 或虚拟环境 PATH；先确认系统 Python 无法导入 AstroPhotoFlow，然后**第一次单次**执行固定 bootstrap `--build --start`。全程未人工续跑、未补 PYTHONPATH。回执 `dd575df835b445e9b3d2c2477d4d467b`，completed/ready=true；233.776 秒，其中构建 101.295 秒、私有 runtime 22.599 秒、Bundle 子进程 0.390 秒、启动 64.406 秒。包含 UI/宿主类型检查和完整前端构建。使用既有共享包缓存，不等同无缓存机器首装。
+- 临时网页 33788、领域服务 33790，浏览器实际显示素材库、画布和运行控件；构建清单记录上述基点，回执 dirty=true，使用本轮未提交脚本，不冒称已提交版本。页面加载观察不替代科学处理或完整产品验收。
+- 再次普通准备（不要求重新构建/启动）回执 `c74a5c826f9e4a099e4db046711c1746`，12.370 秒，Python/前端依赖均复用，没有 build/runtime/start 阶段。验收结束通过固定入口停止临时双服务，33788/33789/33790 无监听。
+- 正常 dev workspace 配置及全局 MCP 配置哈希前后不变；未修改独立 Siril Bundle、默认 workspace、Git 信任或重复启动保护。
+- 本任务临时 Worktree、私有 runtime 和依赖已安全删除，链接目标及共享包缓存保留；主工作区的未提交修复和上述独立证据保留。
+
+证据：`.artifacts/reports/bootstrap-import-tests-final.xml`、`bootstrap-import-first-run.json`、`bootstrap-import-repeat.json`、`bootstrap-first-run.log` 和 `bootstrap-import-fix/first-run-logs`。全新无缓存机器、Linux/WSL、首次安装实际 Siril Bundle 不在本轮验收中；绑定/解除的入口传输及既有软件行为分别由上述回归覆盖。
+
+
+### 准备权限与 pnpm 缓存最小修复（2026-11-02）
+
+针对76d2准备中的Git元数据写入、受限网络和共享npm缓存权限卡点：开发流程要求在已知权限边界下直接通过工具审批入口执行对应操作，不修改全局安全设置；bootstrap在工具准备前用自动关闭删除的临时文件检查所选缓存及npm日志目录，失败明确提示路径且不改用其他缓存；固定pnpm安装增加--prefer-offline，保留--offline严格离线语义。本轮只运行一次准备入口定向回归：36通过（6.39秒），PowerShell语法与差异空白检查通过；未重复完整构建/启动，未改变正常dev、全局MCP、ACL或独立Bundle，未提交/合并/推送。此前首次Python导入修复继续保留。
+
+### 准备流程 P0：内部 browser 与前端产物复用（2026-11-02）
+
+本轮最小改动仅更新开发流程与准备Prompt：Manager先核对已有同基点产物及前端输入/工具/环境，匹配时使用已有`--frontend-assets ... --start`，省略`--build`，无法确认才完整构建；产物继续复制到本Feature私有workspace。固定使用Codex内部browser直接打开回执`preview.web_url`，空浏览器列表不触发桌面应用枚举或Brave回退，入口不可用如实报告未确认。既有bootstrap及产物校验入口不变，未新增缓存系统。一次文档规则/相对链接及空白检查通过，未重跑构建、启动或测试套件，未测量复用后的实际耗时；修改未提交、未推送。
+# 前端产物自动复用与主仓库缓存（2026-11-02）
+
+普通构建记录输入与产物指纹；准备入口按基点、工具、输入及产物校验后复用主仓库前端，Worktree默认使用主仓库包缓存。准备与记录定向测试38项通过，Windows绝对Git指针缓存选择单项通过；普通前端构建及类型检查通过，主仓库产物指纹校验通过。真实新Worktree端到端耗时尚未验证，修改尚未提交，现有已提交dev不会自动包含本修复。

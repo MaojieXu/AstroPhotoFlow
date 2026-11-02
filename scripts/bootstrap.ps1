@@ -39,6 +39,20 @@ if ($env:OS -ne 'Windows_NT' -or -not [Environment]::Is64BitOperatingSystem) {
 Set-Location -LiteralPath $apfRoot
 $apfTools = Join-Path $apfArtifacts 'toolchains'
 $apfCache = Join-Path $apfArtifacts 'cache'
+if (-not $env:ASTROPHOTOFLOW_DEV_CACHE -and (Test-Path -LiteralPath (Join-Path $apfRoot '.git') -PathType Leaf)) {
+    $apfGitPointer = (Get-Content -LiteralPath (Join-Path $apfRoot '.git') -Raw).Trim()
+    if (-not $apfGitPointer.StartsWith('gitdir: ')) { throw 'Invalid worktree Git pointer' }
+    $apfGitTarget = $apfGitPointer.Substring(8)
+    if (-not [IO.Path]::IsPathRooted($apfGitTarget)) { $apfGitTarget = Join-Path $apfRoot $apfGitTarget }
+    $apfGitDir = [IO.Path]::GetFullPath($apfGitTarget)
+    $apfCommonFile = Join-Path $apfGitDir 'commondir'
+    if (Test-Path -LiteralPath $apfCommonFile -PathType Leaf) {
+        $apfCommonDir = [IO.Path]::GetFullPath((Join-Path $apfGitDir (Get-Content -LiteralPath $apfCommonFile -Raw).Trim()))
+        if ((Split-Path -Leaf $apfCommonDir) -eq '.git') {
+            $apfCache = Join-Path (Split-Path -Parent $apfCommonDir) '.artifacts/cache'
+        }
+    }
+}
 if ($env:ASTROPHOTOFLOW_DEV_CACHE) { $apfCache = [IO.Path]::GetFullPath($env:ASTROPHOTOFLOW_DEV_CACHE) }
 for ($apfIndex = 0; $apfIndex -lt $apfArguments.Count; $apfIndex++) {
     if ($apfArguments[$apfIndex] -eq '--cache-dir') {
@@ -55,6 +69,17 @@ for ($apfIndex = 0; $apfIndex -lt $apfArguments.Count; $apfIndex++) {
 $env:ASTROPHOTOFLOW_DEV_CACHE = $apfCache
 $apfReport['cache_dir'] = $apfCache
 Write-ApfReceipt
+foreach ($apfCacheCheck in @($apfCache, (Join-Path $apfCache 'npm/_logs'))) {
+    try {
+        New-Item -ItemType Directory -Force -Path $apfCacheCheck | Out-Null
+        $apfProbe = Join-Path $apfCacheCheck ('.apf-write-check-' + $apfRunId)
+        $apfStream = [IO.FileStream]::new($apfProbe, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write,
+            [IO.FileShare]::None, 1, [IO.FileOptions]::DeleteOnClose)
+        $apfStream.Dispose()
+    } catch {
+        throw "Cache is not writable: $apfCacheCheck. Check execution permissions or select a writable --cache-dir. $($_.Exception.Message)"
+    }
+}
 $env:UV_CACHE_DIR = Join-Path $apfCache 'uv'
 $env:UV_PYTHON_INSTALL_DIR = Join-Path $apfArtifacts 'managed-python'
 $env:UV_PYTHON_BIN_DIR = Join-Path $apfArtifacts 'python-bin'
@@ -150,7 +175,7 @@ function Expand-ApfTool([string]$File, [string]$Uri, [string]$Sha256, [string]$D
         Write-Host "Preparing pnpm $apfPnpmVersion"
         $apfNpmArguments = @($apfNpm, 'install', '--prefix', $apfPnpmDirectory, "pnpm@$apfPnpmVersion",
                             '--ignore-scripts', '--no-audit', '--no-fund', '--cache', (Join-Path $apfCache 'npm'))
-        if ($apfOffline) { $apfNpmArguments += '--offline' }
+        if ($apfOffline) { $apfNpmArguments += '--offline' } else { $apfNpmArguments += '--prefer-offline' }
         & $apfNode @apfNpmArguments
         if ($LASTEXITCODE -ne 0) { throw "pnpm preparation failed: $LASTEXITCODE" }
         $apfPnpm = Find-ApfTool 'pnpm' $apfPnpmManaged $apfPnpmVersion

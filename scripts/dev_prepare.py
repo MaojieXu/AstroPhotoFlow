@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import json
 import os
 import shutil
@@ -13,6 +14,17 @@ from pathlib import Path
 from uuid import uuid4
 
 ROOT = Path(__file__).resolve().parents[1]
+_record_spec = importlib.util.spec_from_file_location('frontend_build_record', Path(__file__).with_name('frontend_build_record.py'))
+frontend_build_record = importlib.util.module_from_spec(_record_spec)
+_record_spec.loader.exec_module(frontend_build_record)
+
+
+def main_checkout() -> Path:
+    git_dir = ROOT / '.git'
+    if git_dir.is_file():
+        git_dir = (ROOT / git_dir.read_text(encoding='utf-8').strip().removeprefix('gitdir: ')).resolve()
+    common_file = git_dir / 'commondir'
+    return (git_dir / common_file.read_text().strip()).resolve().parent if common_file.is_file() else ROOT
 
 
 def environment(workspace: Path, cache: Path | None = None, runtime: Path | None = None) -> dict[str, str]:
@@ -150,6 +162,12 @@ def prepare(report: dict) -> int:
             report["completed"] = report["preview"]["state"] == "completed"
             return 0 if report["completed"] else 1
         assets = args.frontend_assets.resolve() if args.frontend_assets else ROOT / ".artifacts/build/frontend"
+        if args.build and not args.frontend_assets:
+            candidate = main_checkout() / '.artifacts/build/frontend'
+            if frontend_build_record.matches(candidate, ROOT, report['head'], versions['node'], versions['pnpm'], env):
+                assets = candidate
+                args.build = False
+                report['frontend_reuse'] = str(candidate)
         if (args.start or args.frontend_assets) and not args.build:
             manifest = assets / "build-manifest.json"
             if not (assets / "index.html").is_file() or not manifest.is_file():
@@ -207,17 +225,18 @@ def prepare(report: dict) -> int:
             report["runtime"] = json.loads(run("runtime", cli + ["runtime", "prepare", *(["--reuse-only"] if active else [])]))
         command = cli + ["workspace", "create", "--workspace", str(workspace), "--service-port", str(args.service_port),
                          "--comfyui-port", str(args.comfyui_port)]
-        if args.start or args.build or args.frontend_assets:
+        if args.start or args.build or args.frontend_assets or report.get('frontend_reuse'):
             manifest = json.loads((assets / "build-manifest.json").read_text(encoding="utf-8"))
             report["frontend"] = {"assets": str(assets), **manifest}
             if args.build or not frontend_matches(assets, workspace / "web"):
                 command.extend(["--frontend-assets", str(assets)])
         report["workspace_result"] = json.loads(run("workspace", command))
-        from astrophotoflow.modules.software import development
-        if args.bundle_source or args.clear_bundle_source:
-            report['development_sources'] = development.configure(workspace, args.bundle_source, args.clear_bundle_source, report['python'])
-        else:
-            report['development_sources'] = {key: development.source_state(workspace, key).model_dump(mode='json') for key in development.bindings(workspace)}
+        command = [report['python'], str(ROOT / 'scripts/dev_bundle_sources.py'), '--workspace', str(workspace)]
+        for source in args.bundle_source:
+            command.extend(['--bundle-source', source])
+        for package_id in args.clear_bundle_source:
+            command.extend(['--clear-bundle-source', package_id])
+        report['development_sources'] = json.loads(run('bundle-sources', command))
         if any(value['state'] == 'failed' for value in report['development_sources'].values()):
             raise RuntimeError('Development Bundle generation failed; inspect development_sources in the receipt.')
         if args.start:
