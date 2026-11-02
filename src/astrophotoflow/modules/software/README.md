@@ -4,6 +4,10 @@
 
 Bundle SDK仅支持v2，消费真实具名图像／序列／文件输入、多输出与分析文件。契约见`contracts/bundles.py`、`contracts/software.py`，具体命令和参数声明仍在独立Bundle，不在平台生成空节点。宿主负责进程、实际观察、取消、输出范围检查；分析schema与科学输出交data公开能力检查，接入层负责组合，进程退出不等于节点结果已就绪。
 
+命令参考和专属评估资料只在Bundle维护；平台从开发／安装的Bundle或发布目录快照读取，以`SoftwareCommand`承载通用字段和Bundle自有的assessment字典。不再附带独立Siril参考副本，内容、命令数量和节点覆盖由Bundle测试验证。平台单元测试使用合成Bundle，真实Siril测试保留在集成测试。
+
+预览输入与输出由操作的`preview.input/output`声明；既有不可变快照未声明output时，仅在存在唯一FITS图像输出时确定端口，不能猜测具体名称。Bundle负责解码、脚本及采样尺寸策略，平台负责固定素材、通用FITS样本、缓存、实际进程与取消及输出范围保护。采样参数变化会使缓存失效；新缓存使用`bundle-sample`标识，旧缓存不迁移。修改中的Bundle通过独立开发绑定联调，不改写已有tag的发布快照。
+
 操作声明的可选 `automatic_result_preview` 布尔值允许该操作成为自动结果计算目标和依赖，缺省为false；节点目录提供同名能力。显式自动目标不改变原生输出节点身份，整条依赖链均须允许自动执行。主进程正常退出后最多观察已知进程树5秒，确认停止再发布完整结果；仍活动或无法核实时保留unknown，不据此重跑。
 
 开发预览可用进程级`ASTROPHOTOFLOW_BUNDLE_CATALOG`读取独立目录快照，默认仍使用包内固定发布目录。覆盖不会更新默认workspace、全局MCP或正常dev；同样必须固定新tag与SHA、走现有安装计划／网页确认及实际原生加载。快照导出要求干净已提交checkout且HEAD与tag一致，不能把脏工作区冒充旧SHA。操作见[开发流程](../../../../docs/development/README.md)。

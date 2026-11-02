@@ -1,5 +1,26 @@
 # 需求、实现与验证矩阵
 
+<a id="file-ownership-map"></a>
+
+### 文件归属与读写关系核对（2026-11-01）
+
+- 按用户限定，只核对平台、前端、MCP／CLI、Bundle的源码、受跟踪生成文件、构建产物、安装副本、workspace和缓存；结论统一维护在[文件归属与读写关系](../architecture/repository-layout.md)，开发入口仅链接，不另建重复清单。
+- 静态核对构建／打包、workspace网页复制、runtime解压和启动参数、配置选择、MCP生命周期与CLI传输、Bundle生成／导出／安装／开发绑定、节点同步、版本缓存、素材／预览缓存与原生浏览器草稿。开发Python实际导入路径为本Worktree的src，editable关联一致。
+- 本轮仅修改上述文档和开发入口链接；此前Siril清理的未提交实现及隔离Bundle保持原样。未启停服务、修改绑定／安装／全局注册、清理缓存或读取令牌；未执行构建、生成或测试套件。相对文件链接、代码依据和文档差异检查结果在`.artifacts/reports/file-ownership`。
+- 本记录证明文件归属说明已按当前代码核对，不证明此前实现已集成、发布，或当前进程／外部MCP已加载最新版本。
+
+<a id="siril-bundle-ownership-cleanup"></a>
+
+### 平台与 Siril Bundle 归属清理（2026-11-02）
+
+- 平台基点`f8c613633148e365839bcc0c1c627a7c42e266ca`，分支`codex/equipment-management-final`；用户已授权整理本地待审提交和回传Brief，准确冻结SHA见最终Brief。不合并、推送或发布。
+- 独立Bundle从干净dev克隆到本Feature的`.artifacts/bundles/AstroPhotoFlow-Siril`，分支`codex/siril-decoupling`，基点`570504cd593d923726ac76b9775a812e371fdc03`。manifest仍为Siril1.4.4／Bundle0.2.0-dev.2，基点没有精确tag；修改为未发布待审内容，准确冻结SHA见最终Brief，不代表现有v0.2.0-dev.2。原Bundle仓库与安装副本未改。
+- 删除平台三个旧Siril参考JSON及旧读取函数。核对确认命令资料与Bundle语义一致；评估资料覆盖同一组199个命令、保留全部评估字段，Bundle版本另有更新后的状态与历史证据。Siril内容验证归Bundle，平台发行检查只核对通用Bundle资源与契约。
+- 命令查询按有效Bundle软件版本读取，公共模型改为SoftwareCommand及通用assessment字典；预览按声明读取端口，Bundle十个live操作及生成器增加output声明。旧不可变目录未重写；未声明output时只允许唯一FITS图像输出，歧义明确失败。
+- 平台样本、缓存及宿主显示改用Bundle命名；输入与输出颜色布局取操作声明，采样缓存身份覆盖操作与参数。旧缓存不复用、不转换；按受管manifest目录保留其清理归属和启动恢复。平台单元测试用独立合成目录；新增非Siril包名／版本／端口、缺失资料、版本冲突、输出缺失、范围保护、取消、原件变化及缓存归属用例。新增／调整的测试均未执行。
+- 已完成：OpenAPI／前端六份契约与97项MCP离线目录生成、UI包类型检查、宿主类型检查及前端构建、Python语法与Bundle声明检查、产品修改及新增测试的Ruff检查。CLI脚本无参数变化，生成后内容不变。MCP生成初次受沙箱asyncio socketpair阻塞，沙箱外同脚本生成成功；未连接业务服务。
+- 未执行：测试套件、独立打包安装、真实Siril处理、浏览器验收、跨版本升级。已有测试文件保留的历史lint不作为本轮通过项。当前服务未重启，运行界面不代表本轮修改已加载。证据、构建日志及两仓库差异见`.artifacts/reports/siril-decoupling`。
+
 <a id="modernization-g7-browser-closure"></a>
 
 ### G7旧浏览器入口收尾及G1—G7重新复核（2026-11-01）

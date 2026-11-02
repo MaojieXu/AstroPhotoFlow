@@ -17,14 +17,14 @@ import type {
   SoftwarePackage,
   SoftwarePackageDetails,
   SoftwarePreparation,
-  SirilCommand
+  SoftwareCommand
 } from './contracts'
 export { ApiClientError } from '../../../core/api/errors'
 
 export interface SoftwareClient {
   listReleases(packageId: string, signal?: AbortSignal): Promise<SoftwareReleaseListing>
   listPackages(signal?: AbortSignal): Promise<SoftwarePackage[]>
-  listCommands(packageId: string, version: string, signal?: AbortSignal): Promise<SirilCommand[]>
+  listCommands(packageId: string, version: string, signal?: AbortSignal): Promise<SoftwareCommand[]>
   getPackage(
     packageId: string,
     operationId?: string,

@@ -10,8 +10,14 @@ from uuid import UUID, uuid4
 
 from astrophotoflow.contracts.software import BundlePreviewRequest
 from astrophotoflow.core.errors import ApiError
-from astrophotoflow.modules.data.public import direct_fits_image, prepare_siril_sample
-from astrophotoflow.modules.software.public import get_operation, get_package, preview_operation, validate_parameters
+from astrophotoflow.modules.data.public import direct_fits_image, prepare_bundle_sample
+from astrophotoflow.modules.software.public import (
+    get_operation,
+    get_package,
+    get_preview_definition,
+    preview_operation,
+    validate_parameters,
+)
 
 
 class BundlePreviews:
@@ -63,10 +69,12 @@ class BundlePreviews:
 
             package = get_package(self.settings, body.package_id)
             operation = get_operation(self.settings, body.package_id, package.effective_version, body.operation_id)
-            layout = next(item.colour_layout for item in operation.inputs if item.name == 'image')
+            preview = get_preview_definition(self.settings, body.package_id, body.operation_id)
+            layout = next(item.colour_layout for item in operation.inputs if item.name == preview.input)
             decoder_key = json.dumps([body.package_id, package.effective_version, package.effective_bundle_commit,
-                package.development_source.fingerprint if package.development_source else None, body.parameters.get('runtime', '{}')], sort_keys=True)
-            work = self.executor.submit(prepare_siril_sample, self.database, self.settings, self.cache, body, checkpoint, decoder_key, layout)
+                package.development_source.fingerprint if package.development_source else None,
+                operation.content_token, body.operation_id, body.parameters], sort_keys=True)
+            work = self.executor.submit(prepare_bundle_sample, self.database, self.settings, self.cache, body, checkpoint, decoder_key, layout)
             sample = None
             directory = None
             future = None
@@ -74,11 +82,13 @@ class BundlePreviews:
             try:
                 sample = await asyncio.shield(asyncio.wrap_future(work))
                 directory = sample.folder / str(uuid4())
-                if sample.path != sample.folder / "linear.fit":
+                if not sample.path.resolve().is_relative_to(sample.folder.resolve()):
                     result = await preview_operation(self.settings, sample.path, directory, body.parameters, package_id=body.package_id, operation_id=body.operation_id, prepare_sample=True, preview_max_edge=body.preview_max_edge)
                 else:
                     result = await preview_operation(self.settings, sample.path, directory, body.parameters, package_id=body.package_id, operation_id=body.operation_id)
-                future = self.executor.submit(direct_fits_image, result, None, body.preview_max_edge, display_balance=body.display_balance)
+                output_layout = next(item.colour_layout for item in operation.outputs if item.name == preview.output)
+                future = self.executor.submit(direct_fits_image, result, None, body.preview_max_edge,
+                                              colour_layout=output_layout, display_balance=body.display_balance)
                 image = await asyncio.shield(asyncio.wrap_future(future))
                 stream = BytesIO()
                 image.save(stream, format="PNG")

@@ -3,7 +3,7 @@ import os
 from importlib.resources import files
 from pathlib import Path
 
-from astrophotoflow.contracts.bundles import BundleManifest
+from astrophotoflow.contracts.bundles import BundleManifest, BundlePreview
 from astrophotoflow.contracts.localization import CapabilityDisplay
 from astrophotoflow.contracts.nodes import NodeDefinition
 from astrophotoflow.contracts.software import SoftwareOperation
@@ -49,6 +49,12 @@ def read_bundle(root: Path):
         operation = SoftwareOperation.model_validate(dict(entry['operation'], content_token='', ready=False, reason=None))
         if operation.package_id != manifest.package_id or operation.version != manifest.software_version:
             raise ValueError('Bundle operation identity mismatch.')
+        if entry.get('preview') is not None:
+            preview = BundlePreview.model_validate(entry['preview'])
+            if not any(item.name == preview.input and item.data_kind == 'image' for item in operation.inputs):
+                raise ValueError('Bundle preview input is not a declared image input.')
+            if preview.output is not None and not any(item.name == preview.output and item.type == 'APF_SCIENCE' and 'fits' in item.formats for item in operation.outputs):
+                raise ValueError('Bundle preview output is not a declared FITS image output.')
     nodes = []
     for name in manifest.nodes:
         value = json.loads(contained(root, name).read_text(encoding='utf-8'))

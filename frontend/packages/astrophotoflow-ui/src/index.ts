@@ -42,7 +42,7 @@ export type {
   SoftwarePreparation,
   SoftwareRelease,
   SoftwareReleaseListing,
-  SirilCommand
+  SoftwareCommand
 } from './modules/software'
 
 export { createPlatformClient } from './core/api/client'

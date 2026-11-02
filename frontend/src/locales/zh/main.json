@@ -293,7 +293,7 @@
       "contentHash": "内容哈希",
       "fixedFile": "固定文件版本"
     },
-    "siril": {
+    "bundlePreview": {
       "quickPreview": "快速预览",
       "connectSource": "连接素材库数据节点以显示实时预览。",
       "updating": "正在更新预览…"

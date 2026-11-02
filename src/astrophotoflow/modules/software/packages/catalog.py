@@ -6,27 +6,17 @@ from astrophotoflow.modules.software.metadata import contained, read_bundle, rea
 """Read fixed package, operation and command capabilities."""
 import hashlib
 import json
-from importlib.resources import files
-from typing import Any
 
 import psutil
 
 from astrophotoflow.contracts.bundles import BundleManifest
-from astrophotoflow.contracts.software import SirilCommand, SoftwarePackage, SoftwarePackageState, SoftwarePreparation
+from astrophotoflow.contracts.software import SoftwareCommand, SoftwarePackage, SoftwarePackageState, SoftwarePreparation
 from astrophotoflow.core.config import Settings
 from astrophotoflow.core.errors import ApiError
 from astrophotoflow.core.localization import error_message, workspace_locale
 from astrophotoflow.modules.software import bundles, development
 from astrophotoflow.modules.software.packages.maintenance import PACKAGE_LOCKS
 from astrophotoflow.modules.software.packages.state import state_from_package, state_path, write_package_state
-
-
-def read_vendor_resource(name: str) -> str:
-    return files("astrophotoflow").joinpath("vendor", name).read_text(encoding="utf-8-sig")
-
-
-def siril_manifest() -> dict[str, Any]:
-    return json.loads(read_vendor_resource("siril-1.4.4-manifest.json"))
 
 
 def get_package(settings: Settings, package_id: str) -> SoftwarePackage:
@@ -161,45 +151,39 @@ def prepare_package(settings, package_id):
     return SoftwarePreparation(package=get_package(settings, package_id), user_action=None, ui_kind=None, ui_target=None)
 
 
-def command_rows(command_bytes, assessment_bytes, expected_hash=None):
+def command_rows(command_bytes, assessment_bytes=None) -> list[SoftwareCommand]:
     commands = json.loads(command_bytes)
-    assessments = json.loads(assessment_bytes)
-    if assessments["package_id"] != "siril" or assessments["version"] != "1.4.4":
-        raise ValueError("Siril command assessments are not bound to the fixed package version.")
-    actual_hash = hashlib.sha256(command_bytes).hexdigest()
-    if assessments["source_commands_file_sha256"].casefold() != actual_hash or expected_hash is not None and actual_hash != expected_hash.casefold():
-        raise ValueError("Siril command assessments do not match the official command catalog.")
-    assessment_rows = assessments["commands"]
-    assessment_by_command = {item["command"]: item["assessment"] for item in assessment_rows}
-    command_names = {item["command"] for item in commands}
-    if len(assessment_by_command) != len(assessment_rows) or set(assessment_by_command) != command_names:
-        raise ValueError("Siril command assessment entries must match the official command catalog exactly.")
-    return [
-        SirilCommand.model_validate({**item, "assessment": assessment_by_command[item["command"]]})
-        for item in commands
-    ]
+    assessments = json.loads(assessment_bytes)["commands"] if assessment_bytes is not None else []
+    by_command = {row["command"]: row["assessment"] for row in assessments}
+    if len(by_command) != len(assessments):
+        raise ValueError("Duplicate command assessments in Bundle reference.")
+    rows = [SoftwareCommand.model_validate({**item, "assessment": by_command.get(item["command"], item.get("assessment", {}))})
+            for item in commands]
+    names = {row.command for row in rows}
+    if len(names) != len(rows) or not set(by_command).issubset(names):
+        raise ValueError("Invalid command identities in Bundle reference.")
+    return rows
 
 
-def list_siril_commands() -> list[SirilCommand]:
-    return get_command_catalog('siril', '1.4.4')
-
-
-def get_command_catalog(package_id: str, version: str, settings=None) -> list[SirilCommand]:
-    if package_id != "siril" or version != "1.4.4":
-        raise ApiError(404, "RESOURCE_NOT_FOUND", "未找到请求的软件命令目录。", message_key='the_requested_software_command_reference_was_not_found')
+def get_command_catalog(package_id: str, version: str, settings=None) -> list[SoftwareCommand]:
     if settings is not None:
+        manifest, _, _ = bundles.metadata(settings.workspace, package_id)
         root = development.source_root(settings.workspace, package_id)
-        if root.is_dir():
-            manifest, _, _ = bundles.metadata(settings.workspace, package_id)
-            if manifest.commands is None or manifest.assessments is None:
-                raise ApiError(404, 'RESOURCE_NOT_FOUND', '已安装 Bundle 没有提供命令参考目录。', message_key='the_installed_bundle_does_not_provide_a_command_reference')
-            return command_rows(contained(root, manifest.commands).read_bytes(),
-                                 contained(root, manifest.assessments).read_bytes())
-    release = bundles.release(package_id)
-    manifest = release['manifest']
-    references = release['reference_files']
-    return command_rows(references[manifest['commands']].encode('utf-8'), references[manifest['assessments']].encode('utf-8'))
-
+    else:
+        manifest = BundleManifest.model_validate(bundles.release(package_id)['manifest'])
+        root = None
+    if version != manifest.software_version:
+        raise ApiError(404, 'RESOURCE_NOT_FOUND', '未找到请求的软件命令目录。', message_key='the_requested_software_command_reference_was_not_found')
+    if manifest.commands is None:
+        raise ApiError(404, 'RESOURCE_NOT_FOUND', 'Bundle 没有提供命令参考目录。', message_key='the_installed_bundle_does_not_provide_a_command_reference')
+    if root is not None and root.is_dir():
+        command_bytes = contained(root, manifest.commands).read_bytes()
+        assessment_bytes = contained(root, manifest.assessments).read_bytes() if manifest.assessments else None
+    else:
+        references = bundles.release(package_id)['reference_files']
+        command_bytes = references[manifest.commands].encode('utf-8')
+        assessment_bytes = references[manifest.assessments].encode('utf-8') if manifest.assessments else None
+    return command_rows(command_bytes, assessment_bytes)
 
 
 def list_package_ids() -> list[str]:

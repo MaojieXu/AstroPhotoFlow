@@ -352,29 +352,10 @@ class ConfirmSoftwareEvent(StrictModel):
     operation_id: UuidInput
 
 
-class SirilCommandAssessment(StrictModel):
-    parameter_details: str
-    structured_parameter_defaults_ranges: str
-    single_image_sequence_context: str
-    input_output_semantics: str
-    headless_status: str
-    dependencies: str
-    security_risk: str
-    semantic_review_status: str
-    node_definition_status: str
-    node_definition_reason: str
-    node_generation_status: str
-    node_generation_reason: str
-    registry_load_status: str
-    registry_load_reason: str
-    runtime_test_status: str
-    runtime_test_reason: str
-
-
-class SirilCommand(StrictModel):
+class SoftwareCommand(StrictModel):
     command: str
     scriptable: bool
     syntax: str
     description: str
     url: str
-    assessment: SirilCommandAssessment
+    assessment: dict[str, JsonValue] = Field(default_factory=dict)

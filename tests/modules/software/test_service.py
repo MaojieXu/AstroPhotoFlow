@@ -16,7 +16,7 @@ from astrophotoflow.interfaces.http.app import create_app
 from astrophotoflow.interfaces.http.software import get_software_packages, router as software_router
 from astrophotoflow.contracts.native import NativePageConfirmSoftwareEvent, NativePageEvent
 from astrophotoflow.modules.software.public import (
-    get_bundled_definitions, get_command_catalog, get_operation, list_packages, list_siril_commands,
+    get_bundled_definitions, get_operation, list_packages,
 )
 
 
@@ -111,52 +111,6 @@ def test_background_install_error_localizes_outer_message_and_nested_reason(tmp_
     asyncio.run(scenario())
 
 
-def test_siril_command_catalog_matches_its_sourcesiril_manifest():
-    from importlib.resources import files
-
-    from astrophotoflow.modules.software.packages.catalog import siril_manifest
-    import hashlib
-    import json
-
-    manifest = siril_manifest()
-    commands = list_siril_commands()
-    assert commands == get_command_catalog("siril", "1.4.4")
-    names = [command.command for command in commands]
-    assert len(names) == manifest["indexed_commands"]
-    assert len(set(names)) == len(names)
-    assert all(command.syntax and command.url for command in commands)
-    assert sum(command.scriptable for command in commands) == manifest["scriptable_commands"]
-    assert sum(not command.scriptable for command in commands) == manifest["non_scriptable_commands"]
-    assert all(command.assessment.semantic_review_status for command in commands)
-    assert all(command.assessment.headless_status for command in commands)
-    assert all(command.assessment.security_risk for command in commands)
-    assessment_bytes = files("astrophotoflow").joinpath("vendor", manifest["command_assessments_file"]).read_bytes()
-    assert hashlib.sha256(assessment_bytes).hexdigest().upper() == manifest["command_assessments_file_sha256"].upper()
-    assessments = json.loads(assessment_bytes)
-    assert assessments["source_commands_file_sha256"].upper() == manifest["commands_file_sha256"].upper()
-    assert {item["command"] for item in assessments["commands"]} == set(names)
-    assert all(command.assessment.headless_status and command.assessment.security_risk for command in commands)
-    pyscript = next(command for command in commands if command.command == "pyscript")
-    assert "High" in pyscript.assessment.security_risk
-    assert "Python" in pyscript.assessment.security_risk
-    assert pyscript.assessment.node_definition_status == "implemented_executable"
-    published = json.loads(files("astrophotoflow").joinpath("vendor/bundle-catalog.json").read_text(encoding="utf-8"))["siril"]
-    assert any(node["execution"]["operation_id"] == "pyscript" for node in published["nodes"])
-
-
-def test_siril_command_catalog_is_bound_to_package_version():
-    from astrophotoflow.modules.software.packages.catalog import siril_manifest
-
-    commands = get_command_catalog("siril", "1.4.4")
-    assert len(commands) == siril_manifest()["indexed_commands"]
-    with pytest.raises(ApiError) as wrong_version:
-        get_command_catalog("siril", "1.4.3")
-    assert wrong_version.value.code == "RESOURCE_NOT_FOUND"
-    with pytest.raises(ApiError) as wrong_package:
-        get_command_catalog("other", "1.4.4")
-    assert wrong_package.value.code == "RESOURCE_NOT_FOUND"
-
-
 def test_siril_package_list_is_read_only_and_reports_platform_state(tmp_path):
     settings = Settings("127.0.0.1", 8190, tmp_path, (), workspace=tmp_path)
     first = list_packages(settings)
@@ -200,7 +154,7 @@ def test_siril_package_reads_current_state_and_uses_version_in_token(tmp_path):
 def test_siril_operation_and_definition_are_version_bound(tmp_path):
     settings = Settings("127.0.0.1", 8190, tmp_path, (), workspace=tmp_path)
     operation = get_operation(settings, "siril", "1.4.4", "autostretch")
-    assert operation.syntax == "autostretch [-linked] [shadowsclip [targetbg]]"
+    assert operation.syntax == "fixture-operation"
     assert operation.ready is False
     assert operation.cancel_supported is True
     assert operation.inputs[0].supports_hdu is False
@@ -211,7 +165,7 @@ def test_siril_operation_and_definition_are_version_bound(tmp_path):
     definition = get_bundled_definitions(settings, "siril", "1.4.4")[0]
     assert definition["execution"]["operation_id"] == operation.operation_id
     assert definition["execution"]["package_id"] == operation.package_id
-    assert len(get_bundled_definitions(settings, "siril", "1.4.4")) == 160
+    assert len(get_bundled_definitions(settings, "siril", "1.4.4")) == 2
     with pytest.raises(ApiError) as missing:
         get_operation(settings, "siril", "1.4.3", "autostretch")
     assert missing.value.status_code == 404
@@ -278,7 +232,7 @@ def test_install_request_builds_replaceable_plan_without_side_effects(tmp_path, 
     body = SoftwareInstallRequest(version="1.4.4", package_token=package.package_token)
     first = app.state.request_software_action("siril", body)
     assert first.state == "awaiting_confirmation"
-    assert "AstroPhotoFlow-Siril.git @ v0.2.0-dev.2" in first.plan.source
+    assert "fixture-bundle.git @ v0.2.0-dev.2" in first.plan.source
     assert first.plan.restart_required is False
     assert first.plan.node_changes[0].action == "create"
     assert "operation_id=" + str(first.operation_id) in first.confirmation_url

@@ -14,12 +14,12 @@ import GraphView from '@/views/GraphView.vue'
 import { useCanvasDataSession } from '../canvas/session'
 import { useApp } from '@/scripts/appInstance'
 import { registerDataReferenceDisplay } from '../canvas/dataReferenceDisplay'
-import { registerSirilPreviewDisplay } from '../results/sirilPreviewDisplay'
+import { registerBundlePreviewDisplay } from '../results/bundlePreviewDisplay'
 import { registerBundleResultDisplay } from '../results/bundleDisplay'
 import { useAutomaticResults } from '../results/automatic'
 
 registerDataReferenceDisplay(useApp())
-const disposeBundleDisplay = registerSirilPreviewDisplay(useApp())
+const disposeBundleDisplay = registerBundlePreviewDisplay(useApp())
 if (disposeBundleDisplay) onBeforeUnmount(disposeBundleDisplay)
 registerBundleResultDisplay(useApp())
 useCanvasDataSession()

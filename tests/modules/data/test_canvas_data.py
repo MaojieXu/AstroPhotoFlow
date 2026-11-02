@@ -134,7 +134,7 @@ def test_native_siril_inputs_resolve_complete_fixed_members_and_preserve_gain_ze
 
 def test_live_siril_sample_reuses_linear_data_and_participates_in_cleanup_protection(canvas_library):
     from astrophotoflow.contracts.software import BundlePreviewRequest
-    from astrophotoflow.modules.data.public import prepare_siril_sample
+    from astrophotoflow.modules.data.public import prepare_bundle_sample
     from astrophotoflow.modules.data.media.ownership import assert_no_preview_jobs, owned_preview_locations
 
     client, database, _, versions, _, _ = canvas_library
@@ -152,7 +152,7 @@ def test_live_siril_sample_reuses_linear_data_and_participates_in_cleanup_protec
     body = BundlePreviewRequest(reference={"kind": "asset_version", "asset_version_id": versions[0], "selection": {"kind": "whole_file"}},
                               member_index=0, consumer_id=uuid4(), generation=1, package_id="siril", operation_id="autostretch", parameters={"targetbg":0})
     cache = client.app.state.media_views.cache
-    sample = prepare_siril_sample(database, settings, cache, body, lambda: None)
+    sample = prepare_bundle_sample(database, settings, cache, body, lambda: None)
     try:
         np.testing.assert_array_equal(fits.getdata(sample.path), pixels)
         with database.read_session() as session:
@@ -160,11 +160,11 @@ def test_live_siril_sample_reuses_linear_data_and_participates_in_cleanup_protec
                 assert_no_preview_jobs(session, [versions[0]])
             assert active.value.code == "PREVIEW_ACTIVE"
             row = session.get(Preview, sample.row_id)
-            assert any(path.endswith("linear.fit") for path in owned_preview_locations(row, settings))
+            assert any(path.endswith("sample.fit") for path in owned_preview_locations(row, settings))
         stamp = sample.path.stat().st_mtime_ns
     finally:
         sample.close()
-    second = prepare_siril_sample(database, settings, cache, body.model_copy(update={"generation": 2, "targetbg": 0.4}), lambda: None)
+    second = prepare_bundle_sample(database, settings, cache, body.model_copy(update={"generation": 2, "targetbg": 0.4}), lambda: None)
     try:
         assert second.path.stat().st_mtime_ns == stamp
         assert second.row_id == sample.row_id

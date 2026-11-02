@@ -104450,6 +104450,17 @@
                 "input": {
                   "type": "string"
                 },
+                "output": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
+                },
                 "max_edge": {
                   "const": 1024,
                   "default": 1024,
@@ -105305,6 +105316,17 @@
                       },
                       "input": {
                         "type": "string"
+                      },
+                      "output": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "default": null
                       },
                       "max_edge": {
                         "const": 1024,
@@ -106918,75 +106940,7 @@
                 "type": "string"
               },
               "assessment": {
-                "additionalProperties": false,
-                "properties": {
-                  "parameter_details": {
-                    "type": "string"
-                  },
-                  "structured_parameter_defaults_ranges": {
-                    "type": "string"
-                  },
-                  "single_image_sequence_context": {
-                    "type": "string"
-                  },
-                  "input_output_semantics": {
-                    "type": "string"
-                  },
-                  "headless_status": {
-                    "type": "string"
-                  },
-                  "dependencies": {
-                    "type": "string"
-                  },
-                  "security_risk": {
-                    "type": "string"
-                  },
-                  "semantic_review_status": {
-                    "type": "string"
-                  },
-                  "node_definition_status": {
-                    "type": "string"
-                  },
-                  "node_definition_reason": {
-                    "type": "string"
-                  },
-                  "node_generation_status": {
-                    "type": "string"
-                  },
-                  "node_generation_reason": {
-                    "type": "string"
-                  },
-                  "registry_load_status": {
-                    "type": "string"
-                  },
-                  "registry_load_reason": {
-                    "type": "string"
-                  },
-                  "runtime_test_status": {
-                    "type": "string"
-                  },
-                  "runtime_test_reason": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "parameter_details",
-                  "structured_parameter_defaults_ranges",
-                  "single_image_sequence_context",
-                  "input_output_semantics",
-                  "headless_status",
-                  "dependencies",
-                  "security_risk",
-                  "semantic_review_status",
-                  "node_definition_status",
-                  "node_definition_reason",
-                  "node_generation_status",
-                  "node_generation_reason",
-                  "registry_load_status",
-                  "registry_load_reason",
-                  "runtime_test_status",
-                  "runtime_test_reason"
-                ],
+                "additionalProperties": {},
                 "type": "object"
               }
             },
@@ -106995,8 +106949,7 @@
               "scriptable",
               "syntax",
               "description",
-              "url",
-              "assessment"
+              "url"
             ],
             "type": "object"
           },

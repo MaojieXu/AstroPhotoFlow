@@ -5,7 +5,7 @@ export {
   zPendingSoftwareAction as pendingSoftwareActionSchema,
   zSoftwarePackageDetails as softwarePackageDetailsSchema,
   zSoftwarePreparation as softwarePreparationSchema,
-  zSirilCommand as sirilCommandSchema,
+  zSoftwareCommand as softwareCommandSchema,
   zSoftwareInstallRequest as softwareInstallRequestSchema,
   zSoftwareRelease as softwareReleaseSchema,
   zSoftwareReleaseListing as softwareReleaseListingSchema
@@ -15,7 +15,7 @@ export type {
   PendingSoftwareAction,
   SoftwarePackageDetails,
   SoftwarePreparation,
-  SirilCommand,
+  SoftwareCommand,
   SoftwareInstallRequest,
   SoftwareRelease,
   SoftwareReleaseListing

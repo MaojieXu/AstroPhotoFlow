@@ -202,7 +202,7 @@ onBeforeUnmount(() => api.removeEventListener('graphChanged', changed))
       variant="textonly"
       :aria-expanded="expanded"
       @click="expanded = !expanded"
-      >{{ t('astrophotoflow.siril.quickPreview') }}</Button
+      >{{ t('astrophotoflow.bundlePreview.quickPreview') }}</Button
     >
     <template v-if="expanded">
       <PreviewControls v-model:max-edge="maxEdge" v-model:balance="balance" />
@@ -230,8 +230,8 @@ onBeforeUnmount(() => api.removeEventListener('graphChanged', changed))
             failure ||
             t(
               phase === 'idle'
-                ? 'astrophotoflow.siril.connectSource'
-                : 'astrophotoflow.siril.updating'
+                ? 'astrophotoflow.bundlePreview.connectSource'
+                : 'astrophotoflow.bundlePreview.updating'
             )
           }}</span>
           <Button

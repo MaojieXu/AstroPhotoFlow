@@ -30,10 +30,9 @@ def check_wheel(path: Path) -> None:
             "core/database/alembic/versions/0001_baseline.py",
             "comfyui/proxy.py", "core/files.py", "web/index.html", "vendor/comfyui-source.json", "vendor/http-routes.json",
             "vendor/comfyui-0.42.0.zip", "vendor/comfyui-0.42.0-windows-py312.lock",
-            "vendor/siril-1.4.4-commands.json", "vendor/siril-1.4.4-manifest.json",
-            "vendor/siril-1.4.4-command-assessments.json",
             "vendor/bundle-catalog.json",
         }
+        assert not any(name.startswith(prefix + "vendor/siril-") for name in names)
         missing_resources = sorted({prefix + name for name in required} - names)
         assert not missing_resources, f"Missing product resources in {path.name}: {missing_resources}"
         product_python = {
@@ -124,7 +123,7 @@ import sys
 import astrophotoflow
 from astrophotoflow.core.database.schema import SCHEMA_REVISION, upgrade_database, current_revision
 from astrophotoflow.core.config import Settings
-from astrophotoflow.modules.software.public import get_command_catalog, list_siril_commands
+from astrophotoflow.modules.software.public import get_command_catalog
 import astrophotoflow.comfyui
 import astrophotoflow.interfaces.mcp.server
 assert 'server' not in sys.modules
@@ -133,36 +132,17 @@ assert importlib.util.find_spec('astrophotoflow_service') is None
 assert files('astrophotoflow').joinpath('web/index.html').is_file()
 assert importlib.util.find_spec('astrophotoflow.backend') is None
 vendor = files('astrophotoflow').joinpath('vendor')
-catalog_manifest = json.loads(vendor.joinpath('siril-1.4.4-manifest.json').read_text(encoding='utf-8'))
-catalog_bytes = vendor.joinpath('siril-1.4.4-commands.json').read_bytes()
-catalog = json.loads(catalog_bytes)
-assessment_bytes = vendor.joinpath(catalog_manifest['command_assessments_file']).read_bytes()
-assessments = json.loads(assessment_bytes)
-assert hashlib.sha256(assessment_bytes).hexdigest().upper() == catalog_manifest['command_assessments_file_sha256'].upper()
-assert assessments['package_id'] == catalog_manifest['package_id']
-assert assessments['version'] == catalog_manifest['version']
-assert assessments['source_commands_file_sha256'].upper() == catalog_manifest['commands_file_sha256'].upper()
-assessment_names = [item['command'] for item in assessments['commands']]
-assert len(assessment_names) == catalog_manifest['command_assessment_records']
-assert len(assessment_names) == len(set(assessment_names))
-assert set(assessment_names) == {item['command'] for item in catalog}
-assessment_fields = {'parameter_details', 'structured_parameter_defaults_ranges', 'single_image_sequence_context', 'input_output_semantics', 'headless_status', 'dependencies', 'security_risk', 'semantic_review_status', 'node_definition_status', 'node_definition_reason', 'node_generation_status', 'node_generation_reason', 'registry_load_status', 'registry_load_reason', 'runtime_test_status', 'runtime_test_reason'}
-assert all(set(item['assessment']) == assessment_fields and all(isinstance(value, str) and value for value in item['assessment'].values()) for item in assessments['commands'])
-node_definitions = json.loads(vendor.joinpath('bundle-catalog.json').read_text(encoding='utf-8'))['siril']['nodes']
-catalog_names = [item['command'] for item in catalog]
-assert hashlib.sha256(catalog_bytes).hexdigest().upper() == catalog_manifest['commands_file_sha256'].upper()
-assert len(catalog_names) == catalog_manifest['indexed_commands']
-assert len(catalog_names) == len(set(catalog_names))
-assert sum(item['scriptable'] is True for item in catalog) == catalog_manifest['scriptable_commands']
-assert sum(item['scriptable'] is False for item in catalog) == catalog_manifest['non_scriptable_commands']
-assert all(item['scriptable'] is not None for item in catalog)
-assert isinstance(node_definitions, list) and node_definitions
+from astrophotoflow.contracts.bundles import BundleManifest
 from astrophotoflow.contracts.nodes import NodeDefinition
-validated_definitions = [NodeDefinition.model_validate(item) for item in node_definitions]
-assert len(validated_definitions) == len(node_definitions)
-public_commands = list_siril_commands()
-assert public_commands == get_command_catalog('siril', '1.4.4')
-assert len(public_commands) == catalog_manifest['indexed_commands']
+from astrophotoflow.modules.software.metadata import catalog
+for package_id, release in catalog().items():
+    manifest = BundleManifest.model_validate(release['manifest'])
+    assert package_id == manifest.package_id
+    for definition in release['nodes']:
+        NodeDefinition.model_validate(definition)
+    if manifest.commands is not None:
+        commands = get_command_catalog(package_id, manifest.software_version)
+        assert len({row.command for row in commands}) == len(commands)
 from astrophotoflow.modules.data.persistence import schema_metadata
 metadata = schema_metadata()
 assert 'capture_profile' not in metadata.tables

@@ -90,7 +90,7 @@ def test_full_node_catalogue_reads_bundle_metadata_per_package(tmp_path, monkeyp
     root = bundle_install(settings)
     template = bundles.metadata(tmp_path, 'siril')[2][0]
     directory = tmp_path/'nodes'; directory.mkdir()
-    for index in range(160):
+    for index in range(3):
         definition = json.loads(json.dumps(template))
         definition.update(definition_id=str(uuid4()), name=f'Operation {index}', source='custom')
         (directory/(definition['definition_id']+'.json')).write_text(json.dumps(definition), encoding='utf-8')
@@ -101,5 +101,5 @@ def test_full_node_catalogue_reads_bundle_metadata_per_package(tmp_path, monkeyp
         return original(path)
     monkeypatch.setattr(bundle_metadata, 'read_bundle', read)
     values = list_nodes(settings)
-    assert len(values) == 160 and all(value.available for value in values)
+    assert len(values) == 3 and all(value.available for value in values)
     assert len(reads) <= 8

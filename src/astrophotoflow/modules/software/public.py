@@ -1,5 +1,5 @@
 """Explicit software capabilities; implementations have one owning module."""
-from .execution.preview import preview_operation
+from .execution.preview import get_preview_definition, preview_operation
 from .execution.records import (
     find_software_call,
     list_software_call_records,
@@ -22,7 +22,6 @@ from .packages.catalog import (
     list_operations,
     list_packages,
     list_releases,
-    list_siril_commands,
     prepare_package,
     resolve_release,
     set_package_node_definition_ids,
@@ -30,7 +29,7 @@ from .packages.catalog import (
 from .packages.install import install_package, uninstall_package
 from .packages.maintenance import maintain_package
 
-__all__ = ['bundle_content_fingerprint', 'bundle_observation_path', 'bundle_source_identity', 'bundle_source_receipt_path', 'bundle_source_root', 'bundle_sources_path', 'bundle_watch_paths', 'cancel_operation', 'find_software_call', 'get_bundle_display', 'get_bundle_metadata', 'get_bundled_definitions', 'get_command_catalog', 'get_operation', 'get_package', 'get_package_source', 'get_preview_usage', 'get_usage', 'inspect_operation', 'install_package', 'invoke_operation', 'list_operations', 'list_package_ids', 'list_packages', 'list_releases', 'list_siril_commands', 'list_software_call_records', 'maintain_package', 'prepare_package', 'preview_operation', 'read_software_call', 'refresh_bundle_sources', 'resolve_release', 'save_software_call', 'set_package_node_definition_ids', 'software_call_log', 'unfinished_software_calls', 'uninstall_package', 'validate_parameters']
+__all__ = ['bundle_content_fingerprint', 'bundle_observation_path', 'bundle_source_identity', 'bundle_source_receipt_path', 'bundle_source_root', 'bundle_sources_path', 'bundle_watch_paths', 'cancel_operation', 'find_software_call', 'get_bundle_display', 'get_bundle_metadata', 'get_bundled_definitions', 'get_command_catalog', 'get_operation', 'get_package', 'get_package_source', 'get_preview_definition', 'get_preview_usage', 'get_usage', 'inspect_operation', 'install_package', 'invoke_operation', 'list_operations', 'list_package_ids', 'list_packages', 'list_releases', 'list_software_call_records', 'maintain_package', 'prepare_package', 'preview_operation', 'read_software_call', 'refresh_bundle_sources', 'resolve_release', 'save_software_call', 'set_package_node_definition_ids', 'software_call_log', 'unfinished_software_calls', 'uninstall_package', 'validate_parameters']
 
 from .development import (
     bindings_path as bundle_sources_path,

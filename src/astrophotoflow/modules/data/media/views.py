@@ -52,7 +52,7 @@ class MediaViews:
         self.preparing = {}
         self.output_jobs = {}
         with database.write_session() as session:
-            for row in session.scalars(select(Preview).where(Preview.size.in_({"viewer", "playback", "siril-live"}), Preview.status == "generating")).all():
+            for row in session.scalars(select(Preview).where(Preview.storage_path.endswith('/manifest.json'), Preview.status == "generating")).all():
                 row.status, row.error = "failed", error_message(workspace_locale(self.settings.workspace), '', 'media_interrupted')
         for folder in self.cache.folders():
             for part in folder.glob("*.part*"):

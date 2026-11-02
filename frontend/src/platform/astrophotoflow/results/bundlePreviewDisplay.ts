@@ -10,7 +10,7 @@ import type { ComfyApp } from '@/types/comfy'
 import { useExtensionStore } from '@/stores/extensionStore'
 import { useNodeDefStore } from '@/stores/nodeDefStore'
 
-import SirilPreviewWidget from './SirilPreviewWidget.vue'
+import BundlePreviewWidget from './BundlePreviewWidget.vue'
 
 import { bundleCapabilities } from '../sidebar/bundleCatalog'
 import { mergeBundleNodeI18n } from '@/i18n'
@@ -23,11 +23,11 @@ import.meta.hot?.dispose(() => {
   for (const dispose of disposers) dispose()
 })
 
-export function attachSirilPreview(node: LGraphNode) {
-  if (!node.comfyClass || !bundleCapabilities.get(node.comfyClass)?.preview || node.widgets?.some(widget => widget.name === 'apf_siril_preview')) return
+export function attachBundlePreview(node: LGraphNode) {
+  if (!node.comfyClass || !bundleCapabilities.get(node.comfyClass)?.preview || node.widgets?.some(widget => widget.name === 'apf_bundle_preview')) return
   const widget = new ComponentWidgetImpl({
-    node, name: 'apf_siril_preview', component: markRaw(SirilPreviewWidget),
-    inputSpec: { name: 'apf_siril_preview', type: 'STRING' },
+    node, name: 'apf_bundle_preview', component: markRaw(BundlePreviewWidget),
+    inputSpec: { name: 'apf_bundle_preview', type: 'STRING' },
     options: {
       serialize: false, surfaces: { canvas: 'never', vueNode: 'shown', panel: 'never' },
       getMinHeight: () => 40, getMaxHeight: () => 330
@@ -43,10 +43,10 @@ export function configureBundleNode(node: LGraphNode) {
     const defaults = [capability.node.definition.name, ...Object.values(capability.display ?? {}).map(display => display?.name)]
     if (defaults.includes(node.title)) node.title = ''
   }
-  attachSirilPreview(node)
+  attachBundlePreview(node)
 }
 
-export function registerSirilPreviewDisplay(app: ComfyApp) {
+export function registerBundlePreviewDisplay(app: ComfyApp) {
   if (registered.has(app)) return
   registered.add(app)
   const nodeDefs = useNodeDefStore()
@@ -72,7 +72,7 @@ export function registerSirilPreviewDisplay(app: ComfyApp) {
         const packageId = capability.node.definition.execution.package_id
         const category = capability.node.definition.category ?? []
         if (category.length) {
-          categories[normalizeI18nKey(packageId)] = packageId === 'siril' ? 'Siril' : packageId
+          categories[normalizeI18nKey(packageId)] = packageId
           category.forEach((part, index) => {
             const path = [packageId, ...category.slice(0, index + 1)].join('/')
             categories[normalizeI18nKey(path)] = escapeI18nMessage(display.category?.[index] ?? part)

@@ -155,6 +155,7 @@ export const zBundleDevelopmentSource = z.object({
 export const zBundlePreview = z.object({
     kind: z.literal('science-image'),
     input: z.string(),
+    output: z.string().nullish(),
     max_edge: z.literal(1024).optional().default(1024)
 }).strict();
 
@@ -2360,40 +2361,6 @@ export const zServiceHealth = z.object({
 }).strict();
 
 /**
- * SirilCommandAssessment
- */
-export const zSirilCommandAssessment = z.object({
-    parameter_details: z.string(),
-    structured_parameter_defaults_ranges: z.string(),
-    single_image_sequence_context: z.string(),
-    input_output_semantics: z.string(),
-    headless_status: z.string(),
-    dependencies: z.string(),
-    security_risk: z.string(),
-    semantic_review_status: z.string(),
-    node_definition_status: z.string(),
-    node_definition_reason: z.string(),
-    node_generation_status: z.string(),
-    node_generation_reason: z.string(),
-    registry_load_status: z.string(),
-    registry_load_reason: z.string(),
-    runtime_test_status: z.string(),
-    runtime_test_reason: z.string()
-}).strict();
-
-/**
- * SirilCommand
- */
-export const zSirilCommand = z.object({
-    command: z.string(),
-    scriptable: z.boolean(),
-    syntax: z.string(),
-    description: z.string(),
-    url: z.string(),
-    assessment: zSirilCommandAssessment
-}).strict();
-
-/**
  * SoftwareBinding
  */
 export const zSoftwareBinding = z.object({
@@ -2444,6 +2411,18 @@ export const zDefinitionWriteResult = z.object({
     applied: z.boolean(),
     content: zSavedDefinition.nullable(),
     error: zErrorDetail.nullable()
+}).strict();
+
+/**
+ * SoftwareCommand
+ */
+export const zSoftwareCommand = z.object({
+    command: z.string(),
+    scriptable: z.boolean(),
+    syntax: z.string(),
+    description: z.string(),
+    url: z.string(),
+    assessment: z.record(z.string(), zJsonValue).optional()
 }).strict();
 
 /**
@@ -5117,7 +5096,7 @@ export const zGetSoftwareCommandsApiV1SoftwarePackagesPackageIdVersionsVersionCo
  *
  * Successful Response
  */
-export const zGetSoftwareCommandsApiV1SoftwarePackagesPackageIdVersionsVersionCommandsGetResponse = z.array(zSirilCommand);
+export const zGetSoftwareCommandsApiV1SoftwarePackagesPackageIdVersionsVersionCommandsGetResponse = z.array(zSoftwareCommand);
 
 export const zGetSoftwarePackageApiV1SoftwarePackagesPackageIdGetPath = z.object({
     package_id: z.string()

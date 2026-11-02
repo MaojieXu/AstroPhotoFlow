@@ -1,0 +1,317 @@
+{
+  "siril": {
+    "repository": "https://example.invalid/fixture-bundle.git",
+    "tag": "v0.2.0-dev.2",
+    "commit": "ffffffffffffffffffffffffffffffffffffffff",
+    "manifest": {
+      "schema_version": 1,
+      "package_id": "siril",
+      "name": "Fixture package",
+      "bundle_version": "0.2.0-dev.2",
+      "release_channel": "dev",
+      "software_version": "1.4.4",
+      "platform": "windows-x86_64",
+      "host_api": 2,
+      "executable": "app/bin/program.exe",
+      "version_args": [
+        "--version"
+      ],
+      "version_output": "fixture 1.4.4",
+      "adapter": "adapter/siril.py",
+      "operations": [
+        "operations/test.json",
+        "operations/analysis.json"
+      ],
+      "nodes": [
+        "nodes/test.json",
+        "nodes/analysis.json"
+      ],
+      "output_nodes": [
+        "17a34abb-132f-4827-9e77-4fe333915487"
+      ],
+      "commands": "reference/commands.json",
+      "assessments": "reference/assessments.json",
+      "locales": {}
+    },
+    "operations": [
+      {
+        "operation": {
+          "package_id": "siril",
+          "version": "1.4.4",
+          "operation_id": "autostretch",
+          "name": "Fixture operation",
+          "description": "Synthetic platform test operation",
+          "syntax": "fixture-operation",
+          "scriptable": true,
+          "inputs": [
+            {
+              "name": "image",
+              "type": "APF_SCIENCE",
+              "formats": [
+                "fits",
+                "image",
+                "raw",
+                "xisf"
+              ],
+              "cardinality": "many",
+              "required": true,
+              "supports_hdu": false,
+              "supports_slice": false,
+              "colour_layout": "planar"
+            }
+          ],
+          "outputs": [
+            {
+              "name": "image",
+              "type": "APF_SCIENCE",
+              "formats": [
+                "fits"
+              ],
+              "cardinality": "many",
+              "colour_layout": "planar"
+            }
+          ],
+          "parameters": [
+            {
+              "name": "linked",
+              "kind": "boolean",
+              "default": false,
+              "minimum": null,
+              "maximum": null,
+              "step": null,
+              "choices": null,
+              "advanced": false,
+              "nullable": false
+            },
+            {
+              "name": "shadowsclip",
+              "kind": "float",
+              "default": -2.8,
+              "minimum": null,
+              "maximum": null,
+              "step": null,
+              "choices": null,
+              "advanced": false,
+              "nullable": false
+            },
+            {
+              "name": "targetbg",
+              "kind": "float",
+              "default": 0.25,
+              "minimum": null,
+              "maximum": null,
+              "step": null,
+              "choices": null,
+              "advanced": false,
+              "nullable": false
+            },
+            {
+              "name": "runtime",
+              "kind": "string",
+              "default": "{}",
+              "minimum": null,
+              "maximum": null,
+              "step": null,
+              "choices": null,
+              "advanced": false,
+              "nullable": false
+            }
+          ],
+          "cancel_supported": true
+        },
+        "preview": {
+          "kind": "science-image",
+          "input": "image",
+          "output": "image",
+          "max_edge": 1024
+        },
+        "automatic_result_preview": true,
+        "help": "Fixture help",
+        "examples": [
+          "Fixture example"
+        ]
+      },
+      {
+        "operation": {
+          "package_id": "siril",
+          "version": "1.4.4",
+          "operation_id": "stat",
+          "name": "Fixture operation",
+          "description": "Synthetic platform test operation",
+          "syntax": "fixture-analysis",
+          "scriptable": true,
+          "inputs": [
+            {
+              "name": "image",
+              "type": "APF_SCIENCE",
+              "formats": [
+                "fits",
+                "image",
+                "raw",
+                "xisf"
+              ],
+              "cardinality": "many",
+              "required": true,
+              "supports_hdu": false,
+              "supports_slice": false,
+              "colour_layout": "planar"
+            }
+          ],
+          "outputs": [
+            {
+              "name": "analysis",
+              "type": "APF_ANALYSIS",
+              "formats": [
+                "other"
+              ],
+              "cardinality": "one"
+            }
+          ],
+          "parameters": [],
+          "cancel_supported": true
+        },
+        "preview": null,
+        "automatic_result_preview": true,
+        "help": "Fixture analysis",
+        "examples": [
+          "Fixture example"
+        ]
+      }
+    ],
+    "nodes": [
+      {
+        "definition_id": "17a34abb-132f-4827-9e77-4fe333915487",
+        "source": "package",
+        "name": "Fixture node",
+        "description": "Synthetic platform test node",
+        "category": [
+          "Fixture"
+        ],
+        "inputs": [
+          {
+            "name": "image",
+            "type": "APF_SCIENCE"
+          }
+        ],
+        "outputs": [
+          {
+            "name": "image",
+            "type": "APF_SCIENCE"
+          }
+        ],
+        "parameters": [
+          {
+            "name": "linked",
+            "kind": "boolean",
+            "default": false,
+            "minimum": null,
+            "maximum": null,
+            "step": null,
+            "choices": null,
+            "advanced": false,
+            "nullable": false
+          },
+          {
+            "name": "shadowsclip",
+            "kind": "float",
+            "default": -2.8,
+            "minimum": null,
+            "maximum": null,
+            "step": null,
+            "choices": null,
+            "advanced": false,
+            "nullable": false
+          },
+          {
+            "name": "targetbg",
+            "kind": "float",
+            "default": 0.25,
+            "minimum": null,
+            "maximum": null,
+            "step": null,
+            "choices": null,
+            "advanced": false,
+            "nullable": false
+          },
+          {
+            "name": "runtime",
+            "kind": "string",
+            "default": "{}",
+            "minimum": null,
+            "maximum": null,
+            "step": null,
+            "choices": null,
+            "advanced": false,
+            "nullable": false
+          }
+        ],
+        "execution": {
+          "package_id": "siril",
+          "operation_id": "autostretch",
+          "inputs": {
+            "image": "image"
+          },
+          "outputs": {
+            "image": "image"
+          },
+          "parameters": {
+            "linked": {
+              "kind": "parameter",
+              "name": "linked"
+            },
+            "shadowsclip": {
+              "kind": "parameter",
+              "name": "shadowsclip"
+            },
+            "targetbg": {
+              "kind": "parameter",
+              "name": "targetbg"
+            },
+            "runtime": {
+              "kind": "parameter",
+              "name": "runtime"
+            }
+          }
+        }
+      },
+      {
+        "definition_id": "ca837261-78b8-4899-a33a-ab60e904d0f1",
+        "source": "package",
+        "name": "Fixture analysis",
+        "description": "Synthetic platform test node",
+        "category": [
+          "Fixture"
+        ],
+        "inputs": [
+          {
+            "name": "image",
+            "type": "APF_SCIENCE"
+          }
+        ],
+        "outputs": [
+          {
+            "name": "analysis",
+            "type": "APF_ANALYSIS"
+          }
+        ],
+        "parameters": [],
+        "execution": {
+          "package_id": "siril",
+          "operation_id": "stat",
+          "inputs": {
+            "image": "image"
+          },
+          "outputs": {
+            "analysis": "analysis"
+          },
+          "parameters": {}
+        }
+      }
+    ],
+    "localizations": {},
+    "reference_files": {
+      "reference/commands.json": "[{\"command\": \"fixture\", \"scriptable\": true, \"syntax\": \"fixture\", \"description\": \"Fixture command\", \"url\": \"https://example.invalid/fixture\"}]",
+      "reference/assessments.json": "{\"commands\": [{\"command\": \"fixture\", \"assessment\": {\"fixture\": true}}]}"
+    }
+  }
+}

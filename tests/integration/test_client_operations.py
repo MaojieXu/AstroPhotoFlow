@@ -175,7 +175,7 @@ def test_software_command_catalog_client_uses_the_exact_package_version():
         "command": "autostretch", "scriptable": True, "syntax": "autostretch [-linked]",
         "description": "Auto-stretches the currently loaded image.",
         "url": "https://siril.readthedocs.io/en/stable/Commands.html#autostretch",
-        "assessment": next(row["assessment"] for row in json.loads((Path(__file__).resolve().parents[2] / "src/astrophotoflow/vendor/siril-1.4.4-command-assessments.json").read_text(encoding="utf-8"))["commands"] if row["command"] == "autostretch"),
+        "assessment": {"fixture": True},
     }
 
     def handle(request):

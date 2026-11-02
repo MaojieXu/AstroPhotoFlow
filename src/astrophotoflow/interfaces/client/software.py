@@ -7,8 +7,8 @@ from astrophotoflow.contracts.bundles import AnalysisResult
 from astrophotoflow.contracts.packages import PendingSoftwareAction, SoftwarePackageDetails
 from astrophotoflow.contracts.software import (
     BundlePreviewRequest,
-    SirilCommand,
     SoftwareCallResult,
+    SoftwareCommand,
     SoftwareInstallRequest,
     SoftwarePackage,
     SoftwarePreparation,
@@ -38,9 +38,9 @@ class SoftwareOperations:
     def list_software_packages(self) -> list[SoftwarePackage]:
         return self.request("GET", "/software/packages", adapter=TypeAdapter(list[SoftwarePackage]))
 
-    def list_software_commands(self, package_id: str, version: str) -> list[SirilCommand]:
+    def list_software_commands(self, package_id: str, version: str) -> list[SoftwareCommand]:
         path = f"/software/packages/{quote(package_id, safe='')}/versions/{quote(version, safe='')}/commands"
-        return self.request("GET", path, adapter=TypeAdapter(list[SirilCommand]))
+        return self.request("GET", path, adapter=TypeAdapter(list[SoftwareCommand]))
 
     def get_software_package(self, package_id: str, *, operation_id: UUID | None = None) -> SoftwarePackageDetails:
         return self.request("GET", f"/software/packages/{package_id}", params={"operation_id": operation_id}, adapter=TypeAdapter(SoftwarePackageDetails))
