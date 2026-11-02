@@ -98,8 +98,8 @@
               "name": "targetbg",
               "kind": "float",
               "default": 0.25,
-              "minimum": null,
-              "maximum": null,
+              "minimum": 0,
+              "maximum": 1,
               "step": null,
               "choices": null,
               "advanced": false,
@@ -128,7 +128,7 @@
         "automatic_result_preview": true,
         "help": "Fixture help",
         "examples": [
-          "Fixture example"
+          {"parameters": {}, "description": "Fixture example"}
         ]
       },
       {
@@ -174,7 +174,7 @@
         "automatic_result_preview": true,
         "help": "Fixture analysis",
         "examples": [
-          "Fixture example"
+          {"parameters": {}, "description": "Fixture example"}
         ]
       }
     ],

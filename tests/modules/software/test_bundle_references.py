@@ -132,6 +132,8 @@ def test_preview_execution_uses_named_ports_and_preserves_source(sample_package,
     source.write_bytes(b'original')
     observed = []
     monkeypatch.setattr(previews, 'get_package', lambda *_: SimpleNamespace(effective_availability='ready', effective_reason=None))
+    metadata = bundles.metadata(settings.workspace, 'sample-tool')
+    monkeypatch.setattr(bundles, 'metadata', lambda *_: metadata)
     monkeypatch.setattr(previews.development, 'source_root', lambda *_: settings.workspace)
 
     def build(_workspace, _package, _operation, sources, parameters, work, **options):
@@ -179,3 +181,38 @@ def test_preview_execution_uses_named_ports_and_preserves_source(sample_package,
             assert source.read_bytes() == b'original'
     asyncio.run(run())
     assert observed[0][0] == {'source': [source]}
+
+
+@pytest.mark.asyncio
+async def test_command_reference_crosses_http_client_and_mcp_without_siril_fields(sample_package, monkeypatch):
+    from contextlib import closing
+
+    import httpx
+    from fastapi.testclient import TestClient
+    from fastmcp import Client
+
+    from astrophotoflow.client import AssetClient
+    from astrophotoflow.interfaces.http.app import create_app
+    from astrophotoflow.interfaces.mcp import lifespan
+    from astrophotoflow.interfaces.mcp.server import build_tool_catalog
+
+    settings, _, _ = sample_package
+    endpoint = '/api/v1/software/packages/sample-tool/versions/7.8.9/commands'
+    with closing(TestClient(create_app(settings, 'reference-test'))) as http:
+        assert http.get(endpoint).status_code == 401
+        authenticated = {'Authorization': 'Bearer reference-test'}
+        expected = http.get(endpoint, headers=authenticated).json()
+        assert expected[0]['assessment'] == {'fixture': True}
+        assert http.get(endpoint.replace('7.8.9', '8.0.0'), headers=authenticated).status_code == 404
+        def handle(request):
+            response = http.get(request.url.path, headers=dict(request.headers))
+            return httpx.Response(response.status_code, json=response.json())
+
+        api = AssetClient.__new__(AssetClient)
+        api.client = httpx.Client(base_url='http://service/api/v1', headers=authenticated,
+            transport=httpx.MockTransport(handle))
+        assert api.list_software_commands('sample-tool', '7.8.9')[0].assessment == {'fixture': True}
+        monkeypatch.setattr(lifespan, 'AssetClient', lambda: api)
+        async with Client(build_tool_catalog()) as mcp:
+            result = await mcp.call_tool('software_packages_commands', {'package_id': 'sample-tool', 'version': '7.8.9'})
+            assert result.structured_content == {'result': expected}
