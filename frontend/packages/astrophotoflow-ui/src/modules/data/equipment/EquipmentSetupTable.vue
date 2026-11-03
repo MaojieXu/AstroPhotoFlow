@@ -34,13 +34,14 @@ const emit = defineEmits<{
 const equipmentColumns = [
   { key: 'camera', get label() { return uiT('apfUi.camera_dacf07') } },
   { key: 'telescope', get label() { return uiT('apfUi.telescope') } },
+  { key: 'mount', get label() { return uiT('apfUi.mount') } },
   { key: 'filter', get label() { return uiT('apfUi.filter') } }
 ] as const
 const columns = [{ key: 'name', get label() { return uiT('apfUi.name') } }, ...equipmentColumns] as const
 type EquipmentColumn = typeof equipmentColumns[number]['key']
 const equipmentById = computed(() => new Map(props.equipment.map(item => [item.id, item])))
 const tableRows = computed(() => props.setups.map(setup => {
-  const names: Record<EquipmentColumn, string[]> = { camera: [], telescope: [], filter: [] }
+  const names: Record<EquipmentColumn, string[]> = { camera: [], telescope: [], mount: [], filter: [] }
   const filterTags: { id: string; label: string; name: string }[] = []
   for (const component of setup.components) {
     const equipment = component.source === 'inline' ? component.equipment : equipmentById.value.get(component.equipment_id)

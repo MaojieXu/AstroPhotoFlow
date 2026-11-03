@@ -3,16 +3,19 @@ import type { FetchApi } from '../../../core/api/client'
 import {
   searchLibrary,
   getLibraryFilterOptions,
-  listDatasetMembers
+  getLibraryChangeState,
+  listDatasetMembers,
+  listDatasetMemberSummaries
 } from '../../../generated/api/sdk.gen'
 import type {
   SearchLibraryData,
-  ListDatasetMembersData
+  ListDatasetMembersData,
+  ListDatasetMemberSummariesData
 } from '../../../generated/api/types.gen'
-import { zSearchLibraryQuery } from '../../../generated/api/zod.gen'
+import { zDatasetMemberPage, zDatasetMemberSummaryPage, zSearchLibraryQuery } from '../../../generated/api/zod.gen'
 
 export type LibraryQuery = NonNullable<SearchLibraryData['query']>
-export type MemberQuery = NonNullable<ListDatasetMembersData['query']>
+export type MemberQuery = NonNullable<ListDatasetMemberSummariesData['query']>
 
 /** Convert the filter form's range strings; the generated schema owns API keys and types. */
 export function parseLibraryQuery(
@@ -38,6 +41,12 @@ export function createLibraryClient(fetchApi: FetchApi) {
     throwOnError: true
   } as const
   return {
+    changeState: async (signal?: AbortSignal) =>
+      (await getLibraryChangeState<true>({ ...options, signal })).data,
+    memberSummaries: async (datasetId: string, versionId: string, query: MemberQuery, signal?: AbortSignal) =>
+      zDatasetMemberSummaryPage.parse((await listDatasetMemberSummaries<true>({
+        ...options, path: { dataset_id: datasetId, version_id: versionId }, query, signal
+      })).data),
     search: async (query: LibraryQuery, signal?: AbortSignal) =>
       (await searchLibrary<true>({ ...options, query, signal })).data,
     filters: async (signal?: AbortSignal) =>
@@ -45,16 +54,16 @@ export function createLibraryClient(fetchApi: FetchApi) {
     members: async (
       datasetId: string,
       versionId: string,
-      query: MemberQuery,
+      query: NonNullable<ListDatasetMembersData['query']>,
       signal?: AbortSignal
     ) =>
-      (
+      zDatasetMemberPage.parse((
         await listDatasetMembers<true>({
           ...options,
           path: { dataset_id: datasetId, version_id: versionId },
-          query,
+          query: { ...query, image_query: false },
           signal
         })
-      ).data
+      ).data)
   }
 }

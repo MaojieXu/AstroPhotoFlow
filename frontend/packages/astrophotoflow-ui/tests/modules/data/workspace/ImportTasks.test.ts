@@ -4,6 +4,7 @@ import { focusManager } from '@tanstack/vue-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import ImportTasks from '@ui/modules/data/imports/ImportTasks.vue'
 import { taskSchema } from '@ui/modules/data/api/contracts'
+import type { AssetTaskSummary } from '@ui/generated/api/types.gen'
 import { ApiClientError } from '@ui/modules/data/api/client'
 
 const {get,send}=vi.hoisted(()=>({get:vi.fn(),send:vi.fn()}))
@@ -14,7 +15,7 @@ const base=taskSchema.parse({id,status:'running',sources:[],storage_mode:'manage
   report:{registration:{total:2,registered:2,completed:true}},error:null,created_at:'2026-10-28T12:00:00Z',updated_at:'2026-10-28T12:00:00Z',items:[],items_total:2,items_completed:0,items_limit:20,items_offset:0})
 const content={total:2,succeeded:1,failed:0,skipped:0,metadata_failed:0,bytes_total:100,bytes_copied:50,completed:false}
 const preview={total:2,available:0,failed:0,unsupported:0,completed:false}
-const page=(value:ReturnType<typeof taskSchema.parse>)=>({items:[value],total:1,limit:50,offset:0})
+const page=(value:ReturnType<typeof taskSchema.parse>)=>{ const {id,status,dataset_name,target_dataset_id,dataset_id,enumeration_completed,report,error,created_at,updated_at,items_total,items_completed}=value; return {items:[{id,status,dataset_name,target_dataset_id,dataset_id,enumeration_completed,report,error,created_at,updated_at,items_total,items_completed}],total:1,limit:50,offset:0} }
 let wrapper:ReturnType<typeof mount>|undefined
 beforeEach(()=>{localStorage.clear();get.mockReset().mockResolvedValue(page(base));send.mockReset().mockResolvedValue({task_id:id,status:'queued'})})
 afterEach(()=>{wrapper?.unmount();wrapper=undefined;localStorage.clear();focusManager.setFocused(undefined);vi.useRealTimers()})
@@ -110,7 +111,7 @@ describe('managed import stages and one-time notices',()=>{
 
   it('forwards recovery state through the existing slot',async()=>{
     get.mockResolvedValue(page({...base,status:'interrupted'}))
-    wrapper=mount(ImportTasks,{props:{refreshToken:0},slots:{default:({tasks,resume}:{tasks:ReturnType<typeof taskSchema.parse>[];resume:(task:ReturnType<typeof taskSchema.parse>)=>Promise<void>})=>h('button',{onClick:()=>resume(tasks[0])},'恢复')}})
+    wrapper=mount(ImportTasks,{props:{refreshToken:0},slots:{default:({tasks,resume}:{tasks:AssetTaskSummary[];resume:(task:AssetTaskSummary)=>Promise<void>})=>h('button',{onClick:()=>resume(tasks[0])},'恢复')}})
     await flushPromises();await wrapper.get('button').trigger('click');await flushPromises()
     expect(send).toHaveBeenCalledOnce()
   })
@@ -180,7 +181,7 @@ describe('managed import stages and one-time notices',()=>{
     await flushPromises()
     expect(get).toHaveBeenCalledTimes(1)
     get.mockResolvedValue(page(base))
-    await vi.advanceTimersByTimeAsync(10_000)
+    await vi.advanceTimersByTimeAsync(30_000)
     await flushPromises()
     expect(wrapper.text()).toContain('Night')
     expect(get).toHaveBeenCalledTimes(2)
@@ -190,7 +191,7 @@ describe('managed import stages and one-time notices',()=>{
     expect(get).toHaveBeenCalledTimes(3)
     await vi.advanceTimersByTimeAsync(1_500)
     expect(get).toHaveBeenCalledTimes(3)
-    await vi.advanceTimersByTimeAsync(8_500)
+    await vi.advanceTimersByTimeAsync(28_500)
     await flushPromises()
     expect(get).toHaveBeenCalledTimes(4)
   })

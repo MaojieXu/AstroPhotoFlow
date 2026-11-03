@@ -1,5 +1,6 @@
 import { readPages } from './pagination'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
+import type { QueryClient } from '@tanstack/vue-query'
 import { computed, toValue, watch } from 'vue'
 import type { MaybeRefOrGetter } from 'vue'
 
@@ -12,6 +13,14 @@ import { zLibraryItemPage } from '../../../generated/api/zod.gen'
 
 export function libraryQueryKey(workspaceId: string) {
   return [...workspaceQueryKey(workspaceId), 'library'] as const
+}
+
+export function readLibraryChanges(cache: QueryClient, workspaceId: string) {
+  return cache.fetchQuery({
+    queryKey: [...libraryQueryKey(workspaceId), 'change-state'],
+    queryFn: ({ signal }) => libraryApi.changeState(signal),
+    staleTime: 500
+  })
 }
 
 export function useLibraryBootstrap(connectionEpoch: MaybeRefOrGetter<number> = 0, connected: MaybeRefOrGetter<boolean> = true) {
@@ -35,11 +44,21 @@ export function useLibraryBootstrap(connectionEpoch: MaybeRefOrGetter<number> = 
 }
 
 export function useLibraryFilterOptions(workspace: MaybeRefOrGetter<string>) {
+  const cache = useQueryClient()
+  let checkpoint: string | undefined
   const connectionReady = useQueryAvailability()
   return useQuery({
     queryKey: computed(() => [...libraryQueryKey(toValue(workspace)), 'filters'] as const),
     enabled: computed(() => connectionReady.value && Boolean(toValue(workspace))),
-    queryFn: ({ signal }) => libraryApi.filters(signal),
+    queryFn: async ({ signal, queryKey }) => {
+      const change = await readLibraryChanges(cache, toValue(workspace))
+      signal.throwIfAborted()
+      const previous = cache.getQueryData<Awaited<ReturnType<typeof libraryApi.filters>>>(queryKey)
+      if (previous && !cache.getQueryState(queryKey)?.isInvalidated && checkpoint === change.revision_token) return previous
+      const filters = await libraryApi.filters(signal)
+      checkpoint = change.revision_token
+      return filters
+    },
     refetchInterval: 10_000
   })
 }
@@ -56,6 +75,7 @@ export function useLibraryQuery(
   paused: MaybeRefOrGetter<boolean>
 ) {
   const client = useQueryClient()
+  let checkpoint: { key: string; token: string } | undefined
   const queryKey = computed(() => {
     const current = toValue(request)
     return current ? [...libraryQueryKey(current.workspaceId), 'items', current.query, current.all, current.empty] as const : ['library-items-idle'] as const
@@ -64,12 +84,20 @@ export function useLibraryQuery(
   const query = useQuery({
     queryKey,
     enabled: computed(() => connectionReady.value && Boolean(toValue(request)?.workspaceId) && !toValue(paused)),
-    queryFn: async ({ signal }): Promise<LibraryItemPage> => {
+    queryFn: async ({ signal, queryKey: activeKey }): Promise<LibraryItemPage> => {
       const current = toValue(request)
       if (!current?.workspaceId) throw new Error('A library request requires a workspace identity')
       if (current.empty) return { items: [], total: 0, limit: current.query.limit, offset: current.query.offset }
+      const change = await readLibraryChanges(client, current.workspaceId)
+      signal.throwIfAborted()
+      const identity = JSON.stringify(activeKey), token = change.revision_token + ':' + change.thumbnail_token
+      const previous = client.getQueryData<LibraryItemPage>(activeKey)
+      if (previous && !client.getQueryState(activeKey)?.isInvalidated && checkpoint?.key === identity && checkpoint.token === token) return previous
       const read = (offset: number) => libraryApi.search({ ...current.query, offset }, signal)
-      return readPages(offset => read(offset ?? current.query.offset ?? 0), current.all, signal)
+      const page = await readPages(offset => read(offset ?? current.query.offset ?? 0), current.all, signal)
+      signal.throwIfAborted()
+      checkpoint = { key: identity, token }
+      return page
     },
     refetchInterval: 10_000
   })
@@ -87,6 +115,7 @@ export function useLibraryQuery(
     void client.invalidateQueries({queryKey:queryKey.value})
   }
   async function refresh() {
+    checkpoint = undefined
     const current=toValue(request)
     if(!current)return
     await client.invalidateQueries({queryKey:libraryQueryKey(current.workspaceId),refetchType:'none'})

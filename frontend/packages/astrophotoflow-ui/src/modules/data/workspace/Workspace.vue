@@ -38,8 +38,7 @@ const ready = computed(
   () =>
     props.connected !== false &&
     bootstrap.isSuccess.value &&
-    bootstrap.isFetchedAfterMount.value &&
-    !bootstrap.isFetching.value
+    bootstrap.isFetchedAfterMount.value
 )
 provide(queryAvailabilityKey, ready)
 const failure = computed(() =>
@@ -114,7 +113,7 @@ defineExpose({ selectArea, leavePage, showImportIssue, activeArea })
     <p v-if="connected === false" role="status">
       {{ $t('apfUi.reconnecting_workbench') }}
     </p>
-    <p v-else-if="bootstrap.isFetching.value" role="status">
+    <p v-else-if="!confirmed && bootstrap.isFetching.value" role="status">
       {{ $t('apfUi.reading_service_data') }}
     </p>
     <div v-else-if="bootstrap.isError.value" role="alert">

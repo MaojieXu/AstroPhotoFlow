@@ -29,6 +29,14 @@ uv run --locked --no-sync pytest tests/modules/data/test_service.py -k openapi_s
 
 接口修改同步更新处理逻辑、模型、生成的代理清单和实际消费者。OpenAPI不能证明业务语义自动同步；实际行为由对应测试覆盖，不再复制一份手工schema。
 
+## 图像管理接口
+
+图像核心32工具及7个任务操作的精确参数以实际FastMCP目录和上述OpenAPI为准；流程见[图像导入与校准指南](../development/library-agent-tools.md#图像导入跨夜追加与校准)。HTTP与客户端复用同一数据服务，MCP不负责自动分组。
+
+现有网页请求继续使用原响应。新版客户端在共享查询路径显式传`image_query=true`，包括素材搜索、组搜索／成员及任务明细；文件事实检查使用`file_facts_only=true`。这些选择字段已进入OpenAPI，MCP工具不需要调用者传入这些HTTP适配字段。新旧写入合同互斥，不同时提交`base_revision`与`expected_revision/changes`。
+
+数据库版本与受支持升级以 [schema.py](../../src/astrophotoflow/core/database/schema.py) 为准，服务启动不自动迁移已有库。本轮性能优化沿用当前schema，不为变更检测增加迁移。任务目录使用摘要合同，完整信息按任务详情读取；网页成员表使用固定成员摘要接口，科学事实与完整设备快照按详情读取。精确路径和模型仍以生成OpenAPI为准。
+
 ## 其他接口按需查询
 
 | 想查什么 | 事实源 |
@@ -44,4 +52,4 @@ uv run --locked --no-sync pytest tests/modules/data/test_service.py -k openapi_s
 
 MCP／业务CLI由固定入口`python scripts/generate_cli.py`从完整离线目录生成，输出[工具快照](mcp-tools.json)和interfaces/cli/generated.py；不从仅含search_tools／call_tool的Agent视图生成，不手改生成物。
 
-CLI固定生成入口为`scripts/generate_cli.py`：完整97工具按名称排序，经FastMCP官方生成器生成，使用锁定Ruff统一导入布局，再写入生成文件及`mcp-tools.json`。排序／格式化属于生成入口，不手改生成物；执行入口需要已准备的开发依赖。
+CLI固定生成入口为`scripts/generate_cli.py`：完整工具目录按名称排序，经FastMCP官方生成器生成，使用锁定Ruff统一导入布局，再写入生成文件及`mcp-tools.json`。排序／格式化属于生成入口，不手改生成物；执行入口需要已准备的开发依赖。

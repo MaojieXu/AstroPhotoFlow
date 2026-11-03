@@ -41,7 +41,6 @@ import {
   zDisplayPreviewState
 } from '../../../generated/api/zod.gen'
 import {
-  zCapturePresetOut,
   zLibraryItemPage,
   zDatasetOut,
   zDatasetMemberPage,
@@ -62,10 +61,8 @@ export const setupComponentSchema = zEquipmentSetupOut.shape.components.element
 
 export const equipmentSetupSchema = zEquipmentSetupOut
 
-export const capturePresetSchema = zCapturePresetOut
 export type EquipmentSetup = z.infer<typeof equipmentSetupSchema>
 export type SetupComponent = z.infer<typeof setupComponentSchema>
-export type CapturePreset = z.infer<typeof capturePresetSchema>
 
 export const assetVersionSchema = zAssetVersionOut
 
@@ -112,6 +109,7 @@ export const calibrationTargetOptionSchema = zCalibrationTargetOption
 
 export type CalibrationTarget = z.infer<typeof calibrationTargetSchema>
 export type CalibrationBindings = z.infer<typeof calibrationBindingsSchema>
+export type CalibrationBinding = CalibrationBindings[keyof CalibrationBindings]
 export type CalibrationTargetOption = z.infer<
   typeof calibrationTargetOptionSchema
 >

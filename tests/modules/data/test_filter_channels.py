@@ -4,11 +4,10 @@ from contextlib import closing
 
 from astrophotoflow.contracts.equipment import FilterCreate, FilterPatch, FilterSnapshot, FilterSpecs
 from astrophotoflow.contracts.metadata import AssetParametersPatch
-from astrophotoflow.contracts.setups import CapturePresetCreate, EquipmentSetupCreate, EquipmentSetupQuery
+from astrophotoflow.contracts.setups import EquipmentSetupCreate, EquipmentSetupQuery
 from astrophotoflow.core.config import Settings
 from astrophotoflow.core.database.db import Database
 from astrophotoflow.core.database.schema import upgrade_database
-from astrophotoflow.modules.data.equipment.presets import create_capture_preset
 from astrophotoflow.modules.data.equipment.queries import list_setups
 from astrophotoflow.modules.data.equipment.service import create_equipment, update_equipment
 from astrophotoflow.modules.data.equipment.setups import create_setup
@@ -31,14 +30,14 @@ def test_selected_filter_channel_is_frozen_without_renaming_the_filter(tmp_path)
         setup = create_setup(session, EquipmentSetupCreate(name="Rig", components=[
             {"source": "registered", "equipment_id": device.id},
         ]))
-        preset = create_capture_preset(session, setup.id, CapturePresetCreate())
-        frozen = capture_defaults_snapshot(session, preset.id, AssetParametersPatch()).model_dump(mode="json")
+        from astrophotoflow.contracts.image_management import EquipmentApplication
+        application = EquipmentApplication(choice={"source": "setup", "setup_id": setup.id, "expected_revision": 1}, fields=["filter"])
+        frozen = capture_defaults_snapshot(session, AssetParametersPatch(), application).model_dump(mode="json")
         changed = update_equipment(session, device.id, FilterPatch(
             kind="filter", base_revision=1, specs={"channel": "Custom", "bandwidth_nm": 7}))
         assert changed.id == device.id and changed.name == "L-Pro"
         assert frozen["selected_equipment"]["filter_id"]["specs"]["channel"] == "RGB"
         assert frozen["selected_equipment"]["filter_id"]["name"] == "L-Pro"
-        assert preset.name == "Rig [L-Pro]"
         cleared = update_equipment(session, device.id, FilterPatch(kind="filter", base_revision=2, specs={"channel": None}))
         assert cleared.specs.channel is None and cleared.specs.bandwidth_nm == 7
 

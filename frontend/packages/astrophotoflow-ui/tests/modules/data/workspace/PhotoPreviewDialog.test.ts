@@ -1,5 +1,5 @@
 import { fixedMemberFixture } from '../../../fixtures/library-members'
-import { metadataForMembers } from '../../../fixtures/library-summary'
+import { metadataForMembers, exposureForMembers } from '../../../fixtures/library-summary'
 import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import PhotoPreviewDialog from '@ui/modules/data/media/PhotoPreviewDialog.vue'
@@ -228,9 +228,9 @@ it('keeps project dataset member browsing pinned to A while the current dataset 
   const group={id:datasetId,name:'Current B group',status:'active',notes:null,revision:2,current_version_id:datasetB,
     member_count:2,current_version_number:2,created_at:created,updated_at:created}
   const fixed={id:'00000000-0000-4000-8000-000000000094',added_at:created,project_id:projectId,dataset_id:datasetId,dataset_version_id:datasetA,base_revision:1,
-    dataset:group,version:{id:datasetA,dataset_id:datasetId,version_number:1,created_at:created}}
+    dataset:group,version:{id:datasetA,dataset_id:datasetId,version_number:1,created_at:created,exposure_summary:exposureForMembers([pinned])}}
   const summary = metadataForMembers([pinned])
-  Object.assign(group, {summary, input_ready: true})
+  Object.assign(group, {summary, exposure_summary:exposureForMembers([pinned]), input_ready: true})
   Object.assign(fixed, {summary, input_ready: true, member_count: 1})
   const page=(items:unknown[])=>({items,total:items.length,limit:50,offset:0})
   get.mockImplementation(async(path:string)=>{

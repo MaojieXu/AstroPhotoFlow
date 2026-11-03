@@ -8,6 +8,7 @@ import socket
 import subprocess
 import sys
 import time
+from uuid import uuid4
 import httpx
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
@@ -76,7 +77,12 @@ def _cli_json(service: dict, tool: str, **arguments) -> dict:
     args = ['call-tool', tool]
     for name, value in arguments.items():
         flag = '--' + name.replace('_', '-')
-        if isinstance(value, list):
+        if name in {'members', 'files', 'add', 'items', 'assets'}:
+            # The official generator represents an array of union objects as JSON.
+            args.extend([flag, json.dumps(value)])
+        elif isinstance(value, bool):
+            args.append(flag if value else '--no-' + name.replace('_', '-'))
+        elif isinstance(value, list):
             for item in value:
                 args.extend([flag, json.dumps(item) if isinstance(item, (dict, list)) else str(item)])
         else:
@@ -105,14 +111,14 @@ def test_apf_cli_imports_and_queries_parameters(service, tmp_path):
     accepted = _cli_json(service, 'data_imports_upload_one', path=str(photo))
     task = _wait_cli_task(service, accepted['task_id'])
     assert task['items'][0]['asset_id']
-    listed = _cli_json(service, 'data_assets_list', query={'limit': 10})
+    listed = _cli_json(service, 'data_assets_search', query={'limit': 200})
     asset_id = str(task['items'][0]['asset_id'])
-    assert asset_id in {str(item['id']) for item in listed['items']}
-    asset = _cli_json(service, 'data_assets_get', asset_id=asset_id)
+    assert asset_id in {str(item['asset']['id']) for item in listed['items']}
+    asset = _cli_json(service, 'data_assets_get', asset_id=asset_id)['asset']
     assert asset['parameters']['exposure_seconds'] is None
-    updated = _cli_json(service, 'data_assets_update_parameters', asset_id=asset_id, base_revision=asset['revision'], parameters={'exposure_seconds': 0})
+    updated = _cli_json(service, 'data_assets_update', asset_id=asset_id, expected_revision=asset['revision'], changes={'parameters': {'exposure_seconds': 0}})['asset']
     assert updated['parameters']['exposure_seconds'] == 0
-    assert _cli_json(service, 'data_assets_get', asset_id=asset_id)['parameters']['exposure_seconds'] == 0
+    assert _cli_json(service, 'data_assets_get', asset_id=asset_id)['asset']['parameters']['exposure_seconds'] == 0
 
 def _result_text(result) -> str:
     return '\n'.join((block.text for block in result.content if hasattr(block, 'text')))
@@ -158,28 +164,30 @@ def test_apf_mcp_stdio_tools_and_parameter_patch_protocol(service, tmp_path):
                 accepted = _tool_data(await _call_operation(session, 'data_imports_upload_one', {'path': str(photo)}, read_timeout_seconds=10), service)
                 task = await _wait_mcp_task(session, service, accepted['task_id'])
                 asset_id = str(task['items'][0]['asset_id'])
-                assets = _tool_data(await _call_operation(session, 'data_assets_list', {'query': {'limit': 50, 'offset': 0}}, read_timeout_seconds=5), service)
-                assert asset_id in {str(item['id']) for item in assets['items']}
-                asset = _tool_data(await _call_operation(session, 'data_assets_get', {'asset_id': asset_id}, read_timeout_seconds=5), service)
+                assets = _tool_data(await _call_operation(session, 'data_assets_search', {'query': {'limit': 200, 'offset': 0}}, read_timeout_seconds=5), service)
+                assert asset_id in {str(item['asset']['id']) for item in assets['items']}
+                asset = _tool_data(await _call_operation(session, 'data_assets_get', {'asset_id': asset_id}, read_timeout_seconds=5), service)['asset']
                 assert asset['revision'] == 1
                 prepared = _tool_data(await _call_operation(session, 'data_assets_prepare_canvas_data', {'body': {'entry_type': 'asset', 'id': asset_id, 'version_id': asset['current_version_id']}}, read_timeout_seconds=5), service)
                 assert prepared['native_type'] == 'APF_DATA_REFERENCE'
                 assert prepared['reference']['asset_version_id'] == asset['current_version_id']
-                first = _tool_data(await _call_operation(session, 'data_assets_update_parameters', {'asset_id': asset_id, 'base_revision': 1, 'parameters': {'gain': 0, 'exposure_seconds': 0}}, read_timeout_seconds=5), service)
+                first = _tool_data(await _call_operation(session, 'data_assets_update', {'asset_id': asset_id, 'expected_revision': 1, 'changes': {'parameters': {'gain': 0, 'exposure_seconds': 0}}}, read_timeout_seconds=5), service)['asset']
                 assert first['parameters']['gain'] == 0
                 assert first['parameters']['exposure_seconds'] == 0
-                cleared = _tool_data(await _call_operation(session, 'data_assets_update_parameters', {'asset_id': asset_id, 'base_revision': 2, 'parameters': {'gain': None}}, read_timeout_seconds=5), service)
+                cleared = _tool_data(await _call_operation(session, 'data_assets_update', {'asset_id': asset_id, 'expected_revision': 2, 'changes': {'parameters': {'gain': None}}}, read_timeout_seconds=5), service)['asset']
                 assert cleared['parameters']['gain'] is None
                 assert cleared['parameters']['exposure_seconds'] == 0
-                stale = await _call_operation(session, 'data_assets_update_parameters', {'asset_id': asset_id, 'base_revision': 2, 'parameters': {'exposure_seconds': 12}}, read_timeout_seconds=5)
+                stale = await _call_operation(session, 'data_assets_update', {'asset_id': asset_id, 'expected_revision': 2, 'changes': {'parameters': {'exposure_seconds': 12}}}, read_timeout_seconds=5)
                 assert stale.is_error
                 assert 'REVISION_CONFLICT' in _result_text(stale)
-                current = _tool_data(await _call_operation(session, 'data_assets_get', {'asset_id': asset_id}, read_timeout_seconds=5), service)
+                current = _tool_data(await _call_operation(session, 'data_assets_get', {'asset_id': asset_id}, read_timeout_seconds=5), service)['asset']
                 assert current['revision'] == 3
                 assert current['parameters']['exposure_seconds'] == 0
     asyncio.run(exercise_protocol())
 
 def test_apf_mcp_business_domains_protocol(service, tmp_path):
+    import numpy as np
+    from astropy.io import fits
 
     async def exercise_protocol():
         params = StdioServerParameters(command=_entrypoint('apf'), args=['mcp'], env=service['env'], cwd=str(ROOT))
@@ -187,68 +195,83 @@ def test_apf_mcp_business_domains_protocol(service, tmp_path):
             async with ClientSession(*streams) as session:
                 await session.initialize()
 
-                async def call(name, **arguments):
-                    return _tool_data(await _call_operation(session, name, arguments, read_timeout_seconds=10), service)
+                async def call(tool_name, **arguments):
+                    return _tool_data(await _call_operation(session, tool_name, arguments, read_timeout_seconds=10), service)
                 equipment = {}
                 for kind in ('camera', 'telescope', 'filter'):
-                    created = await call('data_equipment_create_item', body={'kind': kind, 'name': 'SDK ' + kind})
+                    created = await call('data_equipment_register_' + kind, name='SDK ' + kind)
                     equipment[kind] = created
-                    assert (await call('data_equipment_get_item', equipment_id=created['id']))['kind'] == kind
-                assert (await call('data_equipment_list_items', query={'kind': 'camera', 'limit': 1}))['total'] >= 1
-                setup = await call('data_setups_create', body={'name': 'SDK setup', 'components': [{'source': 'registered', 'equipment_id': equipment['camera']['id']}, {'source': 'inline', 'equipment': {'kind': 'telescope', 'name': 'Inline only'}}]})
-                assert (await call('data_equipment_list_items', query={'q': 'Inline only'}))['total'] == 0
+                    assert (await call('data_equipment_get', equipment_id=created['id']))['kind'] == kind
+                assert (await call('data_equipment_search', query={'equipment_type': 'camera', 'limit': 1}))['total'] >= 1
+                setup = await call('data_setups_create', name='SDK setup', members=[{'source': 'registered', 'equipment_id': equipment['camera']['id']}, {'source': 'inline', 'equipment': {'kind': 'telescope', 'name': 'Inline only'}}])
+                assert (await call('data_equipment_search', query={'text': 'Inline only'}))['total'] == 0
                 assert (await call('data_setups_get', setup_id=setup['id']))['components'] == setup['components']
-                assert (await call('data_setups_list', query={'q': 'SDK setup'}))['total'] == 1
-                preset = await call('data_presets_create', setup_id=setup['id'], body={'parameters': {'parameter_mode': 'gain', 'gain': 0, 'exposure_seconds': 30}})
-                assert (await call('data_presets_get', preset_id=preset['id']))['equipment_setup_id'] == setup['id']
-                assert (await call('data_presets_list', query={'equipment_setup_id': setup['id']}))['total'] == 1
-                paths = [tmp_path / 'night-one.png', tmp_path / 'night-two.png']
+                assert (await call('data_setups_search', query={'text': 'SDK setup'}))['total'] == 1
+                paths = [tmp_path / 'night-one.fits', tmp_path / 'night-two.fits']
                 for path in paths:
-                    _write_png(path)
-                accepted = await call('data_imports_upload', paths=[str(path) for path in paths], options={'capture_preset_id': preset['id'], 'classification': {'frame_class': 'subframe', 'frame_type': 'light'}, 'dataset_name': 'SDK night batch'})
+                    fits.writeto(path, np.arange(256, dtype=np.float32).reshape(16, 16))
+                scan = await call('data_imports_inspect', paths=[str(path) for path in paths])
+                files = (await call('data_imports_entries', scan_id=scan['scan_id']))['items']
+                accepted = await call('data_imports_import_dataset', request_id=str(uuid4()), scan_id=scan['scan_id'],
+                                     name='SDK night batch', files=[{'file_id': row['file_id']} for row in files],
+                                     defaults={'metadata': {'classification': {'frame_class': 'subframe', 'frame_type': 'light'},
+                                                               'parameters': {'parameter_mode': 'gain', 'gain': 0, 'exposure_seconds': 30}},
+                                               'equipment': {'choice': {'source': 'setup', 'setup_id': setup['id'],
+                                                                         'expected_revision': setup['revision']}, 'fields': ['camera']}})
                 task = await _wait_mcp_task(session, service, accepted['task_id'])
-                assert len(task['items']) == 2 and task['report']['registration']['completed']
-                assert (await call('data_tasks_get', task_id=task['id'], items_limit=1, items_offset=1))['items'][0]['id'] == task['items'][1]['id']
+                assert len(task['items']) == 2 and task['stages']['registration']['registered'] == 2
+                assert (await call('data_tasks_get', task_id=task['task_id'], items_limit=1, items_offset=1))['items'][0]['task_item_id'] == task['items'][1]['task_item_id']
                 assert (await call('data_tasks_list', limit=1))['items']
                 asset_ids = [item['asset_id'] for item in task['items']]
                 version_ids = [item['asset_version_id'] for item in task['items']]
-                asset = await call('data_assets_get', asset_id=asset_ids[0])
+                asset = (await call('data_assets_get', asset_id=asset_ids[0]))['asset']
                 assert asset['classification']['frame_type'] == 'light'
                 assert asset['parameters']['gain'] == 0
-                await call('data_presets_update', preset_id=preset['id'], body={'base_revision': 1, 'parameters': {'gain': 88}})
-                assert (await call('data_assets_get', asset_id=asset_ids[0]))['parameters']['gain'] == 0
-                asset = await call('data_assets_update', asset_id=asset_ids[0], body={'base_revision': asset['revision'], 'notes': 'temporary', 'parameters': {'exposure_seconds': 0}})
-                asset = await call('data_assets_update', asset_id=asset_ids[0], body={'base_revision': asset['revision'], 'notes': None, 'classification': {'frame_class': 'subframe', 'frame_type': 'light'}})
+                assert (await call('data_assets_get', asset_id=asset_ids[0]))['asset']['parameters']['gain'] == 0
+                asset = (await call('data_assets_update', asset_id=asset_ids[0], expected_revision=asset['revision'], changes={'notes': 'temporary', 'parameters': {'exposure_seconds': 0}}))['asset']
+                asset = (await call('data_assets_update', asset_id=asset_ids[0], expected_revision=asset['revision'], changes={'notes': None, 'classification': {'frame_class': 'subframe', 'frame_type': 'light'}}))['asset']
                 assert asset['notes'] is None and asset['parameters']['exposure_seconds'] == 0
-                assert (await call('data_assets_get_version', asset_id=asset_ids[0], version_id=version_ids[0]))['availability'] == 'available'
+                assert (await call('data_assets_get', asset_id=asset_ids[0], version_id=version_ids[0]))['version']['availability'] == 'available'
                 assert (await call('data_assets_list_versions', asset_id=asset_ids[0]))['total'] == 1
                 assert (await call('data_library_search', query={'q': 'SDK night batch'}))['items']
-                import numpy as np
-                from astropy.io import fits
                 master_path = tmp_path / 'master-dark.fits'
                 hdu = fits.PrimaryHDU(np.arange(256, dtype=np.float32).reshape(16, 16))
                 hdu.header['IMAGETYP'] = 'Master Dark'
                 hdu.writeto(master_path)
-                master_task = await _wait_mcp_task(session, service, (await call('data_imports_upload_one', path=str(master_path), options={'capture_preset_id': preset['id']}))['task_id'])
-                master = await call('data_assets_get', asset_id=master_task['items'][0]['asset_id'])
+                master_scan = await call('data_imports_inspect', paths=[str(master_path)])
+                master_file = (await call('data_imports_entries', scan_id=master_scan['scan_id']))['items'][0]
+                master_task = await _wait_mcp_task(session, service, (await call('data_imports_import_asset',
+                    request_id=str(uuid4()), scan_id=master_scan['scan_id'], file={'file_id': master_file['file_id'],
+                    'metadata': {'parameters': {'parameter_mode': 'gain', 'gain': 0}}}))['task_id'])
+                master = (await call('data_assets_get', asset_id=master_task['items'][0]['asset_id']))['asset']
                 assert master['classification'] == {'frame_class': 'masterframe', 'frame_type': 'dark'}
-                targets = await call('data_calibration_targets', frame_type='dark', limit=1, offset=0)
+                targets = await call('data_calibration_search', slot='dark', query={'limit': 1, 'offset': 0})
                 assert targets['items'][0]['target'] == {'kind': 'asset_version', 'id': master['current_version_id']}
-                group = await call('data_datasets_create', body={'name': 'SDK logical group', 'asset_version_ids': version_ids})
-                assert (await call('data_datasets_list', query={'q': group['name']}))['total'] == 1
-                bound = await call('data_datasets_publish_version', dataset_id=group['id'], body={'base_revision': group['revision'], 'asset_version_ids': version_ids, 'calibration_defaults': {'dark': targets['items'][0]['target']}, 'member_calibration_overrides': {version_ids[0]: {'dark': None}}})
-                assert bound['calibration_defaults']['dark']['id'] == master['current_version_id']
-                assert bound['members'][0]['calibration_overrides'] == {'dark': None}
-                assert await call('data_datasets_get_version', dataset_id=group['id'], version_id=bound['id']) == bound
-                assert (await call('data_datasets_list_versions', dataset_id=group['id']))['total'] == 2
-                group = await call('data_datasets_get', dataset_id=group['id'])
-                revisions = [(await call('data_assets_get', asset_id=identity))['revision'] for identity in asset_ids]
-                edited = await call('data_datasets_update_members', dataset_id=group['id'], body={'base_revision': group['revision'], 'base_version_id': bound['id'], 'members': [{'asset_id': identity, 'revision': revision} for identity, revision in zip(asset_ids, revisions)], 'parameters': {'gain': 0}})
-                assert len(edited['assets']) == 2 and all((item['parameters']['gain'] == 0 for item in edited['assets']))
+                created = await call('data_datasets_create', request_id=str(uuid4()), name='SDK logical group',
+                                     members=[{'asset_version_id': identity} for identity in version_ids])
+                group = (await call('data_datasets_get', dataset_id=created['result']['dataset_id']))['dataset']
+                assert (await call('data_datasets_search', query={'text': group['name']}))['total'] == 1
+                bound = await call('data_calibration_update_defaults', request_id=str(uuid4()), dataset_id=group['id'],
+                                   expected_revision=group['revision'], base_version_id=group['current_version_id'],
+                                   changes={'dark': {'mode': 'target', 'target': targets['items'][0]['target']}}, accept_unknown=True)
+                group = (await call('data_datasets_get', dataset_id=group['id']))['dataset']
+                overridden = await call('data_calibration_update_members', request_id=str(uuid4()), dataset_id=group['id'],
+                                        expected_revision=group['revision'], base_version_id=group['current_version_id'],
+                                        members=[{'asset_version_id': version_ids[0], 'changes': {'dark': {'mode': 'disabled'}}}],
+                                        accept_unknown=True)
+                bindings = await call('data_calibration_get_dataset', dataset_id=group['id'], version_id=overridden['result']['dataset_version_id'])
+                assert bindings['defaults']['dark']['target']['id'] == master['current_version_id']
+                assert bindings['items'][0]['overrides']['dark'] == {'mode': 'disabled'}
+                assert (await call('data_datasets_get', dataset_id=group['id'], version_id=bound['result']['dataset_version_id']))['version']['id'] == bound['result']['dataset_version_id']
+                assert (await call('data_datasets_list_versions', dataset_id=group['id']))['total'] == 3
+                revisions = [(await call('data_assets_get', asset_id=identity))['asset']['revision'] for identity in asset_ids]
+                edited = await call('data_assets_update_metadata_batch', items=[{'asset_id': identity, 'expected_revision': revision,
+                                    'changes': {'parameters': {'gain': 0}}} for identity, revision in zip(asset_ids, revisions)])
+                assert len(edited['items']) == 2 and all(item['asset']['parameters']['gain'] == 0 for item in edited['items'])
                 project = await call('data_projects_create', body={'name': 'SDK M31', 'target_name': 'M31'})
                 assert (await call('data_projects_list', query={'q': 'SDK M31'}))['total'] == 1
                 asset_ref = await call('data_projects_add_asset', project_id=project['id'], body={'base_revision': 1, 'asset_version_id': version_ids[0]})
-                group_now = await call('data_datasets_get', dataset_id=group['id'])
+                group_now = (await call('data_datasets_get', dataset_id=group['id']))['dataset']
                 dataset_ref = await call('data_projects_add_dataset', project_id=project['id'], body={'base_revision': 2, 'dataset_id': group['id'], 'dataset_version_id': group_now['current_version_id']})
                 assert (await call('data_projects_list_assets', project_id=project['id']))['items'][0]['id'] == asset_ref['id']
                 assert (await call('data_projects_get_asset', project_id=project['id'], reference_id=asset_ref['id']))['asset_version_id'] == version_ids[0]
@@ -273,14 +296,14 @@ def test_apf_mcp_business_domains_protocol(service, tmp_path):
                 assert local_task['status'] == 'completed_with_errors'
                 broken = next((item for item in local_task['items'] if item['source_path'].endswith('broken.fits')))
                 hdu.writeto(night / 'broken.fits', overwrite=True)
-                retry = await call('data_tasks_retry', task_id=local_task['id'], body={'item_ids': [broken['id']]})
+                retry = await call('data_tasks_retry', task_id=local_task['id'], item_ids=[broken['id']])
                 repaired = await _wait_mcp_task(session, service, retry['task_id'])
                 assert repaired['items'][0]['retry_of_item_id'] == broken['id']
                 if broken['asset_id']:
                     assert repaired['items'][0]['asset_id'] == broken['asset_id']
                 assert (night / 'good.png').is_file()
                 for tool_name in ('data_tasks_cancel', 'data_tasks_resume'):
-                    rejected = await _call_operation(session, tool_name, {'task_id': task['id']})
+                    rejected = await _call_operation(session, tool_name, {'task_id': task['task_id']})
                     assert rejected.is_error
                     failure = ErrorEnvelope.model_validate_json(_result_text(rejected))
                     assert failure.error.code == 'TASK_STATE_CONFLICT'
@@ -288,7 +311,7 @@ def test_apf_mcp_business_domains_protocol(service, tmp_path):
                 disposable = tmp_path / 'disposable.png'
                 _write_png(disposable)
                 disposable_task = await _wait_mcp_task(session, service, (await call('data_imports_upload_one', path=str(disposable)))['task_id'])
-                disposable_asset = await call('data_assets_get', asset_id=disposable_task['items'][0]['asset_id'])
+                disposable_asset = (await call('data_assets_get', asset_id=disposable_task['items'][0]['asset_id']))['asset']
                 assert disposable_asset['classification'] == {'frame_class': None, 'frame_type': None}
                 remove = {'items': [{'entry_type': 'asset', 'id': disposable_asset['id'], 'revision': disposable_asset['revision'], 'current_version_id': disposable_asset['current_version_id']}]}
                 await call('data_trash_remove', body=remove)
@@ -305,41 +328,144 @@ def test_apf_mcp_business_domains_protocol(service, tmp_path):
                 assert deleted['deleted_file_count'] == preview['managed_file_count'] and (not deleted['failed'])
                 assert disposable.is_file()
                 for kind, item in equipment.items():
-                    assert (await call('data_equipment_update_item', equipment_id=item['id'], body={'kind': kind, 'base_revision': 1, 'status': 'archived'}))['status'] == 'archived'
-                assert (await call('data_setups_update', setup_id=setup['id'], body={'base_revision': 1, 'status': 'archived'}))['status'] == 'archived'
-                assert (await call('data_presets_update', preset_id=preset['id'], body={'base_revision': 2, 'status': 'archived'}))['status'] == 'archived'
-                assert (await call('data_datasets_update', dataset_id=group['id'], body={'base_revision': group_now['revision'], 'status': 'archived'}))['status'] == 'archived'
+                    assert (await call('data_equipment_update_' + kind, equipment_id=item['id'], expected_revision=1, changes={'status': 'archived'}))['status'] == 'archived'
+                assert (await call('data_setups_update', setup_id=setup['id'], expected_revision=1, changes={'status': 'archived'}))['status'] == 'archived'
+                assert (await call('data_datasets_update', dataset_id=group['id'], expected_revision=group_now['revision'], changes={'status': 'archived'}))['dataset']['status'] == 'archived'
     asyncio.run(exercise_protocol())
 
 def test_apf_cli_structured_domain_workflow(service, tmp_path):
 
     def command(tool, **arguments):
         return _cli_json(service, tool, **arguments)
-    camera = command('data_equipment_create_item', body={'kind': 'camera', 'name': 'CLI Camera'})
-    assert command('data_equipment_list_items', query={'kind': 'camera', 'q': 'CLI Camera'})['total'] == 1
-    setup = command('data_setups_create', body={'name': 'CLI setup', 'components': [{'source': 'registered', 'equipment_id': camera['id']}]})
-    preset = command('data_presets_create', setup_id=setup['id'], body={'parameters': {'parameter_mode': 'gain', 'gain': 0}})
-    assert command('data_presets_list', query={'equipment_setup_id': setup['id']})['total'] == 1
+    camera = command('data_equipment_register_camera', name='CLI Camera')
+    candidates = command('data_equipment_search', query={'equipment_type': 'camera', 'text': 'CLI Camera'})
+    assert camera['id'] in {item['id'] for item in candidates['items']}
+    setup = command('data_setups_create', name='CLI setup', members=[{'source': 'registered', 'equipment_id': camera['id']}])
     paths = [tmp_path / 'cli-bulk-a.png', tmp_path / 'cli-bulk-b.png']
     for path in paths:
         _write_png(path)
-    task = _wait_cli_task(service, command('data_imports_upload', paths=list(map(str, paths)), options={'capture_preset_id': preset['id'], 'dataset_name': 'CLI batch'})['task_id'])
+    task = _wait_cli_task(service, command('data_imports_upload', paths=list(map(str, paths)), options={'parameters': {'parameter_mode': 'gain', 'gain': 0}, 'dataset_name': 'CLI batch'})['task_id'])
     assert command('data_tasks_get', task_id=task['id'], items_limit=1, items_offset=1)['items'][0]['id'] == task['items'][1]['id']
-    assert command('data_assets_get', asset_id=task['items'][0]['asset_id'])['parameters']['gain'] == 0
+    assert command('data_assets_get', asset_id=task['items'][0]['asset_id'])['asset']['parameters']['gain'] == 0
     versions = [item['asset_version_id'] for item in task['items']]
-    group = command('data_datasets_create', body={'name': 'CLI logical group', 'asset_version_ids': versions})
-    publication = command('data_datasets_publish_version', dataset_id=group['id'], body={'base_revision': group['revision'], 'asset_version_ids': versions, 'calibration_defaults': {}, 'member_calibration_overrides': {versions[0]: {'dark': None}}})
-    assert command('data_datasets_get_version', dataset_id=group['id'], version_id=publication['id'])['members'][0]['calibration_overrides'] == {'dark': None}
+    created = command('data_datasets_create', request_id=str(uuid4()), name='CLI logical group',
+                      members=[{'asset_version_id': identity} for identity in versions])
+    group = command('data_datasets_get', dataset_id=created['result']['dataset_id'])['dataset']
+    publication = command('data_calibration_update_members', request_id=str(uuid4()), dataset_id=group['id'],
+                          expected_revision=group['revision'], base_version_id=group['current_version_id'],
+                          members=[{'asset_version_id': versions[0], 'changes': {'dark': {'mode': 'disabled'}}}])
+    bindings = command('data_calibration_get_dataset', dataset_id=group['id'], version_id=publication['result']['dataset_version_id'])
+    assert bindings['items'][0]['overrides']['dark'] == {'mode': 'disabled'}
     project = command('data_projects_create', body={'name': 'CLI project'})
-    reference = command('data_projects_add_dataset', project_id=project['id'], body={'base_revision': project['revision'], 'dataset_id': group['id'], 'dataset_version_id': publication['id']})
+    reference = command('data_projects_add_dataset', project_id=project['id'], body={'base_revision': project['revision'], 'dataset_id': group['id'], 'dataset_version_id': publication['result']['dataset_version_id']})
     assert command('data_projects_list_datasets', project_id=project['id'])['items'][0]['id'] == reference['id']
     command('data_projects_remove_dataset', project_id=project['id'], reference_id=reference['id'], body={'base_revision': 2})
     assert command('data_projects_update', project_id=project['id'], body={'base_revision': 3, 'status': 'archived'})['status'] == 'archived'
-    assert command('data_presets_update', preset_id=preset['id'], body={'base_revision': 1, 'status': 'archived'})['status'] == 'archived'
-    assert command('data_setups_update', setup_id=setup['id'], body={'base_revision': 1, 'status': 'archived'})['status'] == 'archived'
-    assert command('data_equipment_update_item', equipment_id=camera['id'], body={'kind': 'camera', 'base_revision': 1, 'status': 'archived'})['status'] == 'archived'
-    rejected = subprocess.run([_entrypoint('apf'), 'call-tool', 'data_assets_update', '--asset-id', task['items'][0]['asset_id'], '--body', '{"base_revision":0}'], cwd=ROOT, env=service['env'], capture_output=True, text=True, check=False, encoding='utf-8')
-    assert rejected.returncode != 0 and 'base_revision' in rejected.stdout + rejected.stderr
+    assert command('data_setups_update', setup_id=setup['id'], expected_revision=1, changes={'status': 'archived'})['status'] == 'archived'
+    assert command('data_equipment_update_camera', equipment_id=camera['id'], expected_revision=1, changes={'status': 'archived'})['status'] == 'archived'
+    rejected = subprocess.run([_entrypoint('apf'), 'call-tool', 'data_assets_update', '--asset-id', task['items'][0]['asset_id'], '--expected-revision', '0', '--changes', '{}'], cwd=ROOT, env=service['env'], capture_output=True, text=True, check=False, encoding='utf-8')
+    assert rejected.returncode != 0 and 'expected_revision' in rejected.stdout + rejected.stderr
+
+def test_chat_equipment_registration_and_configuration_v2(service):
+    """Exercise chat-selected tools through real stdio, HTTP and generated CLI."""
+    async def exercise():
+        params = StdioServerParameters(command=_entrypoint('apf'), args=['mcp'], env=service['env'], cwd=str(ROOT))
+        async with stdio_client(params) as streams, ClientSession(*streams) as session:
+            await session.initialize()
+            assert {tool.name for tool in (await session.list_tools()).tools} == {'search_tools', 'call_tool'}
+
+            async def call(tool_name, **arguments):
+                return _tool_data(await session.call_tool(tool_name, arguments), service)
+
+            for query, expected in (
+                ('登记 相机 camera', 'data_equipment_register_camera'),
+                ('登记 望远镜 telescope 附件', 'data_equipment_register_telescope'),
+                ('登记 滤镜 Channel 带宽', 'data_equipment_register_filter'),
+                ('删除 设备组合 setup', 'data_equipment_management_preview_delete'),
+            ):
+                discovered = await session.call_tool('search_tools', {'query': query})
+                assert not discovered.is_error, _result_text(discovered)
+                definitions = json.loads(_result_text(discovered))
+                assert expected in {item['name'] for item in definitions}, (query, definitions)
+                assert len(definitions) <= 10
+
+            camera = await call('data_equipment_register_camera', name='CHAT camera unknown specs')
+            assert camera['kind'] == 'camera' and camera['specs']['pixel_size_um'] is None
+            duplicate = await call('data_equipment_register_camera', name=camera['name'])
+            assert duplicate['id'] != camera['id']
+            found = await call('data_equipment_search', query={'text': camera['name'], 'status': 'all'})
+            assert {camera['id'], duplicate['id']} <= {item['id'] for item in found['items']}
+            scope = await call('data_equipment_register_telescope', name='CHAT 600mm scope', specs={
+                'native_focal_length_mm': 600,
+                'optical_accessories': [{'name': 'CHAT 0.8x reducer', 'factor': 0.8}],
+            })
+            ha = await call('data_equipment_register_filter', name='CHAT Ha', specs={'channel': 'Ha', 'bandwidth_nm': 7})
+            unknown = await call('data_equipment_register_filter', name='CHAT Unknown filter')
+            assert unknown['specs']['channel'] is None
+            bad = await session.call_tool('data_equipment_register_telescope', {
+                'name': 'CHAT invalid scope', 'specs': {'native_focal_length_mm': -600},
+            })
+            assert bad.is_error
+            assert (await call('data_equipment_search', query={'text': 'CHAT invalid scope'}))['total'] == 0
+            assert (await call('data_equipment_get', equipment_id=camera['id']))['name'] == camera['name']
+            setup = await call('data_setups_create', name='CHAT setup', members=[
+                {'source': 'registered', 'equipment_id': camera['id']},
+                {'source': 'registered', 'equipment_id': scope['id'],
+                 'optical_accessory_id': scope['specs']['optical_accessories'][0]['id']},
+                {'source': 'registered', 'equipment_id': ha['id']},
+                {'source': 'registered', 'equipment_id': unknown['id']},
+            ])
+            telescope = next(member for member in setup['components'] if member.get('equipment_id') == scope['id'])
+            assert telescope['effective_focal_length_mm'] == 480
+            changed = await call('data_equipment_update_camera', equipment_id=duplicate['id'], expected_revision=duplicate['revision'], changes={'notes': 'updated'})
+            stale = await session.call_tool('data_equipment_update_camera', {
+                'equipment_id': duplicate['id'], 'expected_revision': duplicate['revision'], 'changes': {'status': 'archived'},
+            })
+            assert stale.is_error and 'REVISION_CONFLICT' in _result_text(stale)
+            targets = {'equipment': [{'id': changed['id'], 'revision': changed['revision']}]}
+            preview = await call('data_equipment_management_preview_delete', targets=targets)
+            removed = await call('data_equipment_management_delete', targets=targets,
+                                 preview_fingerprint=preview['preview_fingerprint'])
+            assert removed['deleted_count'] == 1
+            assert (await call('data_equipment_get', equipment_id=ha['id']))['specs']['channel'] == 'Ha'
+    asyncio.run(exercise())
+    cli_camera = _cli_json(service, 'data_equipment_register_camera', name='CHAT standalone generator probe')
+    assert _cli_json(service, 'data_equipment_get', equipment_id=cli_camera['id'])['kind'] == 'camera'
+
+
+def test_equipment_unknown_after_commit_is_queryable_without_replay(service, monkeypatch):
+    """Inject a lost MCP result after the real HTTP service committed a device."""
+    from fastmcp import Client
+
+    from astrophotoflow.client import AssetClient
+    from astrophotoflow.interfaces.mcp.server import create_server
+
+    monkeypatch.setenv('ASTROPHOTOFLOW_CONFIG', str(service['config_path']))
+    create = AssetClient.create_equipment
+    committed = []
+
+    def lose_result(client, body):
+        result = create(client, body)
+        committed.append(str(result.id))
+        raise httpx.ReadTimeout('Synthetic result loss after successful service commit')
+
+    monkeypatch.setattr(AssetClient, 'create_equipment', lose_result)
+
+    async def exercise():
+        async with Client(create_server()) as client:
+            result = await client.call_tool('data_equipment_register_camera', {
+                'name': 'CHAT unknown result probe',
+            }, raise_on_error=False)
+            assert result.is_error and 'TRANSPORT_TIMEOUT' in _result_text(result)
+            assert len(committed) == 1
+            observed = await client.call_tool('data_equipment_search', {
+                'query': {'text': 'CHAT unknown result probe', 'status': 'all'},
+            })
+            assert observed.structured_content['total'] == 1
+            assert observed.structured_content['items'][0]['id'] == committed[0]
+            assert len(committed) == 1  # Reconcile with a read, never replay creation.
+    asyncio.run(exercise())
+
 
 def test_apf_display_preview_stdio_image_and_cli_export(service, tmp_path):
     from base64 import b64decode
@@ -388,7 +514,6 @@ def test_apf_display_preview_stdio_image_and_cli_export(service, tmp_path):
 def test_apf_mcp_confirmed_recursive_batch_and_fixed_project_links(service, tmp_path, record_property):
     import numpy as np
     from astropy.io import fits
-    from uuid import uuid4
     root = tmp_path / 'synthetic-night'
     (root / 'nested').mkdir(parents=True)
     for path in [root / 'first.fits', root / 'nested/second.fits']:
@@ -408,26 +533,31 @@ def test_apf_mcp_confirmed_recursive_batch_and_fixed_project_links(service, tmp_
                     result = _tool_data(await session.call_tool(operation, arguments), service)
                     record_property(operation + '_seconds', time.perf_counter() - start)
                     return result
-                baseline = await call('data_assets_list', {'query': {'limit': 50}})
-                scan = await call('data_imports_inspect', {'body': {'paths': [str(root)]}})
-                assert scan['file_count'] == 2
-                before = await call('data_assets_list', {'query': {'limit': 50}})
+                baseline = await call('data_assets_search', {'query': {'limit': 50}})
+                scan = await call('data_imports_inspect', {'paths': [str(root)]})
+                assert scan['file_count'] == 2 and 'groups' not in scan
+                before = await call('data_assets_search', {'query': {'limit': 50}})
                 assert before['total'] == baseline['total']
-                discovered = await session.call_tool('search_tools', {'query': 'data_imports_submit data_tasks_wait'})
-                definitions = json.loads(_result_text(discovered))
-                assert {'data_imports_submit', 'data_tasks_wait'} <= {row['name'] for row in definitions}
-                assert len(definitions) <= 10
+                for tool_name in ('data_imports_import_dataset', 'data_tasks_wait'):
+                    discovered = await session.call_tool('search_tools', {'query': tool_name})
+                    definitions = json.loads(_result_text(discovered))
+                    assert tool_name in {row['name'] for row in definitions}
+                    assert len(definitions) <= 10
                 project = await call('data_projects_create', {'body': {'name': 'Confirmed night'}})
-                body = {'scan_id': scan['scan_id'], 'request_id': str(uuid4()), 'project_id': project['id'], 'project_revision': project['revision'], 'groups': [{'name': 'Confirmed M31', 'group_id': scan['groups'][0]['id']}]}
-                accepted = await call('data_imports_submit', {'body': body})
-                completed = await call('data_tasks_wait', {'body': {'request_id': body['request_id'], 'wait_seconds': 20}})
+                entries = await call('data_imports_entries', {'scan_id': scan['scan_id']})
+                arguments = {'scan_id': scan['scan_id'], 'request_id': str(uuid4()), 'name': 'Confirmed M31',
+                             'files': [{'file_id': row['file_id']} for row in entries['items']]}
+                accepted = await call('data_imports_import_dataset', arguments)
+                completed = await call('data_tasks_wait', {'request_id': arguments['request_id'], 'wait_seconds': 20})
                 assert completed['state'] == 'completed', completed
-                assert completed['groups'][0]['items_total'] == 2
-                link = completed['groups'][0]['project_link']
-                assert link['state'] == 'linked'
-                repeated = await call('data_imports_submit', {'body': body})
-                assert repeated['groups'][0]['task_id'] == accepted['groups'][0]['task_id']
-                assets = await call('data_assets_list', {'query': {'limit': 50}})
+                assert completed['items_total'] == 2
+                publication = completed['stages']['publication']
+                link = await call('data_projects_add_dataset', {'project_id': project['id'], 'body': {
+                    'base_revision': project['revision'], 'dataset_id': publication['dataset_id'],
+                    'dataset_version_id': publication['dataset_version_id']}})
+                repeated = await call('data_imports_import_dataset', arguments)
+                assert repeated['task_id'] == accepted['task_id']
+                assets = await call('data_assets_search', {'query': {'limit': 50}})
                 assert assets['total'] == baseline['total'] + 2
                 references = await call('data_projects_list_datasets', {'project_id': project['id'], 'limit': 50})
                 assert references['total'] == 1

@@ -61,29 +61,27 @@ class DatasetCalibration(Base):
     __tablename__ = "dataset_calibration"
     __table_args__ = (
         CheckConstraint("frame_type IN ('bias', 'dark', 'flat', 'dark_flat')", name="ck_dataset_calibration_frame_type"),
-        CheckConstraint("(disabled = 1 AND asset_version_id IS NULL AND target_dataset_version_id IS NULL) OR (disabled = 0 AND ((asset_version_id IS NULL) != (target_dataset_version_id IS NULL)))", name="ck_dataset_calibration_target"),
+        CheckConstraint("(disabled = 1 AND asset_version_id IS NULL) OR (disabled = 0 AND asset_version_id IS NOT NULL)", name="ck_dataset_calibration_target"),
         Index("ix_dataset_calibration_asset_target", "asset_version_id"),
-        Index("ix_dataset_calibration_dataset_target", "target_dataset_version_id"),
     )
 
     dataset_version_id: Mapped[str] = mapped_column(ForeignKey("dataset_version.id", ondelete="CASCADE"), primary_key=True)
     frame_type: Mapped[str] = mapped_column(String(16), primary_key=True)
     disabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    state: Mapped[str | None] = mapped_column(String(16))
     asset_version_id: Mapped[str | None] = mapped_column(ForeignKey("asset_version.id", ondelete="CASCADE"))
-    target_dataset_version_id: Mapped[str | None] = mapped_column(ForeignKey("dataset_version.id", ondelete="CASCADE"))
 
 
 class MemberCalibration(Base):
     __tablename__ = "member_calibration"
     __table_args__ = (
         CheckConstraint("frame_type IN ('bias', 'dark', 'flat', 'dark_flat')", name="ck_member_calibration_frame_type"),
-        CheckConstraint("(disabled = 1 AND asset_version_id IS NULL AND target_dataset_version_id IS NULL) OR (disabled = 0 AND ((asset_version_id IS NULL) != (target_dataset_version_id IS NULL)))", name="ck_member_calibration_target"),
+        CheckConstraint("(disabled = 1 AND asset_version_id IS NULL) OR (disabled = 0 AND asset_version_id IS NOT NULL)", name="ck_member_calibration_target"),
         Index("ix_member_calibration_asset_target", "asset_version_id"),
-        Index("ix_member_calibration_dataset_target", "target_dataset_version_id"),
     )
 
     member_id: Mapped[str] = mapped_column(ForeignKey("dataset_member.id", ondelete="CASCADE"), primary_key=True)
     frame_type: Mapped[str] = mapped_column(String(16), primary_key=True)
     disabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    state: Mapped[str | None] = mapped_column(String(16))
     asset_version_id: Mapped[str | None] = mapped_column(ForeignKey("asset_version.id", ondelete="CASCADE"))
-    target_dataset_version_id: Mapped[str | None] = mapped_column(ForeignKey("dataset_version.id", ondelete="CASCADE"))

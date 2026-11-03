@@ -7,7 +7,9 @@ from functools import wraps
 
 import httpx
 from fastmcp.exceptions import NotFoundError, ToolError
+from fastmcp.exceptions import ValidationError as FastMCPValidationError
 from fastmcp.server.middleware import Middleware, MiddlewareContext
+from pydantic import ValidationError as PydanticValidationError
 
 from astrophotoflow.contracts.common import ErrorDetail
 from astrophotoflow.core.localization import localized_error
@@ -29,6 +31,13 @@ def translate_error(exc: Exception, source: str) -> ToolError:
         return tool_error(localized_error('en', 'TRANSPORT_TIMEOUT', 'mcp_transport_timeout'))
     if isinstance(exc, httpx.HTTPError):
         return tool_error(localized_error('en', 'SERVICE_UNAVAILABLE', 'mcp_service_unavailable'))
+    if isinstance(exc, (FastMCPValidationError, PydanticValidationError)):
+        validation = exc.__cause__ if isinstance(exc, FastMCPValidationError) else exc
+        fields = ([{'path': '.'.join(str(part) for part in item['loc']) or 'arguments', 'message': item['msg']}
+                   for item in validation.errors(include_url=False, include_input=False)]
+                  if isinstance(validation, PydanticValidationError)
+                  else [{'path': 'diagnostic', 'message': str(exc)}])
+        return tool_error(localized_error('en', 'INVALID_REQUEST', 'mcp_invalid_request', fields=fields))
     if isinstance(exc, (OSError, ValueError)):
         return tool_error(localized_error('en', 'INVALID_REQUEST', 'mcp_invalid_request', fields=[{'path': 'diagnostic', 'message': str(exc)}]))
     logger.exception("MCP operation failed: %s", source)

@@ -50,10 +50,13 @@ describe('owned writes and fixed-scope invalidation',()=>{
     const pending=owner.mutateAsync({workspaceId:'/a',assetId:id,body})
     await vi.waitFor(()=>expect(patchAsset).toHaveBeenCalledTimes(1))
     cache.setQueryData([...workspaceQueryKey('/b'),'library'],{newView:true})
+    cache.setQueryData([...workspaceQueryKey('/a'),'datasets','group-a','members'],{items:[{asset:{id}}]})
+    cache.setQueryData([...workspaceQueryKey('/a'),'datasets','group-b','members'],{items:[{asset:{id:'other'}}]})
     finish({id,revision:5});await pending
     expect(patchAsset).toHaveBeenCalledWith(id,body)
     expect(cache.getQueryState([...workspaceQueryKey('/a'),'library'])?.isInvalidated).toBe(true)
-    expect(cache.getQueryState([...workspaceQueryKey('/a'),'datasets'])?.isInvalidated).toBe(true)
+    expect(cache.getQueryState([...workspaceQueryKey('/a'),'datasets','group-a','members'])?.isInvalidated).toBe(true)
+    expect(cache.getQueryState([...workspaceQueryKey('/a'),'datasets','group-b','members'])?.isInvalidated).toBe(false)
     expect(cache.getQueryState([...workspaceQueryKey('/b'),'library'])?.isInvalidated).toBe(false)
     expect(cache.getQueryData([...workspaceQueryKey('/b'),'library'])).toEqual({newView:true})
   })
@@ -72,7 +75,7 @@ describe('owned writes and fixed-scope invalidation',()=>{
     const {owner}=setup(useUpdateDatasetMembers)
     members.mockResolvedValueOnce({items:[{asset:{id:'first',revision:2}}],total:2,limit:1,offset:0})
       .mockResolvedValueOnce({items:[{asset:{id:'second',revision:7}}],total:2,limit:1,offset:1})
-    patchMembers.mockResolvedValue({updated_count:2})
+    patchMembers.mockResolvedValue({dataset_id:id,revision:4,version_id:'fixed-version',assets:[{id:'first'},{id:'second'}]})
     await owner.mutateAsync({workspaceId:'/a',datasetId:id,versionId:'fixed-version',revision:3,changes:{parameters:{gain:0,offset:null}}})
     expect(members.mock.calls.map(call=>[call[1],call[2].offset])).toEqual([['fixed-version',0],['fixed-version',1]])
     expect(patchMembers).toHaveBeenCalledExactlyOnceWith(id,{

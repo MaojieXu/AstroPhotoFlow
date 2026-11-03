@@ -1,4 +1,4 @@
-import { libraryAsset as assetSummary, libraryDataset as datasetSummary } from '../../../fixtures/library-summary'
+import { libraryAsset as assetSummary, libraryDataset as datasetSummary, exposureForMembers } from '../../../fixtures/library-summary'
 import {flushPromises,mount} from '@vue/test-utils'
 import {createPinia} from 'pinia'
 import {afterEach,beforeEach,describe,expect,it,vi} from 'vitest'
@@ -25,9 +25,9 @@ const dark=photo(2,'Dark master image','dark',true)
 const unknown=photo(3,'Unclassified image',null)
 const members=[light,dark,unknown].map((asset,index)=>({id:id(200+index),dataset_version_id:id(50),asset_version_id:asset.current_version_id,position:index,relative_path:asset.name,calibration_overrides:{},asset,version:asset.current_version}))
 const group={id:id(40),name:'Mixed original group',notes:'original scene',status:'active',revision:1,current_version_id:id(50),member_count:3,created_at:timestamp,updated_at:timestamp}
-const oldVersion={id:id(50),dataset_id:group.id,version_number:1,created_at:timestamp,calibration_defaults:{},members}
+const oldVersion={id:id(50),dataset_id:group.id,version_number:1,created_at:timestamp,calibration_defaults:{},exposure_summary:exposureForMembers(members),members}
 const mixed=datasetSummary(group,oldVersion,3)
-Object.assign(group,{current_version_number:1,input_ready:false,summary:mixed.summary})
+Object.assign(group,{current_version_number:1,input_ready:false,summary:mixed.summary,exposure_summary:mixed.exposure_summary})
 const target={target:{kind:'asset_version' as const,id:dark.current_version_id},name:dark.name,frame_type:'dark' as const,version_number:1,member_count:1}
 let wrapper:ReturnType<typeof mount>|undefined
 beforeEach(()=>{get.mockReset().mockImplementation(async(path:string)=>{
@@ -123,12 +123,14 @@ describe('calibration library and fixed bindings',()=>{
     expect(wrapper!.find('#calibration-group-name').exists()).toBe(false)
   })
 
-  it('refreshes an untouched editor and uses the newly observed revision',async()=>{
+  it('does not poll the full group and uses a new revision after explicit refresh',async()=>{
     vi.useFakeTimers()
     await openBindings()
     const implementation=get.getMockImplementation()!
     get.mockImplementation(async(path:string)=>path.endsWith('/datasets/'+group.id)?{...group,name:'Observed new name',revision:7}:implementation(path))
     await vi.advanceTimersByTimeAsync(10_000);await flushPromises()
+    expect((wrapper!.get('#calibration-group-name').element as HTMLInputElement).value).toBe(group.name)
+    await click('重新读取')
     expect((wrapper!.get('#calibration-group-name').element as HTMLInputElement).value).toBe('Observed new name')
     send.mockRejectedValue(new Error('Keep draft'))
     await wrapper!.get('#calibration-group-name').setValue('Next edit')
@@ -220,6 +222,20 @@ describe('calibration library and fixed bindings',()=>{
     expect(wrapper.emitted('update:modelValue')!.at(-1)).toEqual([undefined])
     await wrapper.get('select').setValue('none')
     expect(wrapper.emitted('update:modelValue')!.at(-1)).toEqual([null])
+  })
+
+  it('keeps an explicitly unconfigured member separate from inheritance and non-use',async()=>{
+    expect(calibrationBindingsSchema.parse({dark:{mode:'unconfigured'}})).toEqual({dark:{mode:'unconfigured'}})
+    wrapper=mount(CalibrationBindingSelect,{props:{modelValue:{mode:'unconfigured'},frameType:'dark',targets:[],inherit:true,label:'member dark'}})
+    expect(wrapper.get('select').element.value).toBe('unconfigured')
+    expect(wrapper.text()).toContain('未配置')
+    expect(wrapper.text()).not.toContain('已固定的历史版本')
+    await wrapper.get('select').setValue('inherit')
+    expect(wrapper.emitted('update:modelValue')!.at(-1)).toEqual([undefined])
+    await wrapper.get('select').setValue('none')
+    expect(wrapper.emitted('update:modelValue')!.at(-1)).toEqual([null])
+    await wrapper.get('select').setValue('unconfigured')
+    expect(wrapper.emitted('update:modelValue')!.at(-1)).toEqual([{mode:'unconfigured'}])
   })
 
   it('shows surviving calibration references and blocks the permanent-delete confirmation',async()=>{

@@ -26,7 +26,7 @@ from astrophotoflow.modules.data.imports.models import AssetTask, AssetTaskItem
 
 def create_upload(session: Session, settings: Settings, body: UploadImportCreate) -> ImportAccepted:
     validate_import_equipment(session, body.parameters.model_dump(mode='json'))
-    defaults_snapshot = capture_defaults_snapshot(session, body.capture_preset_id, body.parameters).model_dump(mode='json', exclude_unset=True)
+    defaults_snapshot = capture_defaults_snapshot(session, body.parameters, body.equipment).model_dump(mode='json', exclude_unset=True)
     task_id = str(uuid4())
     staging = settings.data_dir / 'upload-staging' / task_id
     staging.mkdir(parents=True, exist_ok=True)

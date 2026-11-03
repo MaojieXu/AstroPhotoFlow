@@ -1,116 +1,106 @@
+"""Explicit file intake; grouping and metadata decisions belong to the Agent."""
+
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Literal
 
 from fastmcp import FastMCP
 from fastmcp.dependencies import Depends
-from pydantic import Field
 
 from astrophotoflow.client import AssetClient
-from astrophotoflow.contracts.import_batches import BatchOut, ImportBatchSubmit, InspectionOut, InspectionPage, SourceInspection
+from astrophotoflow.contracts.common import UuidInput
+from astrophotoflow.contracts.image_calibration import CalibrationPatch
+from astrophotoflow.contracts.image_imports import (
+    ConfirmedFile,
+    ImageImportReceipt,
+    ImageInspectionOut,
+    ImageInspectionPage,
+    ImportDefaults,
+    InspectionQuery,
+)
+from astrophotoflow.contracts.image_management import ImageName, Revision
 from astrophotoflow.contracts.imports import ImportAccepted, ImportCreate, ImportRootEntryPage, PhotoImportOptions
 from astrophotoflow.interfaces.mcp.composition import tool_namespace
 from astrophotoflow.interfaces.mcp.errors import service_errors
 from astrophotoflow.interfaces.mcp.lifespan import service_client
 
+IMPORT_CONFIRMATION_PROMPT = (
+    " Before importing, summarize the exact file scope/order, proposed grouping, equipment, calibration "
+    "and relevant missing or uncertain facts; ask the user and obtain confirmation. Model knowledge or "
+    "reliable web sources may inform recommendations, but adopt suggested values only after user confirmation. "
+    "Unknown values are allowed: the user may leave them unknown or leave calibration unconfigured. "
+    "Group identical questions across an explicit file selection rather than asking per frame. "
+    "A selected Master does not mean all unknowns were accepted. Set accept_unknown=true only after "
+    "explaining and confirming this request's specific calibration unknowns; never bypass known conflicts. "
+    "Equipment specifications cannot establish actual exposure, gain, offset, temperature or Master processing history. "
+    "If sources or the confirmed scope/equipment/calibration change, review the differences before import. "
+    "Few-shot: 'These 147 H frames use MOANA and Master Flat A. The Master temperature is unknown. "
+    "Keep it unknown and save a pending-verification relation, or leave flat unconfigured?' "
+    "Only then submit the confirmed choice. No quality analysis or calibration is executed by importing."
+)
+
 
 def build_server() -> FastMCP:
     mcp = tool_namespace("imports")
 
-    @mcp.tool(
-        name="upload_one",
-        description="Upload one local photo and start ingestion. Omitted classification uses file and frozen preset rules; unknown stays unknown.\n上传一张本机照片并开始入库。省略分类时采用文件资料和受理时固定的预设规则；未知仍保留未知。\n关键词: 导入 文件 来源 检查 上传 批次 ",
-    )
+    @mcp.tool(name="inspect", description="Read-only file/directory inspection returning file facts and source stamps, without suggested groups or ingestion. Agent decides grouping/metadata and obtains user confirmation. 图像 导入 检查 文件 事实 来源")
     @service_errors
-    def import_photo(
-        path: str, options: PhotoImportOptions | None = None, *, client: AssetClient = Depends(service_client)
-    ) -> ImportAccepted:
-        """Upload one local photo and start ingestion. Omitted classification uses file and frozen preset rules; unknown stays unknown."""
+    def inspect(paths: list[str], recursive: bool = True, *, client: AssetClient = Depends(service_client)) -> ImageInspectionOut:
+        return ImageInspectionOut.model_validate(client.image_imports_inspect(paths=paths, recursive=recursive), strict=False)
+
+    @mcp.tool(name="get_inspection", description="Read existing file inspection without rescanning. 图像 导入 扫描 摘要 读取")
+    @service_errors
+    def get_inspection(scan_id: UuidInput, *, client: AssetClient = Depends(service_client)) -> ImageInspectionOut:
+        return ImageInspectionOut.model_validate(client.image_imports_get_inspection(scan_id=scan_id), strict=False)
+
+    @mcp.tool(name="entries", description="Page file facts, exclusions or issues, never automatic groups. Keep filename hints separate from scientific header facts. 图像 导入 文件 分页 事实 问题")
+    @service_errors
+    def entries(scan_id: UuidInput, kind: Literal["files", "excluded", "issues"] = "files", query: InspectionQuery | None = None, *, client: AssetClient = Depends(service_client)) -> ImageInspectionPage:
+        return ImageInspectionPage.model_validate(client.image_imports_entries(scan_id=scan_id, kind=kind, query=query), strict=False)
+
+    @mcp.tool(name="import_asset", description="Import exactly one confirmed scanned file as an independent subframe/Master; no implicit group. request_id reconciles uncertainty. 图像 导入 单张 亮场 校准 Master" + IMPORT_CONFIRMATION_PROMPT)
+    @service_errors
+    def import_asset(request_id: UuidInput, scan_id: UuidInput, file: ConfirmedFile, defaults: ImportDefaults | None = None, storage_mode: Literal["managed", "reference"] = "managed", accept_unknown: bool = False, *, client: AssetClient = Depends(service_client)) -> ImageImportReceipt:
+        return ImageImportReceipt.model_validate(client.image_imports_import_asset(request_id=request_id, scan_id=scan_id, file=file, defaults=defaults, storage_mode=storage_mode, accept_unknown=accept_unknown), strict=False)
+
+    @mcp.tool(name="import_dataset", description="Import an explicitly confirmed ordered file list into a new named group. Manual common defaults and per-file overrides; no automatic grouping. 图像 导入 新建组 天体 分组 校准" + IMPORT_CONFIRMATION_PROMPT)
+    @service_errors
+    def import_dataset(request_id: UuidInput, scan_id: UuidInput, name: ImageName, files: list[ConfirmedFile], defaults: ImportDefaults | None = None, calibration_defaults: CalibrationPatch | None = None, notes: str | None = None, storage_mode: Literal["managed", "reference"] = "managed", accept_unknown: bool = False, *, client: AssetClient = Depends(service_client)) -> ImageImportReceipt:
+        return ImageImportReceipt.model_validate(client.image_imports_import_dataset(request_id=request_id, scan_id=scan_id, name=name, files=files, defaults=defaults, calibration_defaults=calibration_defaults, notes=notes, storage_mode=storage_mode, accept_unknown=accept_unknown), strict=False)
+
+    @mcp.tool(name="append_dataset", description="Import files into an existing fixed object group. incoming_calibration applies only to new members; unspecified incoming slots are unconfigured unless inherit is explicit. Old members/defaults stay. 图像 导入 已有组 追加 第二夜 平场 绑定" + IMPORT_CONFIRMATION_PROMPT)
+    @service_errors
+    def append_dataset(request_id: UuidInput, scan_id: UuidInput, dataset_id: UuidInput, expected_revision: Revision, base_version_id: UuidInput, files: list[ConfirmedFile], defaults: ImportDefaults | None = None, incoming_calibration: CalibrationPatch | None = None, storage_mode: Literal["managed", "reference"] = "managed", accept_unknown: bool = False, *, client: AssetClient = Depends(service_client)) -> ImageImportReceipt:
+        return ImageImportReceipt.model_validate(client.image_imports_append_dataset(request_id=request_id, scan_id=scan_id, dataset_id=dataset_id, expected_revision=expected_revision, base_version_id=base_version_id, files=files, defaults=defaults, incoming_calibration=incoming_calibration, storage_mode=storage_mode, accept_unknown=accept_unknown), strict=False)
+
+    @mcp.tool(name="retry_publication", description="Retry only failed group publication from an existing import task at the new observed group revision/version. Never copy or import files again. 图像 导入 关联失败 修复 重试 发布")
+    @service_errors
+    def retry_publication(request_id: UuidInput, task_id: UuidInput, expected_revision: Revision, base_version_id: UuidInput, *, client: AssetClient = Depends(service_client)) -> ImageImportReceipt:
+        return ImageImportReceipt.model_validate(client.image_imports_retry_publication(request_id=request_id, task_id=task_id, expected_revision=expected_revision, base_version_id=base_version_id), strict=False)
+
+    # Existing direct/upload/root capabilities remain for their native callers.
+    @mcp.tool(name="upload_one", description="Upload one explicitly selected client-local photo using file/confirmed manual/unknown facts. 图像 导入 上传 单张" + IMPORT_CONFIRMATION_PROMPT)
+    @service_errors
+    def upload_one(path: str, options: PhotoImportOptions | None = None, *, client: AssetClient = Depends(service_client)) -> ImportAccepted:
         return client.import_photo(Path(path), options)
 
-    @mcp.tool(
-        name="upload",
-        description="Upload multiple local photos in supplied order. Set options.create_dataset and dataset_name to register a logical group.\n按提供的顺序上传多张本机照片。设置 options.create_dataset 和 dataset_name 可登记逻辑图像组。\n关键词: 导入 文件 来源 检查 上传 批次 ",
-    )
+    @mcp.tool(name="upload", description="Upload an explicitly selected ordered list of client-local photos. 图像 导入 上传 多张" + IMPORT_CONFIRMATION_PROMPT)
     @service_errors
-    def import_photos(
-        paths: list[str], options: PhotoImportOptions | None = None, *, client: AssetClient = Depends(service_client)
-    ) -> ImportAccepted:
-        """Upload multiple local photos in supplied order. Set options.create_dataset and dataset_name to register a logical group."""
+    def upload(paths: list[str], options: PhotoImportOptions | None = None, *, client: AssetClient = Depends(service_client)) -> ImportAccepted:
         return client.import_photos([Path(path) for path in paths], options)
 
-    @mcp.tool(
-        name="roots",
-        description="List the configured service-side local import roots.\n列出服务端已配置的本机导入根目录。\n关键词: 导入 文件 来源 检查 上传 批次 ",
-    )
+    @mcp.tool(name="roots", description="List configured service-side local import roots. 图像 导入 根目录")
     @service_errors
-    def list_import_roots(*, client: AssetClient = Depends(service_client)) -> dict[str, Any]:
-        """List the configured service-side local import roots."""
+    def roots(*, client: AssetClient = Depends(service_client)) -> dict:
         return {"items": client.list_import_roots()}
 
-    @mcp.tool(
-        name="browse",
-        description="Browse files and folders inside one configured root using relative POSIX paths.\n使用相对 POSIX 路径浏览指定根目录内的文件和文件夹。\n关键词: 导入 文件 来源 检查 上传 批次 ",
-    )
+    @mcp.tool(name="browse", description="Browse files/folders inside one configured root with relative POSIX paths. 图像 导入 浏览 目录 分页")
     @service_errors
-    def browse_import_root(
-        root_id: str,
-        path: str = "",
-        limit: int = 50,
-        offset: int = 0,
-        q: str | None = None,
-        *,
-        client: AssetClient = Depends(service_client),
-    ) -> ImportRootEntryPage:
-        """Browse files and folders inside one configured root using relative POSIX paths."""
+    def browse(root_id: str, path: str = "", limit: int = 50, offset: int = 0, q: str | None = None, *, client: AssetClient = Depends(service_client)) -> ImportRootEntryPage:
         return client.browse_import_root(root_id, path, limit, offset, q)
 
-    @mcp.tool(
-        name="local",
-        description="Import local absolute paths with managed storage and no configured root; folders select their current level only. Existing root_id relative sources also support reference mode. Preset values freeze at acceptance.\n从本机绝对路径导入并托管，无需预设根目录；文件夹仅选择当前层。已有 root_id 相对来源同时支持引用模式。受理时固定预设快照。\n关键词: 导入 文件 来源 检查 上传 批次 ",
-    )
+    @mcp.tool(name="local", description="Import explicitly selected local sources with the existing managed/reference contract. 图像 本地 导入" + IMPORT_CONFIRMATION_PROMPT)
     @service_errors
-    def import_local(body: ImportCreate, *, client: AssetClient = Depends(service_client)) -> ImportAccepted:
-        """Import local absolute paths with managed storage and no configured root; folders select their current level only. Existing root_id relative sources also support reference mode. Preset values freeze at acceptance."""
+    def local(body: ImportCreate, *, client: AssetClient = Depends(service_client)) -> ImportAccepted:
         return client.import_local(body)
-
-    @mcp.tool(
-        name="inspect",
-        description="Inspect local files/recursive folders without ingestion. Return a manifest ID, suggested groups and issues for user confirmation.\n只读检查文件／递归目录，返回分组建议、疑义与清单ID。确认前不入库。\n关键词: 导入 文件 来源 检查 上传 批次 检查 只读",
-    )
-    @service_errors
-    def inspect_sources(body: SourceInspection, *, client: AssetClient = Depends(service_client)) -> InspectionOut:
-        return client.inspect_import_sources(body)
-
-    @mcp.tool(
-        name="get_inspection",
-        description="Read an existing inspection summary without rescanning.\n读取扫描摘要，不重新扫描。\n关键词: 导入 文件 来源 检查 上传 批次 读取 查询",
-    )
-    @service_errors
-    def get_inspection(scan_id: str, *, client: AssetClient = Depends(service_client)) -> InspectionOut:
-        return client.get_import_inspection(scan_id)
-
-    @mcp.tool(
-        name="entries",
-        description="Page files, groups, excluded entries or source issues; optionally filter by group_id. Do not load every file into model context routinely.\n按需分页读取扫描文件、分组、排除项或来源错误；可按组筛选。\n关键词: 导入 文件 来源 检查 上传 批次 ",
-    )
-    @service_errors
-    def inspection_entries(
-        scan_id: str,
-        kind: str = "files",
-        group_id: str | None = None,
-        limit: Annotated[int, Field(ge=1, le=200)] = 50,
-        offset: Annotated[int, Field(ge=0)] = 0,
-        *,
-        client: AssetClient = Depends(service_client),
-    ) -> InspectionPage:
-        return client.list_inspection_entries(scan_id, kind, group_id, limit, offset)
-
-    @mcp.tool(
-        name="submit",
-        description="Submit all user-confirmed groups once. Reuse request_id to query/recover the same acceptance; different content conflicts. Groups select group_id or member_ids. options are explicit manual values, not unconfirmed filename guesses. Optional project requires project_revision.\n用户确认后一次提交所有分组；request_id防重复受理，来源变化则拒绝。组用group_id或member_ids；人工options必须是确认内容。项目需project_revision。\n关键词: 导入 文件 来源 检查 上传 批次 提交 确认",
-    )
-    @service_errors
-    def submit_batch(body: ImportBatchSubmit, *, client: AssetClient = Depends(service_client)) -> BatchOut:
-        return client.submit_import_batch(body)
 
     return mcp

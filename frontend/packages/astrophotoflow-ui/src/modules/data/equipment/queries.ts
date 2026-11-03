@@ -12,19 +12,18 @@ import type { EquipmentSetupPage, ListEquipmentApiV1EquipmentGetData, ListSetups
 export const equipmentChoicesKey = (workspaceId: string) =>
   [...workspaceQueryKey(workspaceId), 'equipment', 'choices'] as const
 
-export function useImportPresetChoices(workspace: MaybeRefOrGetter<string>) {
+export function useImportEquipmentChoices(workspace: MaybeRefOrGetter<string>) {
   const connectionReady = useQueryAvailability()
   return useQuery({
-    queryKey: computed(() => [...workspaceQueryKey(toValue(workspace)), 'equipment', 'import-presets'] as const),
+    queryKey: computed(() => [...workspaceQueryKey(toValue(workspace)), 'equipment', 'import-choices'] as const),
     enabled: computed(() => connectionReady.value && Boolean(toValue(workspace))),
     queryFn: async ({ signal }) => {
-      const [setups,presets] = await Promise.all([
-        readPages(offset=>catalogApi.setups({limit:200,offset:offset??0,sort_by:'name',order:'asc',status:'active'},signal),true,signal),
-        readPages(offset=>catalogApi.allPresets({limit:200,offset:offset??0,sort_by:'name',order:'asc',status:'active'},signal),true,signal)
+      const [setups, equipment] = await Promise.all([
+        readPages(offset => catalogApi.setups({limit:200,offset:offset??0,sort_by:'name',order:'asc',status:'active'},signal),true,signal),
+        readPages(offset => catalogApi.equipment({limit:200,offset:offset??0,sort_by:'name',order:'asc',status:'active'},signal),true,signal)
       ])
-      return {setups:setups.items,presets:presets.items}
-    },
-    refetchInterval: 10_000
+      return {setups:setups.items, equipment:equipment.items}
+    }
   })
 }
 
@@ -112,30 +111,4 @@ export function useEquipmentManagementQuery(
     return query.refetch({cancelRefetch:false})
   }
   return { ...query, refresh, updateItems }
-}
-
-export interface SetupPresetsRequest {
-  workspaceId: string
-  setupId: string
-  query: Parameters<typeof catalogApi.presets>[1]
-}
-export function useSetupPresetsQuery(request: MaybeRefOrGetter<SetupPresetsRequest | undefined>, paused: MaybeRefOrGetter<boolean>) {
-  const client = useQueryClient()
-  const queryKey = computed(() => {
-    const current = toValue(request)
-    return current ? [...workspaceQueryKey(current.workspaceId), 'equipment', 'presets', current.setupId, current.query] as const : ['setup-presets-idle'] as const
-  })
-  const connectionReady = useQueryAvailability()
-  const query = useQuery({
-    queryKey,
-    enabled: computed(() => connectionReady.value && Boolean(toValue(request)?.workspaceId) && !toValue(paused)),
-    queryFn: async ({ signal }) => {
-      const current = toValue(request)
-      if (!current?.workspaceId) throw new Error('Preset reads require a workspace identity')
-      return readPages(offset => catalogApi.presets(current.setupId, { ...current.query, offset: offset ?? current.query.offset }, signal), true, signal)
-    },
-    refetchInterval: 10_000
-  })
-  watch(() => toValue(paused), value => { if (value) void client.cancelQueries({ queryKey: queryKey.value }) }, { flush: 'sync' })
-  return query
 }

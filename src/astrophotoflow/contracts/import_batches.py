@@ -6,6 +6,7 @@ from typing import Literal
 from pydantic import Field, field_validator, model_validator
 
 from astrophotoflow.contracts.common import StrictModel, UuidInput, check_name
+from astrophotoflow.contracts.image_management import EquipmentApplication
 from astrophotoflow.contracts.metadata import AssetClassification, AssetParameters
 
 
@@ -13,7 +14,7 @@ class ConfirmedImportOptions(StrictModel):
     classification: AssetClassification = Field(default_factory=AssetClassification)
     parameters: AssetParameters = Field(default_factory=AssetParameters)
     notes: str | None = None
-    capture_preset_id: UuidInput | None = None
+    equipment: EquipmentApplication | None = None
 
 
 class SourceInspection(StrictModel):

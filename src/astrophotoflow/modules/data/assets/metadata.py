@@ -46,5 +46,5 @@ def capture_role(classification: dict) -> tuple[str, str | None]:
 
 PARAMETER_KEYS = (
     "camera_id", "optical_system_id", "filter_id", "parameter_mode", "iso", "gain", "offset",
-    "exposure_seconds", "integration_seconds", "sensor_temperature_c", "binning_x", "binning_y", "cfa_pattern",
+    "exposure_seconds", "integration_seconds", "sensor_temperature_c", "binning_x", "binning_y", "cfa_pattern", "readout_mode",
 )

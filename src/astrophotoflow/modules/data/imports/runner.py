@@ -8,6 +8,8 @@ def run_import_task(database, settings, task_id, workers=None):
         pipeline.process_task(database, settings, task_id, workers)
     finally:
         finalize_task_batch(database, task_id)
+        from .explicit import finish_image_import
+        finish_image_import(database, task_id)
 
 
 

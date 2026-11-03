@@ -71,14 +71,15 @@ describe('equipment management',()=>{
     expect(get.mock.calls.some(([path])=>String(path).includes('/projects'))).toBe(false)
   })
 
-  it.each([['camera','相机'],['telescope','望远镜'],['filter','滤镜']])('registers %s inside a combination and keeps it after abandoning the combination',async(kind,label)=>{
+  it.each([['camera','相机'],['telescope','望远镜'],['mount','赤道仪'],['filter','滤镜']])('registers %s inside a combination and keeps it after abandoning the combination',async(kind,label)=>{
     await open();await click('新建设备组合');await click('新建'+label)
     await field('设备名称').setValue('Saved '+kind)
     if(kind==='camera')await wrapper!.get('input[aria-label="像元尺寸"]').setValue('3.76')
     await wrapper!.get('form[aria-label="新建设备表单"]').trigger('submit');await flushPromises()
     expect(devices).toHaveLength(1)
     expect(devices[0]).toMatchObject({kind,name:'Saved '+kind})
-    if(kind==='camera')expect(devices[0].specs).toMatchObject({pixel_size_um:3.76})
+    if(devices[0].kind==='camera')expect(devices[0].specs).toMatchObject({pixel_size_um:3.76})
+    if(kind==='mount')expect(devices[0]).not.toHaveProperty('specs')
     expect(wrapper!.text()).toContain('取消组合仍会保留此设备')
     vi.spyOn(window,'confirm').mockReturnValue(true)
     await click('取消');await click('我的设备')
@@ -273,20 +274,11 @@ describe('equipment management',()=>{
     expect(send.mock.calls).toHaveLength(1)
   })
 
-  it('selects multiple owned presets for one direct deletion confirmation',async()=>{
-    setups=[{id:id(100),name:'Wide rig',components:[],notes:null,status:'active',revision:1,created_at:timestamp,updated_at:timestamp}]
-    const presets=[1,2].map(index=>({id:id(200+index),equipment_setup_id:id(100),name:'Preset '+index,equipment_selection:{},parameters:{},status:'active',revision:index,created_at:timestamp,updated_at:timestamp}))
-    const original=get.getMockImplementation()!
-    get.mockImplementation(async(path:string)=>path.includes('/presets?')?page(presets):original(path))
-    await open();await wrapper!.get('button[aria-label="查看组合 Wide rig"]').trigger('click');await flushPromises()
-    for(const preset of presets)await wrapper!.get('input[aria-label="选择预设 '+preset.name+'"]').setValue(true)
-    await click('删除所选预设（2）')
-    expect(send.mock.calls.at(-1)![0]).toBe('/astrophotoflow/api/v1/equipment-management/delete-preview')
-    expect(send.mock.calls.at(-1)![3]).toEqual({items:presets.map(row=>({entry_type:'capture_preset',id:row.id,revision:row.revision}))})
-    await click('取消')
-    expect(send.mock.calls.some(([path])=>String(path).endsWith('/delete'))).toBe(false)
+  it('offers combinations without an independent capture preset manager',async()=>{
+    await open();await click('设备组合')
+    expect(wrapper!.text()).not.toContain('拍摄预设')
+    expect(get.mock.calls.every(([path])=>!String(path).includes('presets'))).toBe(true)
   })
-
   it('requires a fresh preview after a deletion conflict and never resends automatically',async()=>{
     const items=[{entry_type:'equipment' as const,id:id(1),revision:1}]
     wrapper=mount(EquipmentDeleteDialog,{props:{workspaceId:'/fixture',viewKey:'one',items}});await flushPromises()

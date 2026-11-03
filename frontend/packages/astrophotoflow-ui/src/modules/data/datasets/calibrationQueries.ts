@@ -32,12 +32,11 @@ export function useCalibrationData(
         readPages(offset => datasetApi.calibrationTargets({ limit: 200, offset: offset ?? 0 }, signal), true, signal)
       ])
       const versionId = current.versionId ?? dataset.current_version_id
-      // Editing bindings needs the complete ordered scope, unlike summary lists.
       const version = versionId ? await datasetApi.version(current.datasetId, versionId, signal) : undefined
       signal.throwIfAborted()
       return { dataset, versions: versions.items, targets: targets.items, version }
     },
-    refetchInterval: 10_000
+    staleTime: Infinity
   })
   watch(() => toValue(paused), value => {
     if (value) void cache.cancelQueries({ queryKey: key.value })

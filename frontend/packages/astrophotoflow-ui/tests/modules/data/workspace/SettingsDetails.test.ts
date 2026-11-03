@@ -56,7 +56,7 @@ describe('settings detail boundaries without a Workspace provider', () => {
 
   it('keeps dataset edits associated with the reference rather than replacing its identity with the dataset id', async () => {
     const dataset: DatasetOut = { id: id(5), name: 'Group', notes: null, status: 'active', revision: 1,
-      current_version_id: id(6), current_version_number: 4, member_count: 0, summary: metadataForMembers([]), input_ready: false,
+      current_version_id: id(6), current_version_number: 4, member_count: 0, exposure_summary: {subframe_count:0,known_count:0,unknown_count:0,total_seconds:null,complete:true}, summary: metadataForMembers([]), input_ready: false,
       created_at: '2026-10-28T12:00:00Z', updated_at: '2026-10-28T12:00:00Z' }
     const save = vi.fn().mockResolvedValue(undefined)
     const wrapper = mount(DatasetDetails, { props: { dataset, recordId: id(7), saveName: save, saveStatus: save, saveNotes: save } })

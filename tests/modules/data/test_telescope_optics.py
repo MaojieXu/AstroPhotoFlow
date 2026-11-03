@@ -1,4 +1,4 @@
-"""Telescope-owned accessories, sparse preset selection, and frozen optical facts."""
+"""Telescope-owned accessories, setup selection, and frozen optical facts."""
 
 from contextlib import closing
 from copy import deepcopy
@@ -9,15 +9,22 @@ from pydantic import TypeAdapter, ValidationError
 
 from astrophotoflow.contracts.equipment import EquipmentCreate, OpticalAccessory, TelescopeCreate, TelescopePatch
 from astrophotoflow.contracts.metadata import AssetParametersPatch
-from astrophotoflow.contracts.setups import CapturePresetCreate, CapturePresetPatch, EquipmentSetupCreate, EquipmentSetupPatch
+from astrophotoflow.contracts.setups import EquipmentSetupCreate, EquipmentSetupPatch
 from astrophotoflow.core.config import Settings
 from astrophotoflow.core.database.db import Database
 from astrophotoflow.core.database.schema import upgrade_database
 from astrophotoflow.core.errors import ApiError
-from astrophotoflow.modules.data.equipment.presets import create_capture_preset, get_capture_preset, update_capture_preset
 from astrophotoflow.modules.data.equipment.service import create_equipment, get_equipment, update_equipment
 from astrophotoflow.modules.data.equipment.setups import create_setup, get_setup, update_setup
 from astrophotoflow.modules.data.equipment.snapshots import capture_defaults_snapshot
+
+
+def freeze_setup(session, setup_id):
+    from astrophotoflow.contracts.image_management import EquipmentApplication
+    current = get_setup(session, setup_id)
+    application = EquipmentApplication(choice={"source": "setup", "setup_id": setup_id, "expected_revision": current.revision},
+                                       fields=["telescope", "optical_accessory"] if current.components else ["telescope"])
+    return capture_defaults_snapshot(session, AssetParametersPatch(), application).model_dump(mode="json")
 
 
 @pytest.fixture
@@ -46,18 +53,17 @@ def test_accessory_requires_a_finite_positive_factor(factor):
         OpticalAccessory(name="Reducer", factor=factor)
 
 
-@pytest.mark.parametrize("kind", ["mount", "accessory", "optical_system"])
+@pytest.mark.parametrize("kind", ["accessory", "optical_system"])
 def test_removed_equipment_kinds_are_rejected(kind):
     with pytest.raises(ValidationError):
         TypeAdapter(EquipmentCreate).validate_python({"kind": kind, "name": "removed"})
 
 
-def test_presets_inherit_the_setup_accessory_and_follow_explicit_setup_changes(database):
+def test_imports_freeze_the_setup_accessory_and_follow_explicit_setup_changes(database):
     with database.write_session() as session:
         telescope, setup, reducer, flattener = optical_rig(session)
-        preset = create_capture_preset(session, setup.id, CapturePresetCreate())
         def frozen():
-            return capture_defaults_snapshot(session, preset.id, AssetParametersPatch()).model_dump(mode="json")["selected_equipment"]["optical_system_id"]
+            return freeze_setup(session, setup.id)["selected_equipment"]["optical_system_id"]
         assert frozen()["optical_accessory"]["id"] == str(reducer.id)
         component = setup.components[0].model_dump(mode="json", exclude={"effective_focal_length_mm"})
         component["optical_accessory_id"] = None
@@ -67,14 +73,13 @@ def test_presets_inherit_the_setup_accessory_and_follow_explicit_setup_changes(d
         component["optical_accessory_id"] = flattener.id
         update_setup(session, setup.id, EquipmentSetupPatch(base_revision=2, components=[component]))
         assert frozen()["optical_accessory"]["name"] == "Flattener"
-        update_capture_preset(session, preset.id, CapturePresetPatch(base_revision=1, parameters={"exposure_seconds": 60}))
         assert frozen()["optical_accessory"]["id"] == str(flattener.id)
         assert get_equipment(session, telescope.id).specs.optical_accessories[0].id == reducer.id
 
 
 def test_accessory_ids_must_belong_to_the_selected_telescope(database):
     with database.write_session() as session:
-        telescope, setup, reducer, _ = optical_rig(session)
+        telescope, _setup, reducer, _ = optical_rig(session)
     with pytest.raises(ApiError), database.write_session() as session:
         create_setup(session, EquipmentSetupCreate(name="wrong", components=[{
             "source": "registered", "equipment_id": telescope.id, "optical_accessory_id": uuid4(),
@@ -92,8 +97,7 @@ def test_removal_of_a_selected_accessory_is_rejected_but_renaming_keeps_frozen_f
         component = setup.components[0].model_dump(mode="json", exclude={"effective_focal_length_mm"})
         component["optical_accessory_id"] = flattener.id
         update_setup(session, setup.id, EquipmentSetupPatch(base_revision=1, components=[component]))
-        preset = create_capture_preset(session, setup.id, CapturePresetCreate())
-        frozen = deepcopy(capture_defaults_snapshot(session, preset.id, AssetParametersPatch()).model_dump(mode="json"))
+        frozen = deepcopy(freeze_setup(session, setup.id))
     for accessories in ([], [reducer.model_dump(mode="json")]):
         with pytest.raises(ApiError), database.write_session() as session:
             update_equipment(session, telescope.id, TelescopePatch(kind="telescope", base_revision=1,
@@ -102,7 +106,7 @@ def test_removal_of_a_selected_accessory_is_rejected_but_renaming_keeps_frozen_f
         changed = flattener.model_copy(update={"name": "Changed", "factor": 2.0})
         update_equipment(session, telescope.id, TelescopePatch(kind="telescope", base_revision=1,
                          specs={"optical_accessories": [reducer, changed]}))
-        current = capture_defaults_snapshot(session, preset.id, AssetParametersPatch()).model_dump(mode="json")
+        current = freeze_setup(session, setup.id)
         assert current["selected_equipment"]["optical_system_id"]["effective_focal_length_mm"] == 1200
     assert frozen["selected_equipment"]["optical_system_id"]["optical_accessory"]["name"] == "Flattener"
     assert frozen["selected_equipment"]["optical_system_id"]["effective_focal_length_mm"] == 600
@@ -114,13 +118,11 @@ def test_removing_telescope_member_leaves_no_current_override_but_keeps_history(
         component = setup.components[0].model_dump(mode="json", exclude={"effective_focal_length_mm"})
         component["optical_accessory_id"] = flattener.id
         update_setup(session, setup.id, EquipmentSetupPatch(base_revision=1, components=[component]))
-        preset = create_capture_preset(session, setup.id, CapturePresetCreate())
-        frozen = capture_defaults_snapshot(session, preset.id, AssetParametersPatch()).model_dump(mode="json")
+        frozen = freeze_setup(session, setup.id)
     with database.write_session() as session:
         update_setup(session, setup.id, EquipmentSetupPatch(base_revision=2, components=[]))
-        assert get_capture_preset(session, preset.id).equipment_selection.model_dump(exclude_unset=True) == {}
         assert get_setup(session, setup.id).components == []
-        assert "optical_system_id" not in capture_defaults_snapshot(session, preset.id, AssetParametersPatch()).model_dump(mode="json")["selected_equipment"]
+        assert freeze_setup(session, setup.id)["selected_equipment"]["optical_system_id"] is None
     assert frozen["selected_equipment"]["optical_system_id"]["optical_accessory"]["id"] == str(flattener.id)
 
 
@@ -135,7 +137,6 @@ def test_inline_telescope_uses_member_selection_and_unknown_focal_stays_unknown(
             },
         }]))
         assert setup.components[0].effective_focal_length_mm is None
-        preset = create_capture_preset(session, setup.id, CapturePresetCreate())
-        frozen = capture_defaults_snapshot(session, preset.id, AssetParametersPatch()).model_dump(mode="json")
+        frozen = freeze_setup(session, setup.id)
         assert frozen["selected_equipment"]["optical_system_id"]["optical_accessory"]["id"] == str(identity)
         assert frozen["selected_equipment"]["optical_system_id"]["effective_focal_length_mm"] is None

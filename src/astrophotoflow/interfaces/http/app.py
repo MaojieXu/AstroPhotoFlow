@@ -4,6 +4,7 @@ from astrophotoflow.interfaces.http.data.calibration import router as calibratio
 from astrophotoflow.interfaces.http.data.canvas import router as data_canvas_router
 from astrophotoflow.interfaces.http.data.content import router as content_router
 from astrophotoflow.interfaces.http.data.datasets import router as dataset_router
+from astrophotoflow.interfaces.http.data.image_management import router as image_management_router
 from astrophotoflow.interfaces.http.data.imports import router as import_router
 from astrophotoflow.interfaces.http.data.inspection import router as inspection_router
 from astrophotoflow.interfaces.http.data.library import router as library_router
@@ -28,7 +29,6 @@ from astrophotoflow.interfaces.http.data.equipment import router as equipment_ro
 from astrophotoflow.interfaces.http.data.exports import router as export_router
 from astrophotoflow.interfaces.http.data.management import equipment_router as equipment_management_router
 from astrophotoflow.interfaces.http.data.management import router as management_router
-from astrophotoflow.interfaces.http.data.presets import router as preset_router
 from astrophotoflow.interfaces.http.data.result_media import router as result_media_router
 from astrophotoflow.interfaces.http.data.results import router as data_node_router
 from astrophotoflow.interfaces.http.data.setups import router as setup_router
@@ -65,7 +65,7 @@ def create_app(settings: Settings, token: str) -> FastAPI:
     register_maintenance(app, settings)
     register_native_pages(app, settings)
     register_error_handlers(app)
-    for router in (media_router, preview_router, inspection_router, batch_router, content_router, system.router, management_router, equipment_management_router, trash_router, import_router, asset_router, project_router, equipment_router, setup_router, preset_router, dataset_router, calibration_router, software_router, nodes_router):
+    for router in (image_management_router, media_router, preview_router, inspection_router, batch_router, content_router, system.router, management_router, equipment_management_router, trash_router, import_router, asset_router, project_router, equipment_router, setup_router, dataset_router, calibration_router, software_router, nodes_router):
         app.include_router(router)
     register_native_schemas(app)
     return app

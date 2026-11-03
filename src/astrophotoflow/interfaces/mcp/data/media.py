@@ -1,11 +1,15 @@
 from pathlib import Path
+from typing import Annotated, Literal
 
 from fastmcp import FastMCP
 from fastmcp.dependencies import Depends
 from fastmcp.utilities.types import Image
+from pydantic import Field
 
 from astrophotoflow.client import AssetClient
+from astrophotoflow.contracts.common import UuidInput
 from astrophotoflow.contracts.previews import DisplayPreviewState
+from astrophotoflow.contracts.thumbnails import ThumbnailBatchCreate, ThumbnailBatchOut, ThumbnailTarget
 from astrophotoflow.interfaces.client.exports import PreviewExportResult
 from astrophotoflow.interfaces.mcp.composition import tool_namespace
 from astrophotoflow.interfaces.mcp.errors import service_errors
@@ -14,6 +18,22 @@ from astrophotoflow.interfaces.mcp.lifespan import service_client
 
 def build_server() -> FastMCP:
     mcp = tool_namespace("media")
+
+    @mcp.tool(name="thumbnails_generate", description="Queue 100px automatically stretched library thumbnails for a fixed asset, fixed dataset or missing library entries. A dataset uses its first fixed member's stretch. Import already queues thumbnails automatically. Reuse request_id to reconcile acceptance. 缩略图 生成 图像组 首帧 后台")
+    @service_errors
+    def thumbnails_generate(request_id: UuidInput, target: ThumbnailTarget, mode: Literal["missing", "rebuild"] = "missing", *, client: AssetClient = Depends(service_client)) -> ThumbnailBatchOut:
+        body = ThumbnailBatchCreate.model_validate({"request_id": request_id, "target": target, "mode": mode}, strict=False)
+        return ThumbnailBatchOut.model_validate(client.thumbnail_batch_create(body), strict=False)
+
+    @mcp.tool(name="thumbnails_status", description="Read thumbnail batch counts, group-level fixed-first-member failures and paginated item results using its original request ID. 缩略图 批次 状态 组级失败 查询")
+    @service_errors
+    def thumbnails_status(request_id: UuidInput, limit: Annotated[int, Field(ge=1, le=200)] = 50, offset: Annotated[int, Field(ge=0)] = 0, *, client: AssetClient = Depends(service_client)) -> ThumbnailBatchOut:
+        return ThumbnailBatchOut.model_validate(client.thumbnail_batch_status(request_id, limit, offset), strict=False)
+
+    @mcp.tool(name="thumbnails_retry", description="Retry selected failed thumbnail items from an existing batch, automatically queuing their failed fixed-first-member dependency first. Other failed members are not retried. This never reimports or modifies source images. 缩略图 失败项 重试 首帧依赖")
+    @service_errors
+    def thumbnails_retry(request_id: UuidInput, item_ids: Annotated[list[UuidInput], Field(min_length=1, max_length=200)], *, client: AssetClient = Depends(service_client)) -> ThumbnailBatchOut:
+        return ThumbnailBatchOut.model_validate(client.thumbnail_batch_retry(request_id, item_ids), strict=False)
 
     @mcp.tool(
         name="schedule",

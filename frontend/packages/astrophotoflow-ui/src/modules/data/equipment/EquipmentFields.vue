@@ -43,7 +43,7 @@ function setSpec(key: string, numeric: boolean, value: string | number | null | 
         </label>
       </div>
     </section>
-    <section class="apf-device-section" :aria-labelledby="formId+'-parameters'">
+    <section v-if="equipment.kind!=='mount'" class="apf-device-section" :aria-labelledby="formId+'-parameters'">
       <h3 :id="formId+'-parameters'">{{ $t('apfUi.equipment_parameters') }}</h3>
       <div class="apf-device-grid">
         <label v-for="field in specFields[equipment.kind]" :key="field.key" class="apf-device-field" :class="{'apf-device-field-wide':field.key==='cfa_pattern'}">

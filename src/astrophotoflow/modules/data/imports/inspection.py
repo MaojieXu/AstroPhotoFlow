@@ -3,19 +3,20 @@ import json
 import logging
 import os
 import re
+from copy import deepcopy
 from pathlib import Path
 from uuid import UUID, uuid4
 
 from astrophotoflow.core.errors import ApiError, not_found
 from astrophotoflow.core.localization import localized_error, workspace_locale
-from astrophotoflow.modules.data.formats.fits import inspect_fits
+from astrophotoflow.modules.data.formats.fits import PARSER_VERSION, inspect_fits
 from astrophotoflow.modules.data.formats.xisf import inspect_xisf
 
 from ..files import format_for_path
 
 GROUP_KEYS = ('target_name', 'frame_type', 'frame_class', 'filter_name', 'exposure_seconds',
               'INSTRUME', 'TELESCOP', 'gain', 'offset', 'iso', 'binning_x', 'binning_y',
-              'cfa_pattern', 'sensor_temperature_setpoint_c')
+              'cfa_pattern', 'sensor_temperature_c', 'sensor_temperature_setpoint_c')
 
 
 def source_stamp(path):
@@ -51,13 +52,17 @@ def _hints(path):
     return result
 
 
-def _metadata(path, category):
+def _metadata(path, category, snapshots=None):
     if category == 'xisf':
         parsed = inspect_xisf(path)
+        if snapshots is not None:
+            snapshots.update({'parser_version': 'xisf-1', 'parsed_parameters': deepcopy(parsed), 'hdus': []})
         return {key: value for key, value in parsed.items() if key not in {'xisf_fits_keywords', 'preview_layout'}}
     if category != 'fits':
         return {}
     inspected = inspect_fits(path)
+    if snapshots is not None:
+        snapshots.update({'parser_version': PARSER_VERSION, **deepcopy(inspected)})
     parsed = inspected['parsed_parameters']
     for hdu in inspected['hdus']:
         if hdu['hdu_index'] == 0 or hdu['is_selected']:
@@ -68,7 +73,7 @@ def _metadata(path, category):
     return parsed
 
 
-def inspect_sources(settings, body):
+def inspect_sources(settings, body, *, include_groups=True):
     files, excluded, issues, roots = [], [], [], []
     seen_dirs, seen_files = set(), set()
     data_root = settings.data_dir.resolve()
@@ -105,7 +110,10 @@ def inspect_sources(settings, body):
                      'format': category, 'source_stamp': before, 'observed': {}, 'hints': _hints(relative),
                      'issues': [], 'metadata_status': 'unsupported'}
             try:
-                entry['observed'] = _metadata(actual, category)
+                snapshot = {}
+                entry['observed'] = _metadata(actual, category, snapshot)
+                if snapshot:
+                    entry['metadata_snapshot'] = snapshot
                 if category in {'fits', 'xisf'}:
                     entry['metadata_status'] = 'available'
             except Exception as exc:
@@ -121,9 +129,13 @@ def inspect_sources(settings, body):
                 hint = entry['hints'].get(key)
                 suggested[key] = {'value': value if value is not None else hint,
                                   'source': 'header' if value is not None else 'name' if hint is not None else 'unknown'}
-                if value is not None and hint is not None and str(value).casefold().replace(' ', '') != str(hint).casefold().replace(' ', ''):
+                if include_groups and value is not None and hint is not None and str(value).casefold().replace(' ', '') != str(hint).casefold().replace(' ', ''):
                     entry['issues'].append({'code': 'HEADER_NAME_CONFLICT', 'field': key, 'header': value, 'name': hint})
-            entry['suggested'] = suggested
+            if include_groups:
+                entry['suggested'] = suggested
+            else:
+                # File discovery reports observations; grouping belongs to the caller.
+                entry.pop('hints')
             files.append(entry)
         except (OSError, ValueError) as exc:
             issues.append({'path': str(path), 'code': 'SOURCE_UNAVAILABLE', 'message': str(exc)})
@@ -136,7 +148,7 @@ def inspect_sources(settings, body):
         visit(path, path.resolve(), Path(path.name))
     groups = {}
     group_keys = GROUP_KEYS
-    for entry in files:
+    for entry in files if include_groups else ():
         key = json.dumps({name: entry['suggested'][name]['value'] for name in group_keys}, sort_keys=True)
         if key not in groups:
             values = json.loads(key)
@@ -193,10 +205,11 @@ def list_inspection_entries(settings, scan_id, *, limit=50, offset=0, group_id=N
     manifest = read_manifest(settings, scan_id)
     items = manifest[kind]
     if kind == 'issues':
-        items = items + [{'member_id': item['id'], 'group_id': item['group_id'], 'path': item['path'], **issue}
+        items = items + [{'member_id': item['id'], 'group_id': item.get('group_id'), 'path': item['path'], **issue}
                          for item in manifest['files'] for issue in item['issues']]
     if kind == 'groups':
         items = [{**{key: value for key, value in group.items() if key != 'member_ids'}, 'count': len(group['member_ids'])} for group in items]
     if group_id is not None:
         items = [item for item in items if item.get('group_id', item.get('id')) == str(group_id)]
+    items = [{key: value for key, value in item.items() if key != 'metadata_snapshot'} for item in items]
     return {'items': items[offset:offset + limit], 'total': len(items), 'limit': limit, 'offset': offset}

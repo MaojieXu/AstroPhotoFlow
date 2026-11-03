@@ -1,4 +1,8 @@
-import { computed, nextTick, ref, toValue } from 'vue'
+import { computed, nextTick, ref, toValue, watch } from 'vue'
+import { useQuery, useQueryClient } from '@tanstack/vue-query'
+import { useQueryAvailability } from '../../../core/query/availability'
+import { workspaceQueryKey } from '../../../core/query/keys'
+import { datasetApi } from '../api'
 import type { MaybeRefOrGetter, Ref } from 'vue'
 import type { DatasetOut } from '../../../generated/api/types.gen'
 import type { ApiClientError as ApiError } from '../api/client'
@@ -8,6 +12,7 @@ import type { WorkspaceRecord } from '../workspace/recordTypes'
 import { isDatasetRecord } from '../workspace/recordTypes'
 import type { WorkspacePageSize } from '../workspace/store'
 import { isLibrarySummary } from '../library/summary'
+import { readLibraryChanges } from '../library/queries'
 import {
   datasetViewFromSummary,
   datasetViewFromAcknowledgement,
@@ -20,6 +25,8 @@ interface LibraryNavigation {
   pageSize: WorkspacePageSize
 }
 interface DatasetViewOptions {
+  workspaceId?: MaybeRefOrGetter<string>
+  paused?: MaybeRefOrGetter<boolean>
   navigation: LibraryNavigation
   sort: Ref<{ by: string; order: 'asc' | 'desc' }>
   mode: Ref<'simple' | 'detail'>
@@ -32,7 +39,7 @@ interface DatasetViewOptions {
   error: Ref<ApiError | undefined>
 }
 
-/** Owns the fixed group identity and restoration of the outer library view. */
+/** Current library views follow publication; explicitly pinned views remain fixed. */
 export function useDatasetView(options: DatasetViewOptions) {
   const {
     navigation: store,
@@ -54,6 +61,38 @@ export function useDatasetView(options: DatasetViewOptions) {
     }
   >()
   const restoringOuterLibraryState = ref(false)
+  const ready = useQueryAvailability()
+  const cache = useQueryClient()
+  let checkpoint: { key: string; token: string } | undefined
+  const currentDataset = useQuery({
+    queryKey: computed(() => [
+      ...workspaceQueryKey(toValue(options.workspaceId) ?? ''),
+      'datasets', activeDataset.value?.id, 'current-view'
+    ]),
+    enabled: computed(() => ready.value && Boolean(toValue(options.workspaceId)) &&
+      activeDataset.value?.followsCurrent === true && !toValue(options.paused) &&
+      !dirty.value && !calibrationDirty.value),
+    queryFn: async ({ signal, queryKey }) => {
+      const identity = activeDataset.value
+      if (!identity) throw new Error('An active current dataset is required')
+      const change = await readLibraryChanges(cache, toValue(options.workspaceId) ?? '')
+      signal.throwIfAborted()
+      const key = JSON.stringify(queryKey), previous = cache.getQueryData<DatasetOut>(queryKey)
+      if (previous && !cache.getQueryState(queryKey)?.isInvalidated && checkpoint?.key === key && checkpoint.token === change.revision_token) return previous
+      const result = await datasetApi.get(identity.id, signal)
+      checkpoint = {key, token: change.revision_token}
+      return result
+    },
+    refetchInterval: 10_000,
+    refetchOnWindowFocus: false
+  })
+  watch(currentDataset.data, dataset => {
+    const active = activeDataset.value
+    if (!dataset || !active?.followsCurrent || dataset.id !== active.id ||
+      toValue(options.paused) || dirty.value || calibrationDirty.value) return
+    const identity = datasetViewFromAcknowledgement(dataset)
+    if (identity) activeDataset.value = identity
+  })
 
   async function openDataset(row: WorkspaceRecord) {
     const context = {
@@ -157,7 +196,7 @@ export function useDatasetView(options: DatasetViewOptions) {
   }
 
   async function calibrationUpdated(dataset: DatasetOut) {
-    if (activeDataset.value?.id === dataset.id) {
+    if (activeDataset.value?.id === dataset.id && activeDataset.value.followsCurrent === true) {
       const identity = datasetViewFromAcknowledgement(dataset)
       if (!identity) {
         error.value = new ApiClientError(

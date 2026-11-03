@@ -11,7 +11,7 @@ from astrophotoflow.core.database.schema import upgrade_database
 from astrophotoflow.interfaces.http.app import create_app
 from astrophotoflow.modules.data.assets.models import Asset
 from astrophotoflow.modules.data.datasets.models import Dataset
-from astrophotoflow.modules.data.equipment.models import CapturePreset, Equipment, EquipmentSetup
+from astrophotoflow.modules.data.equipment.models import Equipment, EquipmentSetup
 from astrophotoflow.modules.data.projects.models import Project
 
 
@@ -29,15 +29,11 @@ def name_library(tmp_path):
 def test_unicode_search_after_create_patch_and_orm_rename(name_library, domain):
     client, database = name_library
     paths = {"asset": "/library/assets", "dataset": "/datasets", "equipment": "/equipment",
-             "setup": "/equipment-setups", "preset": "/capture-presets", "project": "/projects"}
+             "setup": "/equipment-setups", "project": "/projects"}
     models = {"asset": Asset, "dataset": Dataset, "equipment": Equipment, "setup": EquipmentSetup,
-              "preset": CapturePreset, "project": Project}
+              "project": Project}
     collection = "/api/v1" + paths[domain]
     create_path = collection
-    if domain == "preset":
-        setup = client.post("/api/v1/equipment-setups", json={"name": "Support"})
-        assert setup.status_code == 201, setup.text
-        create_path = f"/api/v1/equipment-setups/{setup.json()['id']}/presets"
     records = []
     for name in ("Straße", "STRASSE"):
         if domain == "asset":
@@ -73,22 +69,3 @@ def test_unicode_search_after_create_patch_and_orm_rename(name_library, domain):
     assert found.status_code == 200, found.text
     assert [row["id"] for row in found.json()["items"]] == [record["id"]]
     assert client.get(collection, params={"q": "KELVIN_K"}).json()["total"] == 0
-
-
-def test_generated_preset_names_use_the_same_search_index(name_library):
-    client, database = name_library
-    preset_ids = []
-    for name in ("Straße", "STRASSE"):
-        setup = client.post("/api/v1/equipment-setups", json={"name": name}).json()
-        created = client.post(f"/api/v1/equipment-setups/{setup['id']}/presets", json={})
-        assert created.status_code == 201, created.text
-        preset_ids.append(created.json()["id"])
-    found = client.get("/api/v1/capture-presets", params={"q": "strasse"}).json()
-    assert {row["id"] for row in found["items"]} == set(preset_ids)
-    updated = client.patch(f"/api/v1/capture-presets/{preset_ids[0]}", json={"base_revision": 1, "parameters": {"exposure_seconds": 1}})
-    assert updated.status_code == 200, updated.text
-    assert "1 s" in updated.json()["name"]
-    assert client.get("/api/v1/capture-presets", params={"q": "1 s"}).json()["total"] == 1
-    with database.write_session() as session:
-        session.get(CapturePreset, preset_ids[0]).name = "Ångström"
-    assert client.get("/api/v1/capture-presets", params={"q": "ångSTRÖM"}).json()["total"] == 1

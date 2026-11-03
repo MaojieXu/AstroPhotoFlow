@@ -30,7 +30,8 @@ from astrophotoflow.modules.data.assets.metadata import (
 from astrophotoflow.modules.data.assets.models import Asset, AssetVersion, FitsHduMetadata
 from astrophotoflow.modules.data.equipment.models import Equipment
 from astrophotoflow.modules.data.files import SUPPORTED_EXTENSIONS, find_root, format_for_path, resolve_relative
-from astrophotoflow.modules.data.formats.fits import PREVIEW_ALGORITHM_VERSION, inspect_fits
+from astrophotoflow.modules.data.formats.fits import PARSER_VERSION, PREVIEW_ALGORITHM_VERSION, inspect_fits
+from astrophotoflow.modules.data.formats.layout import apply_cfa_override
 from astrophotoflow.modules.data.formats.raster import read_raster_preview
 from astrophotoflow.modules.data.formats.raw import read_raw_preview
 from astrophotoflow.modules.data.formats.video import first_video_frame
@@ -48,6 +49,9 @@ def register_asset(database: Database, settings: Settings, task_data: ImportTask
         item = session.get(AssetTaskItem, item_id)
         if item.asset_version_id is not None:
             return
+        if task_data.image_import_plan:
+            from astrophotoflow.modules.data.imports.explicit import context_for_image_item
+            task_data = context_for_image_item(task_data, item)
         root_id, source_path = item.root_id, item.source_path
     if root_id == "__upload__":
         upload = next(file for file in task_data.upload_files if file["stored_name"] == source_path)
@@ -77,7 +81,10 @@ def register_asset(database: Database, settings: Settings, task_data: ImportTask
     defaults = task_data.import_defaults_snapshot or {}
     if category in {"fits", "xisf"}:
         try:
-            if category == "xisf":
+            cached = task_data.metadata_snapshots.get((root_id, source_path))
+            if cached and cached.get("parser_version") == (PARSER_VERSION if category == "fits" else "xisf-1"):
+                parsed, hdu_rows = deepcopy(cached["parsed_parameters"]), deepcopy(cached["hdus"])
+            elif category == "xisf":
                 parsed = inspect_xisf(original)
             else:
                 inspected = inspect_fits(original, task_data.parameters.get("cfa_pattern"), colour_layout=task_data.output_colour_layout)
@@ -86,8 +93,9 @@ def register_asset(database: Database, settings: Settings, task_data: ImportTask
             logger.exception("Import metadata parsing failed")
             parse_error = error_message(workspace_locale(settings.workspace), '', 'import_parse_pending_content', {'format': category.upper()})
     parameters, value_sources = stage_imports_metadata.current_asset_parameters(task_data.parameters, parsed, defaults.get("parameters"))
-    if category == "fits" and not parse_error and parameters.get("cfa_pattern") and not parsed.get("cfa_pattern") and not task_data.parameters.get("cfa_pattern"):
-        hdu_rows = inspect_fits(original, parameters["cfa_pattern"], colour_layout=task_data.output_colour_layout)["hdus"]
+    if category == "fits" and not parse_error:
+        # CFA overrides change the interpretation of 2D pixels, not file structure.
+        apply_cfa_override(hdu_rows, parameters.get("cfa_pattern"))
     classification, classification_sources = stage_imports_metadata.current_classification(
         task_data.classification, parsed.get("classification") or {}, defaults.get("classification") or {})
     value_sources.update(classification_sources)
@@ -105,7 +113,7 @@ def register_asset(database: Database, settings: Settings, task_data: ImportTask
             if parameters.get(key) is not None
         }
         for key, frozen in defaults.get("selected_equipment", {}).items():
-            if value_sources.get(key) == "preset":
+            if key == "mount_id" or value_sources.get(key) == "manual":
                 equipment_snapshot[key] = deepcopy(frozen)
         equipment_links = {
             key: value if value is not None and session.get(Equipment, str(value)) is not None else None
@@ -115,7 +123,7 @@ def register_asset(database: Database, settings: Settings, task_data: ImportTask
         asset = Asset(id=asset_id, name=Path(asset_name).stem or asset_name, scope="shared", owner_project_id=None,
                       role=role, current_version_id=None, **classification_columns(classification), **parameter_columns(parameters),
                       equipment_snapshot=equipment_snapshot, value_sources=value_sources,
-                      notes=task_data.notes if task_data.target_dataset_id is None else None,
+                      notes=task_data.notes if task_data.target_dataset_id is None or task_data.image_import_plan else None,
                       status="active", revision=1)
         session.add(asset)
         session.flush()
@@ -145,6 +153,13 @@ def register_asset(database: Database, settings: Settings, task_data: ImportTask
         item.updated_at = datetime.now(UTC)
         for row in hdu_rows:
             session.add(FitsHduMetadata(id=str(uuid4()), asset_version_id=version_id, **row))
+        if task_data.image_import_plan:
+            from astrophotoflow.modules.data.assets.image_metadata import record_import_image_metadata
+            file_plan = task_data.image_import_plan['files'][item.root_item_id]
+            if file_plan.get('name') is not None:
+                asset.name = file_plan['name']
+            record_import_image_metadata(session, asset_id, file_plan['metadata'], defaults,
+                                         value_sources=file_plan['image_value_sources'], freeze_capture=True)
 
 
 def materialize_content(database: Database, settings: Settings, task_data: ImportTaskContext, item_id: str) -> str | None:

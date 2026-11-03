@@ -12,7 +12,14 @@ from astrophotoflow.core.database.db import Database
 from astrophotoflow.core.localization import workspace_locale
 from astrophotoflow.interfaces.application.software_calls import recover_software_calls
 from astrophotoflow.interfaces.application.software_previews import BundlePreviews
-from astrophotoflow.modules.data.public import DataExports, DisplayPreviews, MediaViews, import_workers, recover_import_tasks
+from astrophotoflow.modules.data.public import (
+    DataExports,
+    DisplayPreviews,
+    MediaViews,
+    ThumbnailService,
+    import_workers,
+    recover_import_tasks,
+)
 
 
 @asynccontextmanager
@@ -30,6 +37,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.import_workers = workers
         app.state.display_previews = DisplayPreviews(database, settings, workers[1])
         app.state.media_views = MediaViews(database, settings, workers[1])
+        app.state.thumbnails = ThumbnailService(database, settings, workers[1])
+        app.state.thumbnails.start()
+        stack.callback(app.state.thumbnails.close)
         exports = app.state.data_exports = DataExports(database, settings, workers)
         stack.push_async_callback(asyncio.to_thread, exports.close)
         previews = app.state.bundle_previews = BundlePreviews(database, settings, workers[1], app.state.media_views.cache)

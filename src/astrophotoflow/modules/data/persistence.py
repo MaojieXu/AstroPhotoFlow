@@ -4,6 +4,7 @@ from sqlalchemy import MetaData
 
 from astrophotoflow.core.database.base import Base
 from astrophotoflow.modules.data.assets import models as asset_models  # noqa: F401 -- register owned mappings
+from astrophotoflow.modules.data.calibration import models as calibration_models  # noqa: F401 -- register owned mappings
 from astrophotoflow.modules.data.datasets import models as dataset_models  # noqa: F401 -- register owned mappings
 from astrophotoflow.modules.data.equipment import models as equipment_models  # noqa: F401 -- register owned mappings
 from astrophotoflow.modules.data.imports import models as import_models  # noqa: F401 -- register owned mappings

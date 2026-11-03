@@ -74,7 +74,7 @@ describe('import dialog defaults',()=>{
 })
 
 describe('import overrides',()=>{
-  it('omits blank manual values and classification so file metadata and presets can supply them',async()=>{
+  it('omits blank manual values and classification so file metadata can supply them',async()=>{
     send.mockResolvedValue({task_id:'00000000-0000-4000-8000-000000000001',status:'queued'})
     upload.mockResolvedValue(undefined)
     const wrapper=mount(ImportDialog,{props:{workspaceId:'/test-workspace',open:false,files:[{root_id:'science',path:'one.fits',name:'one.fits',size:4}]}})
@@ -103,4 +103,19 @@ describe('import overrides',()=>{
     expect(send.mock.calls[0][3].parameters).toEqual({exposure_seconds:0})
     wrapper.unmount()
   })
+})
+
+
+it('imports direct equipment associations without adding capture defaults or a preset identity',async()=>{
+  const camera={id:'00000000-0000-4000-8000-000000000003',kind:'camera',name:'My camera',model:null,notes:null,specs:{},status:'active',revision:2,created_at:'2026-11-02T00:00:00Z',updated_at:'2026-11-02T00:00:00Z'}
+  get.mockImplementation(async(path:string)=>path.includes('/equipment?')?{items:[camera],total:1,limit:200,offset:0}:{items:[],total:0,limit:200,offset:0})
+  send.mockResolvedValue({task_id:'00000000-0000-4000-8000-000000000001',status:'queued'})
+  const wrapper=mount(ImportDialog,{props:{workspaceId:'/test-workspace',open:true,files:[{path:'D:/Night/one.fits',name:'one.fits',size:4}]}})
+  await flushPromises()
+  await wrapper.get('select[aria-label="相机"]').setValue(camera.id)
+  await wrapper.get('form').trigger('submit');await flushPromises()
+  expect(send.mock.calls[0][3]).toMatchObject({equipment:{choice:{source:'devices',camera:{equipment_id:camera.id,expected_revision:2}},fields:['camera']},parameters:{}})
+  expect(send.mock.calls[0][3]).not.toHaveProperty('capture_preset_id')
+  expect(send.mock.calls[0][3].parameters).not.toHaveProperty('sensor_temperature_c')
+  wrapper.unmount()
 })

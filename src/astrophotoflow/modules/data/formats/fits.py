@@ -12,7 +12,7 @@ from astrophotoflow.modules.data.formats.pixels import calculate_stretch, displa
 
 PREVIEW_ALGORITHM_VERSION = "auto-stretch-2"
 
-PARSER_VERSION = "fits-1"
+PARSER_VERSION = "fits-2"
 
 def fits_json_value(value: Any):
     if value is None or isinstance(value, (str, int, bool)):
@@ -51,7 +51,8 @@ def parsed_parameters(header) -> dict[str, Any]:
         "integration_seconds": ("TOTEXP", "INTTIME"),
         "gain": ("GAIN",),
         "offset": ("OFFSET",),
-        "sensor_temperature_setpoint_c": ("CCD-TEMP",),
+        "sensor_temperature_c": ("CCD-TEMP",),
+        "sensor_temperature_setpoint_c": ("SET-TEMP",),
         "binning_x": ("XBINNING",),
         "binning_y": ("YBINNING",),
         "iso": ("ISOSPEED", "ISO"),

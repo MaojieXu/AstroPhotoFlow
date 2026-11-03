@@ -22,6 +22,24 @@ function createEditor(){
 }
 
 describe('typed record editing sessions', () => {
+  it('creates and edits an equatorial mount without submitting specifications', async () => {
+    const editor = createEditor()
+    editor.equipment()
+    const current = editor.model.value!
+    if (current.kind !== 'equipment') throw new Error('Expected equipment session')
+    editor.model.value = { ...current, draft: { ...current.draft, kind: 'mount', name: 'AP1100 GTO', specs: {} } }
+    const record = equipmentSchema.parse({ id: id(30), kind: 'mount', name: 'AP1100 GTO', model: null, notes: null, status: 'active', revision: 1, created_at: '2026-10-28T12:00:00Z', updated_at: '2026-10-28T12:00:00Z' })
+    send.mockResolvedValue(record)
+    await editor.submit()
+    expect(send.mock.calls[0][3]).toEqual({ kind: 'mount', name: 'AP1100 GTO', model: null, notes: null })
+    editor.equipment(record)
+    const edit = editor.model.value!
+    if (edit.kind !== 'equipment') throw new Error('Expected equipment session')
+    editor.model.value = { ...edit, draft: { ...edit.draft, notes: 'Remote observatory' } }
+    send.mockResolvedValue({ ...record, notes: 'Remote observatory', revision: 2 })
+    await editor.submit()
+    expect(send.mock.calls[1][3]).toEqual({ kind: 'mount', base_revision: 1, notes: 'Remote observatory' })
+  })
   it('ignores a stale draft update after the editor target changes', () => {
     const editor = createEditor()
     editor.project(project(1))

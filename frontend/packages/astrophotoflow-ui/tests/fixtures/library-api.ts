@@ -34,12 +34,12 @@ import {
   zDatasetOut,
   zProjectOut,
   zEquipmentSetupOut,
-  zCapturePresetOut,
   zManagementArchiveResult
 } from '../../src/generated/api/zod.gen'
 import { createMutationClient } from '../../src/modules/data/api/mutations'
 import { createCatalogClient } from '../../src/modules/data/api/catalog'
 import { createLibraryClient } from '../../src/modules/data/library/client'
+import { libraryAsset } from './library-summary'
 import { ApiClientError } from '../../src/core/api/errors'
 import {
   zLibraryFilterOptions,
@@ -62,7 +62,18 @@ export function createLibraryApiFixture(
     signal?: AbortSignal
   ) => unknown | Promise<unknown>
 ) {
-  return fixtureFetch(get, createLibraryClient)
+  let revision = 0
+  return fixtureFetch(async (path, schema, signal) => {
+    if (path.endsWith('/library/change-state')) return {revision_token:String(++revision),thumbnail_token:'fixture'}
+    if (!path.includes('/member-summaries?')) return get(path, schema, signal)
+    const body = zDatasetMemberPage.parse(await get(path.replace('/member-summaries?', '/members?'), schema, signal))
+    const datasetId = /\/datasets\/([^/]+)\//.exec(path)![1]
+    return { ...body, items: body.items.map(member => ({
+      ...libraryAsset({ ...member.asset, current_version: member.version, current_version_id: member.version.id }),
+      dataset_id: datasetId, dataset_version_id: member.dataset_version_id, member_position: member.position,
+      thumbnail_status: null, calibration_projection: member.calibration_projection
+    })) }
+  }, createLibraryClient)
 }
 
 export function createCatalogApiFixture(
@@ -193,10 +204,7 @@ function mutationFixture<T>(
                         ? zManagementArchiveResult
                         : path.includes('/library/assets/')
                           ? zAssetOut
-                          : path.includes('/capture-presets/') ||
-                              path.endsWith('/presets')
-                            ? zCapturePresetOut
-                            : path.includes('/equipment-setups')
+                          : path.includes('/equipment-setups')
                               ? zEquipmentSetupOut
                               : path.includes('/equipment')
                                 ? zEquipmentPage.shape.items.element

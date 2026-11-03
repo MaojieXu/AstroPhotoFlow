@@ -23,6 +23,7 @@ from astrophotoflow.modules.data.formats.fits import inspect_fits
 from astrophotoflow.modules.data.formats.xisf import inspect_xisf
 from astrophotoflow.modules.data.imports.models import AssetTaskItem
 from astrophotoflow.modules.data.media.models import Preview
+from astrophotoflow.modules.data.media.thumbnail_batches import THUMBNAIL_STANDALONE
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +35,7 @@ def current_asset_parameters(request_values: dict, file_values: dict, defaults: 
         elif file_values.get(key) is not None:
             values[key], sources[key] = file_values[key], "file"
         elif key in (defaults or {}):
-            values[key], sources[key] = defaults[key], "preset"
+            values[key], sources[key] = defaults[key], "manual"
         else:
             values[key] = "standard" if key == "parameter_mode" else None
             sources[key] = "unknown"
@@ -47,9 +48,9 @@ def current_classification(request_values: dict, file_values: dict, defaults: di
         if key in request_values:
             values[key], sources[f"classification.{key}"] = request_values[key], "manual"
             continue
-        observed, preset = file_values.get(key), defaults.get(key)
-        values[key] = observed if observed is not None else preset
-        sources[f"classification.{key}"] = "file" if observed is not None else "preset" if preset is not None else "unknown"
+        observed, supplied = file_values.get(key), defaults.get(key)
+        values[key] = observed if observed is not None else supplied
+        sources[f"classification.{key}"] = "file" if observed is not None else "manual" if supplied is not None else "unknown"
     if values["frame_class"] == "video":
         values["frame_type"] = None
         sources["classification.frame_type"] = sources["classification.frame_class"]
@@ -78,8 +79,6 @@ def refresh_fits_metadata(database: Database, settings: Settings, item_id: str, 
             manual_cfa = current_parameters.get("cfa_pattern") if value_sources.get("cfa_pattern") == "manual" else None
             result = inspect_fits(path, manual_cfa, colour_layout=colour_layout)
             hdu_rows, parsed = result["hdus"], result["parsed_parameters"]
-            if not parsed.get("cfa_pattern") and value_sources.get("cfa_pattern") == "preset":
-                hdu_rows = inspect_fits(path, current_parameters["cfa_pattern"], colour_layout=colour_layout)["hdus"]
         error = None
     except Exception:
         logger.exception("Import FITS metadata parsing failed")
@@ -118,7 +117,11 @@ def refresh_fits_metadata(database: Database, settings: Settings, item_id: str, 
         for preview in session.scalars(select(Preview).where(
             Preview.asset_version_id == version_id, Preview.size == "thumbnail",
         )).all():
-            preview.status = "pending"
+            if preview.algorithm_version == THUMBNAIL_STANDALONE:
+                preview.status = "failed" if error else "queued"
+                preview.error = str(error) if error else None
+            else:
+                preview.status = "pending"
         item.error = {"code": f"{category.upper()}_PARSE_FAILED", "message": error} if error else None
         item.updated_at = datetime.now(UTC)
     return error

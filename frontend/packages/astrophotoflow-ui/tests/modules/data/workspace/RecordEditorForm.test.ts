@@ -32,4 +32,16 @@ describe('controlled record editor without a Workspace provider', () => {
       expect(model.draft.specs.pixel_size_um).toBeUndefined()
     } finally { wrapper.unmount() }
   })
+
+  it('shows only identity fields for an equatorial mount', () => {
+    const model: RecordEditorState = { kind: 'equipment', draft: { kind: 'mount', name: 'AP1100 GTO', specs: {} } }
+    const wrapper = mount(RecordEditorForm, { props: { modelValue: model, saving: false, savingInline: 0, inlineError: '', saveField: vi.fn() } })
+    try {
+      expect(wrapper.get('select[aria-label="设备类型"]').element).toHaveProperty('value', 'mount')
+      expect(wrapper.find('input[type="number"]').exists()).toBe(false)
+      expect(wrapper.text()).not.toContain('设备参数')
+      expect(wrapper.text()).not.toContain('光学附件')
+      expect(wrapper.get('input[aria-label="名称"]').element).toHaveProperty('value', 'AP1100 GTO')
+    } finally { wrapper.unmount() }
+  })
 })

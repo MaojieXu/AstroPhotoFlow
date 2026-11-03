@@ -26,6 +26,7 @@ class AssetClassification(StrictModel):
 
 
 class CaptureParametersPatch(StrictModel):
+    readout_mode: str | None = None
     parameter_mode: ParameterMode | None = None
     iso: int | None = Field(default=None, gt=0)
     gain: float | None = None

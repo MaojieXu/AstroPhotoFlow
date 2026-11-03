@@ -6,7 +6,8 @@ import { createImageViewport, BROWSER_TILE_LIMIT } from './viewport'
 const engine = vi.hoisted(() => ({
   create: vi.fn(),
   destroy: vi.fn(),
-  addHandler: vi.fn()
+  addHandler: vi.fn(),
+  addTiledImage: vi.fn()
 }))
 vi.mock('openseadragon', async (original) => {
   const actual = await original<{ default: typeof OpenSeadragon }>()
@@ -16,6 +17,7 @@ it('uses the returned tile descriptor, bounds browser resources and delegates de
   engine.create.mockReturnValue(
     fromPartial<OpenSeadragon.Viewer>({
       destroy: engine.destroy,
+      addTiledImage: engine.addTiledImage,
       addHandler: engine.addHandler
     })
   )
@@ -50,6 +52,11 @@ it('uses the returned tile descriptor, bounds browser resources and delegates de
   expect(handler).toBeDefined()
   handler()
   expect(failed).toHaveBeenCalledOnce()
+  viewport.replace({ ...image, tile_url: '/second/tiles/{level}/{x}/{y}' }, { failed, zoom: vi.fn(), bounds: vi.fn() })
+  expect(engine.create).toHaveBeenCalledOnce()
+  const replacement = engine.addTiledImage.mock.calls[0]![0]
+  expect(replacement.replace).toBe(true)
+  expect(replacement.tileSource.getTileUrl(1, 2, 3)).toBe('/second/tiles/1/2/3')
   viewport.destroy()
   expect(engine.destroy).toHaveBeenCalledOnce()
 })

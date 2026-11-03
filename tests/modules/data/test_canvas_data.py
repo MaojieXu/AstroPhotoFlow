@@ -59,7 +59,8 @@ def test_asset_canvas_reference_is_fixed_and_contains_no_preview_or_path(canvas_
     assert response.status_code == 200
     value = response.json()
     assert value == {"native_type": "APF_DATA_REFERENCE", "title": "frame-0.fits", "reference": {
-        "kind": "asset_version", "asset_version_id": versions[0], "selection": {"kind": "whole_file", "hdu_index": None},
+        "kind": "asset_version", "asset_version_id": versions[0], "binding_version_id": None,
+        "selection": {"kind": "whole_file", "hdu_index": None},
     }}
     assert TypeAdapter(ScienceReference).validate_json(json.dumps(value["reference"])).model_dump(mode="json") == value["reference"]
 

@@ -7,6 +7,11 @@ type InlineInput = Extract<ComponentInput, { source: 'inline' }>['equipment']
 export type EquipmentDraft = Omit<InlineInput, 'specs'> & {
   specs: Record<string, unknown>
 }
+
+export function equipmentInput(draft: EquipmentDraft) {
+  const { specs, ...identity } = draft
+  return draft.kind === 'mount' ? identity : { ...identity, specs }
+}
 export type SetupComponentDraft =
   | Extract<ComponentInput, { source: 'registered' }>
   | (Omit<Extract<ComponentInput, { source: 'inline' }>, 'equipment'> & {

@@ -6,25 +6,20 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { workspaceQueryKey } from '@ui/core/query/keys'
 import {
   useSaveSetup,
-  useSavePreset,
   useCreateEquipment
 } from '@ui/modules/data/equipment/mutations'
 
-const { createEquipment, createSetup, patchSetup, createPreset, patchPreset } =
+const { createEquipment, createSetup, patchSetup } =
   vi.hoisted(() => ({
     createEquipment: vi.fn(),
     createSetup: vi.fn(),
-    patchSetup: vi.fn(),
-    createPreset: vi.fn(),
-    patchPreset: vi.fn()
+    patchSetup: vi.fn()
   }))
 vi.mock('@ui/modules/data/api/index', () => ({
   mutationApi: {
     createEquipment,
     createSetup,
-    patchSetup,
-    createPreset,
-    patchPreset
+    patchSetup
   }
 }))
 let wrapper: ReturnType<typeof mount> | undefined
@@ -47,8 +42,8 @@ function setup<T>(build: () => T) {
   for (const workspace of ['/one', '/two'])
     for (const part of [
       ['equipment'],
-      ['equipment', 'presets', id],
-      ['equipment', 'import-presets'],
+      ['equipment', 'setups', id],
+      ['equipment', 'import-choices'],
       ['trash'],
       ['library']
     ])
@@ -78,7 +73,7 @@ it('saves a setup with its reviewed revision and invalidates only original equip
     cache.getQueryState([
       ...workspaceQueryKey('/one'),
       'equipment',
-      'presets',
+      'setups',
       id
     ])?.isInvalidated
   ).toBe(true)
@@ -86,7 +81,7 @@ it('saves a setup with its reviewed revision and invalidates only original equip
     cache.getQueryState([
       ...workspaceQueryKey('/one'),
       'equipment',
-      'import-presets'
+      'import-choices'
     ])?.isInvalidated
   ).toBe(true)
   expect(
@@ -96,52 +91,6 @@ it('saves a setup with its reviewed revision and invalidates only original equip
   expect(
     cache.getQueryState([...workspaceQueryKey('/one'), 'library'])
       ?.isInvalidated
-  ).toBe(false)
-})
-
-it('preserves sparse preset selections, zero and explicit null through a create request', async () => {
-  const { owner } = setup(useSavePreset)
-  createPreset.mockResolvedValue({ id })
-  const body = {
-    equipment_selection: { filter: null },
-    parameters: { gain: 0, offset: null }
-  }
-  await owner.mutateAsync({
-    workspaceId: '/one',
-    action: 'create',
-    setupId: id,
-    body
-  })
-  expect(createPreset).toHaveBeenCalledExactlyOnceWith(id, body)
-  expect(patchPreset).not.toHaveBeenCalled()
-  expect(body.equipment_selection).not.toHaveProperty('camera')
-})
-
-it('invalidates a failed original preset write without retrying the unknown outcome', async () => {
-  const { owner, cache } = setup(useSavePreset)
-  patchPreset.mockRejectedValue(new Error('Outcome unknown'))
-  await expect(
-    owner.mutateAsync({
-      workspaceId: '/one',
-      action: 'update',
-      presetId: id,
-      body: { base_revision: 8, parameters: { offset: null } }
-    })
-  ).rejects.toThrow('Outcome unknown')
-  expect(patchPreset).toHaveBeenCalledTimes(1)
-  expect(
-    cache.getQueryState([
-      ...workspaceQueryKey('/one'),
-      'equipment',
-      'import-presets'
-    ])?.isInvalidated
-  ).toBe(true)
-  expect(
-    cache.getQueryState([
-      ...workspaceQueryKey('/two'),
-      'equipment',
-      'import-presets'
-    ])?.isInvalidated
   ).toBe(false)
 })
 

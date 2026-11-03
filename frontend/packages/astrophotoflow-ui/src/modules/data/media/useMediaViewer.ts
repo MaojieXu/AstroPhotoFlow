@@ -8,6 +8,7 @@ import type {
   createMediaClient
 } from '../api/media'
 import { useMediaView } from './useMediaView'
+import type { MediaViewRequest } from './useMediaView'
 
 /** Bounded current/neighbor reads for one fixed viewer request. Rendering stays in the host. */
 export function useMediaViewer(
@@ -150,15 +151,50 @@ export function useMediaViewer(
     }),
     client
   )
+  const nextRequest = shallowRef<MediaViewRequest>()
+  const nextMedia = useMediaView(nextRequest, client)
+  let nextOverview: AbortController | undefined
+  watch(view, () => {
+    nextRequest.value = undefined
+    nextOverview?.abort()
+    nextOverview = undefined
+  }, { flush: 'sync' })
+  watch([media.state, () => members.value.map(value => value.data)], () => {
+    const current = scope.value
+    if (!current || media.state.value?.status !== 'available' || media.state.value.kind !== 'image') {
+      nextRequest.value = undefined
+      nextOverview?.abort()
+      nextOverview = undefined
+      return
+    }
+    const next = members.value.find(value => value.data?.index === view.value.index + 1)?.data
+    const target = next?.member
+    if (!target || next.scope !== current.id) {
+      nextRequest.value = undefined
+      return
+    }
+    if (nextRequest.value?.basePath === target.basePath && nextRequest.value.workspaceId === current.workspaceId) return
+    nextRequest.value = { workspaceId: current.workspaceId, basePath: target.basePath,
+      selection: { ...target.selection, ...view.value.selection, prefetch: true } }
+  })
+  watch(nextMedia.state, value => {
+    nextOverview?.abort()
+    nextOverview = undefined
+    if (value?.status !== 'available' || !value.overview_url) return
+    const controller = nextOverview = new AbortController()
+    void client.image(value.overview_url, controller.signal).catch(() => undefined)
+  })
   watch(
     scope,
     () => {
       release()
+      nextRequest.value = undefined
+      nextOverview?.abort()
       view.value = { index: toValue(request).index, selection: {} }
     },
     { flush: 'sync' }
   )
-  onScopeDispose(release)
+  onScopeDispose(() => { release(); nextOverview?.abort() })
   function open(index: number, selection: Partial<MediaSelection> = {}) {
     if (index < 0 || index >= toValue(request).total) return
     view.value = { index, selection }

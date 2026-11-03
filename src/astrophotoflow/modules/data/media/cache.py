@@ -3,6 +3,7 @@ from collections import OrderedDict
 from contextlib import contextmanager
 from pathlib import Path
 from threading import RLock
+from time import monotonic
 
 MEMORY_BYTES = 256 * 1024**2
 DISK_BYTES = 4 * 1024**3
@@ -15,11 +16,16 @@ class MediaCache:
         self.active = {}
         self.memory = OrderedDict()
         self.memory_bytes = 0
+        self.disk_files = {}
+        self.disk_folders = {}
+        self.reconciled_at = None
 
     @contextmanager
     def hold(self, folder):
         folder.resolve().relative_to(self.data_dir / "previews")
         with self.lock:
+            if self.reconciled_at is None or monotonic() - self.reconciled_at >= 300:
+                self.reconcile()
             self.active[folder] = self.active.get(folder, 0) + 1
         try:
             yield
@@ -32,20 +38,54 @@ class MediaCache:
     def folders(self):
         return list((self.data_dir / "previews").glob("*/media/*"))
 
+    def reconcile(self):
+        with self.lock:
+            files, folders = {}, {}
+            for folder in self.folders():
+                amount = 0
+                for path in folder.rglob('*'):
+                    if path.is_file():
+                        files[path] = path.stat().st_size
+                        amount += files[path]
+                folders[folder] = (amount, folder.stat().st_mtime_ns)
+            self.disk_files, self.disk_folders = files, folders
+            self.reconciled_at = monotonic()
+
+    def record(self, path):
+        path = path.resolve()
+        relative = path.relative_to(self.data_dir / 'previews')
+        if len(relative.parts) < 4 or relative.parts[1] != 'media':
+            raise ValueError('Display cache must be inside a version media directory.')
+        folder = self.data_dir / 'previews' / Path(*relative.parts[:3])
+        with self.lock:
+            if self.reconciled_at is None:
+                self.reconcile()
+            size = path.stat().st_size if path.is_file() else 0
+            old = self.disk_files.get(path, 0)
+            amount, modified = self.disk_folders.get(folder, (0, 0))
+            if size:
+                self.disk_files[path] = size
+            else:
+                self.disk_files.pop(path, None)
+            self.disk_folders[folder] = (amount + size - old, folder.stat().st_mtime_ns if folder.exists() else modified)
+
     def reserve(self, size):
         with self.lock:
             if size > self.disk_budget:
                 raise ValueError("当前显示数据超过4GiB缓存预算；原件保留，未发布缩小替代图。")
-            folders = self.folders()
-            total = sum(path.stat().st_size for folder in folders for path in folder.rglob("*") if path.is_file())
-            for folder in sorted(folders, key=lambda item: item.stat().st_mtime_ns):
+            if self.reconciled_at is None:
+                self.reconcile()
+            total = sum(amount for amount, _ in self.disk_folders.values())
+            for folder, (amount, _) in sorted(self.disk_folders.items(), key=lambda item: item[1][1]):
                 if total + size <= self.disk_budget:
                     break
                 if folder in self.active:
                     continue
                 folder.resolve().relative_to(self.data_dir / "previews")
-                amount = sum(path.stat().st_size for path in folder.rglob("*") if path.is_file())
-                shutil.rmtree(folder)
+                if folder.exists():
+                    shutil.rmtree(folder)
+                del self.disk_folders[folder]
+                self.disk_files = {path: size for path, size in self.disk_files.items() if not path.is_relative_to(folder)}
                 total -= amount
             if total + size > self.disk_budget or shutil.disk_usage(self.data_dir).free < size:
                 raise ValueError("可用显示缓存或磁盘空间不足；请关闭其他查看窗口后重试。")
@@ -70,10 +110,18 @@ class MediaCache:
                 self.memory_bytes -= len(removed)
 
     def write(self, path, content):
-        self.reserve(len(content))
-        temporary = path.with_suffix(path.suffix + ".part")
-        temporary.write_bytes(content)
-        temporary.replace(path)
+        path = path.resolve()
+        relative = path.relative_to(self.data_dir / 'previews')
+        if len(relative.parts) < 4 or relative.parts[1] != 'media':
+            raise ValueError('Display cache must be inside a version media directory.')
+        with self.lock:
+            if self.reconciled_at is None:
+                self.reconcile()
+            self.reserve(max(0, len(content) - self.disk_files.get(path, 0)))
+            temporary = path.with_suffix(path.suffix + ".part")
+            temporary.write_bytes(content)
+            temporary.replace(path)
+            self.record(path)
 
 
 def media_locations(preview, settings):

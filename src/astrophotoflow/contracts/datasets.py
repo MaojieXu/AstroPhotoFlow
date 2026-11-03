@@ -4,14 +4,23 @@ from uuid import UUID
 
 from pydantic import Field, field_validator, model_validator
 
-from astrophotoflow.contracts.assets import AssetOut, AssetVersionOut, LibraryMemberFilters, LibraryMetadataSummary, LibrarySortKey
-from astrophotoflow.contracts.calibration import CalibrationBindings
+from astrophotoflow.contracts.assets import (
+    AssetOut,
+    AssetVersionOut,
+    ExposureSummary,
+    LibraryAssetSummary,
+    LibraryMemberFilters,
+    LibraryMetadataSummary,
+    LibrarySortKey,
+)
+from astrophotoflow.contracts.calibration import CalibrationBindings, LibraryCalibrationProjection
 from astrophotoflow.contracts.common import PageMetadata, StrictModel, UuidInput, check_name
 from astrophotoflow.contracts.metadata import AssetClassification, AssetParametersPatch
 
 
 class DatasetOut(StrictModel):
     summary: LibraryMetadataSummary
+    exposure_summary: ExposureSummary
     input_ready: bool
     id: UUID
     name: str
@@ -43,8 +52,20 @@ class DatasetMemberOut(StrictModel):
     position: int
     relative_path: str | None
     calibration_overrides: CalibrationBindings = Field(default_factory=dict)
+    calibration_projection: LibraryCalibrationProjection | None = None
     asset: AssetOut
     version: AssetVersionOut
+
+
+class DatasetMemberSummary(LibraryAssetSummary):
+    dataset_id: UUID
+    dataset_version_id: UUID
+    member_position: int = Field(ge=0)
+    thumbnail_status: Literal['queued', 'generating', 'available', 'failed', 'unsupported'] | None
+
+
+class DatasetMemberSummaryPage(PageMetadata):
+    items: list[DatasetMemberSummary]
 
 
 class DatasetMemberQuery(LibraryMemberFilters):
@@ -65,6 +86,7 @@ class DatasetVersionSummary(StrictModel):
     version_number: int
     created_at: datetime
     calibration_defaults: CalibrationBindings = Field(default_factory=dict)
+    exposure_summary: ExposureSummary
 
 
 class DatasetVersionOut(StrictModel):
@@ -74,6 +96,7 @@ class DatasetVersionOut(StrictModel):
     created_at: datetime
     calibration_defaults: CalibrationBindings = Field(default_factory=dict)
     members: list[DatasetMemberOut]
+    exposure_summary: ExposureSummary
 
 
 

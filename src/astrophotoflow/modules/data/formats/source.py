@@ -18,7 +18,7 @@ from astrophotoflow.modules.data.formats.ser import SER_BAYER, SER_HEADER_SIZE, 
 FITS_STRIP_BYTES = 8 * 1024**2
 
 class PixelSource:
-    def __init__(self, path, category, selection, parameters, folder, reserve, check_cancel=None):
+    def __init__(self, path, category, selection, parameters, folder, reserve, check_cancel=None, record=None):
         self.path, self.category, self.selection = path, category, selection
         self.parameters, self.folder, self.reserve = parameters, folder, reserve
         self.arrays = numpy_arrays(path) if category == "numpy" else []
@@ -26,6 +26,7 @@ class PixelSource:
         self.cfa = str(parameters.get("cfa_pattern") or "").upper() if category in {"fits", "xisf"} else None
         self.linear = category in {"fits", "xisf", "numpy"} or path.suffix.lower() == ".ser"
         self.check_cancel = check_cancel
+        self.record = record
 
     def checkpoint(self):
         if self.check_cancel is not None:
@@ -68,6 +69,8 @@ class PixelSource:
         with part.open("wb") as stream:
             np.save(stream, array, allow_pickle=False)
         part.replace(cached)
+        if self.record is not None:
+            self.record(cached)
         return np.load(cached, mmap_mode="r", allow_pickle=False)
 
     @contextmanager
@@ -125,7 +128,7 @@ class PixelSource:
         x0, y0, x1, y1 = box
         planar = len(hdu.shape) == 3 and rgb_channel_first(hdu.header)
         channels = 3 if len(hdu.shape) == 3 else 1
-        width = hdu.shape[-1] if planar else hdu.shape[1]
+        width = x1 - x0
         sample_bytes = max(8, abs(hdu.header["BITPIX"]) // 8)
         row_bytes = width * sample_bytes * (channels if not planar else 1)
         strip_rows = max(1, FITS_STRIP_BYTES // row_bytes)
@@ -136,13 +139,13 @@ class PixelSource:
                 self.checkpoint()
                 bottom = min(top + strip_rows, y1)
                 if planar:
-                    strip = np.asarray(hdu.section[channel, top:bottom, :])
+                    strip = np.asarray(hdu.section[channel, top:bottom, x0:x1])
                 elif channels == 3:
-                    strip = np.asarray(hdu.section[top:bottom, :, :])
+                    strip = np.asarray(hdu.section[top:bottom, x0:x1, :])
                 else:
-                    strip = np.asarray(hdu.section[top:bottom, :])
+                    strip = np.asarray(hdu.section[top:bottom, x0:x1])
                 self.checkpoint()
-                sampled = strip[::step, x0:x1:step]
+                sampled = strip[::step, ::step]
                 if output is None:
                     shape = ((y1 - y0 + step - 1) // step, (x1 - x0 + step - 1) // step)
                     output = np.empty((*shape, channels) if channels == 3 else shape, dtype=sampled.dtype)

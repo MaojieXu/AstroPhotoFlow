@@ -23,9 +23,9 @@ export const cfaChoices=[
   {value:'RGGB',label:'RGGB'},{value:'BGGR',label:'BGGR'},{value:'GRBG',label:'GRBG'},{value:'GBRG',label:'GBRG'},
   {value:'XTRANS',label:'X-Trans 6×6'},{value:'QUAD_BAYER',label:'Quad Bayer'}
 ]
-export const equipmentKinds = ['camera', 'telescope', 'filter'] as const
-export const equipmentKindLabels:Record<string,string> = {get camera() { return uiT('apfUi.camera_dacf07') },get telescope() { return uiT('apfUi.telescope') },get filter() { return uiT('apfUi.filter') },get optical_system() { return uiT('apfUi.telescope') }}
-export const equipmentKindIcons:Record<string,string> = {camera:'icon-[lucide--camera]',telescope:'icon-[lucide--telescope]',filter:'icon-[lucide--circle-dot]',}
+export const equipmentKinds = ['camera', 'telescope', 'mount', 'filter'] as const
+export const equipmentKindLabels:Record<string,string> = {get camera() { return uiT('apfUi.camera_dacf07') },get telescope() { return uiT('apfUi.telescope') },get mount() { return uiT('apfUi.mount') },get filter() { return uiT('apfUi.filter') },get optical_system() { return uiT('apfUi.telescope') }}
+export const equipmentKindIcons:Record<string,string> = {camera:'icon-[lucide--camera]',telescope:'icon-[lucide--telescope]',mount:'icon-[lucide--axis-3d]',filter:'icon-[lucide--circle-dot]',}
 export function specKind(field:InputField):'number'|'select'|'text'{
   return field.key==='cfa_pattern'||field.options?'select':field.type==='number'?'number':'text'
 }

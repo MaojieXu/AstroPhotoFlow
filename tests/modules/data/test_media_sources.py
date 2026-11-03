@@ -20,6 +20,32 @@ def source(tmp_path, path, category, selection=None, parameters=None):
     return PixelSource(path, category, selection or MediaSelection(), parameters or {}, folder, lambda _: None)
 
 
+@pytest.mark.parametrize('layout', ['mono', 'planar', 'interleaved'])
+def test_fits_region_read_requests_only_the_selected_columns(tmp_path, layout):
+    pixels = np.arange(40 * 60, dtype=np.float32).reshape(40, 60)
+    if layout != 'mono':
+        pixels = np.stack([pixels, pixels + 1, pixels + 2], axis=0 if layout == 'planar' else -1)
+    requests = []
+
+    class Section:
+        def __getitem__(self, selection):
+            requests.append(selection)
+            return pixels[selection]
+
+    header = fits.Header({'BITPIX': -32})
+    if layout == 'planar':
+        header['CTYPE3'] = 'RGB'
+    elif layout == 'interleaved':
+        header['CTYPE1'] = 'RGB'
+    hdu = SimpleNamespace(shape=pixels.shape, header=header, section=Section())
+    reader = source(tmp_path, tmp_path / 'unused.fits', 'fits')
+    actual = reader.read_fits_region(hdu, (11, 9, 24, 22), 3)
+    expected = np.moveaxis(pixels, 0, -1) if layout == 'planar' else pixels
+    np.testing.assert_array_equal(actual, expected[9:22:3, 11:24:3])
+    assert requests
+    assert all(request[-1 if layout != 'interleaved' else -2] == slice(11, 24) for request in requests)
+
+
 @pytest.mark.parametrize("kind", ["mono", "planar", "interleaved", "compressed", "scaled"])
 def test_fits_reads_original_region_with_odd_dimensions_without_modifying_source(tmp_path, kind):
     values = np.arange(519 * 523, dtype=np.float32).reshape(519, 523)

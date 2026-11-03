@@ -46,7 +46,7 @@ def client():
                 "parameters":{},"equipment_snapshot":{},"value_sources":{},"notes":None,"status":"active","revision":8,"created_at":timestamp})
         if path.startswith("/api/v1/datasets/") and path.endswith("/versions"):
             return httpx.Response(200,json={"id":identity,"dataset_id":path.split("/")[-2],"version_number":2,
-                "created_at":timestamp,"calibration_defaults":{},"members":[]})
+                "created_at":timestamp,"calibration_defaults":{},"members":[],"exposure_summary":{"subframe_count":0,"known_count":0,"unknown_count":0,"total_seconds":None,"complete":True}})
         if path.endswith("/entries") or path=="/api/v1/asset-tasks":
             return httpx.Response(200,json={"items":[],"total":0,"limit":10,"offset":0})
         if path=="/api/v1/equipment" or path.startswith("/api/v1/equipment/"):
@@ -139,11 +139,11 @@ def test_sparse_patch_and_fixed_calibration_maps(client):
     assert body(calls[-1]) == {"base_revision": 3, "notes": None, "parameters": {"gain": 0}}
     api.publish_dataset_version(group, DatasetMembersCreate(
         base_revision=4, asset_version_ids=[member], calibration_defaults={},
-        member_calibration_overrides={member: {"dark": None, "flat": {"kind": "dataset_version", "id": target}}},
+        member_calibration_overrides={member: {"dark": None, "flat": {"kind": "asset_version", "id": target}}},
     ))
     assert body(calls[-1]) == {
         "base_revision": 4, "asset_version_ids": [member], "calibration_defaults": {},
-        "member_calibration_overrides": {member: {"dark": None, "flat": {"kind": "dataset_version", "id": target}}},
+        "member_calibration_overrides": {member: {"dark": None, "flat": {"kind": "asset_version", "id": target}}},
     }
     api.import_local(ImportCreate(sources=[{"root_id": "night", "path": "2026-10-25"}], storage_mode="reference"))
     assert body(calls[-1]) == {"sources": [{"root_id": "night", "path": "2026-10-25"}], "storage_mode": "reference"}
@@ -208,10 +208,10 @@ def test_client_sparse_patch_archive_create_and_retry_use_shared_schemas(client)
 
 
 def test_client_rejects_invalid_domain_body_before_http(client):
-    from astrophotoflow.contracts.setups import CapturePresetCreate
+    from astrophotoflow.contracts.setups import EquipmentSetupCreate
     api,calls=client
     with pytest.raises(ValueError,match='invented'):
-        api.create_capture_preset(str(uuid4()),CapturePresetCreate.model_validate({'name':'night','parameters':{'invented':1}}))
+        api.create_equipment_setup(EquipmentSetupCreate.model_validate({'name':'night','invented':1}))
     assert not calls
 
 
@@ -287,7 +287,7 @@ def test_preview_export_preserves_existing_destination_and_cli_fails(client, tmp
     with pytest.raises(SystemExit) as caught:
         cli.main()
     captured=capsys.readouterr()
-    assert caught.value.code == 1 and output.name in captured.out+captured.err
+    assert caught.value.code == 1 and output.name in "".join((captured.out + captured.err).split())
     assert output.read_bytes() == original
 
 

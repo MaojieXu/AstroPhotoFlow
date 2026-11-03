@@ -68,8 +68,6 @@ def test_direct_delete_detaches_combinations_defaults_and_preserves_existing_mat
         "name": name, "components": [{"source": "registered", "equipment_id": camera["id"]},
             {"source": "inline", "equipment": {"kind": "filter", "name": "Existing inline filter"}}],
     }), 201) for name in ("Wide", "Long")]
-    preset = checked(client.post(f"/api/v1/equipment-setups/{rigs[0]['id']}/presets", headers=AUTH,
-                                 json={'equipment_selection': {}, 'parameters': {'parameter_mode': 'gain', 'gain': 0}}), 201)
     outcome = direct_delete(client, selection(camera))
     assert outcome == {"deleted_count": 1, "detached_material_count": 1}
     assert client.get("/api/v1/equipment/" + camera["id"], headers=AUTH).status_code == 404
@@ -77,9 +75,6 @@ def test_direct_delete_detaches_combinations_defaults_and_preserves_existing_mat
         after = checked(client.get("/api/v1/equipment-setups/" + rig["id"], headers=AUTH))
         assert after["components"] == rig["components"][1:]
         assert after["revision"] == rig["revision"] + 1
-    after_preset = checked(client.get("/api/v1/capture-presets/" + preset["id"], headers=AUTH))
-    assert "camera" not in after_preset["equipment_selection"]
-    assert after_preset["parameters"]["gain"] == 0
     after = checked(client.get("/api/v1/library/assets/" + asset_id, headers=AUTH))
     assert after["equipment_snapshot"] == before["equipment_snapshot"]
     assert after["current_version"]["capture_snapshot"] == before["current_version"]["capture_snapshot"]
@@ -104,20 +99,15 @@ def test_direct_delete_rejects_changed_dependency_without_archiving(service):
     assert checked(client.get("/api/v1/equipment/" + camera["id"], headers=AUTH))["status"] == "active"
 
 
-def test_direct_delete_setup_cascades_presets_once_and_keeps_equipment(service):
+def test_direct_delete_setup_keeps_registered_equipment(service):
     client, _, _, _ = service
     camera = equipment(client)
     rig = checked(client.post("/api/v1/equipment-setups", headers=AUTH, json={
         "name": "Rig", "components": [{"source": "registered", "equipment_id": camera["id"]}],
     }), 201)
-    presets = [checked(client.post(f"/api/v1/equipment-setups/{rig['id']}/presets", headers=AUTH,
-                                   json={}), 201) for name in ("L", "Ha")]
-    body = {"items": [{"entry_type": "equipment_setup", "id": rig["id"], "revision": rig["revision"]},
-                       {"entry_type": "capture_preset", "id": presets[0]["id"], "revision": presets[0]["revision"]}]}
-    assert direct_delete(client, body)["deleted_count"] == 3
+    body = {"items": [{"entry_type": "equipment_setup", "id": rig["id"], "revision": rig["revision"]}]}
+    assert direct_delete(client, body)["deleted_count"] == 1
     assert client.get("/api/v1/equipment-setups/" + rig["id"], headers=AUTH).status_code == 404
-    for preset in presets:
-        assert client.get("/api/v1/capture-presets/" + preset["id"], headers=AUTH).status_code == 404
     assert checked(client.get("/api/v1/equipment/" + camera["id"], headers=AUTH))["status"] == "active"
 
 
@@ -153,12 +143,11 @@ def accept(client, root, camera, via, entry, count=1):
     Image.new("RGB", (16, 12), (20, 40, 80)).save(stream, format="PNG")
     content = stream.getvalue()
     body = {"parameters": {"camera_id": camera["id"], "gain": 0, "exposure_seconds": 0}}
-    if via == "preset":
+    if via == "setup":
         setup = checked(client.post("/api/v1/equipment-setups", headers=AUTH, json={
             "name": "Rig", "components": [{"source": "registered", "equipment_id": camera["id"]}],
         }), 201)
-        preset = checked(client.post(f"/api/v1/equipment-setups/{setup['id']}/presets", headers=AUTH, json={'parameters': {'parameter_mode': 'gain', 'gain': 0, 'exposure_seconds': 0}}), 201)
-        body = {"capture_preset_id": preset["id"]}
+        body["equipment"] = {"choice": {"source": "setup", "setup_id": setup["id"], "expected_revision": setup["revision"]}, "fields": ["camera"]}
     names = [f"photo-{index}.png" for index in range(count)]
     for name in names:
         (root / name).write_bytes(content)
@@ -178,7 +167,7 @@ def accept(client, root, camera, via, entry, count=1):
     return task_id, content
 
 
-@pytest.mark.parametrize("via", ["explicit", "preset"])
+@pytest.mark.parametrize("via", ["explicit", "setup"])
 @pytest.mark.parametrize("entry", ["upload", "root"])
 @pytest.mark.parametrize("mutation", ["rename", "archive", "restore", "delete", "direct_delete"])
 def test_accepted_import_keeps_frozen_equipment(service, via, entry, mutation):
@@ -207,7 +196,7 @@ def test_accepted_import_keeps_frozen_equipment(service, via, entry, mutation):
     task = checked(client.get("/api/v1/asset-tasks/" + task_id, headers=AUTH))
     assert task["status"] == "completed", task
     asset = checked(client.get("/api/v1/library/assets/" + task["items"][0]["asset_id"], headers=AUTH))
-    expected = frozen["selected_equipment"]["camera_id"] if via == "preset" else frozen["equipment_snapshots"][camera["id"]]
+    expected = frozen["selected_equipment"]["camera_id"] if via == "setup" else frozen["equipment_snapshots"][camera["id"]]
     assert asset["equipment_snapshot"]["camera_id"] == expected
     assert asset["parameters"]["camera_id"] == camera["id"]
     assert asset["parameters"]["gain"] == asset["parameters"]["exposure_seconds"] == 0
@@ -219,7 +208,7 @@ def test_accepted_import_keeps_frozen_equipment(service, via, entry, mutation):
         assert session.get(AssetTask, task_id).import_defaults_snapshot == frozen
 
 
-@pytest.mark.parametrize("via", ["explicit", "preset"])
+@pytest.mark.parametrize("via", ["explicit", "setup"])
 def test_failed_registration_retry_uses_deleted_equipment_snapshot(service, via, monkeypatch):
     client, app, settings, root = service
     camera = equipment(client)
@@ -307,13 +296,13 @@ def test_legacy_api_and_project_field_are_removed(service):
     assert "capture_profile_ids" not in project
 
 
-def test_preset_freezes_actual_equipment_revision_after_later_update(service):
+def test_setup_freezes_actual_equipment_revision_after_later_update(service):
     client, app, settings, root = service
     camera = equipment(client)
     camera = checked(client.patch('/api/v1/equipment/' + camera['id'], headers=AUTH,
         json={'kind':'camera','base_revision':1,'name':'Revision two'}))
     assert camera['revision']==2
-    task_id, content=accept(client,root,camera,'preset','root')
+    task_id, content=accept(client,root,camera,'setup','root')
     with app.state.database.read_session() as session:
         frozen=deepcopy(session.get(AssetTask,task_id).import_defaults_snapshot)
     checked(client.patch('/api/v1/equipment/' + camera['id'],headers=AUTH,

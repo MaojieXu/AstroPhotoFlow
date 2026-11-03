@@ -59,6 +59,7 @@ class Asset(SearchableName, Base):
     iso: Mapped[int | None] = mapped_column(Integer)
     gain: Mapped[float | None] = mapped_column(Float)
     offset: Mapped[float | None] = mapped_column(Float)
+    readout_mode: Mapped[str | None] = mapped_column(String(128))
     exposure_seconds: Mapped[float | None] = mapped_column(Float)
     integration_seconds: Mapped[float | None] = mapped_column(Float)
     sensor_temperature_c: Mapped[float | None] = mapped_column(Float)
@@ -123,3 +124,55 @@ class FitsHduMetadata(Base):
     supported_kind: Mapped[str | None] = mapped_column(String(16))
     is_selected: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     parse_error: Mapped[str | None] = mapped_column(Text)
+
+
+class ImageMetadataState(Base):
+    """Correctable image facts; original capture snapshots remain untouched."""
+
+    __tablename__ = "image_metadata_state"
+    __table_args__ = (
+        Index("ix_image_metadata_target", "target_name"),
+        Index("ix_image_metadata_capture_start", "capture_start_utc"),
+        Index("ix_image_metadata_master_created", "master_created_utc"),
+    )
+    asset_id: Mapped[str] = mapped_column(ForeignKey("asset.id", ondelete="CASCADE"), primary_key=True)
+    metadata_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict, server_default=text("'{}'"))
+    target_name: Mapped[str | None] = mapped_column(String)
+    capture_start_utc: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    capture_end_utc: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    master_created_utc: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    equipment_context: Mapped[dict | None] = mapped_column(JSON)
+
+
+class MasterProvenanceRevision(Base):
+    """Immutable user declarations, separate from actual platform output facts."""
+
+    __tablename__ = "master_provenance_revision"
+    __table_args__ = (
+        UniqueConstraint("asset_version_id", "revision", name="uq_master_provenance_revision"),
+        CheckConstraint("revision > 0", name="ck_master_provenance_revision"),
+        CheckConstraint("asset_revision > 0", name="ck_master_provenance_asset_revision"),
+        CheckConstraint("source_kind = 'user_declared'", name="ck_master_provenance_source_kind"),
+        Index("ix_master_provenance_asset_version", "asset_version_id"),
+    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    asset_version_id: Mapped[str] = mapped_column(ForeignKey("asset_version.id", ondelete="CASCADE"), nullable=False)
+    revision: Mapped[int] = mapped_column(Integer, nullable=False)
+    asset_revision: Mapped[int] = mapped_column(Integer, nullable=False)
+    source_kind: Mapped[str] = mapped_column(String(24), nullable=False, default="user_declared")
+    data: Mapped[dict] = mapped_column(JSON, nullable=False)
+    source_time_range: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict, server_default=text("'{}'"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.current_timestamp())
+
+
+class MasterProvenanceReference(Base):
+    __tablename__ = "master_provenance_reference"
+    __table_args__ = (
+        CheckConstraint("(asset_version_id IS NULL) != (dataset_version_id IS NULL)", name="ck_master_provenance_reference_target"),
+        Index("ix_master_provenance_reference_asset", "asset_version_id"),
+        Index("ix_master_provenance_reference_dataset", "dataset_version_id"),
+    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    provenance_id: Mapped[str] = mapped_column(ForeignKey("master_provenance_revision.id", ondelete="CASCADE"), nullable=False)
+    asset_version_id: Mapped[str | None] = mapped_column(ForeignKey("asset_version.id"))
+    dataset_version_id: Mapped[str | None] = mapped_column(ForeignKey("dataset_version.id"))

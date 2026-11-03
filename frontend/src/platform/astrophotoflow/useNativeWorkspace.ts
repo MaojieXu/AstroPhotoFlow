@@ -23,8 +23,7 @@ export function useNativeWorkspace() {
   const ready = computed(
     () =>
       Boolean(connectionId.value) &&
-      query.isSuccess.value &&
-      !query.isFetching.value
+      query.isSuccess.value
   )
   onScopeDispose(() => {
     if (--users === 0) {

@@ -233,6 +233,8 @@ def test_proxy_whitelist_origin_headers_and_upstream_status(tmp_path, monkeypatc
             assert seen["authorization"] == "Bearer server-only-token"
             assert all(
                 method == "GET" or (method == "POST" and path == "/datasets/{dataset_id}/versions")
+                or (method == "POST" and path == "/library/assets/{asset_id}/versions/{asset_version_id}/calibration")
+                or (method == "PATCH" and path == "/library/assets/{asset_id}/versions/{version_id}/master-provenance")
                 or (method == "PATCH" and path == "/datasets/{dataset_id}/member-parameters")
                 or (method == "POST" and path in {"/library/assets/{asset_id}/versions/{version_id}/previews/display", "/projects/{project_id}/asset-references/{reference_id}/previews/display"})
                 or (method == "POST" and path in {"/library/assets/{asset_id}/versions/{version_id}/previews/display/auto-stretch", "/projects/{project_id}/asset-references/{reference_id}/previews/display/auto-stretch"})
@@ -250,6 +252,8 @@ def test_proxy_whitelist_origin_headers_and_upstream_status(tmp_path, monkeypatc
                 and "/versions" in path
                 and path != "/datasets/{dataset_id}/versions"
                 and path != "/datasets/{dataset_id}/member-parameters"
+                and not (method == "POST" and path == "/library/assets/{asset_id}/versions/{asset_version_id}/calibration")
+                and not (method == "PATCH" and path == "/library/assets/{asset_id}/versions/{version_id}/master-provenance")
                 and not (method == "POST" and path == "/library/assets/{asset_id}/versions/{version_id}/previews/display")
                 and not (method == "POST" and path == "/library/assets/{asset_id}/versions/{version_id}/previews/display/auto-stretch")
                 and not (method == "POST" and path.endswith("/previews/viewer"))

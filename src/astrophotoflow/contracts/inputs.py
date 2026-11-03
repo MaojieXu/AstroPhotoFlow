@@ -31,6 +31,7 @@ class ScienceSelection(StrictModel):
 class AssetInputReference(StrictModel):
     kind: Literal["asset_version"]
     asset_version_id: UuidInput
+    binding_version_id: UuidInput | None = None
     selection: ScienceSelection
 
 
@@ -112,12 +113,13 @@ class ResolvedAssetInput(StrictModel):
     reference_index: int = Field(ge=0)
     asset_id: UUID
     asset_version_id: UUID
+    binding_version_id: UUID | None = None
     dataset_version_id: UUID | None = None
     member_index: int | None = None
     asset_revision: int = Field(ge=1)
     parameters: dict
     classification: AssetClassification | None
-    value_sources: dict[str, Literal["manual", "file", "preset", "unknown"]]
+    value_sources: dict[str, Literal["manual", "file", "unknown"]]
     capture_snapshot: VersionCaptureSnapshot | None
     equipment_snapshot: dict
     effective_calibration: CalibrationBindings

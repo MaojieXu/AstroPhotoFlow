@@ -12,7 +12,7 @@ JsonObject = dict[str, JsonValue]
 CfaPattern = Literal["MONO", "RGGB", "BGGR", "GRBG", "GBRG", "XTRANS", "QUAD_BAYER"]
 
 
-EquipmentKind = Literal["camera", "telescope", "filter"]
+EquipmentKind = Literal["camera", "telescope", "filter", "mount"]
 
 
 class StrictModel(BaseModel):

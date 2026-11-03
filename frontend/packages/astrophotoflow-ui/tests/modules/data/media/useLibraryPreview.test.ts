@@ -55,3 +55,29 @@ it('aborts lazy native member reads after their owning viewer closes',async()=>{
   await expect(reading).rejects.toMatchObject({name:'AbortError'})
   await expect(view.member(0,new AbortController().signal)).rejects.toMatchObject({name:'AbortError'})
 })
+
+it('opens a fixed image without requiring an existing thumbnail',async()=>{
+  const preview=scope.run(()=>useLibraryPreview({nativeViewer:()=>true,waitForEdits:async()=>true,onError:vi.fn()}))!
+  const withoutThumbnail={...second.asset,current_version:{...second.version,thumbnail_ref:null}}
+  await preview.open(libraryAsset(withoutThumbnail))
+  const viewer=preview.media.value!
+  expect(viewer.total).toBe(1)
+  const member=await viewer.member(0,new AbortController().signal)
+  expect(member.basePath).toContain(`/versions/${second.version.id}/previews`)
+  expect(members).not.toHaveBeenCalled()
+})
+
+
+it('retains the existing preview while a new group resolves or fails',async()=>{
+  let reject!: (reason:Error)=>void
+  members.mockImplementation(()=>new Promise((_resolve, fail)=>{reject=fail}))
+  const onError=vi.fn()
+  const preview=scope.run(()=>useLibraryPreview({nativeViewer:()=>false,waitForEdits:async()=>true,onError}))!
+  await preview.open(libraryAsset(second.asset))
+  const old=preview.photo.value
+  const opening=preview.open(group);await flushPromises()
+  expect(preview.photo.value).toBe(old)
+  reject(new Error('read failed'));await opening
+  expect(preview.photo.value).toBe(old)
+  expect(onError).toHaveBeenCalledOnce()
+})

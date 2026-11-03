@@ -17,11 +17,6 @@ from astrophotoflow.contracts.projects import (
     ProjectReferenceDeleteResult,
 )
 from astrophotoflow.contracts.setups import (
-    CapturePresetCreate,
-    CapturePresetOut,
-    CapturePresetPage,
-    CapturePresetPatch,
-    CapturePresetQuery,
     EquipmentSetupCreate,
     EquipmentSetupOut,
     EquipmentSetupPage,
@@ -100,16 +95,3 @@ class OrganizationOperations:
 
     def update_equipment_setup(self, setup_id: str, body: EquipmentSetupPatch) -> EquipmentSetupOut:
         return self.request("PATCH", f"/equipment-setups/{setup_id}", json=body, adapter=TypeAdapter(EquipmentSetupOut))
-
-    def list_capture_presets(self, query: CapturePresetQuery | None = None) -> CapturePresetPage:
-        params = query if query is not None else CapturePresetQuery()
-        return self.request('GET', '/capture-presets', params=params.model_dump(mode="json"), adapter=TypeAdapter(CapturePresetPage))
-
-    def create_capture_preset(self, setup_id: str, body: CapturePresetCreate) -> CapturePresetOut:
-        return self.request("POST", f"/equipment-setups/{setup_id}/presets", json=body, adapter=TypeAdapter(CapturePresetOut))
-
-    def get_capture_preset(self, preset_id: str) -> CapturePresetOut:
-        return self.request("GET", f"/capture-presets/{preset_id}", adapter=TypeAdapter(CapturePresetOut))
-
-    def update_capture_preset(self, preset_id: str, body: CapturePresetPatch) -> CapturePresetOut:
-        return self.request("PATCH", f"/capture-presets/{preset_id}", json=body, adapter=TypeAdapter(CapturePresetOut))

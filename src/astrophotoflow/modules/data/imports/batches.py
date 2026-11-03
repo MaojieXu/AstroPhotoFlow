@@ -139,8 +139,9 @@ def submit_import_batch(session: Session, settings: Settings, body: ImportBatchS
         scheduled.append(str(accepted.task_id))
         task = session.get(AssetTask, str(accepted.task_id))
         # Keep the inspected stamps through registration and copy, including the acceptance race window.
-        stamps = {entry['path']: entry['source_stamp'] for entry in frozen}
-        task.sources = [{**source, 'entries': [{**entry, 'source_stamp': stamps[entry['path']]}
+        observations = {entry['path']: entry for entry in frozen}
+        task.sources = [{**source, 'entries': [{**entry, 'source_stamp': observations[entry['path']]['source_stamp'],
+            'metadata_snapshot': observations[entry['path']].get('metadata_snapshot')}
                                                for entry in source['entries']]} for source in task.sources]
         task.report = {**task.report, 'agent_batch': {
             'request_id': str(body.request_id), 'fingerprint': fingerprint, 'scan_id': str(body.scan_id),

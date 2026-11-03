@@ -66,6 +66,7 @@ function setup(total = 1000) {
   )
   const status = vi.fn<ReturnType<typeof createMediaClient>['status']>()
   const viewport = {
+    replace: vi.fn(),
     fit: vi.fn(),
     actual: vi.fn(),
     zoomBy: vi.fn(),
@@ -98,6 +99,10 @@ function setup(total = 1000) {
 }
 
 beforeEach(() => {
+  vi.stubGlobal('Image', class {
+    src = ''
+    decode() { return Promise.resolve() }
+  })
   nativeWorkspace.workspaceId.value = '/test-workspace'
   nativeWorkspace.ready.value = true
   vi.stubGlobal(
@@ -131,7 +136,7 @@ describe('shared original-resolution media viewer', () => {
         expect.any(AbortSignal)
       )
     )
-    await waitFor(() => expect(createImageViewport).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(view.viewport.replace).toHaveBeenCalledOnce())
     await fireEvent.update(
       screen.getByRole('combobox', { name: 'astrophotoflow.media.rgbDisplay' }),
       'auto'
@@ -148,7 +153,7 @@ describe('shared original-resolution media viewer', () => {
     )
     view.unmount()
   })
-  it('opens one of a thousand frames, prefetches only adjacent thumbnails and preserves the view on switching', async () => {
+  it('opens one of a thousand frames, prepares only the next neighbor and reuses the view on switching', async () => {
     const user = userEvent.setup()
     const { member, prepare, viewport } = setup()
     await screen.findByText('Frame 1')
@@ -156,7 +161,8 @@ describe('shared original-resolution media viewer', () => {
     await waitFor(() =>
       expect(member).toHaveBeenCalledWith(1, expect.any(AbortSignal))
     )
-    expect(prepare).toHaveBeenCalledTimes(1)
+    await waitFor(() => expect(prepare.mock.calls.filter(([, selection]) => selection.prefetch)).toHaveLength(1))
+    expect(prepare.mock.calls.filter(([, selection]) => !selection.prefetch)).toHaveLength(1)
     expect(
       member.mock.calls.every(([index]) => index === 0 || index === 1)
     ).toBe(true)
@@ -164,15 +170,12 @@ describe('shared original-resolution media viewer', () => {
     expect(viewport.actual).toHaveBeenCalledOnce()
     await user.click(screen.getByRole('button', { name: 'g.nextImage' }))
     await screen.findByText('Frame 2')
-    await waitFor(() => expect(createImageViewport).toHaveBeenCalledTimes(2))
-    expect(vi.mocked(createImageViewport).mock.calls[1]?.[2].previous).toEqual(
+    await waitFor(() => expect(viewport.replace).toHaveBeenCalledOnce())
+    expect(createImageViewport).toHaveBeenCalledOnce()
+    expect(viewport.replace.mock.calls[0]?.[1].previous).toEqual(
       viewport.snapshot()
     )
-    expect(prepare).toHaveBeenLastCalledWith(
-      '/frame/1',
-      expect.objectContaining({ generation: 2 }),
-      expect.any(AbortSignal)
-    )
+    expect(prepare.mock.calls.filter(([, selection]) => !selection.prefetch).at(-1)?.[0]).toBe('/frame/1')
   })
 
   it('ignores a late preparation after a direct jump and releases the viewer on closing', async () => {
@@ -195,7 +198,7 @@ describe('shared original-resolution media viewer', () => {
     await screen.findByText('Frame 999')
     finish?.(image('late'))
     await waitFor(() =>
-      expect(vi.mocked(createImageViewport).mock.calls.at(-1)?.[1].key).toBe(
+      expect(view.viewport.replace.mock.calls.at(-1)?.[0].key).toBe(
         '/frame/998'
       )
     )
@@ -437,7 +440,8 @@ describe('shared original-resolution media viewer', () => {
     })
     expect(overview).toHaveClass('max-w-none')
     await user.click(screen.getByRole('button', { name: 'g.nextImage' }))
-    await waitFor(() => expect(createImageViewport).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(view.viewport.replace).toHaveBeenCalledOnce())
+    expect(createImageViewport).toHaveBeenCalledOnce()
     first.bounds({ left: 999, top: 999, width: 999, height: 999 })
     await nextTick()
     const current = screen.getByAltText('Frame 2')
@@ -445,4 +449,29 @@ describe('shared original-resolution media viewer', () => {
     expect(current).not.toHaveStyle({ left: '999px' })
     view.unmount()
   })
+})
+
+
+it('keeps the previous image while a new request is preparing or fails', async () => {
+  const view = setup(1)
+  await waitFor(() => expect(createImageViewport).toHaveBeenCalled())
+  let fail!: (cause: Error) => void
+  view.prepare.mockImplementationOnce(() => new Promise((_resolve, reject) => { fail = reject }))
+  await view.rerender({ request: { index: 0, total: 1, member: async () => ({title:'new', basePath:'/new'}) } })
+  await waitFor(() => expect(view.prepare).toHaveBeenCalledWith('/new', expect.anything(), expect.any(AbortSignal)))
+  expect(view.viewport.destroy).not.toHaveBeenCalled()
+  fail(new Error('new image failed'))
+  await screen.findByRole('alert')
+  expect(view.viewport.destroy).not.toHaveBeenCalled()
+  view.unmount()
+  expect(view.viewport.destroy).toHaveBeenCalled()
+})
+
+it('clears the previous image when the workspace changes', async () => {
+  const view = setup(1)
+  await waitFor(() => expect(createImageViewport).toHaveBeenCalled())
+  nativeWorkspace.workspaceId.value = '/another-workspace'
+  await nextTick()
+  expect(view.viewport.destroy).toHaveBeenCalled()
+  view.unmount()
 })

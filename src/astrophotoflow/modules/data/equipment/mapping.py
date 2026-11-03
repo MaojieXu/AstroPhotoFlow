@@ -17,7 +17,7 @@ _output = TypeAdapter(EquipmentOut)
 def equipment_out(row: Equipment) -> EquipmentOut:
     return _output.validate_python({
         "id": UUID(row.id), "kind": row.kind, "name": row.name, "model": row.model,
-        "notes": row.notes, "specs": row.specs,
+        "notes": row.notes, **({} if row.kind == "mount" else {"specs": row.specs}),
         "status": row.status, "revision": row.revision,
         "created_at": row.created_at.replace(tzinfo=UTC) if row.created_at.tzinfo is None else row.created_at,
         "updated_at": row.updated_at.replace(tzinfo=UTC) if row.updated_at.tzinfo is None else row.updated_at,

@@ -11,7 +11,7 @@ from astrophotoflow.modules.data.equipment.models import Equipment, EquipmentSet
 
 def member_equipment(session: Session, member: EquipmentSetupMember) -> tuple[str, dict]:
     if member.equipment_id is None:
-        return member.inline_equipment["kind"], member.inline_equipment["specs"]
+        return member.inline_equipment["kind"], member.inline_equipment.get("specs", {})
     equipment = session.get(Equipment, member.equipment_id)
     if equipment is None:
         raise invalid_reference("The selected setup equipment no longer exists.")
@@ -28,7 +28,7 @@ def resolve_optics(kind: str, specs: dict, accessory_id: str | None) -> dict:
         accessory = next((item for item in specs.get("optical_accessories", [])
                           if str(item["id"]) == str(accessory_id)), None)
         if accessory is None:
-            raise invalid_reference("The selected optical accessory is unavailable on this telescope. Update the setup or preset selection before removing or replacing that accessory.")
+            raise invalid_reference("The selected optical accessory is unavailable on this telescope. Update the setup selection before removing or replacing that accessory.")
     base = specs.get("native_focal_length_mm")
     focal = base * (accessory["factor"] if accessory is not None else 1.0) if base is not None else None
     if focal is not None and (not isfinite(focal) or focal <= 0):
@@ -37,13 +37,13 @@ def resolve_optics(kind: str, specs: dict, accessory_id: str | None) -> dict:
 
 
 def validate_setup_members(session: Session, setup: EquipmentSetup) -> None:
-    counts = {"camera": 0, "telescope": 0}
+    counts = {"camera": 0, "telescope": 0, "mount": 0}
     for member in setup.members:
         kind, _ = member_equipment(session, member)
         if kind in counts:
             counts[kind] += 1
     if any(count > 1 for count in counts.values()):
-        raise invalid_reference("A setup may contain at most one camera and one telescope, including registered and inline equipment.")
+        raise invalid_reference("A setup may contain at most one camera, one telescope and one mount, including registered and inline equipment.")
 
 
 def validate_setup_optics(session: Session, setup: EquipmentSetup) -> None:

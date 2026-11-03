@@ -112,7 +112,7 @@ export function useSetupEditor(
   function count(kind: string) {
     return setupDraft.value.components.filter(component => componentKind(component) === kind).length
   }
-  const invalidCounts = computed(() => count('camera') > 1 || count('telescope') > 1)
+  const invalidCounts = computed(() => count('camera') > 1 || count('telescope') > 1 || count('mount') > 1)
   function applyInline(index: number, equipment: EquipmentDraft) {
     if (equipment.kind !== 'filter' && setupDraft.value.components.some((component, position) => position !== index && componentKind(component) === equipment.kind)) return false
     const current = setupDraft.value.components[index]
@@ -162,7 +162,7 @@ export function useSetupEditor(
     deviceEditor.value = {
       source: 'inline',
       index,
-      equipment: JSON.parse(JSON.stringify(component.equipment))
+      equipment: { ...JSON.parse(JSON.stringify(component.equipment)), specs: component.equipment.kind === 'mount' ? {} : JSON.parse(JSON.stringify(component.equipment.specs)) }
     }
     equipmentOriginal.value = JSON.stringify(deviceEditor.value.equipment)
   }
