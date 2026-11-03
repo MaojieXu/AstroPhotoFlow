@@ -1,5 +1,101 @@
 # 需求、实现与验证矩阵
 
+<a id="library-thumbnail-recovery"></a>
+
+### 素材库缩略图异常恢复补齐（2026-11-02，测试仅编写）
+
+- 批次状态新增独立于成员分页的组级失败信息，报告固定组版本、严格首帧版本和首帧原始错误。首帧失败仍不替换为其他成员；成功／重新排队后清除当前失败投影。
+- 重试失败成员时，在同一事务中检查并排队其失败的固定首帧依赖；不重试未选中的其他失败成员。非法选集不产生部分更新；首帧缓存记录不存在时明确返回依赖缺失，要求为同一固定组版本生成新批次。
+- 后台周期检查本功能的可用缓存文件；文件丢失或缓存路径不合法时沿用原Preview身份重新排队，保留冻结拉伸参数和固定引用，覆盖历史组缓存。维护暂停期间不补排队，不操作原件或其他预览算法缓存。
+- 已补写组级错误／分页、成员单独重试／失败依赖、非法重试原子性、单图／组缓存丢失恢复与维护暂停用例。本轮按用户要求**不运行测试或实际联调**；未迁移数据库、部署前端或启停workspace，不将实现和接口生成视为运行验收。保留已有改动，不提交、合并或推送。
+
+后续用户明确授权部署（2026-11-02 America/Chicago）：完成UI／宿主类型编译与前端生产构建，通过core控制入口仅重启`mcp-hot-reload`。数据库原位从0005升级到0006，迁移入口自动备份；停服后记录的全部旧表行数与内容摘要在迁移后完全一致，包含520条素材记录（含历史／回收站）、14件设备和2个组合。未重建数据目录或修改来源素材。启动回执ready，网页http://127.0.0.1:32628；部署记录`.artifacts/reports/thumbnail-deploy-20261103T003015/`。仍未运行测试或业务／MCP实际联调，不将健康检查与页面展示记为功能验收。未提交、合并或推送。
+
+<a id="library-inline-master"></a>
+
+### 原表校准列、Master目标与自动累计曝光（2026-11-02）
+
+- 用户最终选择覆盖前轮独立校准面板方案：现有素材表直接增加适用校准列，移除独立卡片、重复成员表及搭配筛选；组行只读显示统一目标／多种，成员与独立图复用紧凑行内选择。未配置、用户明确不用、不适用、继承分开；不常驻UUID／检查说明。当前编辑采用起始revision，背景轮询不静默改写提交依据；明确历史组成员只读，回执不跳current。
+- 目标只允许对应用途masterframe固定素材版本；Light可选Dark／Flat／Bias，Flat可选Bias／Dark-flat，Dark／Dark-flat可选Bias，所有槽非必填。所有新增／旧完整发布入口均保持Master和消费者用途不变量。组消费者及Master的固定dataset来源保留，不把来源历史当作再次应用的校准。0005_master_calibration_targets移除绑定表两项组目标列，含旧raw目标的库显式拒绝迁移，避免静默丢关系；本轮用户授权直接重建测试库且不备份。
+- 新calibration_projection批量投影当前页独立配置与组内effective关系；组在SQL聚合统一／混合选择，目标名称批量读取，普通浏览不sciencecheck、不逐图请求。Master候选SQL筛选／COUNT／分页，仅对当前页候选做显式consumer适配检查；没有先读全库再分页。
+- exposure_summary后端SQL汇总整个指定组的subframe.exposure_seconds，分页／筛选不改变总量，不加Master或integration_seconds，未知与合法0分开。当前资料修正反映当前组；明确历史版本按冻结capture事实。增删后采用新组版本，本地写入立即失效查询，外部MCP修改复用可见页10秒轻量刷新及focus更新，不建事件系统。
+- 曝光域／相邻查询25项通过（exposure-summary-final.xml）；列投影4项＋排序6项、相邻域57项通过（row-calibration.xml、row-calibration-domain.xml）。Master目标／迁移／HTTP／MCP及旧用途约束定向通过：master-only-final.xml、master-only-api.xml、master-candidates-bounded.xml、master-consumer-slots.xml、master-slots-recheck.xml。存在重叠场景，不累加为唯一总数。
+- 真实FastMCP stdio→隔离HTTP六场景通过（inline-real-mcp.xml），另补一项跨夜投影读回通过（inline-row-mcp.xml）：原始组／subframe目标被拒绝，两晚不同Masterflat保留，库外层混合关系与全组曝光一致，修正曝光480→780且旧版本300不变。受影响CLI／MCP协议3项通过（inline-cli.xml），共享HTTP／MCP／架构33项通过（inline-contract.xml）。
+- UI行内编辑／Master候选／未知确认／冲突拒绝／起始revision保护及累计曝光格式、current／history刷新测试通过（inline-calibration-final.json、inline-library-final.json、inline-library-regression3.json及对应报告）；旧版本曝光必填fixture已补齐后复验，不把首轮夹具失败当成功。UI类型检查通过。独立只读复核三项运行路径发现均已修复并复核。
+- OpenAPI、MCP／CLI与前端SDK同步；仍111工具，无新增“计算总曝光”或关系管理工具。UI和宿主严格类型检查、完整前端构建通过（inline-frontend-build.log）；生产Ruff排除既有baseline生成I001后通过，diff检查通过。
+- 仅当前mcp-hot-reload测试workspace已按用户授权清空旧测试data（6素材、1组、4设备），不新建备份；经core维护准入／停止后初始化0005，部署前端并重启双服务，健康通过，地址http://127.0.0.1:32628/#/workflows。回执.artifacts/reports/library-inline-deploy/summary.json。没有修改E盘源素材、默认workspace或先前备份。
+- 新库通过真实MCP建立4设备、1组合、2 Master和4合成Light，绑定为两晚不同Flat；其余槽保留未配置，未默认禁用，未执行图像校准。库外行20分钟、Master列及成员目标实际可见。保持页面打开，经MCP将首张曝光300→600秒，后端1200→1500秒且Dataset revision不变，页面无需reload自动显示25分；实际浏览器再次进入组只显示原表校准列，无独立卡片。证据library-inline-demo/summary.json、refresh.json、before-refresh.png、frontend.png、members.png。
+- 本轮只运行定向与所述真实联调，不执行全仓库套件；没有提交、合并或推送。
+
+<a id="library-simplification"></a>
+
+### 图像管理轻量导入、设备简化与校准可见（2026-11-02）
+
+- 保留此前未提交改动。逐文件扫描缓存完整FITS／XISF事实，按来源戳验证后复用；复制及hash仍在同一次遍历。新组仅调度封面，追加保留旧封面，独立图与其他成员按需生成。首次无thumbnail的显示预览支持生成、缓存、并发合并；科学导入完成不等待预览，预览失败不影响原件及发布结果。没有质量分析或实际校准。
+- 删除独立capture preset的合同、实体、服务、HTTP、Client、MCP／CLI及UI；图像支持直接设备或可选组合，设备关联不覆盖拍摄参数，多滤镜明确选择。保留赤道仪、设备快照、固定版本及跨夜成员覆盖。0004_remove_capture_presets删除两张旧表，前序迁移作为历史保留，不存在运行时预设兼容机制。
+- 校准读接口提供最终目标名称／固定版本／来源／适用状态；SQL聚合全组搭配，成员数据库分页及筛选，不在浏览时运行科学检查。前端直显组成员及独立图配置，显式检查当前页后显示本次待核实／冲突；未检查不冒充匹配。移除10秒全组轮询。
+- 新只读data_calibration_check_import在登记前检查扫描文件，不创建plan或聊天状态。导入工具描述和指南要求Agent汇总疑问、建议来源与明确文件范围，用户可保留未知，选Master不等于接受全部未知。CCD-TEMP映射实测温度，SET-TEMP保留为设定温度观察值；不增加温度审计系统。
+- 独立只读复核发现显式null及人工CFA在扫描前检与真实登记间不一致，已修为共享参数／分类优先级及CFA派生；4项预检→导入→检查一致性用例通过，复核通过。校准业务29项、扫描及关系HTTP／目录专项通过，见calibration-reviewed.xml、calibration-preflight-parity.xml、calibration-visible-http.xml。
+- 定向验证：预设移除域／schema／接口／快照155项；轻量导入／FITS预览／执行器49项、完整导入流水线45项；UI校准／预览38项与设备简化51个不同用例；MCP／HTTP合同和架构33项。各组包含重复场景，不汇总为唯一总数。证据在.artifacts/reports对应no-preset-*、remove-presets-*、light-import-*、image-library-frontend.json、no-presets-frontend.json、library-contract.xml。
+- 真实FastMCP stdio→隔离HTTP六种场景最终通过（library-real-mcp-final.xml中5项＋library-lazy-mcp.xml修正公开字段断言后1项）；覆盖入库前未知零写入、跨夜不同flat、固定历史、已知冲突拒绝、失败恢复、设备快照、首次按需预览。CLI／真实协议8项最终通过（library-cli.xml中6项＋library-cli-recheck.xml复验2项）。修复中文删除预检检索关键词；组合检索改逐能力查询，不将BM25最多10候选假定为多个操作的完备集合。
+- OpenAPI、MCP／CLI111工具（图像核心32＋任务7，设备管理16）和前端SDK已生成。UI与宿主类型检查、完整前端构建通过，日志library-frontend-build-final.log。生产Ruff排除既有baseline生成文件的历史I001后通过，diff检查通过；未执行全量仓库套件。
+- 按需预览历史保护回归发现并修复Display改写旧任务预览状态：当前预览只更新Preview，导入历史保持not_requested／失败原事实。最终媒体40项通过（display-lazy-final.xml），显式导入13＋流水线45共58项通过（light-import-history.xml）。此前旧语义失败已适配并复验，不计为功能通过。
+- 当前mcp-hot-reload测试workspace已备份并重建至0004，前端部署、双服务重启健康通过。备份.artifacts/backups/before-library-rebuild-20261102T204055保留原514素材、5组、17设备、3组合及1旧预设；全部514托管原件blake3与数据库记录一致。首次管理脚本SQLite连接未及时关闭造成Windows目录移动失败；保留已复制备份，关闭连接后核验库完整性和全部原件，再保留残余目录并完成重建。没有修改E盘来源素材或默认workspace。
+- 新库通过真实MCP登记4件明确标注的合成设备与1组合、2张合成Master及4张合成亮场；同一组跨夜使用两种Flat，各2张，扫描预检零写入、导入及汇总读回一致；未执行校准。回执.artifacts/reports/library-simplification-deploy/summary.json、library-simplification-demo/summary.json。前端地址http://127.0.0.1:32628/#/workflows，浏览器展示核对见本轮交付。未提交、合并或推送。
+
+<a id="equipment-mount-channel"></a>
+
+### 赤道仪设备管理与 Channel 提示（2026-11-02）
+
+- 保留此前全部未提交候选，增加第四类设备mount，仅名称／型号／备注／状态，无specs及硬件控制字段。组合注册和内联成员合计至多一台赤道仪；预设继承组合；图像明确选择mount后冻结身份和资料，支持清空与revision冲突，不增加拍摄数值参数或SQL身份列，不参与校准匹配。网页登记／编辑／组合／预设只读展示及素材快照显示同步支持。
+- 新增register_mount／update_mount，设备管理20工具、完整目录114工具。FilterSpecs.channel共享字段提示覆盖注册／修改／组合内联schema，两支滤镜工具附few-shot，允许Agent依据明确用途或可靠资料填写L/R/G/B/H/O/S、RGB、SHO、Ir875nm。自由文本不改枚举，不把多通带单片拆成多件，不据通道补造波长／带宽；旧限制的需求及操作指南同步修正。
+- 正式迁移0003_equipment_mount扩展equipment类型CHECK；core显式支持0001／0002升级前备份，旧数据、revision、索引、外键及快照保留。仅隔离数据库执行迁移，本轮未迁移现用workspace、未启停其服务、未补登记真实赤道仪或改写用户资料。
+- 后端7文件66项通过（33.37秒），包括新mount域5项、新迁移1项和既有迁移／设备快照／成员／图片管理；MCP工具36项通过（38.14秒）。JUnit：`.artifacts/reports/equipment-mount-backend.xml`、`mount-mcp.xml`。
+- 真实FastMCP stdio→HTTP联调通过：search_tools返回Channel字段提示和few-shot；登记赤道仪→加入组合→预设继承→合成FITS导入冻结→改名不改旧事实→显式清空不改曝光等参数；H/O/S、RGB、SHO、Ir875nm逐项保存且不补造数值规格。最终1项通过（18.56秒），报告`mount-real-mcp-discovery.xml`；先前完整流程单独1项也通过，不累计为两种场景。
+- MCP目录／架构边界20项通过；代理文件其余6项通过，固定版本写入断言按上一轮实际新增的两条配置／来源路径修正后唯一失败项通过，未放开科学原件写入。OpenAPI与服务／代理快照1项通过。并行测试曾共用临时目录导致5个setup错误，改用独立basetemp后复核。新检索测试初次缺json导入，修复后通过。
+- UI八文件83项，首次82通过、旧类别断言修正后唯一失败项通过；UI类型检查、宿主类型检查及完整前端构建通过。构建日志`.artifacts/reports/mount-frontend-build.log`、产物`.artifacts/build/frontend`。构建常规Vite提示不作为功能验收；未运行真实用户资料浏览器验收或全量套件。
+- 本轮生产改动Ruff／compileall及diff检查通过；相邻proxy测试原有I001／UP041风格诊断未顺带格式化。生成CLI help已核对；OpenAPI、MCP／CLI和Hey API生成物同步。未提交、合并或推送。
+
+<a id="image-management-mcp-v2"></a>
+
+### 图像数据库管理后端与 MCP（2026-11-02）
+
+- 按用户确认的31个图像核心工具＋7个任务操作实现；完整FastMCP目录为112项，包含此前18项设备工具和保留的其他能力。Agent决定分组，MCP只提供文件事实、按明确file_id导入独立素材／新组／向指定组追加。校准场先入库，亮场导入与本批绑定一起发布；新增成员未配置槽位不继承旧夜flat。原始校准组仅标记master_required，不执行制作Master或校准算法。字段及具体HTTP路径统一查[生成接口](../api/README.md)，业务流程见[Agent指南](library-agent-tools.md#图像导入跨夜追加与校准)。
+- 复用Asset／Dataset固定版本及AssetTask；新增目标／科学时间、Master人工来源不可变记录、单图不可变绑定配置、冻结导入计划与请求回执。组内成员覆盖优先于组默认，不动态采用单图配置。保留未配置／继承／禁用／指定目标，已知科学冲突拒绝，未知适配需accept_unknown；普通未知资料且无target不阻止入库。检查返回依赖路径、采用的资料revision、原件状态及诊断。预览、原件就绪、元数据、组发布和关系保存独立报告，写入不代表已执行校准。
+- 正式迁移`0001_baseline → 0002_image_management`已实现；显式升级前用SQLite backup API保存一致备份，服务端拒绝直接使用旧结构。迁移2项通过：旧设备资料／revision及旧disabled关系保持原义、旧资料不自动回填、重复升级不重复备份、新库DDL与ORM metadata一致。测试只操作隔离库；本轮未迁移现用设备workspace或启停正常dev。
+- 后端定向：显式导入及相邻回归66项通过（59.19秒）；新增设备冻结／资料来源修改后9项复验通过（4.89秒，含重复用例，不累计独立总数）。最终校准22项通过（6.91秒）；图片资料／Master来源12项通过，既有设备快照／数据基础35项通过。原生组分页与筛选20项通过（19.81秒）。定向检查发现并修复未知参数模式掩盖已知gain冲突、无关槽位修改被历史unknown阻断，以及未生效默认目标漏结构检查。
+- HTTP新增15项通过（12.54秒），逐文件发布／校准状态及成员查询补测4项通过（6.15秒）；另1项真实HTTP矩阵通过（3.73秒），覆盖5种用途×subframe/masterframe共10组合、固定分类快照和原件字节不变。报告`.artifacts/reports/image-management-http.xml`、`image-management-receipt-fields.xml`及`image-http-classification-matrix.xml`。
+- 真实FastMCP stdio→HTTP→隔离数据库的5个新场景最终全部通过：跨夜M31同组分别flat A/B、单图改绑不影响旧组、明确名单与请求重放、已知冲突拒绝、复制失败恢复保留身份、发布冲突仅补发布。原CLI/MCP合同迁移保留全部8项既有测试，受影响5项最终通过；未改且未重跑的设备／预览用例不据此宣称再次通过。逐项最终结果及失败历史见`.artifacts/reports/image-management-mcp-final-summary.json`与`cli-image-contract-final-summary.json`，没有重复重跑已通过场景。
+- MCP schema／目录相邻9项通过，旧批次兼容1项通过，task-get／科学时间／reload入口安全5项通过；真实reload两项未启用，保留skipped。架构检查最终15项通过（首轮14通过、修正public导出形式后失败单项复验通过）；OpenAPI快照及代理白名单单项通过（5.56秒）。固定原件不可写断言仅新增允许独立校准配置和Master来源修订的准确路径。
+- 同步生成OpenAPI、网页代理白名单、112工具MCP快照／CLI及Hey API类型／Zod。仅为既有网页消费适配新旧响应，并显示unconfigured；未新增页面。UI定向5文件27项通过，UI包和原生宿主类型检查通过，完整前端构建通过；日志`.artifacts/reports/image-management/build.log`，产物`.artifacts/build/frontend`。SDK直接写入遇到文件错误后，使用配置已有的APF_SDK_OUTPUT生成到`.artifacts/build/image-management-sdk`再复制完整生成结果，没有手改生成物或改全局权限。
+- 本轮代码Ruff、Python编译和diff检查通过；旧CLI集成文件已有样式诊断未顺带格式化。Windows sandbox的本地socketpair导致部分HTTP检查挂起，堆栈确认未进入产品逻辑后在授权的沙箱外重跑通过，没有改产品网络机制。测试只使用合成FITS和私有临时服务；未执行完整测试套件、真实用户素材科学验收或本轮Inspector验收。分支仍为`codex/mcp-hot-reload`，基点`b9a1a017a4e3dce243b2ede6e110b55b3beb94e5`，保留之前设备未提交改动；未提交、合并或推送。
+
+<a id="equipment-chat-mcp-v2"></a>
+
+### 聊天登记设备的新版18工具（2026-11-02）
+
+- 按用户最终确认的新设计实现，替换旧设备相关14工具，不保留双份别名；完整MCP目录为101项，其中设备8、组合4、预设4、配置删除2。登记按camera／telescope／filter拆分，顶层仅name必填；更新使用UUID、expected_revision及类型化稀疏changes。查询、组合members/member_id、registered／inline、显式FilterChoice及按对象分组删除均经薄接入转换复用既有HTTP／data服务；没有新增数据库表或迁移。字段以[生成目录](../api/mcp-tools.json)为准，聊天流程见[Agent指南](library-agent-tools.md#通过聊天登记设备)。
+- 基点`b9a1a017a4e3dce243b2ede6e110b55b3beb94e5`，分支`codex/mcp-hot-reload`，当前未提交、合并或推送。新增MCP输入模型位于interfaces，保留共享科学数值与历史快照规则；preset回执保留所属组合ID，使用明确的filter.mode，不再输出隐含equipment_selection。旧HTTP接口及网页继续复用原服务，无需另建聊天或硬件控制进程。
+- 修复删除预检遗漏继承首片滤镜预设的问题：旧代码6项回归中3失败／3通过；修复后新增及相邻快照、组合成员、预设选择与精简预设共68项通过（37.16秒）。预检影响和指纹包含实际会修改的预设及revision，新增／修改继承预设使旧指纹PREVIEW_STALE；不使用或使用其他滤镜的预设不误纳入。
+- 新版FastMCP目录／schema／薄适配／中文关键词搜索测试32项通过（29.80秒）。实际聊天联调发现FastMCP参数校验异常被误报INTERNAL_ERROR，已在共享MCP错误翻译中修复为INVALID_REQUEST并返回字段路径与原因；不回传原始输入，真实内部故障仍掩码。受影响20项定向回归通过（13.92秒），原ServiceApiError翻译单项通过（3.39秒）；这些回归包含重复用例，不累计为独立总数。
+- 真实stdio→HTTP→临时数据库的新版聊天设备流程与已迁移业务MCP工作流2项通过（同批76.20秒）；生成CLI流程最终单项通过（105.31秒）。首轮测试辅助函数name冲突、复杂members数组需按官方CLI规则传完整JSON、以及名称模糊搜索非唯一的测试假设已定向纠正。原失败证据`.artifacts/reports/equipment-v2/protocol-integration-before-final.xml`保留，CLI最终报告为`cli-integration-final.xml`。受控“真实服务提交成功后丢失MCP结果”单项通过（7.60秒），只读核对已落库ID且没有重复创建；报告`unknown-result.xml`。这不代表已实现设备登记幂等重试。
+- 新目录下原搜索视图／官方stdio及HTTP热修改回归8项通过（48.86秒），报告`reload.xml`。固定`generate_cli.py`已生成101工具的CLI和MCP快照；Windows进程按准备入口设置UTF-8，未改全局编码或依赖版本。修改实现Ruff、新增集成代码差异行Ruff、Python编译与diff检查通过；旧集成文件未修改区域的既有样式诊断单独记录，没有顺带格式化。
+- 完整前端构建及UI／宿主类型检查通过（94.125秒），日志`.artifacts/reports/equipment-v2/frontend-build.log`。仅停止并重启本Feature双服务，复用本次前端产物和既有私有CPU runtime；最终磁盘回执`cd535411e9804de5be6e9e2a73f107e1` completed／ready，19.867秒，dirty=true。工作台32628、领域服务32630、完整目录开发MCP32631、Inspector32632；Inspector重连已实际显示Tools(101)及register_camera仅name必填的表单，截图`inspector-register-camera.png`。
+- 外部子代理从8条合成中文话语出发，读取真实search_tools定义并经独立stdio调用新版工具，保留6件APF-CHAT-*设备、1组合、1预设；包含两台同名不同ID、未知规格保持未知、600mm×0.8附件得到480mm、Ha自由文本Channel／7nm、preset none→inherit且Gain0／Offset0／-10℃保留，以及相机成功／负焦距失败的部分成功。话语、工具调用和真实回执在`.artifacts/reports/equipment-v2/chat-agent`；网页已观察到实际设备与组合。参数错误修复后，仅重验原非法请求：返回INVALID_REQUEST及`specs.native_focal_length_mm`的正数原因，未入库；随后查回6件设备、组合及预设的完整对象均与原成功回执相等，未重放成功写入，证据`validation-recheck.json`。存在身份歧义的任务只查询并记录应追问，不擅自新增。本验收使用合成输入和Agent显式调用，不是产品内置聊天解析器，也不等于真实用户器材或任意自然语言的完整验收。
+- 正常dev、默认workspace、全局MCP、其他Feature、Siril Bundle和真实素材未修改。未执行完整测试套件；本轮为独立开发预览，未授权集成或发布。
+
+<a id="mcp-development-reload"></a>
+
+### MCP 热修改开发入口与 Inspector（2026-11-02）
+
+- Feature `codex/mcp-hot-reload`，基点 `b9a1a017a4e3dce243b2ede6e110b55b3beb94e5`，本轮未提交／合并／推送。固定准备回执 `e2cd1c5427e64af4b0c9cecc7b549fee`；私有 workspace、runtime 均在本 Worktree 的 `.artifacts` 下，工作台32628／领域服务32630。前端未改，继续使用准备时已核验的同基点产物。
+- 新增 `pnpm dev:mcp`，绑定显式私有 workspace，使用本空间 Python 和官方 FastMCP 4.1.4 HTTP reload，只监听源码、只绑定回环地址；拒绝dev／default与占用端口，不自动重启领域服务、不修改全局MCP。实际操作见[开发入口](README.md#mcp-热修改与-inspector)。
+- 用户明确授权定向测试与实际联调。执行 `tests/interfaces/mcp/test_fastmcp_reload.py` 和 `test_fastmcp_catalog.py`，设置 `APF_TEST_MCP_RELOAD=1`、`APF_TEST_WORKSPACE` 为本 Feature，独立 basetemp `.artifacts/pytest-mcp-hot-reload`：**8 passed，48.72秒**。没有执行完整测试套件。Ruff、Python字节码编译、`git diff --check`通过；本轮没有前端或产品Python模块修改，不重复前端构建。
+- 真实进程验证：两次新stdio连接读取真实领域服务；官方stdio watcher在源码编辑后退出旧worker并显式重连；HTTP开发入口加载真实97工具目录及两个合成只读工具，保存源码后重新连接。相同`amount=1`由revision1/value1变为revision2/value101，worker PID变化；`reload_removed`删除、`reload_added`新增，参数`amount`从默认变为必填、新增`offset`默认0；搜索返回新schema，缺失必填／非法整数被拒绝，领域素材列表前后均为0。回执`.artifacts/reports/mcp-development/http-test/development.json`及`reload.log`，stdio回执`.artifacts/reports/mcp-development/stdio-reload.json`；测试自建进程树已停止。
+- 官方 npm Inspector 2.13.0 使用本空间缓存、只读私有连接配置和私有存储，内部browser页面32632，MCP32631；Inspector辅助端口32633／32634。演示源码与Inspector存储／证据目录分开，避免保存证据触发重载。稳定演示再次确认PID109548→98664、value1→101，并确认写入监听目录之外的回执后worker未改变；`.artifacts/mcp-inspector/stable-development.json`记录完整定义和调用事实。
+- 浏览器已真实连接、搜索新版`inputSchema`并调用合成工具；截图和DOM证据保存在`.artifacts/mcp-inspector`，进程命令及PID见`processes.json`。保留本Feature的Inspector与演示MCP供查看；不将合成探针当作产品工具改动或真实素材验收。原Codex会话透明刷新、自动工具变更通知、长期可靠性没有据此宣称通过。正常dev、默认workspace、全局MCP、其他Feature和独立Siril Bundle未操作。
+- 后续按用户要求将同一私有MCP切换为真实`server.py:build_tool_catalog`，保留官方源码reload与Inspector；不再加载演示探针。内部browser重新连接后实际显示`Tools (97)`和data／graph／software平铺工具名，可直接进入参数表单；多层挂载以工具名前缀呈现，没有在Inspector生成后端架构树。最新进程仍以`processes.json`为准，目录截图／DOM为`.artifacts/mcp-inspector/full-catalog.png`及`full-catalog-dom.txt`。仅切换开发实例并更新说明，未重复测试套件。
+
 <a id="file-ownership-map"></a>
 
 ### 文件归属与读写关系核对（2026-11-01）
@@ -2289,3 +2385,59 @@ SQLite 旧备份 SHA256 b44fa505c54052ea17e0a6e821cc2bcb17f1988de9ed4c4237126f15
 # 前端产物自动复用与主仓库缓存（2026-11-02）
 
 普通构建记录输入与产物指纹；准备入口按基点、工具、输入及产物校验后复用主仓库前端，Worktree默认使用主仓库包缓存。准备与记录定向测试38项通过，Windows绝对Git指针缓存选择单项通过；普通前端构建及类型检查通过，主仓库产物指纹校验通过。真实新Worktree端到端耗时尚未验证，修改尚未提交，现有已提交dev不会自动包含本修复。
+
+<a id="library-performance-implementation"></a>
+
+### 素材库性能优化：第一阶段（2026-11-02）
+
+用户已授权完整性能优化及旧测试数据清理，无需新增历史数据库备份；本阶段保留已有未提交修改，尚未执行清理或部署。
+
+- 任务目录改为独立摘要合同，仅查询状态、目标、三阶段进度及分页任务项聚合数量；来源、内部 report 和逐项详情保留在详情接口。MCP/HTTP/CLI 共用同一业务查询。
+- 业务列表将首次加载与后台 isFetching 分开；连接身份重读不再单因 isFetching 隐藏已确认页面。空闲任务发现改为30秒，高频仅用于活动任务。
+- 缩略图请求最多四并发；相同页面刷新保留在途请求，切页仍取消。缓存映射改为按 key 响应，素材表缩略图单元格独立读取，避免一张完成重建所有行。
+- 组缩略图命中先定向核对组归属、目标成员和排序首帧，成功后直接返回；只有404才尝试补队列。
+- overview 使用请求尺寸决定采样，只有标准 Bayer 调整采样相位；FITS区域读取只请求目标横向列。媒体缓存增加文件/目录增量容量登记，启动及有界维护时核对，瓦片写入不逐次递归扫描全缓存；解码、视频与输出预览写入补登记。
+
+已执行：OpenAPI与前端六份SDK生成；UTF-8环境下114项离线MCP/CLI目录生成；UI包vue-tsc通过；本轮产品Python编译与选定导入排序静态检查通过。均非测试或实际联调。
+
+已编写但未运行：任务目录减负与详情保留、缩略图四并发/同页保留、独立缩略图单元格更新、媒体缓存增量容量及原件/活动缓存保护、FITS mono/planar/interleaved区域采样。没有运行测试套件、真实性能测量或真实MCP联调。
+
+仍未完成：成员摘要/变更发现/定向失效、大图上下文与只读命中、查看器复用/保留画面/邻帧预取、后台巡检分批、正式清理旧回收素材/快照/扫描/备份和空间维护，以及最终构建部署与逐项完成审计。当前运行实例仍是先前部署版，不宣称本阶段源码已生效。
+
+### 素材库性能优化：第二阶段（2026-11-02，尚未部署）
+
+- 新增固定组成员摘要投影，复用现有分页、排序与校准投影。摘要ORM读取延迟并禁止访问完整capture_snapshot/scientific_metadata/设备快照，只用设备标签SQL提取和当前拍摄标量；固定版本ID、revision、校准来源、状态及100px缓存状态保留。完整成员和单图详情接口继续提供固定事实。
+- 原素材表及固定成员查看组件消费摘要；组内大图显式传dataset_version_id，严格选择固定首帧。大图不再回溯AssetTask/Object/目录历史配方；已有组/独立缩略图拉伸可直接复用，缺失时计算明确参考帧。原件保护改定向清理引用查询；prepare缓存命中不再进入write_session。文件租约仍按既有持久化保护读取中的原件。
+- overview解码完成后替换画面，复用OpenSeadragon；当前帧准备期间保留已展示画面。显示描述缓存最多四条；下一帧仅一项低优先级准备并预取overview，前台目标会使过时后台准备失去兴趣并协作取消，缓存身份不包含消费者、generation或prefetch标志。
+- 缩略图丢失文件巡检改为每轮100条、游标续扫，发现轮次间隔30秒，仍保留重启恢复与后台补生成。
+- 新编写但未运行：成员摘要固定身份/零值/负温度及不读取大JSON、缓存命中只读且不回放任务历史、组内首帧配方、查看器复用与邻帧准备等用例。前端原有成员测试数据通过独立fixture映射成摘要合同，正式客户端不接受伪装的完整/摘要兼容响应。
+- 已重新生成OpenAPI/前端SDK/114项MCP-CLI目录，UI包类型编译通过。宿主类型编译初次发现测试viewport替身缺少replace，已补齐并重新编译；最终结果以工具回执为准。未运行测试、MCP联调或科学处理，未重启服务、未清理数据，未提交/合并/推送。
+
+<a id="library-performance-delivery"></a>
+
+### 素材库性能优化：最终交付与逐项审计（2026-11-02）
+
+本记录覆盖本轮用户完整目标，前两阶段“尚未部署/尚未清理”是对应阶段事实，现由本节更新。保留此前全部未提交内容，不提交、合并或推送。
+
+| 要求 | 最终实现与当前证据 |
+|---|---|
+| 保留身份、设备、固定组、快照与校准 | `.artifacts/reports/library-performance-final/preservation-before.json` 与 `preservation-final.json` 对当前Asset/版本/HDU头/设备与组合/组版本成员/组默认与覆盖/单图配置/Master来源逐表计数与SHA一致，514份托管原件size/mtime一致，外键检查无违规 |
+| 旧测试数据及缓存正式清理 | MCP预检准确520张、1233条自有文件路径、17,216,801,694字节范围；首请求超过客户端等待但实际清理511张与全部6旧组。先查询实际状态，再为9个延后校准目标重新预检后清理，未重放原请求。最终回收站0、素材总数514，未触碰来源目录 |
+| 精简历史，保留防重回执，无新备份 | 完成任务34条压缩冗余来源/输入快照，UTF-8 payload减少27,631,281字节；保留发布事实、逐文件身份、请求ID和指纹。7份扫描清单共12,463,948字节及指定49,717,248字节旧备份删除。`receipt-preservation.json`确认34条核心请求回执身份摘要未变 |
+| 空间维护 | core正式空间维护入口执行checkpoint/VACUUM/optimize；SQLite主文件101,416,960→35,405,824字节；当前schema仍0006，不增加备份或重建素材库 |
+| 任务及成员列表减负 | tasks.py独立摘要+批量项数，详情入口保留；member_summaries.py排除大capture/science/equipment JSON，保留表格字段、revision、固定版本、缩略图状态及最终校准来源。HTTP/UI/生成契约一致，业务通过data公开入口 |
+| 查询热路径及索引 | 组缩略图归属EXISTS与首帧LIMIT1，prepare缓存命中只读，清理保护定向SQL，不回溯任务历史。只读EXPLAIN确认首帧走version/position索引、成员存在走复合唯一索引、预览走version索引，未盲加索引；查询计划见query-plan-audit.json |
+| 100px全部图片及后台行为 | 当前504组成员+10独立Master共514条目标预览均available，最大100×76，见query-plan-audit.json。沿用独立/组固定首帧配方及持久队列，追加/历史上下文及重启恢复不变。前端实际视口IntersectionObserver提升队列，最多4请求，同页不重启；已知失败成员停止重复HTTP取图，无缩略图进度条或逐张通知 |
+| 大图及缓存 | 按512/1024/2048边长采样、FITS只读所需横向区域；显式固定组上下文、严格首帧，复用已有配方。overview解码后替换并复用OpenSeadragon，近期显示描述最多4条，最多预取1个下一帧且低优先级，过时准备协作取消；缓存文件容量增量登记并低频核对。原件、质量分析和科学处理流程未改变 |
+| 静默更新 | 首次加载/后台刷新分离；标量变化摘要未变即复用当前页，过滤项不因单纯预览变化重读；修改按素材/已知关联组失效，结构性移除保留必要全局失效。身份刷新与实际重连分开，稳定表格/滚动/焦点，缩略图按单元格更新 |
+| 累计曝光与schema选择 | 累计曝光仍由后端派生；变化检测减少重复读取，无测量证明需要新增派生表。schema合并属可选维护；本轮评估后保留现有迁移链，避免无收益的数据转存和固定引用风险，已纠正文档旧规则，不恢复取消的预设/旧显示分组逻辑 |
+
+执行与验证边界：
+
+- OpenAPI、前端六份SDK和114项MCP/CLI目录离线生成；UI/宿主类型编译与生产构建通过。最后视口优先级改动对应生产构建日志`visible-priority-build.log`；MCP/HTTP schema未手改。
+- 部署页面自然读取暴露任务摘要UUID转换遗漏，已修正并经core重启加载，后续任务目录HTTP200且页面不再显示导入进度错误。未为排查运行测试套件或MCP联调脚本。
+- 最终核心启动回执`811f19a4-b71e-48ad-bbcb-84b22337d901` completed；final-status.json ready=true，网页32628/服务32630。前端产物按输入指纹核验后安装，当前源码保留未提交状态，不冒称已提交版本。
+- 内部browser打开当前网页，素材库显示15条逻辑记录（5组＋10Master）、缩略图、校准列及累计曝光；仅确认展示和部署，不手动遍历大图场景或进行功能联调。
+- 定向测试仅编写：任务摘要与详情、成员摘要/零值/固定身份、不读取大JSON、变化标识与定向失效、历史压缩/防重与待处理保护、缩略图并发/视口优先级/取消/独立单元格、缓存预算、FITS区域读取、固定组配方、prepare只读、查看器复用/邻帧等。未运行pytest、Vitest、浏览器测试、真实MCP联调测试或性能基准；没有提速百分比、跨格式科学正确性或完整产品验收结论。
+
+自动审批曾拒绝未固定范围的组合维护。随后仅执行只读范围核对并增加34完成任务、7扫描、单份已知备份SHA/大小及514/5/14/2计数硬校验；受限操作获批准后才执行。未绕过拒绝或创建新备份。范围、清理、保留审计、编译和控制回执统一在`.artifacts/reports/library-performance-final/`。

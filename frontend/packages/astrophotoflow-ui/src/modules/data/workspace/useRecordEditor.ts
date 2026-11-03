@@ -49,7 +49,7 @@ export function useRecordEditor(workspace: MaybeRefOrGetter<string>) {
   function equipment(record?: Equipment) {
     const kind = record?.kind ?? 'camera'
     const draft: EquipmentDraft = { kind, name: record?.name ?? '', model: text(record?.model),
-      notes: text(record?.notes), specs: record ? { ...record.specs } : Object.fromEntries(specFields[kind].map(field => [field.key, null])) }
+      notes: text(record?.notes), specs: record ? { ...(record.kind === 'mount' ? {} : record.specs) } : Object.fromEntries((specFields[kind] ?? []).map(field => [field.key, null])) }
     session.value = { kind: 'equipment', source: record, draft, original: structuredClone(draft) }
   }
   function synchronize(id: string, value: unknown) {
@@ -73,14 +73,14 @@ export function useRecordEditor(workspace: MaybeRefOrGetter<string>) {
       for (const key of ['name', 'model', 'notes'] as const)
         if (draft[key] !== original[key]) payload[key] = key === 'name' ? draft[key] : nullable(draft[key])
       const specs = Object.fromEntries(Object.entries(draft.specs).filter(([key, value]) => value !== original.specs[key]))
-      if (Object.keys(specs).length) payload.specs = specs
+      if (draft.kind !== 'mount' && Object.keys(specs).length) payload.specs = specs
       return updateEquipment.mutateAsync({workspaceId:toValue(workspace),equipmentId:current.source.id,body:validatedInput(zPatchEquipmentApiV1EquipmentEquipmentIdPatchBody, payload)})
     }
-    const specs = Object.fromEntries(specFields[draft.kind].map(field => [field.key,
+    const specs = Object.fromEntries((specFields[draft.kind] ?? []).map(field => [field.key,
       field.type ? inputNumber(specValue(field, draft.specs)) : draft.specs[field.key] === '' ? null : draft.specs[field.key]]))
     if (draft.kind === 'telescope') specs.optical_accessories = draft.specs.optical_accessories ?? []
     return createEquipment.mutateAsync({workspaceId:toValue(workspace),body:validatedInput(zCreateEquipmentApiV1EquipmentPostBody, {
-      kind: draft.kind, name: draft.name, model: nullable(draft.model), notes: nullable(draft.notes), specs
+      kind: draft.kind, name: draft.name, model: nullable(draft.model), notes: nullable(draft.notes), ...(draft.kind === 'mount' ? {} : { specs })
     })})
   }
   return { model, dirty, source, project, equipment, synchronize, submit, close: () => { session.value = undefined } }

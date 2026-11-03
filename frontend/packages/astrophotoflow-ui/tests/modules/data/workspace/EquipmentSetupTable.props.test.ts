@@ -16,6 +16,19 @@ const props = () => ({ setups: [setup], selectedId: setup.id, loading: false, eq
   blocked: false, selectMode: false, selectedIds: new Set<string>(), allSelected: false, partiallySelected: false })
 
 describe('controlled setup table without a Workspace provider', () => {
+  it('displays registered and inline mounts and emits mount sorting', async () => {
+    const registered = equipmentSchema.parse({ id: id(30), kind: 'mount', name: 'AP1100 GTO', model: null, notes: null,
+      status: 'active', revision: 1, created_at: timestamp, updated_at: timestamp })
+    const rig = equipmentSetupSchema.parse({ ...setup, components: [{ id: id(31), source: 'registered', equipment_id: registered.id }] })
+    const inline = equipmentSetupSchema.parse({ ...setup, id: id(40), name: 'Inline rig', components: [{ id: id(41), source: 'inline', equipment: { kind: 'mount', name: 'HAE69C' } }] })
+    const wrapper = mount(EquipmentSetupTable, { props: { ...props(), setups: [rig, inline], equipment: [registered] } })
+    try {
+      expect(wrapper.text()).toContain('AP1100 GTO')
+      expect(wrapper.text()).toContain('HAE69C')
+      await wrapper.findAll('thead button').find(button => button.text() === '赤道仪')!.trigger('click')
+      expect(wrapper.emitted('sort')).toEqual([['mount']])
+    } finally { wrapper.unmount() }
+  })
   it('renders both device sources and emits navigation and sorting requests', async () => {
     const wrapper = mount(EquipmentSetupTable, { props: props() })
     try {

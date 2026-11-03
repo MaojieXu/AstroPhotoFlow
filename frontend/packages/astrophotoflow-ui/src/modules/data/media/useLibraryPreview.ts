@@ -43,7 +43,7 @@ export function useLibraryPreview(options: LibraryPreviewOptions) {
           scoped.throwIfAborted()
           const member = index === 0 ? initial : await fixedMemberAt(group,index,scoped)
           scoped.throwIfAborted()
-          return {title:member.asset.name,basePath:materialPreviewBase(record,member)}
+          return {title:member.asset.name,basePath:materialPreviewBase(record,member),selection:{dataset_version_id:group.versionId}}
         }}
         return
       }
@@ -53,7 +53,8 @@ export function useLibraryPreview(options: LibraryPreviewOptions) {
         const member = first
         media.value = {index:0,total:1,member:async(_index,signal)=>{
           AbortSignal.any([current.signal,signal]).throwIfAborted()
-          return {title:member.asset.name,basePath:materialPreviewBase(record,member)}
+          return {title:member.asset.name,basePath:materialPreviewBase(record,member),
+            selection:'member_position' in record && 'dataset_version_id' in record ? {dataset_version_id:record.dataset_version_id}:undefined}
         }}
       } else photo.value = {assetId:first.asset.id,versionId:first.version.id,title:first.asset.name,basePath:materialPreviewBase(record,first)}
     } catch (cause) {

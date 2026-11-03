@@ -4,6 +4,7 @@ import { focusManager } from '@tanstack/vue-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import ImportTasks from '@ui/modules/data/imports/ImportTasks.vue'
 import { taskSchema } from '@ui/modules/data/api/contracts'
+import type { AssetTaskSummary } from '@ui/generated/api/types.gen'
 import { ApiClientError } from '@ui/modules/data/api/client'
 
 const {get,send}=vi.hoisted(()=>({get:vi.fn(),send:vi.fn()}))
@@ -110,7 +111,7 @@ describe('managed import stages and one-time notices',()=>{
 
   it('forwards recovery state through the existing slot',async()=>{
     get.mockResolvedValue(page({...base,status:'interrupted'}))
-    wrapper=mount(ImportTasks,{props:{refreshToken:0},slots:{default:({tasks,resume}:{tasks:ReturnType<typeof taskSchema.parse>[];resume:(task:ReturnType<typeof taskSchema.parse>)=>Promise<void>})=>h('button',{onClick:()=>resume(tasks[0])},'恢复')}})
+    wrapper=mount(ImportTasks,{props:{refreshToken:0},slots:{default:({tasks,resume}:{tasks:AssetTaskSummary[];resume:(task:AssetTaskSummary)=>Promise<void>})=>h('button',{onClick:()=>resume(tasks[0])},'恢复')}})
     await flushPromises();await wrapper.get('button').trigger('click');await flushPromises()
     expect(send).toHaveBeenCalledOnce()
   })

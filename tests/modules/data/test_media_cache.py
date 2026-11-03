@@ -11,6 +11,37 @@ from astrophotoflow.modules.data.media.cache import MediaCache
 from astrophotoflow.modules.data.media.tiles import TileService
 
 
+def test_repeated_tile_writes_use_incremental_accounting_and_preserve_active_cache(tmp_path, monkeypatch):
+    cache = MediaCache(tmp_path, disk_budget=100)
+    folder = tmp_path / 'previews' / 'version' / 'media' / 'key'
+    folder.mkdir(parents=True)
+    with cache.hold(folder):
+        monkeypatch.setattr(Path, 'rglob', lambda *args: pytest.fail('tile write rescanned the cache'))
+        cache.write(folder / 'first.png', b'a' * 20)
+        cache.write(folder / 'second.png', b'b' * 30)
+        cache.write(folder / 'first.png', b'c' * 10)
+        assert sum(size for size, _ in cache.disk_folders.values()) == 40
+        with pytest.raises(ValueError, match='空间不足'):
+            cache.write(folder / 'too-large.png', b'd' * 61)
+        assert not (folder / 'too-large.png').exists()
+
+
+def test_external_decodes_and_removed_files_update_cache_budget(tmp_path):
+    cache = MediaCache(tmp_path, disk_budget=100)
+    folder = tmp_path / 'previews' / 'version' / 'media' / 'key'
+    folder.mkdir(parents=True)
+    with cache.hold(folder):
+        pixels = folder / 'pixels.npy'
+        pixels.write_bytes(b'p' * 70)
+        cache.record(pixels)
+        with pytest.raises(ValueError, match='空间不足'):
+            cache.reserve(31)
+        pixels.unlink()
+        cache.record(pixels)
+        cache.write(folder / 'overview.jpg', b'j' * 100)
+        assert cache.disk_folders[folder][0] == 100
+
+
 def test_disk_lru_does_not_remove_active_view_or_original(tmp_path):
     original = tmp_path / "objects" / "source.fits"
     original.parent.mkdir()

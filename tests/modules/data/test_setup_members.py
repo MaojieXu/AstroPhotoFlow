@@ -89,15 +89,13 @@ def test_member_name_sort_uses_unicode_casefold_and_stable_setup_identity(databa
 
 
 @pytest.mark.parametrize("order", [
-    ("equipment", "equipment_setup", "capture_preset"),
-    ("capture_preset", "equipment_setup", "equipment"),
+    ("equipment", "equipment_setup"),
+    ("equipment_setup", "equipment"),
     ("equipment_setup",),
 ])
-def test_deleting_setup_owns_presets_and_choices_independent_of_selection_order(database, order):
-    from astrophotoflow.contracts.setups import CapturePresetCreate
+def test_deleting_setup_members_independent_of_selection_order(database, order):
     from astrophotoflow.contracts.trash import EquipmentDelete, EquipmentDeleteSelection
-    from astrophotoflow.modules.data.equipment.models import CapturePreset, CapturePresetSelection, Equipment, EquipmentSetup
-    from astrophotoflow.modules.data.public import create_capture_preset
+    from astrophotoflow.modules.data.equipment.models import Equipment, EquipmentSetup
     from astrophotoflow.modules.data.trash.management import delete_equipment_entries, preview_equipment_delete
 
     with database.write_session() as session:
@@ -105,20 +103,14 @@ def test_deleting_setup_owns_presets_and_choices_independent_of_selection_order(
         setup = create_setup(session, EquipmentSetupCreate(name="owned setup", components=[
             {"source": "registered", "equipment_id": camera.id},
         ]))
-        preset = create_capture_preset(session, setup.id, CapturePresetCreate(
-            equipment_selection={"filter": None}, parameters={"gain": 0}))
-        create_capture_preset(session, setup.id, CapturePresetCreate(
-            equipment_selection={}))
-    targets = {"equipment": camera, "equipment_setup": setup, "capture_preset": preset}
+    targets = {"equipment": camera, "equipment_setup": setup}
     items = [{"entry_type": kind, "id": targets[kind].id, "revision": targets[kind].revision} for kind in order]
     with database.read_session() as session:
         preview = preview_equipment_delete(EquipmentDeleteSelection(items=items), session)
     with database.write_session() as session:
         result = delete_equipment_entries(EquipmentDelete(items=items, preview_fingerprint=preview.preview_fingerprint), session)
-        assert result.deleted_count == (4 if "equipment" in order else 3)
+        assert result.deleted_count == (2 if "equipment" in order else 1)
     with database.read_session() as session:
         assert session.get(EquipmentSetup, str(setup.id)) is None
-        assert session.scalars(select(CapturePreset)).all() == []
-        assert session.scalars(select(CapturePresetSelection)).all() == []
         assert session.scalars(select(EquipmentSetupMember)).all() == []
         assert (session.get(Equipment, str(camera.id)) is None) == ("equipment" in order)

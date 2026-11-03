@@ -94,6 +94,7 @@ const overviewStyle = computed(() =>
     : undefined
 )
 const viewer = shallowRef<ReturnType<typeof createImageViewport>>()
+const presentedImage = shallowRef<MediaState>()
 let playbackSelection: Partial<MediaSelection> = {}
 let playbackTime = 0
 let frameCallback: number | undefined
@@ -143,6 +144,12 @@ function actual() {
 }
 
 async function attachImage(image: MediaState, scope: string | undefined) {
+  if (image.overview_url) {
+    const overview = new Image()
+    overview.src = image.overview_url
+    try { await overview.decode() }
+    catch { if (image === state.value) renderError.value = t('astrophotoflow.media.tileError'); return }
+  }
   await nextTick()
   if (
     image !== state.value ||
@@ -151,13 +158,14 @@ async function attachImage(image: MediaState, scope: string | undefined) {
     !image.tile_url
   )
     return
-  viewer.value = createImageViewport(stage.value, image, {
+  if (viewer.value) savedViewport = viewer.value.snapshot()
+  const options = {
     previous: savedViewport,
-    zoom: (value) => {
+    zoom: (value: number) => {
       if (image === state.value && scope === model.scope.value)
         percent.value = value
     },
-    bounds: (value) => {
+    bounds: (value: ImageScreenBounds) => {
       if (image === state.value && scope === model.scope.value)
         imageBounds.value = value
     },
@@ -165,14 +173,16 @@ async function attachImage(image: MediaState, scope: string | undefined) {
       if (image === state.value && scope === model.scope.value)
         renderError.value = t('astrophotoflow.media.tileError')
     }
-  })
+  }
+  if (viewer.value) viewer.value.replace(image, options)
+  else viewer.value = createImageViewport(stage.value, image, options)
+  presentedImage.value = image
 }
 function load(next: number, selection: Partial<MediaSelection> = {}) {
   renderError.value = ''
   model.open(next, selection)
 }
 watch([state, model.scope], ([result, scope]) => {
-  disposeImage()
   stopVideo()
   presentedTime.value = undefined
   if (!result || result.status === 'generating') return
@@ -182,9 +192,17 @@ watch([state, model.scope], ([result, scope]) => {
   chooseArray.value = result.needs_selection
   emit('selection', result)
   if (result.status !== 'available') return
+  if (result.kind !== 'image' || result.needs_selection) {
+    disposeImage()
+    presentedImage.value = undefined
+  }
   if (result.kind === 'image' && !result.needs_selection)
     void attachImage(result, scope)
   if (result.kind === 'video') playbackSelection = model.selection.value
+})
+watch(model.scope, () => {
+  disposeImage()
+  presentedImage.value = undefined
 })
 watch(
   index,
@@ -529,8 +547,8 @@ onBeforeUnmount(() => {
           class="relative min-h-0 flex-1 overflow-hidden rounded-sm bg-component-node-widget-background"
         >
           <img
-            v-if="state?.overview_url || initialOverview"
-            :src="state?.overview_url ?? initialOverview"
+            v-if="presentedImage?.overview_url || state?.overview_url || initialOverview"
+            :src="presentedImage?.overview_url ?? state?.overview_url ?? initialOverview"
             :alt="member?.title ?? t('astrophotoflow.libraryImage')"
             class="pointer-events-none absolute max-w-none"
             :class="

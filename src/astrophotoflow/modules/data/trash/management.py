@@ -24,16 +24,13 @@ from astrophotoflow.modules.data.assets.metadata import asset_parameters
 from astrophotoflow.modules.data.assets.models import Asset, AssetVersion
 from astrophotoflow.modules.data.datasets.models import Dataset
 from astrophotoflow.modules.data.equipment.models import (
-    CapturePreset,
-    CapturePresetSelection,
     Equipment,
     EquipmentSetup,
     EquipmentSetupMember,
 )
-from astrophotoflow.modules.data.equipment.presets import clear_member_selections
 from astrophotoflow.modules.data.projects.models import Project, ProjectAssetReference, ProjectDatasetReference
 
-_MODELS = {"project": Project, "equipment": Equipment, "equipment_setup": EquipmentSetup, "capture_preset": CapturePreset}
+_MODELS = {"project": Project, "equipment": Equipment, "equipment_setup": EquipmentSetup}
 
 
 def _item(entry_type: str, row) -> ManagementTrashItemOut:
@@ -44,8 +41,6 @@ def _item(entry_type: str, row) -> ManagementTrashItemOut:
                    "notes": row.notes, "specs": row.specs}
     elif entry_type == "equipment_setup":
         details = {"notes": row.notes, "component_count": len(row.members)}
-    else:
-        details = {"equipment_setup_id": row.equipment_setup_id, "parameters": row.parameters}
     return ManagementTrashItemOut(entry_type=entry_type, id=UUID(row.id), name=row.name,
                                   revision=row.revision, updated_at=shared.utc_datetime(row.updated_at), details=details)
 
@@ -76,7 +71,7 @@ def _dependency(entry_type: str, row, kind: str, name: str, count: int, blocks: 
 
 def _equipment_snapshot(row: Equipment) -> dict:
     return {"id": row.id, "kind": row.kind, "name": row.name, "model": row.model,
-            "specs": row.specs or {}, "notes": row.notes}
+            **({} if row.kind == "mount" else {"specs": row.specs or {}}), "notes": row.notes}
 
 
 def _preview(session, body, *, direct: bool = False):
@@ -101,20 +96,18 @@ def _preview(session, body, *, direct: bool = False):
                 dependencies.append(_dependency(entry_type, row, "dataset_references", "项目数据集关联（删除项目时解除关联，数据集保留）", len(datasets), False, [item.name for item in datasets]))
         elif entry_type == "equipment":
             version_asset_ids = set(session.scalars(select(AssetVersion.asset_id).where(or_(
-                AssetVersion.camera_id == row.id, AssetVersion.optical_system_id == row.id, AssetVersion.filter_id == row.id))).all())
+                AssetVersion.camera_id == row.id, AssetVersion.optical_system_id == row.id, AssetVersion.filter_id == row.id,
+                AssetVersion.capture_snapshot["equipment_snapshot"]["mount_id"]["id"].as_string() == row.id))).all())
             setups = session.scalars(select(EquipmentSetup).join(EquipmentSetupMember)
                                      .where(EquipmentSetupMember.equipment_id == row.id).distinct()).all()
-            presets = session.scalars(select(CapturePreset).join(CapturePresetSelection)
-                                      .join(EquipmentSetupMember, CapturePresetSelection.member_id == EquipmentSetupMember.id)
-                                      .where(EquipmentSetupMember.equipment_id == row.id).distinct()).all()
             material_assets = session.scalars(select(Asset).where(or_(
                 Asset.camera_id == row.id,
                 Asset.optical_system_id == row.id,
-                Asset.filter_id == row.id))).all()
+                Asset.filter_id == row.id,
+                Asset.equipment_snapshot["mount_id"]["id"].as_string() == row.id))).all()
             material_by_id={asset.id:asset.name for asset in material_assets}
             dependency_revisions.extend(("asset", asset.id, asset.revision) for asset in material_assets)
             dependency_revisions.extend(("equipment_setup", setup.id, setup.revision) for setup in setups)
-            dependency_revisions.extend(("capture_preset", preset.id, preset.revision) for preset in presets)
             for asset_id in version_asset_ids:
                 asset=session.get(Asset,asset_id)
                 if asset is not None:material_by_id.setdefault(asset.id,asset.name)
@@ -122,13 +115,6 @@ def _preview(session, body, *, direct: bool = False):
                 dependencies.append(_dependency(entry_type, row, "materials", "素材记录中的设备快照（保留）", len(material_by_id), False, list(material_by_id.values())))
             if setups:
                 dependencies.append(_dependency(entry_type, row, "equipment_setups", "设备组合中的关联（移除）", len(setups), False, [setup.name for setup in setups]))
-            if presets:
-                dependencies.append(_dependency(entry_type, row, "capture_presets", "拍摄预设中的设备默认值（清除）", len(presets), False, [preset.name for preset in presets]))
-        elif entry_type == "equipment_setup":
-            presets = session.scalars(select(CapturePreset).where(CapturePreset.equipment_setup_id == row.id)).all()
-            dependency_revisions.extend(("capture_preset", preset.id, preset.revision) for preset in presets)
-            if presets:
-                dependencies.append(_dependency(entry_type, row, "capture_presets", "组合内拍摄预设（随组合永久删除）", len(presets), False, [preset.name for preset in presets]))
     fingerprint_data = {
         "items": sorted((item.entry_type, str(item.id), item.revision) for item in body.items),
         "dependencies": sorted((item.entry_type, str(item.id), item.kind, item.count, item.blocks_delete, item.references) for item in dependencies),
@@ -186,7 +172,6 @@ def delete_management_entries(body: ManagementTrashDelete, session: Session):
 def _delete_entries(session, resolved, *, direct: bool = False):
     detached_material_count = 0
     deleted_count = len(resolved)
-    selected_preset_ids={row.id for entry_type,row in resolved if entry_type=="capture_preset"}
     for entry_type, row in resolved:
         if entry_type == "equipment":
             snapshot = _equipment_snapshot(row)
@@ -215,16 +200,12 @@ def _delete_entries(session, resolved, *, direct: bool = False):
             detached_material_count += len(assets)
             for setup in session.scalars(select(EquipmentSetup).join(EquipmentSetupMember)
                                           .where(EquipmentSetupMember.equipment_id == row.id).distinct()).all():
-                clear_member_selections(session, {member.id for member in setup.members if member.equipment_id == row.id})
                 setup.members = [member for member in setup.members if member.equipment_id != row.id]
                 setup.revision += 1
                 setup.updated_at = shared.now_utc()
             # Members and version links must be removed before deleting the
             # registry row; these are separate ORM ownership relationships.
             session.flush()
-        elif entry_type == "equipment_setup":
-            # ORM ownership orders preset/choice deletion before its setup.
-            deleted_count += sum(preset.id not in selected_preset_ids for preset in row.presets)
         session.delete(row)
     session.flush()
     return ManagementTrashDeleteOut(deleted_count=deleted_count, detached_material_count=detached_material_count)

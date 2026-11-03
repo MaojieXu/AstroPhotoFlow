@@ -14,10 +14,8 @@ from astrophotoflow.contracts.setups import (
 )
 from astrophotoflow.core.errors import ApiError, invalid_reference, not_found
 from astrophotoflow.modules.data.equipment.mapping import setup_out
-from astrophotoflow.modules.data.equipment.members import capture_kind, member_kind
 from astrophotoflow.modules.data.equipment.models import Equipment, EquipmentSetup, EquipmentSetupMember
 from astrophotoflow.modules.data.equipment.optics import validate_setup_optics
-from astrophotoflow.modules.data.equipment.presets import clear_member_selections
 from astrophotoflow.modules.data.names import named_changes
 
 
@@ -30,17 +28,6 @@ def _replace_members(session: Session, row: EquipmentSetup, components: list[Set
         if component.source == "registered" and session.get(Equipment, str(component.equipment_id)) is None:
             raise invalid_reference("The setup must reference existing equipment.",
                                     message_key="the_equipment_setup_must_reference_existing_registered_equipment")
-    invalidated = set(existing) - set(supplied)
-    for component in components:
-        if component.id is not None:
-            kind = (session.get(Equipment, str(component.equipment_id)).kind if component.source == "registered"
-                    else component.equipment.kind)
-            kind = capture_kind(kind)
-            if member_kind(session, existing[str(component.id)]) != kind:
-                invalidated.add(str(component.id))
-    clear_member_selections(session, invalidated)
-    # Move existing positions out of the final range before reordering; retain
-    # member identities, including those referenced by presets.
     shift = max((member.position for member in row.members), default=0) + len(components) + 1
     for member in row.members:
         member.position += shift

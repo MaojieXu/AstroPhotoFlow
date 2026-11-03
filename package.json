@@ -15,6 +15,7 @@
     "typecheck": "pnpm --dir frontend --filter @astrophotoflow/ui typecheck",
     "build": "python scripts/frontend_build_record.py",
     "dev:prepare": "python scripts/dev_prepare.py",
+    "dev:mcp": "python scripts/dev_mcp.py",
     "build:watch": "python scripts/dev_frontend.py",
     "test": "pnpm --dir frontend --filter @astrophotoflow/ui test",
     "test:browser": "pnpm --dir frontend exec playwright test --config ../tests/browser/playwright.config.mjs",

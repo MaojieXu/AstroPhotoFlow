@@ -2,7 +2,7 @@
 import { uiT } from '../../../core/i18n'
 import { computed,nextTick,onBeforeUnmount,ref,shallowRef,watch } from 'vue'
 import type { DatasetOut,DatasetVersionOut } from '../../../generated/api/types.gen'
-import type { CalibrationBindings,CalibrationTarget } from '../api/contracts'
+import type { CalibrationBinding,CalibrationBindings } from '../api/contracts'
 import { useCalibrationData } from './calibrationQueries'
 import { useSaveDatasetDescription,usePublishCalibration } from './mutations'
 import CalibrationBindingSelect from '../library/CalibrationBindingSelect.vue'
@@ -13,7 +13,6 @@ import { displayLabel } from '../library/presentation'
 
 const props=defineProps<{workspaceId:string;datasetId:string}>()
 const emit=defineEmits<{updated:[dataset:DatasetOut];dirty:[value:boolean]}>()
-// Explicit editing basis: background responses must not rebase an unsaved draft.
 const dataset=shallowRef<DatasetOut>(),version=shallowRef<DatasetVersionOut>()
 const defaults=ref<CalibrationBindings>({}),overrides=ref<Record<string,CalibrationBindings>>({})
 const name=ref(''),notes=ref(''),actionError=ref(''),notice=ref(''),original=ref('')
@@ -69,7 +68,7 @@ async function changeVersion(event:Event){
   selectedVersion.value=(event.target as HTMLSelectElement).value
   actionError.value='';await nextTick();await read()
 }
-function setBinding(map:CalibrationBindings,key:typeof frameTypes[number],value:CalibrationTarget|null|undefined){
+function setBinding(map:CalibrationBindings,key:typeof frameTypes[number],value:CalibrationBinding){
   if(value===undefined)delete map[key];else map[key]=value
 }
 async function saveNotes(){
@@ -107,6 +106,7 @@ async function saveBindings(){
     <summary>{{ $t('apfUi.group_description_history_and_calibration_bindings') }}</summary>
     <p v-if="loading" role="status">{{ $t('apfUi.reading_the_full_group_version') }}</p>
     <p v-if="error" role="alert" class="apf-error">{{error}} <LibraryButton type="button" @click="load">{{ $t('apfUi.read_again') }}</LibraryButton></p>
+    <LibraryButton v-else-if="dataset" type="button" :disabled="saving||loading" @click="load">{{ $t('apfUi.read_again') }}</LibraryButton>
     <template v-if="dataset&&version">
       <LibraryTextField id="calibration-group-name" v-model="name" :name="$t('apfUi.group_name')" :disabled="saving||loading" /><label>{{ $t('apfUi.description') }}<textarea v-model="notes" :disabled="saving||loading" /></label>
       <LibraryButton type="button" :disabled="saving||loading||pendingMetadata" @click="saveNotes">{{ $t('apfUi.save_group_description') }}</LibraryButton>

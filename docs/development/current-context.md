@@ -1,5 +1,11 @@
 # 当前开发上下文
 
+素材库性能优化候选已实现并更新到当前mcp-hot-reload workspace；旧测试素材、冗余导入输入快照、扫描和指定备份已正式清理，当前514张图片/5组/14设备/2组合及固定事实/校准保留审计一致。实现、构建、就绪/页面展示与只读审计证据见[最终记录](test-matrix.md#library-performance-delivery)。测试仅编写未运行，未执行性能基准或MCP联调测试，不将本次部署等同科学或完整产品验收。用户后续已授权本地待审提交及回传原Manager；准确冻结SHA和发送结果以最终Brief为准，不合并、不推送，交接后暂停修改。
+
+最新本地候选（2026-11-02）将校准合并为原素材表中的可选Master列，取消前轮独立校准卡片／重复表／搭配筛选，补齐后端自动累计曝光与外部MCP轻量刷新。目标仅Master固定素材版本，组消费者和Master来源仍保留固定组引用。用户授权本轮测试库重建、不备份、不提交合并推送；实际证据见[本轮记录](test-matrix.md#library-inline-master)。下文此前面板和备份为历史记录，不覆盖本轮选择。
+
+本轮图像管理候选（2026-11-02）已按最新用户选择实现轻量导入、取消独立拍摄预设、逐成员校准与搭配汇总、Agent确认提示及扫描只读适配检查。保留设备和可选组合；当前MCP目录111工具。实现、验证和测试workspace备份重建证据见[本轮记录](test-matrix.md#library-simplification)，尚未提交、合并或推送。下文早期预设及端口记录只表示对应历史状态。
+
 现代化、设备精简与滤镜Channel累计候选已获用户集成/普通推送/清理及Chat归档授权；Manager独立审查、最小修复与必要验证已完成，见[集成记录](test-matrix.md#modernization-equipment-channel-integration)。以下各轮“未提交/未运行”为历史状态，不覆盖本次结果；最终远端SHA与清理情况见Manager交付报告。
 
 当前设备Feature已增加只能手填的滤镜Channel，组合按通道＋可选带宽展示，选择器保留实际名称；单相机／单望远镜、多滤镜及精简预设规则继续有效。原optics-b数据与历史原文保留，最新预览及检查边界见[当前计划](implementation-plan.md)和[Channel记录](test-matrix.md#filter-free-text-channel)。

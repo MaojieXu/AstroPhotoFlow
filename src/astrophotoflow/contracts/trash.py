@@ -132,7 +132,7 @@ class LibraryTrashDelete(StrictModel):
         return self
 
 
-ManagementEntryType = Literal["project", "equipment", "equipment_setup", "capture_preset"]
+ManagementEntryType = Literal["project", "equipment", "equipment_setup"]
 
 
 class ManagementTrashSelectionItem(StrictModel):
@@ -185,7 +185,7 @@ class ManagementTrashDeleteOut(StrictModel):
 
 
 class EquipmentDeleteSelectionItem(StrictModel):
-    entry_type: Literal["equipment", "equipment_setup", "capture_preset"]
+    entry_type: Literal["equipment", "equipment_setup"]
     id: UuidInput
     revision: int = Field(ge=1)
 

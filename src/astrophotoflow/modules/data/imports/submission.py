@@ -51,7 +51,7 @@ def create_import(session: Session, settings: Settings, body: ImportCreate) -> I
     if is_dataset and (not dataset_name):
         primary = sources[0]
         dataset_name = Path(primary['path'].rstrip('/')).name or next((root.path.name for root in settings.import_roots if root.id == primary['root_id']), '素材集')
-    task = AssetTask(id=task_id, status='queued', sources=sources, storage_mode=body.storage_mode, classification=body.classification.model_dump(mode='json', exclude_unset=True), parameters=body.parameters.model_dump(mode='json', exclude_unset=True), notes=body.notes, dataset_name=dataset_name, import_defaults_snapshot=capture_defaults_snapshot(session, body.capture_preset_id, body.parameters).model_dump(mode='json', exclude_unset=True), target_dataset_id=target_dataset_id, dataset_base_revision=None, dataset_id=None, enumeration_completed=False, retry_of_task_id=None, report={}, error=None, created_at=datetime.now(UTC), updated_at=datetime.now(UTC))
+    task = AssetTask(id=task_id, status='queued', sources=sources, storage_mode=body.storage_mode, classification=body.classification.model_dump(mode='json', exclude_unset=True), parameters=body.parameters.model_dump(mode='json', exclude_unset=True), notes=body.notes, dataset_name=dataset_name, import_defaults_snapshot=capture_defaults_snapshot(session, body.parameters, body.equipment).model_dump(mode='json', exclude_unset=True), target_dataset_id=target_dataset_id, dataset_base_revision=None, dataset_id=None, enumeration_completed=False, retry_of_task_id=None, report={}, error=None, created_at=datetime.now(UTC), updated_at=datetime.now(UTC))
     session.add(task)
     session.flush()
     return ImportAccepted.model_validate({'task_id': UUID(task_id), 'status': 'queued'})

@@ -69,32 +69,6 @@ export function useSaveSetup() {
   })
 }
 
-type PresetWrite = { workspaceId: string } & (
-  | {
-      action: 'create'
-      setupId: string
-      body: Parameters<typeof mutationApi.createPreset>[1]
-    }
-  | {
-      action: 'update'
-      presetId: string
-      body: Parameters<typeof mutationApi.patchPreset>[1]
-    }
-)
-
-export function useSavePreset() {
-  const cache = useQueryClient()
-  return useMutation({
-    mutationFn: (request: PresetWrite) =>
-      request.action === 'create'
-        ? mutationApi.createPreset(request.setupId, request.body)
-        : mutationApi.patchPreset(request.presetId, request.body),
-    retry: false,
-    onSettled: (_data, _error, { workspaceId }) =>
-      invalidateEquipment(cache, workspaceId)
-  })
-}
-
 /** A finite confirmation preview is an explicit operation, never a polled list. */
 export function useEquipmentDeletePreview() {
   return useMutation({

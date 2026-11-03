@@ -16,10 +16,11 @@ import astrophotoflow.modules.data.imports.workers as stage_imports_workers
 from astrophotoflow.core.config import Settings
 from astrophotoflow.core.database.db import Database
 from astrophotoflow.core.localization import localized_error, workspace_locale
+from astrophotoflow.modules.data.datasets.models import Dataset, DatasetMember
 from astrophotoflow.modules.data.imports.context import ImportTaskContext
 from astrophotoflow.modules.data.imports.models import AssetTask, AssetTaskItem
 from astrophotoflow.modules.data.imports.progress import ImportProgress
-from astrophotoflow.modules.data.media.recipes import preview_context
+from astrophotoflow.modules.data.media.display import DisplayPreviews
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +47,8 @@ def process_task(database: Database, settings: Settings, task_id: str, workers=N
         task_data.progress = progress
         task_data.source_stamps = {(entry["root_id"], entry["path"]): entry["source_stamp"]
             for source in task_data.sources for entry in source.get("entries", []) if entry.get("source_stamp")}
+        task_data.metadata_snapshots = {(entry["root_id"], entry["path"]): entry["metadata_snapshot"]
+            for source in task_data.sources for entry in source.get("entries", []) if entry.get("metadata_snapshot")}
         stage_imports_progress.registration_progress(database, task_id, len(items), len(counted))
         registered_ids = []
         file_workers, preview_workers = workers
@@ -100,7 +103,8 @@ def process_task(database: Database, settings: Settings, task_id: str, workers=N
                             registered_ids.append(item_id)
                             condition.notify()
                     progress.update()
-                stage_imports_completion.publish_dataset(database, task_data, task_id)
+                if not task_data.image_import_plan:
+                    stage_imports_completion.publish_dataset(database, task_data, task_id)
                 progress.flush(registration_completed=not stage_imports_progress.task_cancelled(database, task_id))
             finally:
                 with condition:
@@ -108,41 +112,40 @@ def process_task(database: Database, settings: Settings, task_id: str, workers=N
                     condition.notify()
             copied.result()
         progress.flush(content_completed=not stage_imports_progress.task_cancelled(database, task_id))
-        pending_previews = []
-        with database.read_session() as session:
+        if task_data.image_import_plan:
+            from astrophotoflow.modules.data.imports.explicit import settle_image_import
+            settle_image_import(database, task_id)
+        # Publication, not derivative rendering, defines import completion.
+        with database.write_session() as session:
             for item_id in registered_ids:
                 item = session.get(AssetTaskItem, item_id)
-                if item.content_status != "available" or item.status == "cancelled":
-                    continue
-                if item.preview_status in {"available", "unsupported"} and item.metadata_status != "failed":
-                    continue
-                pending_previews.append((item_id, item.asset_version_id))
-        def preview(item_id):
-            try:
-                stage_imports_stages.prepare_preview(database, settings, task_data, item_id)
-            finally:
-                progress.flush()
-        futures = []
-        groups = {}
-        for item_id, version_id in pending_previews:
-            context = preview_context(database, task_id, version_id)
-            if context["group_key"] is not None and context["auto_stretch"] is None:
-                groups.setdefault(context["group_key"], []).append((item_id, version_id))
-            else:
-                futures.append(preview_workers.submit_background(version_id, preview, item_id))
-        for group in groups.values():
-            remaining = iter(group)
-            for item_id, version_id in remaining:
-                preview_workers.submit_background(version_id, preview, item_id, priority=2).result()
-                if preview_context(database, task_id, version_id)["auto_stretch"] is not None:
-                    futures.extend(preview_workers.submit_background(version_id, preview, item_id)
-                                   for item_id, version_id in remaining)
-                    break
-        wait(futures)
-        for future in futures:
-            future.result()
-        progress.flush(preview_completed=not stage_imports_progress.task_cancelled(database, task_id))
+                if item.content_status == "available" and item.status != "cancelled":
+                    if item.preview_status == "pending":
+                        item.preview_status = "not_requested"
+                    item.status = "completed_with_errors" if item.metadata_status == "failed" else "completed"
+        progress.flush()
         stage_imports_completion.finish_task(database, task_id, stage_imports_progress.task_cancelled(database, task_id))
+        # An existing group's first member remains its cover after appending.
+        # Use the actual first member; never silently replace an unavailable
+        # reference with a later member's image and stretch parameters.
+        cover_id = None
+        with database.read_session() as session:
+            task = session.get(AssetTask, task_id)
+            dataset = session.get(Dataset, task.dataset_id) if task.dataset_id else None
+            if dataset is not None and dataset.current_version_id:
+                cover_id = session.scalar(select(DatasetMember.asset_version_id).where(
+                    DatasetMember.dataset_version_id == dataset.current_version_id
+                ).order_by(DatasetMember.position).limit(1))
+                incoming = set(session.scalars(select(AssetTaskItem.asset_version_id).where(
+                    AssetTaskItem.task_id == task_id, AssetTaskItem.id.in_(registered_ids))))
+                if cover_id not in incoming:
+                    cover_id = None
+        if cover_id is not None:
+            try:
+                DisplayPreviews(database, settings, preview_workers, recover=False).schedule(cover_id)
+            except Exception:
+                # The scientific import is already complete. Keep preview failure separate.
+                logger.exception("cover preview could not be scheduled task_id=%s", task_id)
     except Exception:
         logger.exception("asset import task failed task_id=%s", task_id)
         with database.write_session() as session:

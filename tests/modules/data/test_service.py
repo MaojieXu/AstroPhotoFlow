@@ -905,6 +905,8 @@ def test_openapi_snapshot_matches_service_and_proxy_allowlist(service):
         and not (method == "POST" and path == "/library/assets/{asset_id}/versions/{version_id}/previews/display/auto-stretch")
         and not (method == "POST" and path.endswith("/previews/viewer"))
         and not (method == "DELETE" and path.endswith("/previews/viewer/consumer/{consumer_id}"))
+        and not (method == "POST" and path == "/library/assets/{asset_id}/versions/{asset_version_id}/calibration")
+        and not (method == "PATCH" and path == "/library/assets/{asset_id}/versions/{version_id}/master-provenance")
         for method, path, _ in ROUTES
     )
 

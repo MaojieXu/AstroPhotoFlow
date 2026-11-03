@@ -99,9 +99,10 @@ def prepare_bundle_sample(database, settings, cache, body, check_cancel, decoder
                 if (stamp.st_size, stamp.st_mtime_ns) != (after.st_size, after.st_mtime_ns):
                     raise ApiError(409, "SOURCE_CHANGED", "准备线性预览时原件发生变化。", message_key='the_original_changed_while_preparing_the_linear_preview')
                 temporary.replace(sample.path)
+                cache.record(sample.path)
             finally:
                 temporary.unlink(missing_ok=True)
-        (folder / "manifest.json").write_text(json.dumps({"input": sample.path.name, "output": "result.png"}), encoding="utf-8")
+        cache.write(folder / "manifest.json", json.dumps({"input": sample.path.name, "output": "result.png"}).encode())
         return sample
     except BaseException as exc:
         sample.close(exc)

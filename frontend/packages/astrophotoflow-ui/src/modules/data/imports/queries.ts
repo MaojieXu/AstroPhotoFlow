@@ -20,7 +20,7 @@ export function useImportTasks(workspace: MaybeRefOrGetter<string>) {
     queryFn: ({ signal }) => importApi.list({ limit: 50, offset: 0, status: 'all' }, signal),
     // The visible directory discovers external tasks; only active work polls fast.
     refetchInterval: query =>
-      query.state.data?.items.some(task => processingStatuses.has(task.status)) ? 1_500 : 10_000
+      query.state.data?.items.some(task => processingStatuses.has(task.status)) ? 1_500 : 30_000
   })
 }
 

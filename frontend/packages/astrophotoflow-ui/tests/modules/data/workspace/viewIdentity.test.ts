@@ -9,7 +9,7 @@ describe('fixed view identities and observed equipment choices', () => {
   it('pins the opened version until an explicit acknowledged dataset is adopted', () => {
     const summary: LibraryDatasetSummary = { entry_type: 'dataset', id: id(1), name: 'Group', notes: null,
       status: 'active', revision: 1, created_at: '2026-10-28T12:00:00Z', version_id: id(2), version_number: 1,
-      member_count: 0, matching_member_count: 0, input_ready: false, summary: metadataForMembers([]), thumbnail: null, import_issue: null }
+      member_count: 0, exposure_summary: {subframe_count:0,known_count:0,unknown_count:0,total_seconds:null,complete:true}, matching_member_count: 0, input_ready: false, summary: metadataForMembers([]), thumbnail: null, import_issue: null }
     const opened = datasetViewFromSummary(summary)!
     summary.version_id = id(3)
     summary.member_count = 10
@@ -17,7 +17,7 @@ describe('fixed view identities and observed equipment choices', () => {
     expect(opened.member_count).toBe(0)
     expect(datasetViewFromSummary({ ...summary, version_id: null })).toBeUndefined()
     const acknowledged: DatasetOut = { id: id(1), name: 'Group', notes: null, status: 'active', revision: 2,
-      current_version_id: id(3), current_version_number: 2, member_count: 10, summary: summary.summary, input_ready: true,
+      current_version_id: id(3), current_version_number: 2, member_count: 10, exposure_summary: {subframe_count:10,known_count:0,unknown_count:10,total_seconds:null,complete:false}, summary: summary.summary, input_ready: true,
       created_at: summary.created_at, updated_at: summary.created_at }
     expect(datasetViewFromAcknowledgement(acknowledged)?.current_version_id).toBe(id(3))
   })

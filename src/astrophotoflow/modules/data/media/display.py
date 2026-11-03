@@ -13,7 +13,8 @@ from sqlalchemy import select
 from astrophotoflow.contracts.previews import AutoStretch
 from astrophotoflow.core.errors import not_found
 from astrophotoflow.core.localization import error_message, workspace_locale
-from astrophotoflow.modules.data.assets.models import AssetVersion, FitsHduMetadata
+from astrophotoflow.modules.data.assets.metadata import asset_parameters
+from astrophotoflow.modules.data.assets.models import Asset, AssetVersion, FitsHduMetadata
 from astrophotoflow.modules.data.files import find_root, resolve_relative
 from astrophotoflow.modules.data.formats.fits import PREVIEW_ALGORITHM_VERSION, create_preview, read_preview_pixels, read_stretch_pixels
 from astrophotoflow.modules.data.formats.pixels import calculate_stretch, render_stretch, sample_statistics
@@ -22,6 +23,7 @@ from astrophotoflow.modules.data.formats.raw import read_raw_preview
 from astrophotoflow.modules.data.formats.video import first_video_frame
 from astrophotoflow.modules.data.formats.xisf import read_xisf_pixels, read_xisf_preview
 from astrophotoflow.modules.data.media.models import Preview
+from astrophotoflow.modules.data.media.recipes import backfill_context, describe_recipe, save_group_recipe
 from astrophotoflow.modules.data.trash.models import LibraryEntryRemoval
 
 logger = logging.getLogger("astrophotoflow.service.previews")
@@ -31,8 +33,10 @@ def _issue(settings, status, code, message_key):
     return {"status": status, "error": {"code": code, "message": error_message(workspace_locale(settings.workspace), code, message_key)}}
 
 class DisplayPreviews:
-    def __init__(self, database, settings, executor):
+    def __init__(self, database, settings, executor, *, recover=True):
         self.database, self.settings, self.executor = database, settings, executor
+        if not recover:
+            return
         with database.write_session() as session:
             for row in session.scalars(select(Preview).where(Preview.size == "display", Preview.status == "generating")).all():
                 row.status, row.error = 'failed', error_message(workspace_locale(self.settings.workspace), '', 'preview_interrupted')
@@ -48,8 +52,9 @@ class DisplayPreviews:
         key = (Preview.asset_version_id == version_id, Preview.hdu_index == index,
                Preview.algorithm_version == PREVIEW_ALGORITHM_VERSION)
         display = session.scalar(select(Preview).where(*key, Preview.size == "display"))
+        thumbnail = session.scalar(select(Preview).where(*key, Preview.size == "thumbnail", Preview.status == "available"))
         if display is not None:
-            if not refresh and display.status == "available" and (self.settings.data_dir / display.storage_path).is_file():
+            if not refresh and display.status == "available" and thumbnail is not None and (self.settings.data_dir / display.storage_path).is_file():
                 return display, None, {"status": "available", "width": display.width, "height": display.height, "error": None}
             if display.status == "generating":
                 return display, None, {"status": "generating", "error": None}
@@ -66,12 +71,12 @@ class DisplayPreviews:
                row.entry_type == "asset" and row.entry_id == version.asset_id or
                row.entry_type == "dataset" and version.asset_id in (row.member_asset_ids or [])) for row in removals):
             return display, None, _issue(self.settings, "not_ready", "SOURCE_CLEANUP_ACTIVE", 'preview_cleanup_active')
-        thumbnail = session.scalar(select(Preview).where(*key, Preview.size == "thumbnail", Preview.status == "available"))
-        if thumbnail is None:
-            return display, None, _issue(self.settings, "not_ready", "RECIPE_NOT_READY", 'preview_recipe_not_ready')
-        recipe = dict(thumbnail.display_parameters or {})
-        if category in {"fits", "xisf"} and "auto_stretch" not in recipe and not {"stretch_low", "stretch_high"} <= recipe.keys():
-            return display, None, _issue(self.settings, "not_ready", "STRETCH_NOT_READY", 'preview_stretch_not_ready')
+        # Newly imported members intentionally have no thumbnail yet. Their
+        # first display request owns generation of both cached derivatives.
+        recipe = dict(thumbnail.display_parameters or {}) if thumbnail else dict(display.display_parameters or {}) if display else {}
+        context = backfill_context(self.database, version_id) if thumbnail is None else None
+        if context and context["auto_stretch"] is not None:
+            recipe = describe_recipe(context, {"auto_stretch": context["auto_stretch"]})
         if version.storage_mode == "managed":
             path = self.settings.data_dir / version.storage_location
         else:
@@ -79,8 +84,9 @@ class DisplayPreviews:
             _, root = find_root(self.settings, root_id)
             path = resolve_relative(root, relative)
         job = {"version_id": version_id, "hdu_index": index, "kind": hdu.supported_kind if hdu else None,
-               "category": category, "path": path, "recipe": recipe,
-               "parameters": {**dict(version.capture_snapshot or {}), 'colour_layout': (version.scientific_metadata or {}).get('colour_layout')}}
+               "category": category, "path": path, "recipe": recipe, "update_thumbnail": thumbnail is None, "context": context,
+               "auto": bool(context and context["auto"] and "auto_stretch" not in recipe),
+               "parameters": {**dict(asset_parameters(session.get(Asset, version.asset_id)) or {}), 'colour_layout': (version.scientific_metadata or {}).get('colour_layout')}}
         if display is not None:
             return display, job, ({'status': 'failed', 'error': {'code': 'PREVIEW_FAILED', 'message': display.error}} if display.error else _issue(self.settings, 'failed', 'PREVIEW_FAILED', 'preview_cache_unavailable'))
         return None, job, _issue(self.settings, "not_ready", "DISPLAY_NOT_GENERATED", 'preview_not_generated')
@@ -167,7 +173,8 @@ class DisplayPreviews:
             image, computed = create_preview(path, job["hdu_index"], job["kind"], parameters, DISPLAY_EDGE, stretch)
             recipe.update(computed)
         elif category == "xisf":
-            image, _ = read_xisf_preview(path, stretch, DISPLAY_EDGE)
+            image, computed = read_xisf_preview(path, stretch, DISPLAY_EDGE)
+            recipe.update(computed or {})
         elif category == "raw":
             image = read_raw_preview(path, DISPLAY_EDGE)
         elif category == "video":
@@ -177,7 +184,8 @@ class DisplayPreviews:
                 recipe.update(original)
             image, _ = first_video_frame(path, DISPLAY_EDGE, stretch)
         else:
-            image, _ = read_raster_preview(path, stretch, DISPLAY_EDGE)
+            image, computed = read_raster_preview(path, stretch, DISPLAY_EDGE)
+            recipe.update(computed or {})
         image.thumbnail((DISPLAY_EDGE, DISPLAY_EDGE), Image.Resampling.LANCZOS)
         return image.convert("RGB"), recipe
 
@@ -185,6 +193,8 @@ class DisplayPreviews:
         created, replaced = [], []
         try:
             image, recipe = self._render(job)
+            if job.get("context"):
+                recipe = describe_recipe(job["context"], recipe)
             # The DB write lock covers ownership verification, file publication
             # and row availability, so cleanup cannot unlink/delete between them.
             with self.database.write_session() as session:
@@ -214,7 +224,8 @@ class DisplayPreviews:
                         Preview.algorithm_version == PREVIEW_ALGORITHM_VERSION, Preview.size == "thumbnail"))
                     small = image.copy()
                     small.thumbnail((100, 100), Image.Resampling.LANCZOS)
-                    replaced.append(self.settings.data_dir / thumbnail.storage_path)
+                    if thumbnail is not None and thumbnail.storage_path:
+                        replaced.append(self.settings.data_dir / thumbnail.storage_path)
                     small_relative = relative.with_name(relative.name.replace("-display-", "-thumbnail-"))
                     target = self.settings.data_dir / small_relative
                     created.append(target)
@@ -224,9 +235,15 @@ class DisplayPreviews:
                         os.replace(temporary, target)
                     finally:
                         temporary.unlink(missing_ok=True)
+                    if thumbnail is None:
+                        thumbnail = Preview(id=str(uuid4()), asset_version_id=job["version_id"],
+                            hdu_index=job["hdu_index"], algorithm_version=PREVIEW_ALGORITHM_VERSION,
+                            size="thumbnail", width=0, height=0, storage_path="", mime_type="image/jpeg",
+                            display_parameters={}, status="available", error=None)
+                        session.add(thumbnail)
                     thumbnail.width, thumbnail.height = small.size
                     thumbnail.storage_path = small_relative.as_posix()
-                    thumbnail.display_parameters = recipe
+                    thumbnail.display_parameters, thumbnail.status, thumbnail.error = recipe, "available", None
         except Exception as exc:
             for path in created:
                 path.unlink(missing_ok=True)
@@ -234,5 +251,7 @@ class DisplayPreviews:
             self._fail(preview_id, error_message(workspace_locale(self.settings.workspace), '',
                        'preview_generation_diagnostic', {'diagnostic': str(exc)}))
             return
+        if (job.get("context") or {}).get("save_group"):
+            save_group_recipe(self.database, job["context"], recipe)
         for path in replaced:
             path.unlink(missing_ok=True)

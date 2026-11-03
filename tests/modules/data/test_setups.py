@@ -181,38 +181,8 @@ def test_setup_name_sort_descending_and_sort_scope(service):
     result = client.get("/api/v1/equipment-setups", headers=AUTH, params={"sort_by": "name", "order": "desc"}).json()
     assert [row["name"] for row in result["items"]] == ["Zulu", "Alpha"]
     assert client.get("/api/v1/equipment-setups", headers=AUTH, params={"sort_by": "unknown"}).status_code == 422
-    for path in ["/equipment", "/capture-presets"]:
+    for path in ["/equipment"]:
         assert client.get("/api/v1" + path, headers=AUTH, params={"sort_by": "camera"}).status_code == 422
-
-
-def test_owned_presets_preserve_sparse_null_zero_and_revision(service):
-    client, _ = service
-    setup = client.post("/api/v1/equipment-setups", headers=AUTH, json={"name": "Rig"}).json()
-    missing = client.post("/api/v1/equipment-setups/" + str(uuid4()) + "/presets", headers=AUTH, json={})
-    assert missing.status_code == 404
-    created = client.post("/api/v1/equipment-setups/" + setup["id"] + "/presets", headers=AUTH, json={'parameters': {'parameter_mode': 'gain', 'gain': 0, 'offset': None}})
-    assert created.status_code == 201, created.text
-    preset = created.json()
-    assert preset["equipment_setup_id"] == setup["id"]
-    assert preset["parameters"] == {"parameter_mode": "gain", "gain": 0, "offset": None}
-    assert "classification" not in preset
-    updated = client.patch("/api/v1/capture-presets/" + preset["id"], headers=AUTH,
-                           json={'base_revision': 1, 'parameters': {'parameter_mode': 'gain', 'exposure_seconds': 0, 'gain': None}})
-    assert updated.status_code == 200, updated.text
-    assert updated.json()["parameters"] == {"parameter_mode": "gain", "gain": None, "offset": None, "exposure_seconds": 0}
-    assert client.patch("/api/v1/capture-presets/" + preset["id"], headers=AUTH,
-                        json={'base_revision': 1}).status_code == 409
-    video = client.patch("/api/v1/capture-presets/" + preset["id"], headers=AUTH,
-                         json={'base_revision': 2, 'status': 'archived'})
-    assert video.json()["status"] == "archived"
-    assert client.get("/api/v1/capture-presets", headers=AUTH).json()["total"] == 0
-    assert client.get("/api/v1/capture-presets", headers=AUTH, params={"status": "all"}).json()["items"][0]["parameters"] == updated.json()["parameters"]
-    assert client.get("/api/v1/equipment-setups/" + setup["id"] + "/presets", headers=AUTH,
-                      params={"status": "all"}).json()["total"] == 1
-    rejected = client.patch("/api/v1/capture-presets/" + preset["id"], headers=AUTH,
-                            json={'base_revision': 3, 'equipment_selection': {'camera': str(uuid4())}})
-    assert rejected.status_code == 422
-    assert client.get("/api/v1/capture-presets/" + preset["id"], headers=AUTH).json()["revision"] == 3
 
 
 def test_accepted_import_and_retry_keep_configuration_snapshot(service, monkeypatch):
@@ -222,10 +192,11 @@ def test_accepted_import_and_retry_keep_configuration_snapshot(service, monkeypa
         {"source": "registered", "equipment_id": camera["id"]},
         {"source": "inline", "equipment": {"kind": "telescope", "name": "inline scope"}},
     ]}).json()
-    preset = client.post("/api/v1/equipment-setups/" + setup["id"] + "/presets", headers=AUTH,
-                         json={'parameters': {'parameter_mode': 'gain', 'gain': 0}}).json()
-    accepted = client.post("/api/v1/uploads", headers=AUTH,
-                           json={"files": [{"name": "small.fits", "size": 0}], "capture_preset_id": preset["id"]})
+    accepted = client.post("/api/v1/uploads", headers=AUTH, json={
+        "files": [{"name": "small.fits", "size": 0}],
+        "parameters": {"parameter_mode": "gain", "gain": 0},
+        "equipment": {"choice": {"source": "setup", "setup_id": setup["id"], "expected_revision": setup["revision"]}, "fields": ["camera", "telescope"]},
+    })
     assert accepted.status_code == 202, accepted.text
     task_id = accepted.json()["task_id"]
     task = client.get("/api/v1/asset-tasks/" + task_id, headers=AUTH).json()
@@ -237,8 +208,6 @@ def test_accepted_import_and_retry_keep_configuration_snapshot(service, monkeypa
                         json={"base_revision": 1, "kind": "camera", "name": "changed camera"}).status_code == 200
     assert client.patch("/api/v1/equipment-setups/" + setup["id"], headers=AUTH,
                         json={"base_revision": 1, "name": "changed rig", "components": []}).status_code == 200
-    assert client.patch("/api/v1/capture-presets/" + preset["id"], headers=AUTH,
-                        json={'base_revision': 1, 'parameters': {'parameter_mode': 'gain', 'gain': 100}}).status_code == 200
     with database.write_session() as session:
         session.get(AssetTask, task_id).status = "failed"
     monkeypatch.setattr("astrophotoflow.modules.data.public.run_import_task", lambda *args: None)

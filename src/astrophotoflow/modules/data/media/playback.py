@@ -28,7 +28,7 @@ def make_proxy(path, folder, cache, parameters, recipe):
         factor = min(1, 1920 / max(width, height))
         width, height = max(2, int(width * factor) // 2 * 2), max(2, int(height * factor) // 2 * 2)
         command += ["-f", "rawvideo", "-pixel_format", "rgb24", "-video_size", f"{width}x{height}", "-framerate", str(fps), "-i", "pipe:0"]
-        source = PixelSource(path, "video", MediaSelection(frame_index=0), parameters, folder, cache.reserve)
+        source = PixelSource(path, "video", MediaSelection(frame_index=0), parameters, folder, cache.reserve, record=cache.record)
         if source_times is not None:
             commands = "\n".join(f"{max(0, index / fps - 0.000001):.6f} [enter] setpts@ser_pts expr '{timestamp:.9f}/TB';" for index, timestamp in enumerate(source_times))
             cache.write(timing_path, commands.encode())
@@ -54,11 +54,16 @@ def make_proxy(path, folder, cache, parameters, recipe):
                         process.stdin.write(image.tobytes())
                         if part.exists() and part.stat().st_size + log_path.stat().st_size > cache.disk_budget:
                             raise ValueError("视频代理超过4GiB缓存预算。")
+                        cache.record(part)
+                        cache.record(log_path)
+                        cache.reserve(0)
                     process.stdin.close()
                 while process.poll() is None:
                     try:
                         process.wait(timeout=0.2)
                     except subprocess.TimeoutExpired:
+                        cache.record(part)
+                        cache.record(log_path)
                         cache.reserve(0)
                         if part.exists() and part.stat().st_size > cache.disk_budget:
                             raise ValueError("视频代理超过4GiB缓存预算。")
@@ -77,6 +82,8 @@ def make_proxy(path, folder, cache, parameters, recipe):
         mapping = [{"time": timestamp - frames[0][1], "source_time": None if ser else timestamp, "index": index} for index, timestamp in frames]
         cache.write(folder / "frames.json", json.dumps(mapping).encode())
         part.replace(target)
+        cache.record(part)
+        cache.record(target)
         note = "播放代理≤1920px；放大读取原件帧。"
         if ser:
             note += " SER无有效时间戳，按10fps预览。" if source_times is None else " SER保留采集帧时间戳及原始帧对应。"
@@ -85,3 +92,5 @@ def make_proxy(path, folder, cache, parameters, recipe):
         part.unlink(missing_ok=True)
         log_path.unlink(missing_ok=True)
         timing_path.unlink(missing_ok=True)
+        for path in (part, log_path, timing_path):
+            cache.record(path)

@@ -29,6 +29,7 @@ from astrophotoflow.modules.data.assets.metadata import (
 )
 from astrophotoflow.modules.data.assets.models import Asset, AssetVersion, FitsHduMetadata
 from astrophotoflow.modules.data.assets.storage import asset_path
+from astrophotoflow.modules.data.calibration.service import latest_configuration
 from astrophotoflow.modules.data.common import uuid_text
 from astrophotoflow.modules.data.datasets.bindings import default_bindings, member_bindings
 from astrophotoflow.modules.data.datasets.models import Dataset, DatasetMember, DatasetVersion
@@ -116,7 +117,7 @@ def dataset_members(session: Session, project_id: UUID, dataset_version_id: UUID
         validate_selection(session, asset_version, item.selection)
         bindings = dict(default_bindings(version) or {})
         bindings.update(member_bindings(member) or {})
-        result.append((asset, asset_version, member.position, version.id, bindings, item.selection))
+        result.append((asset, asset_version, member.position, version.id, bindings, item.selection, None))
     return result
 
 
@@ -127,7 +128,12 @@ def reference_rows(session: Session, request: ResolveInputsRequest):
         if reference.kind == "asset_version":
             asset, version = require_asset_reference(session, request.project_id, reference.asset_version_id)
             validate_selection(session, version, reference.selection)
-            result.append((reference_index, asset, version, None, None, {"bias": None, "dark": None, "flat": None, "dark_flat": None}, reference.selection))
+            configuration = latest_configuration(session, version.id, reference.binding_version_id)
+            bindings = {"bias": None, "dark": None, "flat": None, "dark_flat": None}
+            if configuration:
+                bindings.update(configuration.bindings)
+            result.append((reference_index, asset, version, None, None, bindings, reference.selection,
+                           configuration.id if configuration else None))
         else:
             result.extend((reference_index, *row) for row in dataset_members(
                 session, request.project_id, reference.dataset_version_id, reference.members
@@ -142,7 +148,7 @@ def validate_input_references(database: Database, project_id: UUID, references: 
 
 
 def resolve_asset(settings: Settings, row, input_mode: str, run_directory: Path, *, colour_layout=None):
-    reference_index, asset, version, member_index, dataset_version_id, calibration, selection = row
+    reference_index, asset, version, member_index, dataset_version_id, calibration, selection, binding_version_id = row
     if not version.content_hash or version.byte_size is None:
         raise ApiError(422, "SOURCE_UNAVAILABLE", "固定素材版本尚未完成内容登记。", message_key='content_registration_is_incomplete_for_this_fixed_asset_version')
     path = asset_path(settings, version)
@@ -188,6 +194,7 @@ def resolve_asset(settings: Settings, row, input_mode: str, run_directory: Path,
         classification=AssetClassification.model_validate(asset_classification(asset) or {}),
         value_sources=asset.value_sources or {}, capture_snapshot=version.capture_snapshot,
         equipment_snapshot=asset.equipment_snapshot or {}, effective_calibration=calibration,
+        binding_version_id=UUID(binding_version_id) if binding_version_id else None,
         read_path=read_path, format=metadata.get("format", "other"), selection=selection,
         byte_size=byte_size, content_hash=content_hash, mtime_ns=mtime_ns,
         scientific_metadata=metadata, preparation=preparation,
@@ -197,7 +204,7 @@ def resolve_asset(settings: Settings, row, input_mode: str, run_directory: Path,
 def resolve_inputs(database: Database, settings: Settings, request: ResolveInputsRequest, *, run_directory: Path) -> ResolvedInputs:
     with database.read_session() as session:
         rows = reference_rows(session, request)
-        required_copy_bytes = sum(version.byte_size or 0 for _, _, version, _, _, _, _ in rows
+        required_copy_bytes = sum(version.byte_size or 0 for _, _, version, _, _, _, _, _ in rows
                                   if request.input_mode == "reproducible" and version.storage_mode == "reference")
     if required_copy_bytes:
         run_directory.mkdir(parents=True, exist_ok=True)
@@ -216,6 +223,7 @@ def resolve_canvas_inputs(database: Database, settings: Settings, reference: Inp
         if reference.kind == "asset_version":
             members = [(None, str(reference.asset_version_id), reference.selection)]
             dataset_version_id = None
+            configuration = latest_configuration(session, str(reference.asset_version_id), reference.binding_version_id)
         else:
             fixed = session.get(DatasetVersion, str(reference.dataset_version_id))
             dataset = session.get(Dataset, fixed.dataset_id) if fixed else None
@@ -239,9 +247,14 @@ def resolve_canvas_inputs(database: Database, settings: Settings, reference: Inp
                 raise ApiError(404, "INVALID_REFERENCE", "固定素材不存在或原件尚未就绪。", message_key='the_fixed_asset_is_missing_or_its_original_is_not_ready')
             validate_selection(session, version, selection)
             calibration = {"bias": None, "dark": None, "flat": None, "dark_flat": None}
-            calibration.update(calibrations.get(position, {}))
-            rows.append((0, asset, version, position, dataset_version_id, calibration, selection))
-    required = sum(version.byte_size or 0 for _, _, version, _, _, _, _ in rows if version.storage_mode == "reference")
+            binding_version_id = None
+            if dataset_version_id is None and configuration:
+                calibration.update(configuration.bindings)
+                binding_version_id = configuration.id
+            else:
+                calibration.update(calibrations.get(position, {}))
+            rows.append((0, asset, version, position, dataset_version_id, calibration, selection, binding_version_id))
+    required = sum(version.byte_size or 0 for _, _, version, _, _, _, _, _ in rows if version.storage_mode == "reference")
     run_directory.mkdir(parents=True, exist_ok=True)
     if required and shutil.disk_usage(run_directory).free < required:
         raise ApiError(422, "INSUFFICIENT_STORAGE", "空间不足，无法固定本次科学输入。", message_key='insufficient_space_to_fix_the_scientific_inputs_for_this_run')

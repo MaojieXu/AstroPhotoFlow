@@ -2,7 +2,6 @@
 import type { DatasetOut } from '../../../generated/api/types.gen'
 import LibraryFilterPanel from './LibraryFilterPanel.vue'
 import CalibrationLibrary from './CalibrationLibrary.vue'
-import CalibrationBindingsEditor from '../datasets/CalibrationBindingsEditor.vue'
 import AssetContentChange from '../assets/AssetContentChange.vue'
 
 defineProps<{
@@ -13,7 +12,9 @@ defineProps<{
   filterAnchor?: HTMLElement
   calibrationLibrary: boolean
   datasetId?: string
-  selectedAsset?: { id: string; title: string; hasVersion: boolean }
+  datasetVersionId?: string
+  datasetName?: string
+  selectedAsset?: { id: string; title: string; hasVersion: boolean; versionId?: string }
 }>()
 const emit = defineEmits<{
   'apply-filters': [filters: Record<string, string[] | string>]
@@ -33,5 +34,4 @@ const emit = defineEmits<{
     <h2>{{ selectedAsset.title }}</h2>
     <AssetContentChange :workspace-id="workspace" :asset-id="selectedAsset.id" :has-version="selectedAsset.hasVersion" @accepted="emit('asset-accepted')" />
   </aside>
-  <CalibrationBindingsEditor v-if="datasetId" :key="workspace+':'+datasetId" :workspace-id="workspace" :dataset-id="datasetId" @updated="emit('calibration-updated', $event)" @dirty="emit('calibration-dirty', $event)" />
 </template>

@@ -7,7 +7,7 @@ const labels: Record<string, string> = {
   get managed() { return uiT('apfUi.managed_copy') }, get reference() { return uiT('apfUi.reference_only') }, get active() { return uiT('apfUi.active') }, get archived() { return uiT('apfUi.archived') },
   get available() { return uiT('apfUi.original_readable') }, get missing() { return uiT('apfUi.original_inaccessible') }, get unavailable() { return uiT('apfUi.unavailable') },
   get mono() { return uiT('apfUi.monochrome') }, get color() { return uiT('apfUi.color') }, get mixed() { return uiT('apfUi.mixed') }, get partial() { return uiT('apfUi.partially_missing') },
-  get file() { return uiT('apfUi.file') }, get manual() { return uiT('apfUi.manual') }, get preset() { return uiT('apfUi.capture_preset') }
+  get file() { return uiT('apfUi.file') }, get manual() { return uiT('apfUi.manual') }
 }
 
 export function displayLabel(value: unknown) {

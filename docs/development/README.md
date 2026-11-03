@@ -184,6 +184,38 @@ CLI 的 `apf runtime prepare` 独立准备软件；`apf workspace create --works
 
 CLI、浏览器和 MCP 各自核对目标；Shell 环境不会重定向已连接的 MCP。MCP 使用明确绑定该 workspace 的独立 stdio 进程，不改全局注册。端口以 core 返回地址为准，不猜测。
 
+### MCP 热修改与 Inspector
+
+开发时可在当前 Worktree 中使用官方 FastMCP HTTP reload；这是临时开发进程，不增加产品常驻服务。先准备并启动自己的 Feature workspace，确认另一个端口空闲，再执行：
+
+```powershell
+pnpm dev:mcp --workspace .artifacts/workspaces/<feature> --port <空闲MCP端口>
+```
+
+入口使用本空间的开发 Python、显式 workspace 和回环地址，拒绝 `dev`／`default` workspace，监听 `src/astrophotoflow`；不会更改全局 MCP。`--reload-dir` 可重复指定源码目录，不要包含 Inspector 存储或验证回执目录，以免保存证据触发无关重载。`--server-spec <文件:factory>` 用于明确选择的开发工厂或隔离探针。默认仍为真实平台 `create_server`。领域服务 Python 修改后仍按上节显式重启自己的实例，MCP reload 不会重启领域服务。
+
+可用官方 [MCP Inspector](https://github.com/modelcontextprotocol/inspector) 连接入口打印的 `/mcp` 地址。Inspector 使用自己的空闲端口，并将配置、存储及 npm 缓存放在本 Feature `.artifacts` 内；设置 `MCP_AUTO_OPEN_ENABLED=false`，通过 Codex 内部 browser 打开终端打印的 Inspector 地址。不要把工作台网页地址当作 MCP 地址，也不要把 Inspector 配置写入全局 MCP。
+
+Inspector 中的 Agent 视图只有 `search_tools`／`call_tool`：用 `search_tools` 的 `{"query":"data_assets_search"}` 查看具体工具的描述、`inputSchema` 和 `outputSchema`；用 `call_tool` 的 `{"name":"data_assets_search","arguments":{"query":{"limit":1}}}` 执行只读联调。需要在 Inspector 直接逐项浏览全部业务工具及参数表单时，开发入口显式选择完整目录工厂：
+
+```powershell
+pnpm dev:mcp --workspace .artifacts/workspaces/<feature> --port <空闲MCP端口> --server-spec src/astrophotoflow/interfaces/mcp/server.py:build_tool_catalog
+```
+
+完整目录按挂载命名空间生成 `data_assets_search`、`graph_canvas_get` 等平铺工具名，Inspector 的列表不展示内部 FastMCP 挂载树或后端模块调用链。此开发选择不改变 Agent 的默认搜索视图。保存源码后确认终端 reload 记录，显式断开并重新连接 Inspector，再搜索和调用。官方 reload 重启 worker，不承诺原 stdio 会话透明继续，也不表示当前 Codex 会话已自动更新；工具列表变更通知与客户端采用须单独实测。
+
+定向验证只使用本 Feature 空 workspace 和合成只读探针，核对实现返回值、工具增删、参数默认／必填变化、非法输入拒绝和真实领域服务读取，不修改生产工具或素材。显式授权执行时：
+
+```powershell
+$env:APF_TEST_MCP_RELOAD = '1'
+$env:APF_TEST_WORKSPACE = "$PWD/.artifacts/workspaces/<feature>"
+python -m pytest tests/interfaces/mcp/test_fastmcp_reload.py tests/interfaces/mcp/test_fastmcp_catalog.py -q --basetemp=.artifacts/pytest-<feature>-mcp
+# 同一联调也可独立执行；已通过时无需重复执行
+python scripts/verify_mcp_development.py --workspace .artifacts/workspaces/<feature> --report .artifacts/reports/mcp-development
+```
+
+验证器使用官方 reloader 和新连接观察变更，结束后停止它自己创建的进程树。测试回执保存在 `.artifacts/reports/mcp-development`；合成探针演示不等于产品工具变化或真实素材验收。
+
 ### 独立Bundle候选预览
 
 #### 开发源码绑定

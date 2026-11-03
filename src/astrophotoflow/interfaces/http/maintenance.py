@@ -23,6 +23,10 @@ def register_maintenance(app: FastAPI, settings: Settings) -> None:
         update_running_state(settings.workspace, {"maintenance_operation_id": str(owner) if owner is not None else None})
         app.state.maintenance_owner = owner
         app.state.maintenance = owner is not None
+        if owner is None:
+            app.state.thumbnails.resume()
+        else:
+            app.state.thumbnails.pause()
 
     @app.post("/internal/maintenance", dependencies=[Depends(authenticate)], include_in_schema=False)
     async def maintenance(body: MaintenanceAction):
@@ -83,5 +87,6 @@ def register_maintenance(app: FastAPI, settings: Settings) -> None:
         async with app.state.maintenance_lock:
             app.state.maintenance = True
             app.state.shutdown_started = True
+            app.state.thumbnails.pause()
             request.app.state.shutdown()
         return {"status": "stopping"}

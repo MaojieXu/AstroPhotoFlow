@@ -4,6 +4,7 @@ from uuid import UUID
 
 from pydantic import Field, field_validator, model_validator
 
+from astrophotoflow.contracts.calibration import LibraryCalibrationProjection
 from astrophotoflow.contracts.common import CfaPattern, ErrorDetail, JsonObject, PageMetadata, StrictModel, UuidInput, check_name
 from astrophotoflow.contracts.equipment import EquipmentSnapshots
 from astrophotoflow.contracts.metadata import AssetClassification, AssetParametersPatch, FrameClass, FrameType, ParameterMode
@@ -41,7 +42,7 @@ class AssetOut(StrictModel):
     classification: AssetClassification
     parameters: AssetParametersPatch
     equipment_snapshot: EquipmentSnapshots
-    value_sources: dict[str, Literal["manual", "file", "preset", "unknown"]]
+    value_sources: dict[str, Literal["manual", "file", "unknown"]]
     notes: str | None
     status: Literal["active", "archived"]
     revision: int
@@ -275,6 +276,16 @@ class LibraryClassificationSummary(StrictModel):
     frame_type: LibraryValueSummary[FrameType]
 
 
+class ExposureSummary(StrictModel):
+    """Exposure of subframes only; missing exposure never contributes zero."""
+
+    subframe_count: int = Field(ge=0)
+    known_count: int = Field(ge=0)
+    unknown_count: int = Field(ge=0)
+    total_seconds: float | None = Field(ge=0, allow_inf_nan=False)
+    complete: bool
+
+
 class LibraryMetadataSummary(StrictModel):
     classification: LibraryClassificationSummary
     parameters: LibraryParameterSummary
@@ -306,6 +317,8 @@ class LibraryItemSummary(StrictModel):
     matching_member_count: int = Field(ge=0)
     input_ready: bool
     summary: LibraryMetadataSummary
+    calibration_projection: LibraryCalibrationProjection | None = None
+    exposure_summary: ExposureSummary
     thumbnail: LibraryThumbnailReference | None
     import_issue: str | None
 
@@ -326,3 +339,8 @@ LibraryItem = Annotated[LibraryAssetSummary | LibraryDatasetSummary, Field(discr
 
 class LibraryItemPage(PageMetadata):
     items: list[LibraryItem]
+
+
+class LibraryChangeState(StrictModel):
+    revision_token: str
+    thumbnail_token: str

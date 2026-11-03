@@ -3,8 +3,8 @@ import { computed, onScopeDispose, shallowRef, toValue, watch } from 'vue'
 import type { MaybeRefOrGetter } from 'vue'
 import { ApiClientError } from '../../../core/api/errors'
 import { workspaceQueryKey } from '../../../core/query/keys'
-import { createMediaClient } from '../api/media'
-import type { MediaSelection } from '../api/media'
+import { createMediaClient, mediaSelectionSchema } from '../api/media'
+import type { MediaSelection, MediaState } from '../api/media'
 
 export interface MediaViewRequest {
   workspaceId: string
@@ -29,6 +29,12 @@ export function useMediaView(
   const cache = useQueryClient()
   const session = shallowRef<Session>()
   let generation = 0
+  const recent = new Map<string, MediaState>()
+  let recentWorkspace: string | undefined
+  function contentKey(target: MediaViewRequest) {
+    const { consumer_id: _consumer, generation: _generation, prefetch: _prefetch, ...selection } = mediaSelectionSchema.parse(target.selection ?? {})
+    return JSON.stringify([target.workspaceId, target.basePath, selection])
+  }
   const key = (target: Target) =>
     [
       ...workspaceQueryKey(target.workspaceId),
@@ -86,6 +92,14 @@ export function useMediaView(
     () =>
       prepare.error.value ?? query.error.value ?? state.value?.error?.message
   )
+  watch(state, value => {
+    const target = session.value?.target
+    if (!target || value?.status !== 'available') return
+    const identity = contentKey(target)
+    recent.delete(identity)
+    recent.set(identity, value)
+    while (recent.size > 4) recent.delete(recent.keys().next().value!)
+  })
   const loading = computed(
     () =>
       Boolean(session.value) &&
@@ -106,6 +120,10 @@ export function useMediaView(
     session.value = undefined
     prepare.reset()
     if (!value?.workspaceId || !value.basePath) return
+    if (value.workspaceId !== recentWorkspace) {
+      recent.clear()
+      recentWorkspace = value.workspaceId
+    }
     const selection = value.selection ?? {}
     const target: Target = {
       ...value,
@@ -120,7 +138,9 @@ export function useMediaView(
       },
       controller: new AbortController()
     }
-    session.value = { target }
+    const remembered = recent.get(contentKey(target))
+    if (remembered) cache.setQueryData(key(target), remembered)
+    session.value = { target, stateKey: remembered?.key }
     try {
       const result = await prepare.mutateAsync(target)
       if (session.value?.target !== target || target.controller.signal.aborted)
@@ -128,6 +148,7 @@ export function useMediaView(
       cache.setQueryData(key(target), result)
       session.value = { target, stateKey: result.key }
     } catch {
+      recent.delete(contentKey(target))
       /* Mutation diagnostics belong to the current display session. No automatic POST replay. */
     }
   }
@@ -139,6 +160,7 @@ export function useMediaView(
   onScopeDispose(() => {
     release(session.value)
     session.value = undefined
+    recent.clear()
   })
   return { state, loading, error, retry: () => begin(toValue(request)) }
 }

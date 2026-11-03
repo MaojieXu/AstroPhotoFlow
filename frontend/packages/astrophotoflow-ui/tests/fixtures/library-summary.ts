@@ -12,6 +12,13 @@ function values(items: unknown[]) {
   return {state: 'consistent', value: known[0]}
 }
 
+export function exposureForMembers(members: SampleMember[]) {
+  const subframes = members.filter(member => member.asset.classification?.frame_class === 'subframe')
+  const known = subframes.flatMap(member => typeof member.asset.parameters?.exposure_seconds === 'number' ? [member.asset.parameters.exposure_seconds] : [])
+  return {subframe_count:subframes.length,known_count:known.length,unknown_count:subframes.length-known.length,
+    total_seconds:known.length ? known.reduce((sum,value)=>sum+value,0) : null,complete:known.length===subframes.length}
+}
+
 export function metadataForMembers(members: SampleMember[]) {
   const keys = ['parameter_mode', 'iso', 'gain', 'offset', 'exposure_seconds', 'integration_seconds', 'sensor_temperature_c', 'binning_x', 'binning_y', 'cfa_pattern']
   const equipment = Object.fromEntries((['camera', 'optical_system', 'filter'] as const).map(slot => {
@@ -34,7 +41,7 @@ export function libraryAsset(asset: SampleAsset) {
     status: asset.status ?? 'active', revision: asset.revision ?? 1, created_at: asset.created_at ?? '2026-10-22T20:00:00Z',
     version_id: asset.current_version_id ?? version?.id ?? null, version_number: version?.version_number ?? null,
     member_count: 1, matching_member_count: 1, input_ready: Boolean(version?.availability === 'available' && version.content_hash && version.byte_size != null),
-    summary: metadataForMembers([{asset, version: version ?? {id: ''}}]), thumbnail: version ? {asset_id: asset.id, asset_version_id: version.id, view_base:`/astrophotoflow/api/v1/library/assets/${asset.id}/versions/${version.id}/previews`, hdu_index: 0} : null, import_issue: null,
+    exposure_summary: exposureForMembers([{asset,version:version ?? {id:''}}]), summary: metadataForMembers([{asset, version: version ?? {id: ''}}]), thumbnail: version ? {asset_id: asset.id, asset_version_id: version.id, view_base:`/astrophotoflow/api/v1/library/assets/${asset.id}/versions/${version.id}/previews`, hdu_index: 0} : null, import_issue: null,
   })
 }
 
@@ -43,6 +50,6 @@ export function libraryDataset(dataset: SampleDataset, version: {id: string; ver
     status: dataset.status ?? 'active', revision: dataset.revision ?? 1, created_at: dataset.created_at ?? '2026-10-22T20:00:00Z',
     version_id: version.id, version_number: version.version_number ?? 1, member_count: version.members.length, matching_member_count: matching,
     input_ready: version.members.length > 0 && version.members.every(member => member.version.availability === 'available' && Boolean(member.version.content_hash) && member.version.byte_size != null),
-    summary: metadataForMembers(version.members), thumbnail: version.members[0] ? {asset_id: version.members[0].asset.id, asset_version_id: version.members[0].version.id, view_base:`/astrophotoflow/api/v1/library/assets/${version.members[0].asset.id}/versions/${version.members[0].version.id}/previews`, hdu_index: 0} : null, import_issue: null,
+    exposure_summary: exposureForMembers(version.members), summary: metadataForMembers(version.members), thumbnail: version.members[0] ? {asset_id: version.members[0].asset.id, asset_version_id: version.members[0].version.id, view_base:`/astrophotoflow/api/v1/library/assets/${version.members[0].asset.id}/versions/${version.members[0].version.id}/previews`, hdu_index: 0} : null, import_issue: null,
   })
 }

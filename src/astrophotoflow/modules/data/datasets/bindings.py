@@ -4,9 +4,9 @@ from astrophotoflow.modules.data.datasets.models import DatasetCalibration, Data
 
 
 def _bindings(rows) -> dict:
-    return {row.frame_type: None if row.disabled else {
-        "kind": "asset_version" if row.asset_version_id is not None else "dataset_version",
-        "id": row.asset_version_id or row.target_dataset_version_id,
+    return {row.frame_type: {"mode": "unconfigured"} if row.state == "unconfigured" else None if row.disabled else {
+        "kind": "asset_version",
+        "id": row.asset_version_id,
     } for row in rows}
 
 
@@ -20,15 +20,20 @@ def member_bindings(member: DatasetMember) -> dict:
 
 def set_default_bindings(version: DatasetVersion, bindings: dict) -> None:
     version.defaults = [DatasetCalibration(
-        dataset_version_id=version.id, frame_type=frame_type, disabled=target is None,
-        asset_version_id=target["id"] if target and target["kind"] == "asset_version" else None,
-        target_dataset_version_id=target["id"] if target and target["kind"] == "dataset_version" else None,
+        dataset_version_id=version.id, frame_type=frame_type, **_target_columns(target),
     ) for frame_type, target in bindings.items()]
 
 
 def set_member_bindings(member: DatasetMember, bindings: dict) -> None:
     member.overrides = [MemberCalibration(
-        member_id=member.id, frame_type=frame_type, disabled=target is None,
-        asset_version_id=target["id"] if target and target["kind"] == "asset_version" else None,
-        target_dataset_version_id=target["id"] if target and target["kind"] == "dataset_version" else None,
+        member_id=member.id, frame_type=frame_type, **_target_columns(target),
     ) for frame_type, target in bindings.items()]
+
+
+def _target_columns(target) -> dict:
+    unconfigured = bool(target and target.get("mode") == "unconfigured")
+    return {
+        "state": "unconfigured" if unconfigured else "disabled" if target is None else "target",
+        "disabled": target is None or unconfigured,
+        "asset_version_id": target["id"] if target and target.get("kind") == "asset_version" else None,
+    }

@@ -1,6 +1,6 @@
 import type { DatasetMemberOut } from '@ui/generated/api/types.gen'
 import { fixedMemberFixture } from '../../../fixtures/library-members'
-import { libraryAsset, libraryDataset, metadataForMembers } from '../../../fixtures/library-summary'
+import { libraryAsset, libraryDataset, metadataForMembers, exposureForMembers } from '../../../fixtures/library-summary'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -65,7 +65,7 @@ afterEach(()=>{wrapper?.unmount();vi.unstubAllGlobals()})
 
 const assets=new Map<string,ReturnType<typeof assetFor>>()
 function configureLibrary(groups:Array<{dataset:ReturnType<typeof dataset>;version:Omit<ReturnType<typeof version>,'members'>&{members:DatasetMemberOut[]}}>,single=assetFor(900,'unrelated.fit')){
-  groups.forEach(group=>Object.assign(group.dataset,{summary:metadataForMembers(group.version.members),input_ready:group.version.members.length>0,current_version_number:group.version.version_number}))
+  groups.forEach(group=>Object.assign(group.dataset,{summary:metadataForMembers(group.version.members),exposure_summary:exposureForMembers(group.version.members),input_ready:group.version.members.length>0,current_version_number:group.version.version_number}))
   assets.clear()
   groups.flatMap(group=>group.version.members).forEach(item=>assets.set(item.asset.id,item.asset))
   assets.set(single.id,single)
@@ -105,6 +105,36 @@ async function enterGroup(name:string){
   await flushPromises()
 }
 describe('dataset group member table',()=>{
+  it('silently replaces a missing member thumbnail after background generation',async()=>{
+    const group=dataset(8301,'Background thumbnails',8302,1)
+    const asset=assetFor(8303,'Background.fit')
+    const fixed=member(asset,8302,0,9301)
+    configureLibrary([{dataset:group,version:version(group.id,8302,[fixed])}])
+    let ready=false
+    getBlob.mockImplementation(async(path:string)=>{
+      if(path.includes('/members/')&&!ready)throw new Error('not ready')
+      return new Blob(['preview'],{type:'image/jpeg'})
+    })
+    const nativeInterval=globalThis.setInterval
+    let refresh:(()=>void)|undefined
+    const interval=vi.spyOn(globalThis,'setInterval').mockImplementation((callback,delay,...args)=>{
+      if(delay===3000&&typeof callback==='function')refresh=()=>callback(...args)
+      return nativeInterval(callback,delay,...args)
+    })
+    try {
+      await mountLibrary();await enterGroup('Background thumbnails')
+      expect(wrapper.find('.apf-assets-table tbody tr .apf-thumb img').exists()).toBe(false)
+      expect(refresh).toBeDefined()
+      ready=true
+      refresh?.()
+      await flushPromises()
+      expect(wrapper.find('.apf-assets-table tbody tr .apf-thumb img').exists()).toBe(true)
+      expect(wrapper.find('[role="progressbar"]').exists()).toBe(false)
+    } finally {
+      interval.mockRestore()
+    }
+  })
+
   it('keeps separate thumbnails and pinned inputs for two versions of the same asset',async()=>{
     const group=dataset(8401,'Repeated asset versions',8402,2)
     const asset=assetFor(8403,'Repeated.fit')
@@ -125,7 +155,7 @@ describe('dataset group member table',()=>{
     for(const item of wrapper.findAll('.apf-assets-table tbody tr'))expect(item.text()).toContain('Shared renamed.fit')
     expect(wrapper.findAllComponents(LibraryCanvasSource).map(item=>item.props('source'))).toEqual(sources)
     expect(send.mock.calls.filter(([_path,_schema,method])=>method==='PATCH')).toHaveLength(1)
-    for(const fixed of [first,second])expect(getBlob).toHaveBeenCalledWith('/astrophotoflow/api/v1/library/assets/'+asset.id+'/versions/'+fixed.version.id+'/previews/thumbnail',expect.any(AbortSignal))
+    for(const fixed of [first,second])expect(getBlob).toHaveBeenCalledWith('/astrophotoflow/api/v1/datasets/'+group.id+'/versions/'+group.current_version_id+'/members/'+fixed.version.id+'/thumbnail',expect.any(AbortSignal))
     expect(getBlob.mock.calls.some(([path])=>String(path).includes('/versions/'+asset.current_version_id+'/'))).toBe(false)
     await rows[1].get('.apf-thumb').trigger('click');await flushPromises()
     const photo=wrapper.findComponent({name:'PhotoPreviewDialog'}).props('photo')
@@ -423,7 +453,7 @@ describe('dataset group member table',()=>{
     await mountLibrary();await enterGroup('Editing group')
 
     expect(wrapper.get('.apf-assets-table tbody tr button.apf-thumb').element.tagName).toBe('BUTTON')
-    expect(getBlob).toHaveBeenCalledWith('/astrophotoflow/api/v1/library/assets/'+asset.id+'/versions/'+fixed.version.id+'/previews/thumbnail', expect.any(AbortSignal))
+    expect(getBlob).toHaveBeenCalledWith('/astrophotoflow/api/v1/datasets/'+group.id+'/versions/'+group.current_version_id+'/members/'+fixed.version.id+'/thumbnail', expect.any(AbortSignal))
     expect(get.mock.calls.some(([path])=>String(path).includes('/datasets/'+group.id+'/versions/'))).toBe(true)
     const row=wrapper.findAll('.apf-assets-table tbody tr').find(item=>item.text().includes('Editable.fit'))!
     const nameButton=row.find('.apf-inline-value')

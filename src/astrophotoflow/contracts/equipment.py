@@ -55,8 +55,22 @@ class TelescopeSpecs(StrictModel):
         return value
 
 
+FILTER_CHANNEL_PROMPT = (
+    "Channel is a free-text imaging-channel/passband label, not a product name, camera CFA pattern, "
+    "or mandatory display-color assignment. Prefer the user's explicit label and spelling. The Agent may "
+    "fill a clear passband from supplied facts, FITS FILTER, or reliable product specifications; omit unknowns. "
+    "Examples: luminance -> L; red/green/blue -> R/G/B; Ha -> H; OIII -> O; SII -> S; "
+    "one confirmed RGB filter -> RGB; an explicitly described IR875nm filter -> Ir875nm. "
+    "Three separate SII/Ha/OIII filters are three entries with S/H/O; one confirmed multi-band SHO filter "
+    "remains one entry with SHO. A color camera does not imply an RGB filter. Do not derive bandwidth or "
+    "central wavelength from channel: 875nm may be a long-pass cutoff. Different filters with the same "
+    "channel remain separate devices. Omitted PATCH keeps the value; null clears it. "
+    "中文：Channel是成像通道／通带自由文本标签，明确用途可由Agent填写，未知不猜，用户自定义值优先。"
+)
+
+
 class FilterSpecs(StrictModel):
-    channel: str | None = None
+    channel: str | None = Field(default=None, description=FILTER_CHANNEL_PROMPT)
     filter_type: str | None = None
     central_wavelength_nm: float | None = Field(default=None, gt=0)
     bandwidth_nm: float | None = Field(default=None, gt=0)
@@ -96,7 +110,11 @@ class TelescopeCreate(EquipmentCreateBase):
     specs: TelescopeSpecs = Field(default_factory=TelescopeSpecs)
 
 
-EquipmentCreate = Annotated[CameraCreate | FilterCreate | TelescopeCreate, Field(discriminator="kind")]
+class MountCreate(EquipmentCreateBase):
+    kind: Literal["mount"]
+
+
+EquipmentCreate = Annotated[CameraCreate | FilterCreate | TelescopeCreate | MountCreate, Field(discriminator="kind")]
 
 
 class EquipmentPatchBase(StrictModel):
@@ -127,7 +145,11 @@ class TelescopePatch(EquipmentPatchBase):
     specs: TelescopeSpecs | None = None
 
 
-EquipmentPatch = Annotated[CameraPatch | FilterPatch | TelescopePatch, Field(discriminator="kind")]
+class MountPatch(EquipmentPatchBase):
+    kind: Literal["mount"]
+
+
+EquipmentPatch = Annotated[CameraPatch | FilterPatch | TelescopePatch | MountPatch, Field(discriminator="kind")]
 
 
 class EquipmentOutBase(StrictModel):
@@ -156,7 +178,11 @@ class TelescopeOut(EquipmentOutBase):
     specs: TelescopeSpecs
 
 
-EquipmentOut = Annotated[CameraOut | FilterOut | TelescopeOut, Field(discriminator="kind")]
+class MountOut(EquipmentOutBase):
+    kind: Literal["mount"]
+
+
+EquipmentOut = Annotated[CameraOut | FilterOut | TelescopeOut | MountOut, Field(discriminator="kind")]
 
 
 class EquipmentQuery(StrictModel):
@@ -213,10 +239,15 @@ class TelescopeSnapshot(EquipmentSnapshotBase):
     effective_focal_length_mm: float | None = Field(default=None, gt=0)
 
 
-EquipmentSnapshot = Annotated[CameraSnapshot | FilterSnapshot | TelescopeSnapshot, Field(discriminator="kind")]
+class MountSnapshot(EquipmentSnapshotBase):
+    kind: Literal["mount"]
+
+
+EquipmentSnapshot = Annotated[CameraSnapshot | FilterSnapshot | TelescopeSnapshot | MountSnapshot, Field(discriminator="kind")]
 
 
 class EquipmentSnapshots(SnapshotModel):
     camera_id: CameraSnapshot | None = None
     optical_system_id: TelescopeSnapshot | None = None
     filter_id: FilterSnapshot | None = None
+    mount_id: MountSnapshot | None = None

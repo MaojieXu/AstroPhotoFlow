@@ -1,7 +1,7 @@
 import { ref } from 'vue'
 import { expect, it } from 'vitest'
 import { useSetupEditor } from '@ui/modules/data/equipment/useSetupEditor'
-import { usePresetEditor } from '@ui/modules/data/equipment/usePresetEditor'
+import { equipmentInput } from '@ui/modules/data/equipment/drafts'
 import {
   equipmentSetupSchema,
   equipmentSchema
@@ -67,41 +67,6 @@ it('edits a cloned setup draft while retaining member identity, order and source
   expect(editor.dirty.value).toBe(false)
 })
 
-it('keeps filter inheritance, explicit removal and zero separate without hardware overrides', () => {
-  const editor = usePresetEditor(ref(rig), ref([camera]))
-  editor.beginPreset(null)
-  editor.setFilter('none')
-  editor.setParameter('parameter_mode', 'gain')
-  editor.setParameter('gain', '0')
-  editor.setParameter('offset', '0')
-  expect(editor.presetDraft.value.equipment_selection).toEqual({ filter: null })
-  expect(editor.presetDraft.value.parameters).toEqual({ parameter_mode: 'gain', gain: 0, offset: 0 })
-  expect(editor.visibleNumericParameters.value.map(field => field.key)).toContain('offset')
-  editor.setParameter('parameter_mode', 'standard')
-  expect(editor.visibleNumericParameters.value.map(field => field.key)).not.toContain('offset')
-  expect(editor.presetDraft.value.parameters.offset).toBe(0)
-  editor.setFilter('')
-  expect(editor.presetDraft.value.equipment_selection).not.toHaveProperty('filter')
-  expect(editor.presetDraft.value).not.toHaveProperty('optical_accessory_selection')
-  expect(editor.presetDraft.value).not.toHaveProperty('name')
-  expect(rig.components).toHaveLength(2)
-})
-
-it('keeps same-channel filter choices separate by member identity and physical name', () => {
-  const setup = equipmentSetupSchema.parse({ ...rig, components: [
-    { id: id(20), source: 'inline', equipment: { kind: 'filter', name: 'Physical A', specs: { channel: 'Ha', bandwidth_nm: 7 } } },
-    { id: id(21), source: 'inline', equipment: { kind: 'filter', name: 'Physical B', specs: { channel: 'Ha', bandwidth_nm: 7 } } }
-  ] })
-  const editor = usePresetEditor(ref(setup), ref([]))
-  editor.beginPreset(null)
-  expect(editor.filterOptions.value.slice(2)).toEqual([
-    { value: id(20), name: 'Ha 7nm · Physical A' },
-    { value: id(21), name: 'Ha 7nm · Physical B' }
-  ])
-  editor.setFilter(id(21))
-  expect(editor.presetDraft.value.equipment_selection.filter).toBe(id(21))
-})
-
 it('counts registered and inline hardware together and only repairs duplicates after an explicit selection', () => {
   const editor = useSetupEditor(ref([camera]))
   editor.beginSetup(rig)
@@ -134,4 +99,21 @@ it('replaces a telescope explicitly without carrying its old accessory selection
   expect(editor.count('telescope')).toBe(1)
   expect(selected?.optical_accessory_id).toBeNull()
   expect(selected?.source === 'registered' && selected.equipment_id).toBe(replacement.id)
+})
+
+it('keeps a single mount across registered and inline sources and preserves other members', () => {
+  const mount = equipmentSchema.parse({ id: id(30), kind: 'mount', name: 'AP1100 GTO', model: null, notes: null,
+    status: 'active', revision: 1, created_at: '2026-10-28T12:00:00Z', updated_at: '2026-10-28T12:00:00Z' })
+  const editor = useSetupEditor(ref([camera, mount]))
+  editor.beginSetup(rig)
+  editor.setupDraft.value.components.push({ id: id(31), source: 'registered', equipment_id: mount.id })
+  expect(editor.applyInline(1, { kind: 'mount', name: 'Second mount', specs: {} })).toBe(false)
+  editor.setupDraft.value.components.push({ source: 'inline', equipment: { kind: 'mount', name: 'Inline mount', specs: {} } })
+  expect(editor.invalidCounts.value).toBe(true)
+  editor.setSingle('mount', mount.id)
+  expect(editor.invalidCounts.value).toBe(false)
+  expect(editor.setupDraft.value.components.map(item => item.id)).toEqual([id(3), id(4), id(31)])
+  editor.setSingle('mount', '')
+  expect(editor.setupDraft.value.components.map(item => item.id)).toEqual([id(3), id(4)])
+  expect(equipmentInput({ kind: 'mount', name: 'Inline mount', specs: {} })).toEqual({ kind: 'mount', name: 'Inline mount' })
 })

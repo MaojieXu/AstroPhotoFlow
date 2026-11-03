@@ -5,7 +5,7 @@ import { assetApi } from '../api'
 import { fixedMemberAt } from './members'
 import { useDatasetMembersQuery } from './queries'
 import { useThumbnailUrls } from '../media/useThumbnailUrls'
-import type { DatasetMemberPage } from '../../../generated/api/types.gen'
+import type { DatasetMemberSummary } from '../../../generated/api/types.gen'
 import PhotoPreviewDialog from '../media/PhotoPreviewDialog.vue'
 import type { PreviewPhoto } from '../media/previewTypes'
 import { libraryControlsKey } from '../workspace/libraryControls'
@@ -17,19 +17,19 @@ const photo=ref<PreviewPhoto>()
 const controls=inject(libraryControlsKey,undefined)
 const mediaRequest=ref<MediaViewerRequest>()
 const refreshError=ref('')
-type Member=DatasetMemberPage['items'][number]
+type Member=DatasetMemberSummary
 const query=useDatasetMembersQuery(()=>open.value&&props.versionId?{
   workspaceId:props.workspaceId,datasetId:props.datasetId,versionId:props.versionId,
   query:{limit:10,offset:page.value*10,sort_by:'position',order:'asc'},all:false
 }:undefined,false)
 const visible=computed(()=>query.data.value?.items??[])
 const total=computed(()=>query.data.value?.total??props.count)
-const loading=query.isFetching
+const loading=query.isPending
 const error=computed(()=>refreshError.value||(query.error.value instanceof Error?query.error.value.message:''))
 function base(member: Member) {
-  return member.version.view_base
+  return member.view_base ?? ''
 }
-const {urls,load:loadThumbnails,refresh:refreshMemberThumbnail,clear}=useThumbnailUrls<Member>(member=>member.id,(member,signal)=>assetApi.getBlob(base(member)+'/thumbnail',signal))
+const {urls,load:loadThumbnails,refresh:refreshMemberThumbnail,clear}=useThumbnailUrls<Member>(member=>member.id,(member,signal)=>assetApi.getBlob(`/astrophotoflow/api/v1/datasets/${member.dataset_id}/versions/${member.dataset_version_id}/members/${member.version_id}/thumbnail`,signal))
 watch(()=>[props.workspaceId,props.datasetId,props.versionId] as const,()=>{
   page.value=0;photo.value=undefined;mediaRequest.value=undefined
 },{flush:'sync'})
@@ -41,15 +41,16 @@ watch([query.dataUpdatedAt,visible],()=>{
 })
 function openMember(member: Member) {
   if(!props.versionId)return
-  if(!controls?.mediaViewer){photo.value={assetId:member.asset.id,versionId:member.version.id,title:member.asset.name,basePath:member.version.view_base};return}
+  if(!member.version_id)return
+  if(!controls?.mediaViewer){photo.value={assetId:member.id,versionId:member.version_id,title:member.name,basePath:base(member)};return}
   const reference={id:props.datasetId,versionId:props.versionId}
   mediaRequest.value={index:page.value*10+visible.value.findIndex(item=>item.id===member.id),total:total.value,
-    member:async(index,signal)=>{const selected=await fixedMemberAt(reference,index,signal);return {title:selected.asset.name,basePath:base(selected)}}}
+    member:async(index,signal)=>{const selected=await fixedMemberAt(reference,index,signal);return {title:selected.asset.name,basePath:selected.version.view_base,selection:{dataset_version_id:reference.versionId}}}}
 }
 async function refreshThumbnail(updated: PreviewPhoto) {
   refreshError.value=''
   try {
-    const aliases=visible.value.filter(member=>member.asset.id===updated.assetId&&member.version.id===updated.versionId)
+    const aliases=visible.value.filter(member=>member.id===updated.assetId&&member.version_id===updated.versionId)
     if(aliases[0])await refreshMemberThumbnail(aliases[0],aliases)
   }catch(cause){refreshError.value=cause instanceof Error?cause.message:uiT('apfUi.could_not_refresh_the_thumbnail')}
 }
@@ -61,7 +62,7 @@ async function refreshThumbnail(updated: PreviewPhoto) {
     <section v-if="open" :aria-label="$t('apfUi.fixed_version_photos')">
       <p v-if="error" role="alert">{{ error }}</p>
       <p v-if="loading" role="status">{{ $t('apfUi.reading_service_data') }}</p>
-      <ul><li v-for="member in visible" :key="member.id"><button type="button" :aria-label="$t('apfUi.view') + member.asset.name + $t('apfUi.full_size')" @click="openMember(member)"><img v-if="urls[member.id]" :src="urls[member.id]" alt="" /><span>{{ member.asset.name }}</span></button></li></ul>
+      <ul><li v-for="member in visible" :key="member.id"><button type="button" :aria-label="$t('apfUi.view') + member.name + $t('apfUi.full_size')" @click="openMember(member)"><img v-if="urls[member.id]" :src="urls[member.id]" alt="" /><span>{{ member.name }}</span></button></li></ul>
       <nav v-if="total>10" :aria-label="$t('apfUi.fixed_version_photo_pagination')"><button type="button" :disabled="page===0||loading" @click="page--">{{ $t('apfUi.previous_page') }}</button><span>{{ page+1 }} / {{ Math.ceil(total/10) }}</span><button type="button" :disabled="(page+1)*10>=total||loading" @click="page++">{{ $t('apfUi.next_page') }}</button></nav>
     </section>
     <PhotoPreviewDialog v-if="photo" :workspace-id="workspaceId" :photo="photo" @close="photo=undefined" @updated="refreshThumbnail" />

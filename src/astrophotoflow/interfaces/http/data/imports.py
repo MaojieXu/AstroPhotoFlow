@@ -1,14 +1,19 @@
 from __future__ import annotations
 
 import asyncio
+import time
 from threading import Event
 from typing import Annotated, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Query, Request
+from pydantic import Field
 
 import astrophotoflow.interfaces.http.dependencies as deps
 import astrophotoflow.modules.data.public as data
+from astrophotoflow.contracts.common import StrictModel, UuidInput
+from astrophotoflow.contracts.image_imports import ExplicitImportRequest, ImageImportReceipt, ImagePublicationRetry
+from astrophotoflow.contracts.import_batches import BatchOut
 from astrophotoflow.contracts.imports import (
     AssetTaskOut,
     AssetTaskPage,
@@ -23,15 +28,65 @@ from astrophotoflow.contracts.imports import (
     UploadImportCreate,
     UploadReceipt,
 )
+from astrophotoflow.core.errors import ApiError
 from astrophotoflow.interfaces.http.dependencies import ERROR_RESPONSES
+
+
+class PublicationRetryBody(StrictModel):
+    request_id: UuidInput
+    expected_revision: int = Field(ge=1)
+    base_version_id: UuidInput
+
+
+class ImageWaitBody(StrictModel):
+    wait_seconds: float = Field(default=20, ge=0, le=20, allow_inf_nan=False)
 
 router = APIRouter(prefix="/api/v1", responses=ERROR_RESPONSES)
 
-@router.post('/imports', status_code=202, dependencies=[Depends(deps.authenticate)], response_model=ImportAccepted, operation_id='create_import_api_v1_imports_post')
-def create_import(body: ImportCreate, request: Request, background: BackgroundTasks, admission: deps.TaskAdmission, session: deps.WriteSession) -> ImportAccepted:
+@router.post('/imports', status_code=202, dependencies=[Depends(deps.authenticate)], response_model=ImageImportReceipt | ImportAccepted, operation_id='create_import_api_v1_imports_post')
+def create_import(body: ImportCreate | ExplicitImportRequest, request: Request, background: BackgroundTasks, admission: deps.TaskAdmission, session: deps.WriteSession):
+    if isinstance(body, ExplicitImportRequest):
+        accepted = data.submit_image_import(session, request.app.state.settings, body)
+        if accepted.scheduled:
+            background.add_task(data.run_import_task, request.app.state.database, request.app.state.settings,
+                                str(accepted.receipt['task_id']), request.app.state.import_workers)
+        return ImageImportReceipt.model_validate(accepted.receipt, strict=False)
     result = data.create_import(session=session, settings=request.app.state.settings, body=body)
     background.add_task(data.run_import_task, request.app.state.database, request.app.state.settings, str(result.task_id), request.app.state.import_workers)
     return result
+
+
+@router.post('/imports/{task_id}/dataset-publication', dependencies=[Depends(deps.authenticate)], response_model=ImageImportReceipt, operation_id='retryImageImportPublication')
+def retry_publication(task_id: UUID, body: PublicationRetryBody, session: deps.WriteSession):
+    command = ImagePublicationRetry.model_validate({**body.model_dump(), 'task_id': task_id})
+    return ImageImportReceipt.model_validate(data.retry_image_publication(session, task_id, command), strict=False)
+
+
+def _request_status(session, request_id):
+    try:
+        return data.get_image_import(session, request_id)
+    except ApiError as exc:
+        if exc.status_code != 404:
+            raise
+        return data.get_import_batch(session, request_id)
+
+
+@router.get('/imports/requests/{request_id}', dependencies=[Depends(deps.authenticate)], response_model=ImageImportReceipt | BatchOut, operation_id='getImageImportRequest')
+def get_request(request_id: UUID, session: deps.ReadSession):
+    result = _request_status(session, request_id)
+    return ImageImportReceipt.model_validate(result, strict=False) if isinstance(result, dict) else result
+
+
+@router.post('/imports/requests/{request_id}/wait', dependencies=[Depends(deps.authenticate)], response_model=ImageImportReceipt | BatchOut, operation_id='waitImageImportRequest')
+def wait_request(request_id: UUID, body: ImageWaitBody, request: Request):
+    deadline = time.monotonic() + body.wait_seconds
+    while True:
+        with request.app.state.database.read_session() as session:
+            result = _request_status(session, request_id)
+            value = result.model_dump(mode='json') if hasattr(result, 'model_dump') else result
+        if value.get('state') != 'running' or time.monotonic() >= deadline:
+            return ImageImportReceipt.model_validate(value, strict=False) if 'stages' in value else BatchOut.model_validate(value, strict=False)
+        time.sleep(min(0.5, max(0, deadline - time.monotonic())))
 
 @router.post('/uploads', status_code=202, dependencies=[Depends(deps.authenticate)], response_model=ImportAccepted, operation_id='create_upload_api_v1_uploads_post')
 def create_upload(body: UploadImportCreate, request: Request, admission: deps.TaskAdmission, session: deps.WriteSession) -> ImportAccepted:
@@ -62,10 +117,10 @@ def list_asset_tasks(session: deps.ReadSession, limit: deps.Limit=50, offset: de
     result = data.list_asset_tasks(session=session, limit=limit, offset=offset, status=status)
     return result
 
-@router.get('/asset-tasks/{task_id}', dependencies=[Depends(deps.authenticate)], response_model=AssetTaskOut, operation_id='get_asset_task_api_v1_asset_tasks__task_id__get')
-def get_asset_task(task_id: UUID, session: deps.ReadSession, items_limit: Annotated[int, Query(ge=1, le=200)]=50, items_offset: Annotated[int, Query(ge=0)]=0) -> AssetTaskOut:
-    result = data.get_asset_task(session=session, task_id=task_id, items_limit=items_limit, items_offset=items_offset)
-    return result
+@router.get('/asset-tasks/{task_id}', dependencies=[Depends(deps.authenticate)], response_model=AssetTaskOut | ImageImportReceipt, operation_id='get_asset_task_api_v1_asset_tasks__task_id__get')
+def get_asset_task(task_id: UUID, session: deps.ReadSession, items_limit: Annotated[int, Query(ge=1, le=200)]=50, items_offset: Annotated[int, Query(ge=0)]=0, image_query: bool = False):
+    result = data.get_image_import_task(session, task_id, items_limit=items_limit, items_offset=items_offset) if image_query else data.get_asset_task(session=session, task_id=task_id, items_limit=items_limit, items_offset=items_offset)
+    return ImageImportReceipt.model_validate(result, strict=False) if isinstance(result, dict) else result
 
 @router.post('/asset-tasks/{task_id}/cancel', status_code=202, dependencies=[Depends(deps.authenticate)], response_model=ImportTaskStateOut, operation_id='cancel_asset_task_api_v1_asset_tasks__task_id__cancel_post')
 def cancel_asset_task(task_id: UUID, request: Request, session: deps.WriteSession) -> ImportTaskStateOut:

@@ -13,8 +13,9 @@ import type {
   ListAssetTasksApiV1AssetTasksGetData,
   GetAssetTaskApiV1AssetTasksTaskIdGetData,
   RetryAssetTaskApiV1AssetTasksTaskIdRetryPostData,
-  CreateImportApiV1ImportsPostData
+  ImportCreate
 } from '../../../generated/api/types.gen'
+import { zAssetTaskOut, zImportAccepted } from '../../../generated/api/zod.gen'
 
 export function createImportClient(fetchApi: FetchApi) {
   const options = {
@@ -49,14 +50,14 @@ export function createImportClient(fetchApi: FetchApi) {
       query: NonNullable<GetAssetTaskApiV1AssetTasksTaskIdGetData['query']>,
       signal?: AbortSignal
     ) =>
-      (
+      zAssetTaskOut.parse((
         await getAssetTaskApiV1AssetTasksTaskIdGet<true>({
           ...options,
           path: { task_id: id },
-          query,
+          query: { ...query, image_query: false },
           signal
         })
-      ).data,
+      ).data),
     resume: async (id: string, signal?: AbortSignal) =>
       (
         await resumeAssetTaskApiV1AssetTasksTaskIdResumePost<true>({
@@ -79,10 +80,10 @@ export function createImportClient(fetchApi: FetchApi) {
         })
       ).data,
     submit: async (
-      body: CreateImportApiV1ImportsPostData['body'],
+      body: ImportCreate,
       signal?: AbortSignal
     ) =>
-      (await createImportApiV1ImportsPost<true>({ ...options, body, signal }))
-        .data
+      zImportAccepted.parse((await createImportApiV1ImportsPost<true>({ ...options, body, signal }))
+        .data)
   }
 }

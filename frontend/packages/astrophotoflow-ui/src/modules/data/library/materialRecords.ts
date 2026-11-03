@@ -1,9 +1,9 @@
 import { z } from 'zod'
-import type { AssetOut, AssetVersionOut, CanvasDataRequest, DatasetMemberOut, DatasetOut, LibraryItemPage, ProjectAssetReferenceOut, ProjectDatasetReferenceOut } from '../../../generated/api/types.gen'
-import { zAssetOut, zDatasetMemberOut, zDatasetOut, zLibraryItemPage, zProjectAssetReferenceOut, zProjectDatasetReferenceOut } from '../../../generated/api/zod.gen'
+import type { AssetOut, AssetVersionOut, CanvasDataRequest, DatasetMemberOut, DatasetMemberSummary, DatasetOut, LibraryItemPage, ProjectAssetReferenceOut, ProjectDatasetReferenceOut } from '../../../generated/api/types.gen'
+import { zAssetOut, zDatasetMemberOut, zDatasetMemberSummary, zDatasetOut, zLibraryItemPage, zProjectAssetReferenceOut, zProjectDatasetReferenceOut } from '../../../generated/api/zod.gen'
 
 type MemberView = Pick<DatasetMemberOut, 'asset' | 'version'> & { member_position: DatasetMemberOut['position'] }
-export type MaterialRecord = LibraryItemPage['items'][number] | AssetOut | DatasetOut | ProjectAssetReferenceOut | ProjectDatasetReferenceOut | MemberView
+export type MaterialRecord = LibraryItemPage['items'][number] | AssetOut | DatasetOut | ProjectAssetReferenceOut | ProjectDatasetReferenceOut | MemberView | DatasetMemberSummary
 export type FixedPreviewMember = { asset: Pick<AssetOut, 'id' | 'name'>; version: Pick<AssetVersionOut, 'id' | 'view_base'> }
 type DatasetRecord = Extract<LibraryItemPage['items'][number], { entry_type: 'dataset' }> | DatasetOut | ProjectDatasetReferenceOut
 
@@ -20,6 +20,7 @@ export function resolveMaterialRecord(value: unknown): MaterialRecord | undefine
     if ('dataset_version_id' in value) return zProjectDatasetReferenceOut.parse(value)
     return
   }
+  if ('member_position' in value && 'version_id' in value) return zDatasetMemberSummary.parse(value)
   if ('member_position' in value) return memberViewSchema.parse({asset:'asset' in value?value.asset:undefined,version:'version' in value?value.version:undefined,member_position:value.member_position})
   if ('version_id' in value && 'entry_type' in value) return zLibraryItemPage.shape.items.element.parse(value)
   if ('member_count' in value) return 'entry_type' in value?datasetChoiceToRecord.parse(value):zDatasetOut.parse(value)
@@ -71,6 +72,7 @@ export function materialPreviewBase(record: MaterialRecord, member: FixedPreview
 }
 
 export function materialThumbnailKey(record: MaterialRecord): string {
+  if ('member_position' in record && 'version_id' in record) return `member:${record.dataset_version_id}:${record.id}:${record.version_id}`
   if ('member_position' in record) return `member:${record.asset.id}:${record.version.id}:${record.member_position}`
   if ('project_id' in record) return `project:${record.project_id}:${record.id}:${'asset_version_id' in record?record.asset_version_id:record.dataset_version_id}`
   if (isDataset(record)) return `dataset:${record.id}:${fixedDatasetReference(record)?.versionId ?? 'none'}`

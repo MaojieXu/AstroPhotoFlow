@@ -10,7 +10,7 @@ export function useUpdateAsset() {
   return useMutation({
     mutationFn: ({ assetId, body }: { workspaceId: string; assetId: string; body: Parameters<typeof mutationApi.patchAsset>[1] }) => mutationApi.patchAsset(assetId, body),
     retry: false,
-    onSettled: (_data, _error, { workspaceId }) => invalidateLibraryData(cache, workspaceId)
+    onSettled: (_data, _error, { workspaceId, assetId }) => invalidateLibraryData(cache, workspaceId, {assetIds:[assetId]})
   })
 }
 
@@ -52,6 +52,6 @@ export function useAcceptAssetContent() {
       }
     },
     retry: false,
-    onSettled: (_data, _error, { workspaceId }) => invalidateLibraryData(cache, workspaceId)
+    onSettled: (_data, _error, { workspaceId, assetId }) => invalidateLibraryData(cache, workspaceId, {assetIds:[assetId]})
   })
 }

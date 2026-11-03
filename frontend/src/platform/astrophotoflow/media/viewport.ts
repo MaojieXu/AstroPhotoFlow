@@ -56,7 +56,8 @@ export function createImageViewport(
     failed: () => void
   }
 ) {
-  const source = new OpenSeadragon.TileSource({
+  function tileSource(image: MediaState) {
+    const source = new OpenSeadragon.TileSource({
     width: image.width,
     height: image.height,
     tileSize: image.tile_size,
@@ -64,10 +65,12 @@ export function createImageViewport(
     minLevel: 0,
     maxLevel: image.max_level
   })
-  source.getTileUrl = (level, x, y) => tileAddress(image.tile_url!, level, x, y)
+    source.getTileUrl = (level, x, y) => tileAddress(image.tile_url!, level, x, y)
+    return source
+  }
   const viewer = OpenSeadragon({
     element,
-    tileSources: [source],
+    tileSources: [tileSource(image)],
     showNavigationControl: false,
     showNavigator: true,
     navigatorPosition: 'BOTTOM_RIGHT',
@@ -163,8 +166,21 @@ export function createImageViewport(
         viewer.viewport.pointFromPixel(event.position)
       )
   })
-  viewer.addHandler('tile-load-failed', options.failed)
+  viewer.addHandler('tile-load-failed', () => options.failed())
   return {
+    replace: (next: MediaState, nextOptions: typeof options) => {
+      image = next
+      options = nextOptions
+      viewer.addTiledImage({ tileSource: tileSource(next), index: 0, replace: true,
+        success: () => {
+          const item = viewer.world.getItemAt(0)
+          if (item && options.previous?.width === image.width && options.previous.height === image.height) {
+            viewer.viewport.zoomTo(item.imageToViewportZoom(options.previous.zoom), undefined, true)
+            viewer.viewport.panTo(new OpenSeadragon.Point(...options.previous.center), true)
+          } else viewer.viewport.goHome(true)
+          updateBounds()
+        }, error: () => options.failed() })
+    },
     actual,
     fit: () => {
       viewer.viewport.goHome()

@@ -69,7 +69,7 @@ function latestListQuery() {
 }
 
 describe('equipment setup table', () => {
-  it('shows four columns, resolves both component sources, and keeps optional columns empty', async () => {
+  it('shows five columns, resolves both component sources, and keeps optional columns empty', async () => {
     devices = ['camera', 'telescope', 'filter'].map((kind, index) => equipmentSchema.parse({
       id: id(index + 1), kind, name: ['Camera with a long full name', 'Telescope', 'Filter'][index],
       model: null, notes: null, specs: kind === 'filter' ? { channel: 'Ha', bandwidth_nm: 7 } : {}, status: 'active',
@@ -82,20 +82,20 @@ describe('equipment setup table', () => {
     ]), setup(101)]
     const { mounted } = await open()
     const table = mounted.get('table[aria-label="设备组合列表"]')
-    expect(table.findAll('th').map(item => item.text())).toEqual(['名称', '相机', '望远镜', '滤镜'])
+    expect(table.findAll('th').map(item => item.text())).toEqual(['名称', '相机', '望远镜', '赤道仪', '滤镜'])
     expect(table.find('input[type="checkbox"]').exists()).toBe(false)
     const first = table.findAll('tbody tr')[0]
     expect(first.text()).toContain('Camera with a long full name')
     expect(first.findAll('.apf-setup-filter-tag').map(tag=>tag.text())).toEqual(['Ha 7nm','Ha 7nm','未指定通道 · Long filter name without truncation'])
     expect(first.text()).not.toContain('等 3 件')
     expect(first.text()).toContain('Telescope')
-    expect(table.text()).not.toContain('赤道仪')
+    expect(first.findAll('td')[3].text()).toBe('—')
     expect(table.findAll('th').some(item => item.text()==='光学附件')).toBe(false)
     expect(first.text()).toContain('Long filter name without truncation')
     expect(mounted.find('button[aria-label="设备组合说明"]').exists()).toBe(false)
     expect(table.find('i.pi-info-circle').exists()).toBe(false)
     expect(mounted.find('section[aria-label="组合拍摄预设"]').exists()).toBe(false)
-    expect(table.findAll('tbody tr')[1].findAll('td').slice(1).map(item => item.text())).toEqual(['—', '—', '—'])
+    expect(table.findAll('tbody tr')[1].findAll('td').slice(1).map(item => item.text())).toEqual(['—', '—', '—', '—'])
     await first.trigger('click')
     await flushPromises()
     const actions=mounted.get('[role="group"][aria-label="组合操作"]')
@@ -116,7 +116,7 @@ describe('equipment setup table', () => {
 
   it.each([
     ['name', '名称'], ['camera', '相机'], ['telescope', '望远镜'],
-    ['filter', '滤镜']
+    ['mount', '赤道仪'], ['filter', '滤镜']
   ] as const)('requests global %s sorting, resets paging, and clears selection', async (key, label) => {
     setups = Array.from({ length: 51 }, (_, index) => setup(index + 100))
     const { mounted, store } = await open()

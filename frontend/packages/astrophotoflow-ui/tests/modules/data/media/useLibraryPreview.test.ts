@@ -55,3 +55,14 @@ it('aborts lazy native member reads after their owning viewer closes',async()=>{
   await expect(reading).rejects.toMatchObject({name:'AbortError'})
   await expect(view.member(0,new AbortController().signal)).rejects.toMatchObject({name:'AbortError'})
 })
+
+it('opens a fixed image without requiring an existing thumbnail',async()=>{
+  const preview=scope.run(()=>useLibraryPreview({nativeViewer:()=>true,waitForEdits:async()=>true,onError:vi.fn()}))!
+  const withoutThumbnail={...second.asset,current_version:{...second.version,thumbnail_ref:null}}
+  await preview.open(libraryAsset(withoutThumbnail))
+  const viewer=preview.media.value!
+  expect(viewer.total).toBe(1)
+  const member=await viewer.member(0,new AbortController().signal)
+  expect(member.basePath).toContain(`/versions/${second.version.id}/previews`)
+  expect(members).not.toHaveBeenCalled()
+})

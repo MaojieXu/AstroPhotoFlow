@@ -8,7 +8,7 @@ import {
   zAssetParametersPatch,
   zAssetClassification,
   zPatchProjectApiV1ProjectsProjectIdPatchBody,
-  zPatchDatasetApiV1DatasetsDatasetIdPatchBody
+  zDatasetPatch
 } from '../../../generated/api/zod.gen'
 import { validatedInput } from '../../../core/api/input'
 import { uiT } from '../../../core/i18n'
@@ -168,7 +168,7 @@ export function useRecordFieldEditing(options: FieldEditingOptions) {
       const updated = await datasetWrite.mutateAsync({
         workspaceId: workspaceId.value,
         datasetId: dataset.id,
-        body: validatedInput(zPatchDatasetApiV1DatasetsDatasetIdPatchBody, {
+        body: validatedInput(zDatasetPatch, {
           base_revision: dataset.revision,
           [field]: value
         })

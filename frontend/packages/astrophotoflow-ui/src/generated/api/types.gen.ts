@@ -53,6 +53,50 @@ export type AnalysisResult = {
 };
 
 /**
+ * AppendDatasetDestination
+ */
+export type AppendDatasetDestination = {
+    /**
+     * Mode
+     */
+    mode: 'append_dataset';
+    /**
+     * Dataset Id
+     */
+    dataset_id: string;
+    /**
+     * Expected Revision
+     */
+    expected_revision: number;
+    /**
+     * Base Version Id
+     */
+    base_version_id: string;
+};
+
+/**
+ * AssetCalibrationConsumer
+ */
+export type AssetCalibrationConsumer = {
+    /**
+     * Kind
+     */
+    kind: 'asset_version';
+    /**
+     * Asset Id
+     */
+    asset_id: string;
+    /**
+     * Asset Version Id
+     */
+    asset_version_id: string;
+    /**
+     * Binding Version Id
+     */
+    binding_version_id?: string | null;
+};
+
+/**
  * AssetClassification
  */
 export type AssetClassification = {
@@ -141,7 +185,26 @@ export type AssetInputReference = {
      * Asset Version Id
      */
     asset_version_id: string;
+    /**
+     * Binding Version Id
+     */
+    binding_version_id?: string | null;
     selection: ScienceSelection;
+};
+
+/**
+ * AssetMetadataChange
+ */
+export type AssetMetadataChange = {
+    /**
+     * Asset Id
+     */
+    asset_id: string;
+    /**
+     * Expected Revision
+     */
+    expected_revision: number;
+    changes: ImageChanges;
 };
 
 /**
@@ -183,7 +246,7 @@ export type AssetOut = {
      * Value Sources
      */
     value_sources: {
-        [key: string]: 'manual' | 'file' | 'preset' | 'unknown';
+        [key: string]: 'manual' | 'file' | 'unknown';
     };
     /**
      * Notes
@@ -230,6 +293,10 @@ export type AssetPage = {
  * AssetParameters
  */
 export type AssetParameters = {
+    /**
+     * Readout Mode
+     */
+    readout_mode?: string | null;
     /**
      * Parameter Mode
      */
@@ -288,6 +355,10 @@ export type AssetParameters = {
  * AssetParametersPatch
  */
 export type AssetParametersPatch = {
+    /**
+     * Readout Mode
+     */
+    readout_mode?: string | null;
     /**
      * Parameter Mode
      */
@@ -364,6 +435,20 @@ export type AssetPatch = {
      * Status
      */
     status?: 'active' | 'archived' | null;
+};
+
+/**
+ * AssetRevisionRef
+ */
+export type AssetRevisionRef = {
+    /**
+     * Asset Id
+     */
+    asset_id: string;
+    /**
+     * Expected Revision
+     */
+    expected_revision: number;
 };
 
 /**
@@ -484,7 +569,60 @@ export type AssetTaskPage = {
     /**
      * Items
      */
-    items: Array<AssetTaskOut>;
+    items: Array<AssetTaskSummary>;
+};
+
+/**
+ * AssetTaskSummary
+ */
+export type AssetTaskSummary = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Status
+     */
+    status: 'queued' | 'running' | 'cancelling' | 'completed' | 'completed_with_errors' | 'failed' | 'cancelled' | 'interrupted';
+    /**
+     * Dataset Name
+     */
+    dataset_name: string | null;
+    /**
+     * Target Dataset Id
+     */
+    target_dataset_id: string | null;
+    /**
+     * Dataset Id
+     */
+    dataset_id: string | null;
+    /**
+     * Enumeration Completed
+     */
+    enumeration_completed: boolean;
+    report: ImportProgressSummary;
+    /**
+     * Error
+     */
+    error: {
+        [key: string]: unknown;
+    } | null;
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Updated At
+     */
+    updated_at: string;
+    /**
+     * Items Total
+     */
+    items_total: number;
+    /**
+     * Items Completed
+     */
+    items_completed: number;
 };
 
 /**
@@ -755,17 +893,461 @@ export type BundlePreviewRequest = {
 };
 
 /**
+ * CalibrationCandidate
+ */
+export type CalibrationCandidate = {
+    target: CalibrationTarget;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Frame Type
+     */
+    frame_type: 'bias' | 'dark' | 'flat' | 'dark_flat';
+    /**
+     * Version Number
+     */
+    version_number: number;
+    /**
+     * Member Count
+     */
+    member_count: number;
+    /**
+     * Target Kind
+     */
+    target_kind: 'master';
+    /**
+     * Check
+     */
+    check?: {
+        [key: string]: JsonValue;
+    } | null;
+};
+
+/**
+ * CalibrationCandidatePage
+ */
+export type CalibrationCandidatePage = {
+    /**
+     * Total
+     */
+    total: number;
+    /**
+     * Limit
+     */
+    limit: number;
+    /**
+     * Offset
+     */
+    offset: number;
+    /**
+     * Items
+     */
+    items: Array<CalibrationCandidate>;
+};
+
+/**
+ * CalibrationCheckItem
+ */
+export type CalibrationCheckItem = {
+    /**
+     * Asset Version Id
+     */
+    asset_version_id: string;
+    /**
+     * Slot
+     */
+    slot: 'bias' | 'dark' | 'flat' | 'dark_flat';
+    target: CalibrationTarget;
+    /**
+     * State
+     */
+    state: 'compatible' | 'unknown' | 'conflict';
+    /**
+     * Master Required
+     */
+    master_required: false;
+    /**
+     * Diagnostics
+     */
+    diagnostics: Array<{
+        [key: string]: JsonValue;
+    }>;
+    /**
+     * Binding Source
+     */
+    binding_source?: 'standalone' | 'dataset_default' | 'member_override' | 'proposal' | 'dependency';
+    /**
+     * Dependency Path
+     */
+    dependency_path?: Array<CalibrationTarget>;
+    /**
+     * Source Asset Revision
+     */
+    source_asset_revision?: number | null;
+    /**
+     * Source Metadata Basis
+     */
+    source_metadata_basis?: 'current_metadata' | 'frozen_capture_snapshot' | null;
+    /**
+     * Source Availability
+     */
+    source_availability?: string | null;
+    /**
+     * Target Asset Revision
+     */
+    target_asset_revision?: number | null;
+    /**
+     * Target Availability
+     */
+    target_availability?: 'available' | 'missing' | 'changed' | 'unknown' | 'mixed';
+    /**
+     * Applicable
+     */
+    applicable?: boolean;
+};
+
+/**
+ * CalibrationCheckPage
+ */
+export type CalibrationCheckPage = {
+    /**
+     * Total
+     */
+    total: number;
+    /**
+     * Limit
+     */
+    limit: number;
+    /**
+     * Offset
+     */
+    offset: number;
+    /**
+     * State
+     */
+    state: 'compatible' | 'unknown' | 'conflict';
+    /**
+     * Checked Bindings
+     */
+    checked_bindings: number;
+    /**
+     * Conflict Count
+     */
+    conflict_count: number;
+    /**
+     * Unknown Count
+     */
+    unknown_count: number;
+    /**
+     * Master Required Count
+     */
+    master_required_count: number;
+    /**
+     * Items
+     */
+    items: Array<CalibrationCheckItem>;
+};
+
+/**
+ * CalibrationCheckProposal
+ */
+export type CalibrationCheckProposal = {
+    changes?: CalibrationPatch;
+    /**
+     * Member Changes
+     */
+    member_changes?: Array<MemberCalibrationChange>;
+};
+
+/**
+ * CalibrationCheckRequest
+ */
+export type CalibrationCheckRequest = {
+    /**
+     * Consumer
+     */
+    consumer: ({
+        kind: 'asset_version';
+    } & AssetCalibrationConsumer) | ({
+        kind: 'dataset_version';
+    } & DatasetCalibrationConsumer);
+    proposal?: CalibrationCheckProposal | null;
+    /**
+     * Limit
+     */
+    limit?: number;
+    /**
+     * Offset
+     */
+    offset?: number;
+};
+
+/**
+ * CalibrationCombination
+ */
+export type CalibrationCombination = {
+    /**
+     * Key
+     */
+    key: string;
+    /**
+     * Member Count
+     */
+    member_count: number;
+    /**
+     * Effective
+     */
+    effective: {
+        bias?: ({
+            mode: 'inherit';
+        } & CalibrationInherit) | ({
+            mode: 'unconfigured';
+        } & CalibrationUnconfigured) | ({
+            mode: 'disabled';
+        } & CalibrationDisabled) | ({
+            mode: 'target';
+        } & CalibrationFixedTarget);
+        dark?: ({
+            mode: 'inherit';
+        } & CalibrationInherit) | ({
+            mode: 'unconfigured';
+        } & CalibrationUnconfigured) | ({
+            mode: 'disabled';
+        } & CalibrationDisabled) | ({
+            mode: 'target';
+        } & CalibrationFixedTarget);
+        flat?: ({
+            mode: 'inherit';
+        } & CalibrationInherit) | ({
+            mode: 'unconfigured';
+        } & CalibrationUnconfigured) | ({
+            mode: 'disabled';
+        } & CalibrationDisabled) | ({
+            mode: 'target';
+        } & CalibrationFixedTarget);
+        dark_flat?: ({
+            mode: 'inherit';
+        } & CalibrationInherit) | ({
+            mode: 'unconfigured';
+        } & CalibrationUnconfigured) | ({
+            mode: 'disabled';
+        } & CalibrationDisabled) | ({
+            mode: 'target';
+        } & CalibrationFixedTarget);
+    };
+    /**
+     * Slots
+     */
+    slots: {
+        bias?: CalibrationSlotDetail;
+        dark?: CalibrationSlotDetail;
+        flat?: CalibrationSlotDetail;
+        dark_flat?: CalibrationSlotDetail;
+    };
+};
+
+/**
+ * CalibrationDisabled
+ */
+export type CalibrationDisabled = {
+    /**
+     * Mode
+     */
+    mode: 'disabled';
+};
+
+/**
+ * CalibrationFixedTarget
+ */
+export type CalibrationFixedTarget = {
+    /**
+     * Mode
+     */
+    mode: 'target';
+    target: CalibrationTarget;
+};
+
+/**
+ * CalibrationInherit
+ */
+export type CalibrationInherit = {
+    /**
+     * Mode
+     */
+    mode: 'inherit';
+};
+
+/**
+ * CalibrationPatch
+ */
+export type CalibrationPatch = {
+    /**
+     * Bias
+     */
+    bias?: ({
+        mode: 'inherit';
+    } & CalibrationInherit) | ({
+        mode: 'unconfigured';
+    } & CalibrationUnconfigured) | ({
+        mode: 'disabled';
+    } & CalibrationDisabled) | ({
+        mode: 'target';
+    } & CalibrationFixedTarget);
+    /**
+     * Dark
+     */
+    dark?: ({
+        mode: 'inherit';
+    } & CalibrationInherit) | ({
+        mode: 'unconfigured';
+    } & CalibrationUnconfigured) | ({
+        mode: 'disabled';
+    } & CalibrationDisabled) | ({
+        mode: 'target';
+    } & CalibrationFixedTarget);
+    /**
+     * Flat
+     */
+    flat?: ({
+        mode: 'inherit';
+    } & CalibrationInherit) | ({
+        mode: 'unconfigured';
+    } & CalibrationUnconfigured) | ({
+        mode: 'disabled';
+    } & CalibrationDisabled) | ({
+        mode: 'target';
+    } & CalibrationFixedTarget);
+    /**
+     * Dark Flat
+     */
+    dark_flat?: ({
+        mode: 'inherit';
+    } & CalibrationInherit) | ({
+        mode: 'unconfigured';
+    } & CalibrationUnconfigured) | ({
+        mode: 'disabled';
+    } & CalibrationDisabled) | ({
+        mode: 'target';
+    } & CalibrationFixedTarget);
+};
+
+/**
+ * CalibrationSearch
+ */
+export type CalibrationSearch = {
+    /**
+     * Text
+     */
+    text?: string | null;
+    /**
+     * Target Kind
+     */
+    target_kind?: 'master' | null;
+    /**
+     * Limit
+     */
+    limit?: number;
+    /**
+     * Offset
+     */
+    offset?: number;
+};
+
+/**
+ * CalibrationSearchRequest
+ */
+export type CalibrationSearchRequest = {
+    /**
+     * Slot
+     */
+    slot: 'bias' | 'dark' | 'flat' | 'dark_flat';
+    /**
+     * Consumer
+     */
+    consumer?: ({
+        kind: 'asset_version';
+    } & AssetCalibrationConsumer) | ({
+        kind: 'dataset_version';
+    } & DatasetCalibrationConsumer) | null;
+    query?: CalibrationSearch | null;
+};
+
+/**
+ * CalibrationSlotDetail
+ */
+export type CalibrationSlotDetail = {
+    /**
+     * Choice
+     */
+    choice: ({
+        mode: 'inherit';
+    } & CalibrationInherit) | ({
+        mode: 'unconfigured';
+    } & CalibrationUnconfigured) | ({
+        mode: 'disabled';
+    } & CalibrationDisabled) | ({
+        mode: 'target';
+    } & CalibrationFixedTarget);
+    /**
+     * Source
+     */
+    source: 'standalone' | 'dataset_default' | 'member_override';
+    /**
+     * Status
+     */
+    status: 'unconfigured' | 'disabled' | 'target' | 'not_applicable';
+    target_detail?: CalibrationTargetDetail | null;
+    /**
+     * Check State
+     */
+    check_state?: 'not_checked';
+};
+
+/**
  * CalibrationTarget
  */
 export type CalibrationTarget = {
     /**
      * Kind
      */
-    kind: 'asset_version' | 'dataset_version';
+    kind: 'asset_version';
     /**
      * Id
      */
     id: string;
+};
+
+/**
+ * CalibrationTargetDetail
+ */
+export type CalibrationTargetDetail = {
+    target: CalibrationTarget;
+    /**
+     * Asset Id
+     */
+    asset_id?: string | null;
+    /**
+     * Dataset Id
+     */
+    dataset_id?: string | null;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Version Number
+     */
+    version_number: number;
+    /**
+     * Target Kind
+     */
+    target_kind: 'master';
+    /**
+     * Master Required
+     */
+    master_required: false;
 };
 
 /**
@@ -811,6 +1393,16 @@ export type CalibrationTargetPage = {
      * Items
      */
     items: Array<CalibrationTargetOption>;
+};
+
+/**
+ * CalibrationUnconfigured
+ */
+export type CalibrationUnconfigured = {
+    /**
+     * Mode
+     */
+    mode: 'unconfigured';
 };
 
 /**
@@ -1423,88 +2015,6 @@ export type CapabilityDisplay = {
 };
 
 /**
- * CapturePresetCreate
- */
-export type CapturePresetCreate = {
-    equipment_selection?: PresetEquipmentSelection;
-    parameters?: PresetParametersPatch;
-};
-
-/**
- * CapturePresetOut
- */
-export type CapturePresetOut = {
-    equipment_selection: PresetEquipmentSelection;
-    parameters: PresetParametersPatch;
-    /**
-     * Name
-     */
-    name: string;
-    /**
-     * Id
-     */
-    id: string;
-    /**
-     * Equipment Setup Id
-     */
-    equipment_setup_id: string;
-    /**
-     * Status
-     */
-    status: 'active' | 'archived';
-    /**
-     * Revision
-     */
-    revision: number;
-    /**
-     * Created At
-     */
-    created_at: string;
-    /**
-     * Updated At
-     */
-    updated_at: string;
-};
-
-/**
- * CapturePresetPage
- */
-export type CapturePresetPage = {
-    /**
-     * Total
-     */
-    total: number;
-    /**
-     * Limit
-     */
-    limit: number;
-    /**
-     * Offset
-     */
-    offset: number;
-    /**
-     * Items
-     */
-    items: Array<CapturePresetOut>;
-};
-
-/**
- * CapturePresetPatch
- */
-export type CapturePresetPatch = {
-    /**
-     * Base Revision
-     */
-    base_revision: number;
-    equipment_selection?: PresetEquipmentSelection | null;
-    parameters?: PresetParametersPatch | null;
-    /**
-     * Status
-     */
-    status?: 'active' | 'archived' | null;
-};
-
-/**
  * ConfigSave
  */
 export type ConfigSave = {
@@ -1582,6 +2092,27 @@ export type ConfigValues = {
 };
 
 /**
+ * ConfirmedFile
+ */
+export type ConfirmedFile = {
+    /**
+     * File Id
+     */
+    file_id: string;
+    /**
+     * Name
+     */
+    name?: string;
+    metadata?: ImageMetadata;
+    equipment?: EquipmentApplication;
+    calibration?: CalibrationPatch;
+    /**
+     * Notes
+     */
+    notes?: string | null;
+};
+
+/**
  * ConfirmedImportGroup
  */
 export type ConfirmedImportGroup = {
@@ -1610,10 +2141,7 @@ export type ConfirmedImportOptions = {
      * Notes
      */
     notes?: string | null;
-    /**
-     * Capture Preset Id
-     */
-    capture_preset_id?: string | null;
+    equipment?: EquipmentApplication | null;
 };
 
 /**
@@ -1714,6 +2242,148 @@ export type DataNodeResult = {
 };
 
 /**
+ * DatasetCalibrationConsumer
+ */
+export type DatasetCalibrationConsumer = {
+    /**
+     * Kind
+     */
+    kind: 'dataset_version';
+    /**
+     * Dataset Id
+     */
+    dataset_id: string;
+    /**
+     * Dataset Version Id
+     */
+    dataset_version_id: string;
+    /**
+     * Member Asset Version Ids
+     */
+    member_asset_version_ids?: Array<string> | null;
+};
+
+/**
+ * DatasetCalibrationPage
+ */
+export type DatasetCalibrationPage = {
+    /**
+     * Total
+     */
+    total: number;
+    /**
+     * Limit
+     */
+    limit: number;
+    /**
+     * Offset
+     */
+    offset: number;
+    /**
+     * Dataset Id
+     */
+    dataset_id: string;
+    /**
+     * Dataset Version Id
+     */
+    dataset_version_id: string;
+    /**
+     * Revision
+     */
+    revision: number;
+    /**
+     * Defaults
+     */
+    defaults: {
+        bias?: ({
+            mode: 'inherit';
+        } & CalibrationInherit) | ({
+            mode: 'unconfigured';
+        } & CalibrationUnconfigured) | ({
+            mode: 'disabled';
+        } & CalibrationDisabled) | ({
+            mode: 'target';
+        } & CalibrationFixedTarget);
+        dark?: ({
+            mode: 'inherit';
+        } & CalibrationInherit) | ({
+            mode: 'unconfigured';
+        } & CalibrationUnconfigured) | ({
+            mode: 'disabled';
+        } & CalibrationDisabled) | ({
+            mode: 'target';
+        } & CalibrationFixedTarget);
+        flat?: ({
+            mode: 'inherit';
+        } & CalibrationInherit) | ({
+            mode: 'unconfigured';
+        } & CalibrationUnconfigured) | ({
+            mode: 'disabled';
+        } & CalibrationDisabled) | ({
+            mode: 'target';
+        } & CalibrationFixedTarget);
+        dark_flat?: ({
+            mode: 'inherit';
+        } & CalibrationInherit) | ({
+            mode: 'unconfigured';
+        } & CalibrationUnconfigured) | ({
+            mode: 'disabled';
+        } & CalibrationDisabled) | ({
+            mode: 'target';
+        } & CalibrationFixedTarget);
+    };
+    /**
+     * Items
+     */
+    items: Array<DatasetMemberCalibrationOut>;
+    /**
+     * Combinations
+     */
+    combinations: Array<CalibrationCombination>;
+};
+
+/**
+ * DatasetCalibrationUpdate
+ */
+export type DatasetCalibrationUpdate = {
+    /**
+     * Request Id
+     */
+    request_id: string;
+    /**
+     * Expected Revision
+     */
+    expected_revision: number;
+    /**
+     * Base Version Id
+     */
+    base_version_id: string;
+    changes: CalibrationPatch;
+    /**
+     * Accept Unknown
+     */
+    accept_unknown?: boolean;
+};
+
+/**
+ * DatasetChanges
+ */
+export type DatasetChanges = {
+    /**
+     * Name
+     */
+    name?: string;
+    /**
+     * Notes
+     */
+    notes?: string | null;
+    /**
+     * Status
+     */
+    status?: 'active' | 'archived';
+};
+
+/**
  * DatasetCreate
  */
 export type DatasetCreate = {
@@ -1729,6 +2399,85 @@ export type DatasetCreate = {
      * Asset Version Ids
      */
     asset_version_ids: Array<string>;
+};
+
+/**
+ * DatasetImageDetail
+ */
+export type DatasetImageDetail = {
+    dataset: DatasetOut;
+    version: DatasetVersionSummary | null;
+};
+
+/**
+ * DatasetImageMember
+ */
+export type DatasetImageMember = {
+    member: DatasetMemberOut;
+    metadata: ImageMetadata;
+};
+
+/**
+ * DatasetImageMemberPage
+ */
+export type DatasetImageMemberPage = {
+    /**
+     * Total
+     */
+    total: number;
+    /**
+     * Limit
+     */
+    limit: number;
+    /**
+     * Offset
+     */
+    offset: number;
+    /**
+     * Items
+     */
+    items: Array<DatasetImageMember>;
+};
+
+/**
+ * DatasetImagePage
+ */
+export type DatasetImagePage = {
+    /**
+     * Total
+     */
+    total: number;
+    /**
+     * Limit
+     */
+    limit: number;
+    /**
+     * Offset
+     */
+    offset: number;
+    /**
+     * Items
+     */
+    items: Array<DatasetImageSummary>;
+};
+
+/**
+ * DatasetImageSummary
+ */
+export type DatasetImageSummary = {
+    dataset: DatasetOut;
+    /**
+     * Member Count
+     */
+    member_count: number;
+    /**
+     * Matching Member Count
+     */
+    matching_member_count: number;
+    /**
+     * Version Id
+     */
+    version_id: string | null;
 };
 
 /**
@@ -1765,6 +2514,160 @@ export type DatasetInputReference = {
 };
 
 /**
+ * DatasetMemberCalibrationOut
+ */
+export type DatasetMemberCalibrationOut = {
+    /**
+     * Asset Id
+     */
+    asset_id: string;
+    /**
+     * Asset Name
+     */
+    asset_name: string;
+    /**
+     * Asset Version Number
+     */
+    asset_version_number: number;
+    /**
+     * Frame Type
+     */
+    frame_type: string | null;
+    /**
+     * Asset Version Id
+     */
+    asset_version_id: string;
+    /**
+     * Overrides
+     */
+    overrides: {
+        bias?: ({
+            mode: 'inherit';
+        } & CalibrationInherit) | ({
+            mode: 'unconfigured';
+        } & CalibrationUnconfigured) | ({
+            mode: 'disabled';
+        } & CalibrationDisabled) | ({
+            mode: 'target';
+        } & CalibrationFixedTarget);
+        dark?: ({
+            mode: 'inherit';
+        } & CalibrationInherit) | ({
+            mode: 'unconfigured';
+        } & CalibrationUnconfigured) | ({
+            mode: 'disabled';
+        } & CalibrationDisabled) | ({
+            mode: 'target';
+        } & CalibrationFixedTarget);
+        flat?: ({
+            mode: 'inherit';
+        } & CalibrationInherit) | ({
+            mode: 'unconfigured';
+        } & CalibrationUnconfigured) | ({
+            mode: 'disabled';
+        } & CalibrationDisabled) | ({
+            mode: 'target';
+        } & CalibrationFixedTarget);
+        dark_flat?: ({
+            mode: 'inherit';
+        } & CalibrationInherit) | ({
+            mode: 'unconfigured';
+        } & CalibrationUnconfigured) | ({
+            mode: 'disabled';
+        } & CalibrationDisabled) | ({
+            mode: 'target';
+        } & CalibrationFixedTarget);
+    };
+    /**
+     * Effective
+     */
+    effective: {
+        bias?: ({
+            mode: 'inherit';
+        } & CalibrationInherit) | ({
+            mode: 'unconfigured';
+        } & CalibrationUnconfigured) | ({
+            mode: 'disabled';
+        } & CalibrationDisabled) | ({
+            mode: 'target';
+        } & CalibrationFixedTarget);
+        dark?: ({
+            mode: 'inherit';
+        } & CalibrationInherit) | ({
+            mode: 'unconfigured';
+        } & CalibrationUnconfigured) | ({
+            mode: 'disabled';
+        } & CalibrationDisabled) | ({
+            mode: 'target';
+        } & CalibrationFixedTarget);
+        flat?: ({
+            mode: 'inherit';
+        } & CalibrationInherit) | ({
+            mode: 'unconfigured';
+        } & CalibrationUnconfigured) | ({
+            mode: 'disabled';
+        } & CalibrationDisabled) | ({
+            mode: 'target';
+        } & CalibrationFixedTarget);
+        dark_flat?: ({
+            mode: 'inherit';
+        } & CalibrationInherit) | ({
+            mode: 'unconfigured';
+        } & CalibrationUnconfigured) | ({
+            mode: 'disabled';
+        } & CalibrationDisabled) | ({
+            mode: 'target';
+        } & CalibrationFixedTarget);
+    };
+    /**
+     * Slots
+     */
+    slots: {
+        bias?: CalibrationSlotDetail;
+        dark?: CalibrationSlotDetail;
+        flat?: CalibrationSlotDetail;
+        dark_flat?: CalibrationSlotDetail;
+    };
+};
+
+/**
+ * DatasetMemberCalibrationUpdate
+ */
+export type DatasetMemberCalibrationUpdate = {
+    /**
+     * Request Id
+     */
+    request_id: string;
+    /**
+     * Expected Revision
+     */
+    expected_revision: number;
+    /**
+     * Base Version Id
+     */
+    base_version_id: string;
+    /**
+     * Members
+     */
+    members: Array<MemberCalibrationChange>;
+    /**
+     * Accept Unknown
+     */
+    accept_unknown?: boolean;
+};
+
+/**
+ * DatasetMemberInput
+ */
+export type DatasetMemberInput = {
+    /**
+     * Asset Version Id
+     */
+    asset_version_id: string;
+    calibration?: CalibrationPatch;
+};
+
+/**
  * DatasetMemberOut
  */
 export type DatasetMemberOut = {
@@ -1792,11 +2695,12 @@ export type DatasetMemberOut = {
      * Calibration Overrides
      */
     calibration_overrides?: {
-        bias?: CalibrationTarget | null;
-        dark?: CalibrationTarget | null;
-        flat?: CalibrationTarget | null;
-        dark_flat?: CalibrationTarget | null;
+        bias?: CalibrationTarget | CalibrationUnconfigured | null;
+        dark?: CalibrationTarget | CalibrationUnconfigured | null;
+        flat?: CalibrationTarget | CalibrationUnconfigured | null;
+        dark_flat?: CalibrationTarget | CalibrationUnconfigured | null;
     };
+    calibration_projection?: LibraryCalibrationProjection | null;
     asset: AssetOut;
     version: AssetVersionOut;
 };
@@ -1880,6 +2784,110 @@ export type DatasetMemberRevision = {
 };
 
 /**
+ * DatasetMemberSummary
+ */
+export type DatasetMemberSummary = {
+    /**
+     * Entry Type
+     */
+    entry_type: 'asset';
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Notes
+     */
+    notes: string | null;
+    /**
+     * Status
+     */
+    status: 'active' | 'archived';
+    /**
+     * Revision
+     */
+    revision: number;
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Version Id
+     */
+    version_id: string | null;
+    /**
+     * Version Number
+     */
+    version_number: number | null;
+    /**
+     * Member Count
+     */
+    member_count: 1;
+    /**
+     * Matching Member Count
+     */
+    matching_member_count: 1;
+    /**
+     * Input Ready
+     */
+    input_ready: boolean;
+    summary: LibraryMetadataSummary;
+    calibration_projection?: LibraryCalibrationProjection | null;
+    exposure_summary: ExposureSummary;
+    thumbnail: LibraryThumbnailReference | null;
+    /**
+     * Import Issue
+     */
+    import_issue: string | null;
+    /**
+     * View Base
+     */
+    view_base: string | null;
+    /**
+     * Dataset Id
+     */
+    dataset_id: string;
+    /**
+     * Dataset Version Id
+     */
+    dataset_version_id: string;
+    /**
+     * Member Position
+     */
+    member_position: number;
+    /**
+     * Thumbnail Status
+     */
+    thumbnail_status: 'queued' | 'generating' | 'available' | 'failed' | 'unsupported' | null;
+};
+
+/**
+ * DatasetMemberSummaryPage
+ */
+export type DatasetMemberSummaryPage = {
+    /**
+     * Total
+     */
+    total: number;
+    /**
+     * Limit
+     */
+    limit: number;
+    /**
+     * Offset
+     */
+    offset: number;
+    /**
+     * Items
+     */
+    items: Array<DatasetMemberSummary>;
+};
+
+/**
  * DatasetMembersCreate
  */
 export type DatasetMembersCreate = {
@@ -1895,20 +2903,20 @@ export type DatasetMembersCreate = {
      * Calibration Defaults
      */
     calibration_defaults?: {
-        bias?: CalibrationTarget | null;
-        dark?: CalibrationTarget | null;
-        flat?: CalibrationTarget | null;
-        dark_flat?: CalibrationTarget | null;
+        bias?: CalibrationTarget | CalibrationUnconfigured | null;
+        dark?: CalibrationTarget | CalibrationUnconfigured | null;
+        flat?: CalibrationTarget | CalibrationUnconfigured | null;
+        dark_flat?: CalibrationTarget | CalibrationUnconfigured | null;
     } | null;
     /**
      * Member Calibration Overrides
      */
     member_calibration_overrides?: {
         [key: string]: {
-            bias?: CalibrationTarget | null;
-            dark?: CalibrationTarget | null;
-            flat?: CalibrationTarget | null;
-            dark_flat?: CalibrationTarget | null;
+            bias?: CalibrationTarget | CalibrationUnconfigured | null;
+            dark?: CalibrationTarget | CalibrationUnconfigured | null;
+            flat?: CalibrationTarget | CalibrationUnconfigured | null;
+            dark_flat?: CalibrationTarget | CalibrationUnconfigured | null;
         };
     } | null;
 };
@@ -1918,6 +2926,7 @@ export type DatasetMembersCreate = {
  */
 export type DatasetOut = {
     summary: LibraryMetadataSummary;
+    exposure_summary: ExposureSummary;
     /**
      * Input Ready
      */
@@ -2032,15 +3041,16 @@ export type DatasetVersionOut = {
      * Calibration Defaults
      */
     calibration_defaults?: {
-        bias?: CalibrationTarget | null;
-        dark?: CalibrationTarget | null;
-        flat?: CalibrationTarget | null;
-        dark_flat?: CalibrationTarget | null;
+        bias?: CalibrationTarget | CalibrationUnconfigured | null;
+        dark?: CalibrationTarget | CalibrationUnconfigured | null;
+        flat?: CalibrationTarget | CalibrationUnconfigured | null;
+        dark_flat?: CalibrationTarget | CalibrationUnconfigured | null;
     };
     /**
      * Members
      */
     members: Array<DatasetMemberOut>;
+    exposure_summary: ExposureSummary;
 };
 
 /**
@@ -2089,11 +3099,12 @@ export type DatasetVersionSummary = {
      * Calibration Defaults
      */
     calibration_defaults?: {
-        bias?: CalibrationTarget | null;
-        dark?: CalibrationTarget | null;
-        flat?: CalibrationTarget | null;
-        dark_flat?: CalibrationTarget | null;
+        bias?: CalibrationTarget | CalibrationUnconfigured | null;
+        dark?: CalibrationTarget | CalibrationUnconfigured | null;
+        flat?: CalibrationTarget | CalibrationUnconfigured | null;
+        dark_flat?: CalibrationTarget | CalibrationUnconfigured | null;
     };
+    exposure_summary: ExposureSummary;
 };
 
 /**
@@ -2114,6 +3125,38 @@ export type DefinitionWriteResult = {
     applied: boolean;
     content: SavedDefinition | null;
     error: ErrorDetail | null;
+};
+
+/**
+ * DeviceEquipmentChoice
+ */
+export type DeviceEquipmentChoice = {
+    /**
+     * Source
+     */
+    source: 'devices';
+    camera?: DeviceRevisionRef | null;
+    telescope?: DeviceRevisionRef | null;
+    filter?: DeviceRevisionRef | null;
+    mount?: DeviceRevisionRef | null;
+    /**
+     * Optical Accessory Id
+     */
+    optical_accessory_id?: string | null;
+};
+
+/**
+ * DeviceRevisionRef
+ */
+export type DeviceRevisionRef = {
+    /**
+     * Equipment Id
+     */
+    equipment_id: string;
+    /**
+     * Expected Revision
+     */
+    expected_revision: number;
 };
 
 /**
@@ -2179,6 +3222,24 @@ export type DisplayPreviewState = {
 };
 
 /**
+ * EquipmentApplication
+ */
+export type EquipmentApplication = {
+    /**
+     * Choice
+     */
+    choice: ({
+        source: 'devices';
+    } & DeviceEquipmentChoice) | ({
+        source: 'setup';
+    } & SetupEquipmentChoice);
+    /**
+     * Fields
+     */
+    fields: Array<'camera' | 'telescope' | 'filter' | 'mount' | 'optical_accessory'>;
+};
+
+/**
  * EquipmentDelete
  */
 export type EquipmentDelete = {
@@ -2209,7 +3270,7 @@ export type EquipmentDeleteSelectionItem = {
     /**
      * Entry Type
      */
-    entry_type: 'equipment' | 'equipment_setup' | 'capture_preset';
+    entry_type: 'equipment' | 'equipment_setup';
     /**
      * Id
      */
@@ -2239,7 +3300,7 @@ export type EquipmentPage = {
     /**
      * Items
      */
-    items: Array<CameraOut | FilterOut | TelescopeOut>;
+    items: Array<CameraOut | FilterOut | TelescopeOut | MountOut>;
 };
 
 /**
@@ -2353,6 +3414,7 @@ export type EquipmentSnapshots = {
     camera_id?: CameraSnapshot | null;
     optical_system_id?: TelescopeSnapshot | null;
     filter_id?: FilterSnapshot | null;
+    mount_id?: MountSnapshot | null;
 };
 
 /**
@@ -2384,6 +3446,45 @@ export type ErrorEnvelope = {
      * Request Id
      */
     request_id: string;
+};
+
+/**
+ * ExplicitImportRequest
+ */
+export type ExplicitImportRequest = {
+    /**
+     * Request Id
+     */
+    request_id: string;
+    /**
+     * Scan Id
+     */
+    scan_id: string;
+    /**
+     * Files
+     */
+    files: Array<ConfirmedFile>;
+    /**
+     * Destination
+     */
+    destination: ({
+        mode: 'standalone';
+    } & StandaloneDestination) | ({
+        mode: 'new_dataset';
+    } & NewDatasetDestination) | ({
+        mode: 'append_dataset';
+    } & AppendDatasetDestination);
+    defaults?: ImportDefaults;
+    calibration_defaults?: CalibrationPatch;
+    incoming_calibration?: CalibrationPatch;
+    /**
+     * Storage Mode
+     */
+    storage_mode?: 'managed' | 'reference';
+    /**
+     * Accept Unknown
+     */
+    accept_unknown?: boolean;
 };
 
 /**
@@ -2553,6 +3654,34 @@ export type ExportSettings = {
 };
 
 /**
+ * ExposureSummary
+ *
+ * Exposure of subframes only; missing exposure never contributes zero.
+ */
+export type ExposureSummary = {
+    /**
+     * Subframe Count
+     */
+    subframe_count: number;
+    /**
+     * Known Count
+     */
+    known_count: number;
+    /**
+     * Unknown Count
+     */
+    unknown_count: number;
+    /**
+     * Total Seconds
+     */
+    total_seconds: number | null;
+    /**
+     * Complete
+     */
+    complete: boolean;
+};
+
+/**
  * FilterCreate
  */
 export type FilterCreate = {
@@ -2587,6 +3716,40 @@ export type FilterEquipmentOption = {
      * Name
      */
     name: string;
+};
+
+/**
+ * FilterInherit
+ */
+export type FilterInherit = {
+    /**
+     * Mode
+     */
+    mode: 'inherit';
+};
+
+/**
+ * FilterMember
+ */
+export type FilterMember = {
+    /**
+     * Mode
+     */
+    mode: 'member';
+    /**
+     * Member Id
+     */
+    member_id: string;
+};
+
+/**
+ * FilterNone
+ */
+export type FilterNone = {
+    /**
+     * Mode
+     */
+    mode: 'none';
 };
 
 /**
@@ -2704,6 +3867,8 @@ export type FilterSnapshot = {
 export type FilterSpecs = {
     /**
      * Channel
+     *
+     * Channel is a free-text imaging-channel/passband label, not a product name, camera CFA pattern, or mandatory display-color assignment. Prefer the user's explicit label and spelling. The Agent may fill a clear passband from supplied facts, FITS FILTER, or reliable product specifications; omit unknowns. Examples: luminance -> L; red/green/blue -> R/G/B; Ha -> H; OIII -> O; SII -> S; one confirmed RGB filter -> RGB; an explicitly described IR875nm filter -> Ir875nm. Three separate SII/Ha/OIII filters are three entries with S/H/O; one confirmed multi-band SHO filter remains one entry with SHO. A color camera does not imply an RGB filter. Do not derive bandwidth or central wavelength from channel: 875nm may be a long-pass cutoff. Different filters with the same channel remain separate devices. Omitted PATCH keeps the value; null clears it. 中文：Channel是成像通道／通带自由文本标签，明确用途可由Agent填写，未知不猜，用户自定义值优先。
      */
     channel?: string | null;
     /**
@@ -2833,6 +3998,46 @@ export type FitsHeaderOut = {
 };
 
 /**
+ * FixedAssetSource
+ */
+export type FixedAssetSource = {
+    /**
+     * Kind
+     */
+    kind: 'asset_version';
+    /**
+     * Asset Id
+     */
+    asset_id: string;
+    /**
+     * Asset Version Id
+     */
+    asset_version_id: string;
+};
+
+/**
+ * FixedDatasetSource
+ */
+export type FixedDatasetSource = {
+    /**
+     * Kind
+     */
+    kind: 'dataset_version';
+    /**
+     * Dataset Id
+     */
+    dataset_id: string;
+    /**
+     * Dataset Version Id
+     */
+    dataset_version_id: string;
+    /**
+     * Member Asset Version Ids
+     */
+    member_asset_version_ids?: Array<string> | null;
+};
+
+/**
  * FixedParameterBinding
  */
 export type FixedParameterBinding = {
@@ -2841,25 +4046,6 @@ export type FixedParameterBinding = {
      */
     kind: 'fixed';
     value: JsonValue;
-};
-
-/**
- * FrozenCapturePreset
- */
-export type FrozenCapturePreset = {
-    /**
-     * Id
-     */
-    id: string;
-    /**
-     * Revision
-     */
-    revision: number;
-    /**
-     * Name
-     */
-    name: string;
-    optical_accessory_selection?: FrozenOpticalAccessorySelection | null;
 };
 
 /**
@@ -2878,6 +4064,10 @@ export type FrozenEquipmentSelection = {
      * Filter
      */
     filter?: string | null;
+    /**
+     * Mount
+     */
+    mount?: string | null;
 };
 
 /**
@@ -2927,7 +4117,9 @@ export type FrozenInlineMember = {
         kind: 'filter';
     } & FilterSnapshot) | ({
         kind: 'telescope';
-    } & TelescopeSnapshot);
+    } & TelescopeSnapshot) | ({
+        kind: 'mount';
+    } & MountSnapshot);
     /**
      * Optical Accessory Id
      */
@@ -2936,16 +4128,6 @@ export type FrozenInlineMember = {
      * Effective Focal Length Mm
      */
     effective_focal_length_mm?: number | null;
-};
-
-/**
- * FrozenOpticalAccessorySelection
- */
-export type FrozenOpticalAccessorySelection = {
-    /**
-     * Accessory Id
-     */
-    accessory_id: string | null;
 };
 
 /**
@@ -2973,7 +4155,9 @@ export type FrozenRegisteredMember = {
         kind: 'filter';
     } & FilterSnapshot) | ({
         kind: 'telescope';
-    } & TelescopeSnapshot);
+    } & TelescopeSnapshot) | ({
+        kind: 'mount';
+    } & MountSnapshot);
     /**
      * Optical Accessory Id
      */
@@ -2982,6 +4166,666 @@ export type FrozenRegisteredMember = {
      * Effective Focal Length Mm
      */
     effective_focal_length_mm?: number | null;
+};
+
+/**
+ * ImageBatchResult
+ */
+export type ImageBatchResult = {
+    /**
+     * Items
+     */
+    items: Array<ImageDetail>;
+};
+
+/**
+ * ImageCalibrationOut
+ */
+export type ImageCalibrationOut = {
+    /**
+     * Asset Id
+     */
+    asset_id: string;
+    /**
+     * Asset Version Id
+     */
+    asset_version_id: string;
+    /**
+     * Asset Revision
+     */
+    asset_revision: number;
+    /**
+     * Binding Version Id
+     */
+    binding_version_id: string | null;
+    /**
+     * Version Number
+     */
+    version_number: number | null;
+    /**
+     * Bindings
+     */
+    bindings: {
+        bias?: ({
+            mode: 'inherit';
+        } & CalibrationInherit) | ({
+            mode: 'unconfigured';
+        } & CalibrationUnconfigured) | ({
+            mode: 'disabled';
+        } & CalibrationDisabled) | ({
+            mode: 'target';
+        } & CalibrationFixedTarget);
+        dark?: ({
+            mode: 'inherit';
+        } & CalibrationInherit) | ({
+            mode: 'unconfigured';
+        } & CalibrationUnconfigured) | ({
+            mode: 'disabled';
+        } & CalibrationDisabled) | ({
+            mode: 'target';
+        } & CalibrationFixedTarget);
+        flat?: ({
+            mode: 'inherit';
+        } & CalibrationInherit) | ({
+            mode: 'unconfigured';
+        } & CalibrationUnconfigured) | ({
+            mode: 'disabled';
+        } & CalibrationDisabled) | ({
+            mode: 'target';
+        } & CalibrationFixedTarget);
+        dark_flat?: ({
+            mode: 'inherit';
+        } & CalibrationInherit) | ({
+            mode: 'unconfigured';
+        } & CalibrationUnconfigured) | ({
+            mode: 'disabled';
+        } & CalibrationDisabled) | ({
+            mode: 'target';
+        } & CalibrationFixedTarget);
+    };
+    /**
+     * Slots
+     */
+    slots: {
+        bias?: CalibrationSlotDetail;
+        dark?: CalibrationSlotDetail;
+        flat?: CalibrationSlotDetail;
+        dark_flat?: CalibrationSlotDetail;
+    };
+    /**
+     * Message
+     */
+    message: string;
+};
+
+/**
+ * ImageCalibrationUpdate
+ */
+export type ImageCalibrationUpdate = {
+    /**
+     * Request Id
+     */
+    request_id: string;
+    /**
+     * Expected Revision
+     */
+    expected_revision: number;
+    /**
+     * Base Binding Version Id
+     */
+    base_binding_version_id: string | null;
+    changes: CalibrationPatch;
+    /**
+     * Accept Unknown
+     */
+    accept_unknown?: boolean;
+};
+
+/**
+ * ImageCaptureParameters
+ *
+ * Capture facts only: device identity is applied through EquipmentApplication.
+ */
+export type ImageCaptureParameters = {
+    /**
+     * Readout Mode
+     */
+    readout_mode?: string | null;
+    /**
+     * Parameter Mode
+     */
+    parameter_mode?: 'iso' | 'gain' | 'standard' | null;
+    /**
+     * Iso
+     */
+    iso?: number | null;
+    /**
+     * Gain
+     */
+    gain?: number | null;
+    /**
+     * Offset
+     */
+    offset?: number | null;
+    /**
+     * Exposure Seconds
+     */
+    exposure_seconds?: number | null;
+    /**
+     * Integration Seconds
+     */
+    integration_seconds?: number | null;
+    /**
+     * Sensor Temperature C
+     */
+    sensor_temperature_c?: number | null;
+    /**
+     * Binning X
+     */
+    binning_x?: number | null;
+    /**
+     * Binning Y
+     */
+    binning_y?: number | null;
+    /**
+     * Cfa Pattern
+     */
+    cfa_pattern?: 'MONO' | 'RGGB' | 'BGGR' | 'GRBG' | 'GBRG' | 'XTRANS' | 'QUAD_BAYER' | null;
+};
+
+/**
+ * ImageChanges
+ */
+export type ImageChanges = {
+    /**
+     * Target Name
+     */
+    target_name?: string | null;
+    classification?: AssetClassification;
+    parameters?: ImageCaptureParameters;
+    times?: ImageTimes;
+    /**
+     * Name
+     */
+    name?: string;
+    /**
+     * Notes
+     */
+    notes?: string | null;
+    /**
+     * Status
+     */
+    status?: 'active' | 'archived';
+};
+
+/**
+ * ImageDatasetCreate
+ */
+export type ImageDatasetCreate = {
+    /**
+     * Request Id
+     */
+    request_id: string;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Members
+     */
+    members: Array<DatasetMemberInput>;
+    calibration_defaults?: CalibrationPatch;
+    /**
+     * Notes
+     */
+    notes?: string | null;
+    /**
+     * Accept Unknown
+     */
+    accept_unknown?: boolean;
+};
+
+/**
+ * ImageDatasetEditMembers
+ */
+export type ImageDatasetEditMembers = {
+    /**
+     * Request Id
+     */
+    request_id: string;
+    /**
+     * Expected Revision
+     */
+    expected_revision: number;
+    /**
+     * Base Version Id
+     */
+    base_version_id: string;
+    /**
+     * Add
+     */
+    add?: Array<DatasetMemberInput>;
+    /**
+     * Remove
+     */
+    remove?: Array<string>;
+    /**
+     * Accept Unknown
+     */
+    accept_unknown?: boolean;
+};
+
+/**
+ * ImageDatasetUpdate
+ */
+export type ImageDatasetUpdate = {
+    /**
+     * Expected Revision
+     */
+    expected_revision: number;
+    changes: DatasetChanges;
+};
+
+/**
+ * ImageDetail
+ */
+export type ImageDetail = {
+    asset: AssetOut;
+    metadata: ImageMetadata;
+    equipment_context?: ImportDefaultsSnapshot | null;
+    version?: AssetVersionOut | null;
+};
+
+/**
+ * ImageEquipmentApply
+ */
+export type ImageEquipmentApply = {
+    /**
+     * Assets
+     */
+    assets: Array<AssetRevisionRef>;
+    equipment: EquipmentApplication;
+};
+
+/**
+ * ImageHeaderPage
+ */
+export type ImageHeaderPage = {
+    /**
+     * Total
+     */
+    total: number;
+    /**
+     * Limit
+     */
+    limit: number;
+    /**
+     * Offset
+     */
+    offset: number;
+    /**
+     * Asset Version Id
+     */
+    asset_version_id: string;
+    /**
+     * Hdu Index
+     */
+    hdu_index: number;
+    /**
+     * Cards
+     */
+    cards: Array<{
+        [key: string]: JsonValue;
+    }>;
+};
+
+/**
+ * ImageImportItem
+ */
+export type ImageImportItem = {
+    /**
+     * File Id
+     */
+    file_id: string | null;
+    /**
+     * Task Item Id
+     */
+    task_item_id: string;
+    /**
+     * Asset Id
+     */
+    asset_id: string | null;
+    /**
+     * Asset Version Id
+     */
+    asset_version_id: string | null;
+    /**
+     * Status
+     */
+    status: string;
+    /**
+     * Originals
+     */
+    originals: string;
+    /**
+     * Metadata
+     */
+    metadata: string;
+    /**
+     * Previews
+     */
+    previews: string;
+    /**
+     * Publication Status
+     */
+    publication_status: 'published' | 'conflict' | 'excluded' | 'not_ready' | 'pending';
+    /**
+     * Calibration Status
+     */
+    calibration_status: 'saved' | 'pending' | 'blocked' | 'not_checked';
+    /**
+     * Errors
+     */
+    errors: Array<{
+        [key: string]: JsonValue;
+    }>;
+    /**
+     * Member Position
+     */
+    member_position: number | null;
+    /**
+     * Error
+     */
+    error: {
+        [key: string]: JsonValue;
+    } | null;
+};
+
+/**
+ * ImageImportReceipt
+ */
+export type ImageImportReceipt = {
+    /**
+     * Request Id
+     */
+    request_id: string;
+    /**
+     * Task Id
+     */
+    task_id: string;
+    /**
+     * Status
+     */
+    status: 'queued' | 'running' | 'cancelling' | 'completed' | 'completed_with_errors' | 'failed' | 'cancelled' | 'interrupted';
+    /**
+     * State
+     */
+    state: 'running' | 'needs_attention' | 'completed';
+    stages: ImageImportStages;
+    /**
+     * Items
+     */
+    items: Array<ImageImportItem>;
+    /**
+     * Items Total
+     */
+    items_total: number;
+    /**
+     * Items Limit
+     */
+    items_limit: number;
+    /**
+     * Items Offset
+     */
+    items_offset: number;
+    /**
+     * Next Poll Seconds
+     */
+    next_poll_seconds: number | null;
+    /**
+     * Error
+     */
+    error: {
+        [key: string]: JsonValue;
+    } | null;
+};
+
+/**
+ * ImageImportStages
+ */
+export type ImageImportStages = {
+    registration: ImportRegistrationStage;
+    originals: ImportAvailabilityStage;
+    metadata: ImportAvailabilityStage;
+    publication: ImagePublicationStage;
+    /**
+     * Calibration
+     */
+    calibration: {
+        [key: string]: JsonValue;
+    };
+    previews: ImportAvailabilityStage;
+};
+
+/**
+ * ImageInspectionHttpRequest
+ */
+export type ImageInspectionHttpRequest = {
+    /**
+     * Paths
+     */
+    paths: Array<string>;
+    /**
+     * Recursive
+     */
+    recursive?: boolean;
+    /**
+     * File Facts Only
+     */
+    file_facts_only: true;
+};
+
+/**
+ * ImageInspectionOut
+ */
+export type ImageInspectionOut = {
+    /**
+     * Scan Id
+     */
+    scan_id: string;
+    /**
+     * Recursive
+     */
+    recursive: boolean;
+    /**
+     * Roots
+     */
+    roots: Array<string>;
+    /**
+     * File Count
+     */
+    file_count: number;
+    /**
+     * Excluded Count
+     */
+    excluded_count: number;
+    /**
+     * Issues
+     */
+    issues: Array<{
+        [key: string]: JsonValue;
+    }>;
+    /**
+     * Issues Total
+     */
+    issues_total: number;
+};
+
+/**
+ * ImageInspectionPage
+ */
+export type ImageInspectionPage = {
+    /**
+     * Total
+     */
+    total: number;
+    /**
+     * Limit
+     */
+    limit: number;
+    /**
+     * Offset
+     */
+    offset: number;
+    /**
+     * Items
+     */
+    items: Array<InspectedImageFile | {
+        [key: string]: JsonValue;
+    }>;
+};
+
+/**
+ * ImageMetadata
+ */
+export type ImageMetadata = {
+    /**
+     * Target Name
+     */
+    target_name?: string | null;
+    classification?: AssetClassification;
+    parameters?: ImageCaptureParameters;
+    times?: ImageTimes;
+};
+
+/**
+ * ImageMetadataBatch
+ */
+export type ImageMetadataBatch = {
+    /**
+     * Items
+     */
+    items: Array<AssetMetadataChange>;
+};
+
+/**
+ * ImageOperationOut
+ */
+export type ImageOperationOut = {
+    /**
+     * Request Id
+     */
+    request_id: string;
+    /**
+     * Operation
+     */
+    operation: string;
+    /**
+     * Result
+     */
+    result: {
+        [key: string]: JsonValue;
+    };
+    /**
+     * Message
+     */
+    message: string;
+};
+
+/**
+ * ImagePage
+ */
+export type ImagePage = {
+    /**
+     * Total
+     */
+    total: number;
+    /**
+     * Limit
+     */
+    limit: number;
+    /**
+     * Offset
+     */
+    offset: number;
+    /**
+     * Items
+     */
+    items: Array<ImageDetail>;
+};
+
+/**
+ * ImagePublicationStage
+ */
+export type ImagePublicationStage = {
+    /**
+     * State
+     */
+    state: 'pending' | 'published' | 'blocked' | 'conflict';
+    /**
+     * Dataset Id
+     */
+    dataset_id?: string | null;
+    /**
+     * Dataset Version Id
+     */
+    dataset_version_id?: string | null;
+    /**
+     * Dataset Revision
+     */
+    dataset_revision?: number | null;
+    /**
+     * Binding
+     */
+    binding?: {
+        [key: string]: JsonValue;
+    } | null;
+    /**
+     * Errors
+     */
+    errors?: Array<{
+        [key: string]: JsonValue;
+    }> | null;
+    /**
+     * Calibration
+     */
+    calibration?: {
+        [key: string]: JsonValue;
+    } | null;
+    /**
+     * Published File Ids
+     */
+    published_file_ids?: Array<string> | null;
+};
+
+/**
+ * ImageTimes
+ */
+export type ImageTimes = {
+    capture_start?: ScientificTime | null;
+    capture_end?: ScientificTime | null;
+    master_created_at?: ScientificTime | null;
+};
+
+/**
+ * ImageUpdate
+ */
+export type ImageUpdate = {
+    /**
+     * Expected Revision
+     */
+    expected_revision: number;
+    changes: ImageChanges;
+};
+
+/**
+ * ImageWaitBody
+ */
+export type ImageWaitBody = {
+    /**
+     * Wait Seconds
+     */
+    wait_seconds?: number;
 };
 
 /**
@@ -2996,6 +4840,20 @@ export type ImportAccepted = {
      * Status
      */
     status: 'queued';
+};
+
+/**
+ * ImportAvailabilityStage
+ */
+export type ImportAvailabilityStage = {
+    /**
+     * Available
+     */
+    available: number;
+    /**
+     * Total
+     */
+    total: number;
 };
 
 /**
@@ -3108,10 +4966,19 @@ export type ImportCreate = {
      * Dataset Name
      */
     dataset_name?: string | null;
+    equipment?: EquipmentApplication | null;
+};
+
+/**
+ * ImportDefaults
+ */
+export type ImportDefaults = {
+    metadata?: ImageMetadata;
+    equipment?: EquipmentApplication;
     /**
-     * Capture Preset Id
+     * Notes
      */
-    capture_preset_id?: string | null;
+    notes?: string | null;
 };
 
 /**
@@ -3123,7 +4990,6 @@ export type ImportDefaultsSnapshot = {
     selected_equipment?: EquipmentSnapshots;
     selected_members?: FrozenEquipmentSelection;
     equipment_setup?: FrozenEquipmentSetup | null;
-    capture_preset?: FrozenCapturePreset | null;
     /**
      * Equipment Snapshots
      */
@@ -3134,7 +5000,9 @@ export type ImportDefaultsSnapshot = {
             kind: 'filter';
         } & FilterSnapshot) | ({
             kind: 'telescope';
-        } & TelescopeSnapshot);
+        } & TelescopeSnapshot) | ({
+            kind: 'mount';
+        } & MountSnapshot);
     };
 };
 
@@ -3165,6 +5033,15 @@ export type ImportPreviewProgress = {
 };
 
 /**
+ * ImportProgressSummary
+ */
+export type ImportProgressSummary = {
+    registration?: ImportRegistrationProgress | null;
+    content?: ImportContentProgress | null;
+    preview?: ImportPreviewProgress | null;
+};
+
+/**
  * ImportProvenance
  */
 export type ImportProvenance = {
@@ -3172,7 +5049,7 @@ export type ImportProvenance = {
      * Value Sources
      */
     value_sources?: {
-        [key: string]: 'manual' | 'file' | 'preset' | 'unknown';
+        [key: string]: 'manual' | 'file' | 'unknown';
     };
     /**
      * Observed Parameters
@@ -3199,6 +5076,20 @@ export type ImportRegistrationProgress = {
      * Completed
      */
     completed: boolean;
+};
+
+/**
+ * ImportRegistrationStage
+ */
+export type ImportRegistrationStage = {
+    /**
+     * Total
+     */
+    total: number;
+    /**
+     * Registered
+     */
+    registered: number;
 };
 
 /**
@@ -3344,7 +5235,9 @@ export type InlineComponent = {
         kind: 'filter';
     } & FilterCreate) | ({
         kind: 'telescope';
-    } & TelescopeCreate);
+    } & TelescopeCreate) | ({
+        kind: 'mount';
+    } & MountCreate);
     /**
      * Optical Accessory Id
      */
@@ -3372,7 +5265,9 @@ export type InlineComponentOut = {
         kind: 'filter';
     } & FilterCreate) | ({
         kind: 'telescope';
-    } & TelescopeCreate);
+    } & TelescopeCreate) | ({
+        kind: 'mount';
+    } & MountCreate);
     /**
      * Optical Accessory Id
      */
@@ -3381,6 +5276,52 @@ export type InlineComponentOut = {
      * Effective Focal Length Mm
      */
     effective_focal_length_mm?: number | null;
+};
+
+/**
+ * InspectedImageFile
+ */
+export type InspectedImageFile = {
+    /**
+     * File Id
+     */
+    file_id: string;
+    /**
+     * Path
+     */
+    path: string;
+    /**
+     * Relative Path
+     */
+    relative_path: string;
+    /**
+     * Format
+     */
+    format: string | null;
+    /**
+     * Source Stamp
+     */
+    source_stamp: {
+        [key: string]: JsonValue;
+    };
+    /**
+     * Observed
+     */
+    observed: {
+        [key: string]: JsonValue;
+    };
+    /**
+     * Issues
+     */
+    issues: Array<JsonValue>;
+    /**
+     * Metadata Status
+     */
+    metadata_status: string;
+    /**
+     * Supported
+     */
+    supported: boolean;
 };
 
 /**
@@ -3510,6 +5451,8 @@ export type LibraryAssetSummary = {
      */
     input_ready: boolean;
     summary: LibraryMetadataSummary;
+    calibration_projection?: LibraryCalibrationProjection | null;
+    exposure_summary: ExposureSummary;
     thumbnail: LibraryThumbnailReference | null;
     /**
      * Import Issue
@@ -3519,6 +5462,116 @@ export type LibraryAssetSummary = {
      * View Base
      */
     view_base: string | null;
+};
+
+/**
+ * LibraryCalibrationDisabled
+ */
+export type LibraryCalibrationDisabled = {
+    /**
+     * Mode
+     */
+    mode: 'disabled';
+};
+
+/**
+ * LibraryCalibrationFixedTarget
+ */
+export type LibraryCalibrationFixedTarget = {
+    /**
+     * Mode
+     */
+    mode: 'target';
+    target: CalibrationTarget;
+};
+
+/**
+ * LibraryCalibrationProjection
+ */
+export type LibraryCalibrationProjection = {
+    /**
+     * Slots
+     */
+    slots: {
+        bias?: LibraryCalibrationSlot;
+        dark?: LibraryCalibrationSlot;
+        flat?: LibraryCalibrationSlot;
+        dark_flat?: LibraryCalibrationSlot;
+    };
+    /**
+     * Binding Version Id
+     */
+    binding_version_id?: string | null;
+};
+
+/**
+ * LibraryCalibrationSlot
+ */
+export type LibraryCalibrationSlot = {
+    /**
+     * Choice
+     */
+    choice: ({
+        mode: 'unconfigured';
+    } & CalibrationUnconfigured) | ({
+        mode: 'disabled';
+    } & LibraryCalibrationDisabled) | ({
+        mode: 'target';
+    } & LibraryCalibrationFixedTarget) | null;
+    /**
+     * Source
+     */
+    source: 'standalone' | 'dataset_default' | 'member_override' | 'mixed';
+    /**
+     * Status
+     */
+    status: 'unconfigured' | 'disabled' | 'target' | 'not_applicable' | 'mixed';
+    target_detail?: LibraryCalibrationTarget | null;
+    /**
+     * Check State
+     */
+    check_state?: 'not_checked';
+};
+
+/**
+ * LibraryCalibrationTarget
+ */
+export type LibraryCalibrationTarget = {
+    target: CalibrationTarget;
+    /**
+     * Asset Id
+     */
+    asset_id: string;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Version Number
+     */
+    version_number: number;
+    /**
+     * Target Kind
+     */
+    target_kind?: 'master';
+    /**
+     * Master Required
+     */
+    master_required?: false;
+};
+
+/**
+ * LibraryChangeState
+ */
+export type LibraryChangeState = {
+    /**
+     * Revision Token
+     */
+    revision_token: string;
+    /**
+     * Thumbnail Token
+     */
+    thumbnail_token: string;
 };
 
 /**
@@ -3582,6 +5635,8 @@ export type LibraryDatasetSummary = {
      */
     input_ready: boolean;
     summary: LibraryMetadataSummary;
+    calibration_projection?: LibraryCalibrationProjection | null;
+    exposure_summary: ExposureSummary;
     thumbnail: LibraryThumbnailReference | null;
     /**
      * Import Issue
@@ -4242,7 +6297,7 @@ export type ManagementTrashDependencyOut = {
     /**
      * Entry Type
      */
-    entry_type: 'project' | 'equipment' | 'equipment_setup' | 'capture_preset';
+    entry_type: 'project' | 'equipment' | 'equipment_setup';
     /**
      * Id
      */
@@ -4276,7 +6331,7 @@ export type ManagementTrashItemOut = {
     /**
      * Entry Type
      */
-    entry_type: 'project' | 'equipment' | 'equipment_setup' | 'capture_preset';
+    entry_type: 'project' | 'equipment' | 'equipment_setup';
     /**
      * Id
      */
@@ -4362,7 +6417,7 @@ export type ManagementTrashSelectionItem = {
     /**
      * Entry Type
      */
-    entry_type: 'project' | 'equipment' | 'equipment_setup' | 'capture_preset';
+    entry_type: 'project' | 'equipment' | 'equipment_setup';
     /**
      * Id
      */
@@ -4371,6 +6426,104 @@ export type ManagementTrashSelectionItem = {
      * Revision
      */
     revision: number;
+};
+
+/**
+ * MasterProvenanceChanges
+ */
+export type MasterProvenanceChanges = {
+    /**
+     * Sources
+     */
+    sources?: Array<FixedAssetSource | FixedDatasetSource> | null;
+    made_at?: ScientificTime | null;
+    processing?: ProcessingProvenance | null;
+    /**
+     * Applied Calibrations
+     */
+    applied_calibrations?: {
+        bias?: CalibrationTarget;
+        dark?: CalibrationTarget;
+        flat?: CalibrationTarget;
+        dark_flat?: CalibrationTarget;
+    } | null;
+    /**
+     * Bias State
+     */
+    bias_state?: 'included' | 'removed' | 'unknown';
+    /**
+     * Normalized
+     */
+    normalized?: boolean | null;
+    /**
+     * Debayered
+     */
+    debayered?: boolean | null;
+    /**
+     * Notes
+     */
+    notes?: string | null;
+};
+
+/**
+ * MasterProvenanceOut
+ */
+export type MasterProvenanceOut = {
+    /**
+     * Asset Id
+     */
+    asset_id: string;
+    /**
+     * Asset Version Id
+     */
+    asset_version_id: string;
+    /**
+     * Asset Revision
+     */
+    asset_revision: number;
+    /**
+     * Provenance Version Id
+     */
+    provenance_version_id: string | null;
+    /**
+     * Revision
+     */
+    revision: number;
+    /**
+     * Source Kind
+     */
+    source_kind: 'user_declared';
+    declaration: MasterProvenanceChanges;
+    /**
+     * Platform Provenance
+     */
+    platform_provenance: {
+        [key: string]: JsonValue;
+    } | null;
+    source_time_range: MasterSourceTimeRange;
+};
+
+/**
+ * MasterProvenanceUpdate
+ */
+export type MasterProvenanceUpdate = {
+    /**
+     * Expected Revision
+     */
+    expected_revision: number;
+    changes: MasterProvenanceChanges;
+};
+
+/**
+ * MasterSourceTimeRange
+ */
+export type MasterSourceTimeRange = {
+    start: ScientificTime | null;
+    end: ScientificTime | null;
+    /**
+     * Complete
+     */
+    complete: boolean;
 };
 
 /**
@@ -4421,6 +6574,14 @@ export type MediaHdu = {
  * MediaSelection
  */
 export type MediaSelection = {
+    /**
+     * Dataset Version Id
+     */
+    dataset_version_id?: string | null;
+    /**
+     * Prefetch
+     */
+    prefetch?: boolean;
     /**
      * Consumer Id
      */
@@ -4587,6 +6748,145 @@ export type MediaState = {
 };
 
 /**
+ * MemberCalibrationChange
+ */
+export type MemberCalibrationChange = {
+    /**
+     * Asset Version Id
+     */
+    asset_version_id: string;
+    changes: CalibrationPatch;
+};
+
+/**
+ * MountCreate
+ */
+export type MountCreate = {
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Model
+     */
+    model?: string | null;
+    /**
+     * Notes
+     */
+    notes?: string | null;
+    /**
+     * Kind
+     */
+    kind: 'mount';
+};
+
+/**
+ * MountOut
+ */
+export type MountOut = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Model
+     */
+    model: string | null;
+    /**
+     * Notes
+     */
+    notes: string | null;
+    /**
+     * Status
+     */
+    status: 'active' | 'archived';
+    /**
+     * Revision
+     */
+    revision: number;
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Updated At
+     */
+    updated_at: string;
+    /**
+     * Kind
+     */
+    kind: 'mount';
+};
+
+/**
+ * MountPatch
+ */
+export type MountPatch = {
+    /**
+     * Base Revision
+     */
+    base_revision: number;
+    /**
+     * Name
+     */
+    name?: string | null;
+    /**
+     * Model
+     */
+    model?: string | null;
+    /**
+     * Notes
+     */
+    notes?: string | null;
+    /**
+     * Status
+     */
+    status?: 'active' | 'archived' | null;
+    /**
+     * Kind
+     */
+    kind: 'mount';
+};
+
+/**
+ * MountSnapshot
+ */
+export type MountSnapshot = {
+    /**
+     * Id
+     */
+    id?: string | null;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Model
+     */
+    model?: string | null;
+    /**
+     * Serial Number
+     */
+    serial_number?: string | null;
+    /**
+     * Notes
+     */
+    notes?: string | null;
+    /**
+     * Revision
+     */
+    revision?: number | null;
+    /**
+     * Kind
+     */
+    kind: 'mount';
+};
+
+/**
  * NativeDataExecute
  */
 export type NativeDataExecute = {
@@ -4650,6 +6950,24 @@ export type NativeNodeLoad = {
      * Reason
      */
     reason: string | null;
+};
+
+/**
+ * NewDatasetDestination
+ */
+export type NewDatasetDestination = {
+    /**
+     * Mode
+     */
+    mode: 'new_dataset';
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Notes
+     */
+    notes?: string | null;
 };
 
 /**
@@ -4935,48 +7253,6 @@ export type PendingSoftwareAction = {
 };
 
 /**
- * PresetEquipmentSelection
- *
- * Omitted filter inherits; null disables; UUID selects an owned filter member.
- */
-export type PresetEquipmentSelection = {
-    /**
-     * Filter
-     */
-    filter?: string | null;
-};
-
-/**
- * PresetParametersPatch
- */
-export type PresetParametersPatch = {
-    /**
-     * Parameter Mode
-     */
-    parameter_mode?: 'iso' | 'gain' | 'standard' | null;
-    /**
-     * Iso
-     */
-    iso?: number | null;
-    /**
-     * Gain
-     */
-    gain?: number | null;
-    /**
-     * Offset
-     */
-    offset?: number | null;
-    /**
-     * Exposure Seconds
-     */
-    exposure_seconds?: number | null;
-    /**
-     * Sensor Temperature C
-     */
-    sensor_temperature_c?: number | null;
-};
-
-/**
  * PreviewIssue
  */
 export type PreviewIssue = {
@@ -4988,6 +7264,30 @@ export type PreviewIssue = {
      * Message
      */
     message: string;
+};
+
+/**
+ * ProcessingProvenance
+ */
+export type ProcessingProvenance = {
+    /**
+     * Software Name
+     */
+    software_name?: string | null;
+    /**
+     * Software Version
+     */
+    software_version?: string | null;
+    /**
+     * Operation
+     */
+    operation?: string | null;
+    /**
+     * Parameters
+     */
+    parameters?: {
+        [key: string]: JsonValue;
+    } | null;
 };
 
 /**
@@ -5264,6 +7564,24 @@ export type ProjectReferenceDeleteResult = {
 };
 
 /**
+ * PublicationRetryBody
+ */
+export type PublicationRetryBody = {
+    /**
+     * Request Id
+     */
+    request_id: string;
+    /**
+     * Expected Revision
+     */
+    expected_revision: number;
+    /**
+     * Base Version Id
+     */
+    base_version_id: string;
+};
+
+/**
  * RegisteredComponent
  */
 export type RegisteredComponent = {
@@ -5387,6 +7705,113 @@ export type SavedDefinition = {
 };
 
 /**
+ * ScannedCalibrationCheckItem
+ */
+export type ScannedCalibrationCheckItem = {
+    /**
+     * File Id
+     */
+    file_id: string;
+    /**
+     * Dependency Asset Version Id
+     */
+    dependency_asset_version_id?: string | null;
+    /**
+     * Slot
+     */
+    slot: 'bias' | 'dark' | 'flat' | 'dark_flat';
+    target: CalibrationTarget;
+    /**
+     * State
+     */
+    state: 'compatible' | 'unknown' | 'conflict';
+    /**
+     * Master Required
+     */
+    master_required: boolean;
+    /**
+     * Diagnostics
+     */
+    diagnostics: Array<{
+        [key: string]: JsonValue;
+    }>;
+    /**
+     * Dependency Path
+     */
+    dependency_path: Array<CalibrationTarget>;
+};
+
+/**
+ * ScannedCalibrationCheckPage
+ */
+export type ScannedCalibrationCheckPage = {
+    /**
+     * Total
+     */
+    total: number;
+    /**
+     * Limit
+     */
+    limit: number;
+    /**
+     * Offset
+     */
+    offset: number;
+    /**
+     * State
+     */
+    state: 'compatible' | 'unknown' | 'conflict';
+    /**
+     * Checked Files
+     */
+    checked_files: number;
+    /**
+     * Checked Bindings
+     */
+    checked_bindings: number;
+    /**
+     * Conflict Count
+     */
+    conflict_count: number;
+    /**
+     * Unknown Count
+     */
+    unknown_count: number;
+    /**
+     * Master Required Count
+     */
+    master_required_count: number;
+    /**
+     * Items
+     */
+    items: Array<ScannedCalibrationCheckItem>;
+};
+
+/**
+ * ScannedCalibrationCheckRequest
+ */
+export type ScannedCalibrationCheckRequest = {
+    /**
+     * Scan Id
+     */
+    scan_id: string;
+    /**
+     * Files
+     */
+    files: Array<ConfirmedFile>;
+    defaults?: ImportDefaults | null;
+    calibration_defaults?: CalibrationPatch | null;
+    /**
+     * Limit
+     */
+    limit?: number;
+    /**
+     * Offset
+     */
+    offset?: number;
+};
+
+/**
  * ScienceSelection
  */
 export type ScienceSelection = {
@@ -5398,6 +7823,24 @@ export type ScienceSelection = {
      * Hdu Index
      */
     hdu_index?: number | null;
+};
+
+/**
+ * ScientificTime
+ */
+export type ScientificTime = {
+    /**
+     * Raw Value
+     */
+    raw_value?: string | null;
+    /**
+     * Time System
+     */
+    time_system?: string | null;
+    /**
+     * Utc
+     */
+    utc?: string | null;
 };
 
 /**
@@ -5482,6 +7925,34 @@ export type ServiceHealth = {
      * Workspace
      */
     workspace: string;
+};
+
+/**
+ * SetupEquipmentChoice
+ */
+export type SetupEquipmentChoice = {
+    /**
+     * Source
+     */
+    source: 'setup';
+    /**
+     * Setup Id
+     */
+    setup_id: string;
+    /**
+     * Expected Revision
+     */
+    expected_revision: number;
+    /**
+     * Filter
+     */
+    filter?: ({
+        mode: 'inherit';
+    } & FilterInherit) | ({
+        mode: 'none';
+    } & FilterNone) | ({
+        mode: 'member';
+    } & FilterMember);
 };
 
 /**
@@ -6140,6 +8611,16 @@ export type SourceInspection = {
 };
 
 /**
+ * StandaloneDestination
+ */
+export type StandaloneDestination = {
+    /**
+     * Mode
+     */
+    mode: 'standalone';
+};
+
+/**
  * TaskItemOut
  */
 export type TaskItemOut = {
@@ -6383,6 +8864,206 @@ export type TelescopeSpecs = {
 };
 
 /**
+ * ThumbnailAssetTarget
+ */
+export type ThumbnailAssetTarget = {
+    /**
+     * Kind
+     */
+    kind: 'asset';
+    /**
+     * Asset Id
+     */
+    asset_id: string;
+    /**
+     * Asset Version Id
+     */
+    asset_version_id: string;
+};
+
+/**
+ * ThumbnailBatchCreate
+ */
+export type ThumbnailBatchCreate = {
+    /**
+     * Request Id
+     */
+    request_id: string;
+    /**
+     * Target
+     */
+    target: ({
+        kind: 'asset';
+    } & ThumbnailAssetTarget) | ({
+        kind: 'dataset';
+    } & ThumbnailDatasetTarget) | ({
+        kind: 'library_missing';
+    } & ThumbnailLibraryTarget);
+    /**
+     * Mode
+     */
+    mode?: 'missing' | 'rebuild';
+};
+
+/**
+ * ThumbnailBatchItemOut
+ */
+export type ThumbnailBatchItemOut = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Asset Version Id
+     */
+    asset_version_id: string | null;
+    /**
+     * Dataset Version Id
+     */
+    dataset_version_id: string | null;
+    /**
+     * Position
+     */
+    position: number;
+    /**
+     * Status
+     */
+    status: 'queued' | 'generating' | 'available' | 'failed' | 'unsupported' | 'deleted';
+    /**
+     * Error
+     */
+    error: string | null;
+};
+
+/**
+ * ThumbnailBatchOut
+ */
+export type ThumbnailBatchOut = {
+    /**
+     * Request Id
+     */
+    request_id: string;
+    /**
+     * Target
+     */
+    target: ({
+        kind: 'asset';
+    } & ThumbnailAssetTarget) | ({
+        kind: 'dataset';
+    } & ThumbnailDatasetTarget) | ({
+        kind: 'library_missing';
+    } & ThumbnailLibraryTarget);
+    /**
+     * State
+     */
+    state: 'running' | 'completed' | 'needs_attention';
+    /**
+     * Total
+     */
+    total: number;
+    /**
+     * Queued
+     */
+    queued: number;
+    /**
+     * Generating
+     */
+    generating: number;
+    /**
+     * Available
+     */
+    available: number;
+    /**
+     * Failed
+     */
+    failed: number;
+    /**
+     * Unsupported
+     */
+    unsupported: number;
+    /**
+     * Deleted
+     */
+    deleted: number;
+    /**
+     * Group Failures
+     */
+    group_failures: Array<ThumbnailGroupFailure>;
+    /**
+     * Items
+     */
+    items: Array<ThumbnailBatchItemOut>;
+    /**
+     * Limit
+     */
+    limit: number;
+    /**
+     * Offset
+     */
+    offset: number;
+};
+
+/**
+ * ThumbnailDatasetTarget
+ */
+export type ThumbnailDatasetTarget = {
+    /**
+     * Kind
+     */
+    kind: 'dataset';
+    /**
+     * Dataset Id
+     */
+    dataset_id: string;
+    /**
+     * Dataset Version Id
+     */
+    dataset_version_id: string;
+};
+
+/**
+ * ThumbnailGroupFailure
+ */
+export type ThumbnailGroupFailure = {
+    /**
+     * Dataset Version Id
+     */
+    dataset_version_id: string;
+    /**
+     * Reference Asset Version Id
+     */
+    reference_asset_version_id: string;
+    /**
+     * Code
+     */
+    code: 'FIRST_FRAME_UNAVAILABLE';
+    /**
+     * Error
+     */
+    error: string;
+};
+
+/**
+ * ThumbnailLibraryTarget
+ */
+export type ThumbnailLibraryTarget = {
+    /**
+     * Kind
+     */
+    kind: 'library_missing';
+};
+
+/**
+ * ThumbnailRetry
+ */
+export type ThumbnailRetry = {
+    /**
+     * Item Ids
+     */
+    item_ids: Array<string>;
+};
+
+/**
  * UploadFile
  */
 export type UploadFile = {
@@ -6418,10 +9099,7 @@ export type UploadImportCreate = {
      * Create Dataset
      */
     create_dataset?: boolean;
-    /**
-     * Capture Preset Id
-     */
-    capture_preset_id?: string | null;
+    equipment?: EquipmentApplication | null;
 };
 
 /**
@@ -6438,6 +9116,12 @@ export type UploadReceipt = {
  * VersionCaptureSnapshot
  */
 export type VersionCaptureSnapshot = {
+    /**
+     * Image Metadata
+     */
+    image_metadata?: {
+        [key: string]: JsonValue;
+    } | null;
     parameters?: AssetParametersPatch;
     classification?: AssetClassification;
     equipment_snapshot?: EquipmentSnapshots;
@@ -6684,6 +9368,67 @@ export type NativePageReply = {
     result: PendingSoftwareAction | null;
     error: ErrorDetail | null;
 };
+
+export type GetLibraryChangeStateData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/library/change-state';
+};
+
+export type GetLibraryChangeStateErrors = {
+    /**
+     * Authentication required
+     */
+    401: ErrorEnvelope;
+    /**
+     * Origin not allowed by the ComfyUI proxy
+     */
+    403: ErrorEnvelope;
+    /**
+     * Resource not found or outside the requested scope
+     */
+    404: ErrorEnvelope;
+    /**
+     * Method not allowed
+     */
+    405: ErrorEnvelope;
+    /**
+     * Revision conflict
+     */
+    409: ErrorEnvelope;
+    /**
+     * Validation error or invalid reference
+     */
+    422: ErrorEnvelope;
+    /**
+     * Internal error
+     */
+    500: ErrorEnvelope;
+    /**
+     * Service not configured or unavailable
+     */
+    503: ErrorEnvelope;
+    /**
+     * Service timeout
+     */
+    504: ErrorEnvelope;
+    /**
+     * Default Response
+     */
+    default: ErrorEnvelope;
+};
+
+export type GetLibraryChangeStateError = GetLibraryChangeStateErrors[keyof GetLibraryChangeStateErrors];
+
+export type GetLibraryChangeStateResponses = {
+    /**
+     * Successful Response
+     */
+    200: LibraryChangeState;
+};
+
+export type GetLibraryChangeStateResponse = GetLibraryChangeStateResponses[keyof GetLibraryChangeStateResponses];
 
 export type RemoveLibraryEntriesApiV1LibraryItemsDeleteData = {
     body: LibraryEntriesRemove;
@@ -6974,6 +9719,114 @@ export type ListLibraryAssetsData = {
     path?: never;
     query?: {
         /**
+         * Text
+         */
+        text?: string | null;
+        /**
+         * Status
+         */
+        status?: 'active' | 'archived' | 'all';
+        /**
+         * Target Name
+         */
+        target_name?: string | null;
+        /**
+         * Frame Class
+         */
+        frame_class?: 'subframe' | 'masterframe' | 'video' | null;
+        /**
+         * Frame Type
+         */
+        frame_type?: 'light' | 'bias' | 'dark' | 'flat' | 'dark_flat' | null;
+        /**
+         * Camera Id
+         */
+        camera_id?: string | null;
+        /**
+         * Telescope Id
+         */
+        telescope_id?: string | null;
+        /**
+         * Filter Id
+         */
+        filter_id?: string | null;
+        /**
+         * Parameter Mode
+         */
+        parameter_mode?: 'iso' | 'gain' | 'standard' | null;
+        /**
+         * Binning X
+         */
+        binning_x?: number | null;
+        /**
+         * Binning Y
+         */
+        binning_y?: number | null;
+        /**
+         * Exposure Min
+         */
+        exposure_min?: number | null;
+        /**
+         * Exposure Max
+         */
+        exposure_max?: number | null;
+        /**
+         * Temperature Min
+         */
+        temperature_min?: number | null;
+        /**
+         * Temperature Max
+         */
+        temperature_max?: number | null;
+        /**
+         * Gain Min
+         */
+        gain_min?: number | null;
+        /**
+         * Gain Max
+         */
+        gain_max?: number | null;
+        /**
+         * Offset Min
+         */
+        offset_min?: number | null;
+        /**
+         * Offset Max
+         */
+        offset_max?: number | null;
+        /**
+         * Iso Min
+         */
+        iso_min?: number | null;
+        /**
+         * Iso Max
+         */
+        iso_max?: number | null;
+        /**
+         * Captured From
+         */
+        captured_from?: string | null;
+        /**
+         * Captured To
+         */
+        captured_to?: string | null;
+        /**
+         * Master Created From
+         */
+        master_created_from?: string | null;
+        /**
+         * Master Created To
+         */
+        master_created_to?: string | null;
+        /**
+         * Sort By
+         */
+        sort_by?: 'name' | 'created_at' | 'capture_start' | 'master_created_at';
+        /**
+         * Order
+         */
+        order?: 'asc' | 'desc';
+        /**
          * Limit
          */
         limit?: number;
@@ -6982,45 +9835,25 @@ export type ListLibraryAssetsData = {
          */
         offset?: number;
         /**
+         * Image Query
+         */
+        image_query?: boolean;
+        /**
          * Q
          */
         q?: string | null;
-        /**
-         * Sort By
-         */
-        sort_by?: 'created_at' | 'name';
-        /**
-         * Order
-         */
-        order?: 'asc' | 'desc';
-        /**
-         * Status
-         */
-        status?: 'active' | 'archived' | 'all';
-        /**
-         * Role
-         */
-        role?: 'raw' | 'calibration' | 'intermediate' | 'final' | null;
-        /**
-         * Frame Type
-         */
-        frame_type?: 'light' | 'bias' | 'dark' | 'flat' | 'dark_flat' | null;
         /**
          * Calibration Level
          */
         calibration_level?: 'individual' | 'master' | null;
         /**
-         * Camera Id
-         */
-        camera_id?: string | null;
-        /**
          * Optical System Id
          */
         optical_system_id?: string | null;
         /**
-         * Filter Id
+         * Role
          */
-        filter_id?: string | null;
+        role?: 'raw' | 'calibration' | 'intermediate' | 'final' | null;
     };
     url: '/api/v1/library/assets';
 };
@@ -7072,9 +9905,11 @@ export type ListLibraryAssetsError = ListLibraryAssetsErrors[keyof ListLibraryAs
 
 export type ListLibraryAssetsResponses = {
     /**
+     * Response Listlibraryassets
+     *
      * Successful Response
      */
-    200: AssetPage;
+    200: ImagePage | AssetPage;
 };
 
 export type ListLibraryAssetsResponse = ListLibraryAssetsResponses[keyof ListLibraryAssetsResponses];
@@ -8843,6 +11678,1094 @@ export type OutputViewFileApiV1RunsPromptIdCallsCallIdOutputsOutputIndexMembersM
 
 export type OutputViewFileApiV1RunsPromptIdCallsCallIdOutputsOutputIndexMembersMemberIndexViewerKeyFileGetResponse = OutputViewFileApiV1RunsPromptIdCallsCallIdOutputsOutputIndexMembersMemberIndexViewerKeyFileGetResponses[keyof OutputViewFileApiV1RunsPromptIdCallsCallIdOutputsOutputIndexMembersMemberIndexViewerKeyFileGetResponses];
 
+export type GetImageDetailData = {
+    body?: never;
+    path: {
+        /**
+         * Asset Id
+         */
+        asset_id: string;
+    };
+    query?: {
+        /**
+         * Version Id
+         */
+        version_id?: string | null;
+    };
+    url: '/api/v1/library/assets/{asset_id}/detail';
+};
+
+export type GetImageDetailErrors = {
+    /**
+     * Authentication required
+     */
+    401: ErrorEnvelope;
+    /**
+     * Origin not allowed by the ComfyUI proxy
+     */
+    403: ErrorEnvelope;
+    /**
+     * Resource not found or outside the requested scope
+     */
+    404: ErrorEnvelope;
+    /**
+     * Method not allowed
+     */
+    405: ErrorEnvelope;
+    /**
+     * Revision conflict
+     */
+    409: ErrorEnvelope;
+    /**
+     * Validation error or invalid reference
+     */
+    422: ErrorEnvelope;
+    /**
+     * Internal error
+     */
+    500: ErrorEnvelope;
+    /**
+     * Service not configured or unavailable
+     */
+    503: ErrorEnvelope;
+    /**
+     * Service timeout
+     */
+    504: ErrorEnvelope;
+    /**
+     * Default Response
+     */
+    default: ErrorEnvelope;
+};
+
+export type GetImageDetailError = GetImageDetailErrors[keyof GetImageDetailErrors];
+
+export type GetImageDetailResponses = {
+    /**
+     * Successful Response
+     */
+    200: ImageDetail;
+};
+
+export type GetImageDetailResponse = GetImageDetailResponses[keyof GetImageDetailResponses];
+
+export type UpdateImageMetadataBatchData = {
+    body: ImageMetadataBatch;
+    path?: never;
+    query?: never;
+    url: '/api/v1/library/assets/metadata-updates';
+};
+
+export type UpdateImageMetadataBatchErrors = {
+    /**
+     * Authentication required
+     */
+    401: ErrorEnvelope;
+    /**
+     * Origin not allowed by the ComfyUI proxy
+     */
+    403: ErrorEnvelope;
+    /**
+     * Resource not found or outside the requested scope
+     */
+    404: ErrorEnvelope;
+    /**
+     * Method not allowed
+     */
+    405: ErrorEnvelope;
+    /**
+     * Revision conflict
+     */
+    409: ErrorEnvelope;
+    /**
+     * Validation error or invalid reference
+     */
+    422: ErrorEnvelope;
+    /**
+     * Internal error
+     */
+    500: ErrorEnvelope;
+    /**
+     * Service not configured or unavailable
+     */
+    503: ErrorEnvelope;
+    /**
+     * Service timeout
+     */
+    504: ErrorEnvelope;
+    /**
+     * Default Response
+     */
+    default: ErrorEnvelope;
+};
+
+export type UpdateImageMetadataBatchError = UpdateImageMetadataBatchErrors[keyof UpdateImageMetadataBatchErrors];
+
+export type UpdateImageMetadataBatchResponses = {
+    /**
+     * Successful Response
+     */
+    200: ImageBatchResult;
+};
+
+export type UpdateImageMetadataBatchResponse = UpdateImageMetadataBatchResponses[keyof UpdateImageMetadataBatchResponses];
+
+export type ApplyImageEquipmentData = {
+    body: ImageEquipmentApply;
+    path?: never;
+    query?: never;
+    url: '/api/v1/library/assets/equipment-applications';
+};
+
+export type ApplyImageEquipmentErrors = {
+    /**
+     * Authentication required
+     */
+    401: ErrorEnvelope;
+    /**
+     * Origin not allowed by the ComfyUI proxy
+     */
+    403: ErrorEnvelope;
+    /**
+     * Resource not found or outside the requested scope
+     */
+    404: ErrorEnvelope;
+    /**
+     * Method not allowed
+     */
+    405: ErrorEnvelope;
+    /**
+     * Revision conflict
+     */
+    409: ErrorEnvelope;
+    /**
+     * Validation error or invalid reference
+     */
+    422: ErrorEnvelope;
+    /**
+     * Internal error
+     */
+    500: ErrorEnvelope;
+    /**
+     * Service not configured or unavailable
+     */
+    503: ErrorEnvelope;
+    /**
+     * Service timeout
+     */
+    504: ErrorEnvelope;
+    /**
+     * Default Response
+     */
+    default: ErrorEnvelope;
+};
+
+export type ApplyImageEquipmentError = ApplyImageEquipmentErrors[keyof ApplyImageEquipmentErrors];
+
+export type ApplyImageEquipmentResponses = {
+    /**
+     * Successful Response
+     */
+    200: ImageBatchResult;
+};
+
+export type ApplyImageEquipmentResponse = ApplyImageEquipmentResponses[keyof ApplyImageEquipmentResponses];
+
+export type GetMasterProvenanceData = {
+    body?: never;
+    path: {
+        /**
+         * Asset Id
+         */
+        asset_id: string;
+        /**
+         * Version Id
+         */
+        version_id: string;
+    };
+    query?: {
+        /**
+         * Provenance Version Id
+         */
+        provenance_version_id?: string | null;
+    };
+    url: '/api/v1/library/assets/{asset_id}/versions/{version_id}/master-provenance';
+};
+
+export type GetMasterProvenanceErrors = {
+    /**
+     * Authentication required
+     */
+    401: ErrorEnvelope;
+    /**
+     * Origin not allowed by the ComfyUI proxy
+     */
+    403: ErrorEnvelope;
+    /**
+     * Resource not found or outside the requested scope
+     */
+    404: ErrorEnvelope;
+    /**
+     * Method not allowed
+     */
+    405: ErrorEnvelope;
+    /**
+     * Revision conflict
+     */
+    409: ErrorEnvelope;
+    /**
+     * Validation error or invalid reference
+     */
+    422: ErrorEnvelope;
+    /**
+     * Internal error
+     */
+    500: ErrorEnvelope;
+    /**
+     * Service not configured or unavailable
+     */
+    503: ErrorEnvelope;
+    /**
+     * Service timeout
+     */
+    504: ErrorEnvelope;
+    /**
+     * Default Response
+     */
+    default: ErrorEnvelope;
+};
+
+export type GetMasterProvenanceError = GetMasterProvenanceErrors[keyof GetMasterProvenanceErrors];
+
+export type GetMasterProvenanceResponses = {
+    /**
+     * Successful Response
+     */
+    200: MasterProvenanceOut;
+};
+
+export type GetMasterProvenanceResponse = GetMasterProvenanceResponses[keyof GetMasterProvenanceResponses];
+
+export type UpdateMasterProvenanceData = {
+    body: MasterProvenanceUpdate;
+    path: {
+        /**
+         * Asset Id
+         */
+        asset_id: string;
+        /**
+         * Version Id
+         */
+        version_id: string;
+    };
+    query?: never;
+    url: '/api/v1/library/assets/{asset_id}/versions/{version_id}/master-provenance';
+};
+
+export type UpdateMasterProvenanceErrors = {
+    /**
+     * Authentication required
+     */
+    401: ErrorEnvelope;
+    /**
+     * Origin not allowed by the ComfyUI proxy
+     */
+    403: ErrorEnvelope;
+    /**
+     * Resource not found or outside the requested scope
+     */
+    404: ErrorEnvelope;
+    /**
+     * Method not allowed
+     */
+    405: ErrorEnvelope;
+    /**
+     * Revision conflict
+     */
+    409: ErrorEnvelope;
+    /**
+     * Validation error or invalid reference
+     */
+    422: ErrorEnvelope;
+    /**
+     * Internal error
+     */
+    500: ErrorEnvelope;
+    /**
+     * Service not configured or unavailable
+     */
+    503: ErrorEnvelope;
+    /**
+     * Service timeout
+     */
+    504: ErrorEnvelope;
+    /**
+     * Default Response
+     */
+    default: ErrorEnvelope;
+};
+
+export type UpdateMasterProvenanceError = UpdateMasterProvenanceErrors[keyof UpdateMasterProvenanceErrors];
+
+export type UpdateMasterProvenanceResponses = {
+    /**
+     * Successful Response
+     */
+    200: MasterProvenanceOut;
+};
+
+export type UpdateMasterProvenanceResponse = UpdateMasterProvenanceResponses[keyof UpdateMasterProvenanceResponses];
+
+export type GetImageDatasetDetailData = {
+    body?: never;
+    path: {
+        /**
+         * Dataset Id
+         */
+        dataset_id: string;
+    };
+    query?: {
+        /**
+         * Version Id
+         */
+        version_id?: string | null;
+    };
+    url: '/api/v1/datasets/{dataset_id}/detail';
+};
+
+export type GetImageDatasetDetailErrors = {
+    /**
+     * Authentication required
+     */
+    401: ErrorEnvelope;
+    /**
+     * Origin not allowed by the ComfyUI proxy
+     */
+    403: ErrorEnvelope;
+    /**
+     * Resource not found or outside the requested scope
+     */
+    404: ErrorEnvelope;
+    /**
+     * Method not allowed
+     */
+    405: ErrorEnvelope;
+    /**
+     * Revision conflict
+     */
+    409: ErrorEnvelope;
+    /**
+     * Validation error or invalid reference
+     */
+    422: ErrorEnvelope;
+    /**
+     * Internal error
+     */
+    500: ErrorEnvelope;
+    /**
+     * Service not configured or unavailable
+     */
+    503: ErrorEnvelope;
+    /**
+     * Service timeout
+     */
+    504: ErrorEnvelope;
+    /**
+     * Default Response
+     */
+    default: ErrorEnvelope;
+};
+
+export type GetImageDatasetDetailError = GetImageDatasetDetailErrors[keyof GetImageDatasetDetailErrors];
+
+export type GetImageDatasetDetailResponses = {
+    /**
+     * Successful Response
+     */
+    200: DatasetImageDetail;
+};
+
+export type GetImageDatasetDetailResponse = GetImageDatasetDetailResponses[keyof GetImageDatasetDetailResponses];
+
+export type EditImageDatasetMembersData = {
+    body: ImageDatasetEditMembers;
+    path: {
+        /**
+         * Dataset Id
+         */
+        dataset_id: string;
+    };
+    query?: never;
+    url: '/api/v1/datasets/{dataset_id}/member-edits';
+};
+
+export type EditImageDatasetMembersErrors = {
+    /**
+     * Authentication required
+     */
+    401: ErrorEnvelope;
+    /**
+     * Origin not allowed by the ComfyUI proxy
+     */
+    403: ErrorEnvelope;
+    /**
+     * Resource not found or outside the requested scope
+     */
+    404: ErrorEnvelope;
+    /**
+     * Method not allowed
+     */
+    405: ErrorEnvelope;
+    /**
+     * Revision conflict
+     */
+    409: ErrorEnvelope;
+    /**
+     * Validation error or invalid reference
+     */
+    422: ErrorEnvelope;
+    /**
+     * Internal error
+     */
+    500: ErrorEnvelope;
+    /**
+     * Service not configured or unavailable
+     */
+    503: ErrorEnvelope;
+    /**
+     * Service timeout
+     */
+    504: ErrorEnvelope;
+    /**
+     * Default Response
+     */
+    default: ErrorEnvelope;
+};
+
+export type EditImageDatasetMembersError = EditImageDatasetMembersErrors[keyof EditImageDatasetMembersErrors];
+
+export type EditImageDatasetMembersResponses = {
+    /**
+     * Successful Response
+     */
+    200: ImageOperationOut;
+};
+
+export type EditImageDatasetMembersResponse = EditImageDatasetMembersResponses[keyof EditImageDatasetMembersResponses];
+
+export type SearchImageCalibrationData = {
+    body: CalibrationSearchRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/calibration/search';
+};
+
+export type SearchImageCalibrationErrors = {
+    /**
+     * Authentication required
+     */
+    401: ErrorEnvelope;
+    /**
+     * Origin not allowed by the ComfyUI proxy
+     */
+    403: ErrorEnvelope;
+    /**
+     * Resource not found or outside the requested scope
+     */
+    404: ErrorEnvelope;
+    /**
+     * Method not allowed
+     */
+    405: ErrorEnvelope;
+    /**
+     * Revision conflict
+     */
+    409: ErrorEnvelope;
+    /**
+     * Validation error or invalid reference
+     */
+    422: ErrorEnvelope;
+    /**
+     * Internal error
+     */
+    500: ErrorEnvelope;
+    /**
+     * Service not configured or unavailable
+     */
+    503: ErrorEnvelope;
+    /**
+     * Service timeout
+     */
+    504: ErrorEnvelope;
+    /**
+     * Default Response
+     */
+    default: ErrorEnvelope;
+};
+
+export type SearchImageCalibrationError = SearchImageCalibrationErrors[keyof SearchImageCalibrationErrors];
+
+export type SearchImageCalibrationResponses = {
+    /**
+     * Successful Response
+     */
+    200: CalibrationCandidatePage;
+};
+
+export type SearchImageCalibrationResponse = SearchImageCalibrationResponses[keyof SearchImageCalibrationResponses];
+
+export type CheckImageCalibrationData = {
+    body: CalibrationCheckRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/calibration/check';
+};
+
+export type CheckImageCalibrationErrors = {
+    /**
+     * Authentication required
+     */
+    401: ErrorEnvelope;
+    /**
+     * Origin not allowed by the ComfyUI proxy
+     */
+    403: ErrorEnvelope;
+    /**
+     * Resource not found or outside the requested scope
+     */
+    404: ErrorEnvelope;
+    /**
+     * Method not allowed
+     */
+    405: ErrorEnvelope;
+    /**
+     * Revision conflict
+     */
+    409: ErrorEnvelope;
+    /**
+     * Validation error or invalid reference
+     */
+    422: ErrorEnvelope;
+    /**
+     * Internal error
+     */
+    500: ErrorEnvelope;
+    /**
+     * Service not configured or unavailable
+     */
+    503: ErrorEnvelope;
+    /**
+     * Service timeout
+     */
+    504: ErrorEnvelope;
+    /**
+     * Default Response
+     */
+    default: ErrorEnvelope;
+};
+
+export type CheckImageCalibrationError = CheckImageCalibrationErrors[keyof CheckImageCalibrationErrors];
+
+export type CheckImageCalibrationResponses = {
+    /**
+     * Successful Response
+     */
+    200: CalibrationCheckPage;
+};
+
+export type CheckImageCalibrationResponse = CheckImageCalibrationResponses[keyof CheckImageCalibrationResponses];
+
+export type CheckImportCalibrationData = {
+    body: ScannedCalibrationCheckRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/calibration/import-check';
+};
+
+export type CheckImportCalibrationErrors = {
+    /**
+     * Authentication required
+     */
+    401: ErrorEnvelope;
+    /**
+     * Origin not allowed by the ComfyUI proxy
+     */
+    403: ErrorEnvelope;
+    /**
+     * Resource not found or outside the requested scope
+     */
+    404: ErrorEnvelope;
+    /**
+     * Method not allowed
+     */
+    405: ErrorEnvelope;
+    /**
+     * Revision conflict
+     */
+    409: ErrorEnvelope;
+    /**
+     * Validation error or invalid reference
+     */
+    422: ErrorEnvelope;
+    /**
+     * Internal error
+     */
+    500: ErrorEnvelope;
+    /**
+     * Service not configured or unavailable
+     */
+    503: ErrorEnvelope;
+    /**
+     * Service timeout
+     */
+    504: ErrorEnvelope;
+    /**
+     * Default Response
+     */
+    default: ErrorEnvelope;
+};
+
+export type CheckImportCalibrationError = CheckImportCalibrationErrors[keyof CheckImportCalibrationErrors];
+
+export type CheckImportCalibrationResponses = {
+    /**
+     * Successful Response
+     */
+    200: ScannedCalibrationCheckPage;
+};
+
+export type CheckImportCalibrationResponse = CheckImportCalibrationResponses[keyof CheckImportCalibrationResponses];
+
+export type GetImageCalibrationData = {
+    body?: never;
+    path: {
+        /**
+         * Asset Id
+         */
+        asset_id: string;
+        /**
+         * Asset Version Id
+         */
+        asset_version_id: string;
+    };
+    query?: {
+        /**
+         * Binding Version Id
+         */
+        binding_version_id?: string | null;
+    };
+    url: '/api/v1/library/assets/{asset_id}/versions/{asset_version_id}/calibration';
+};
+
+export type GetImageCalibrationErrors = {
+    /**
+     * Authentication required
+     */
+    401: ErrorEnvelope;
+    /**
+     * Origin not allowed by the ComfyUI proxy
+     */
+    403: ErrorEnvelope;
+    /**
+     * Resource not found or outside the requested scope
+     */
+    404: ErrorEnvelope;
+    /**
+     * Method not allowed
+     */
+    405: ErrorEnvelope;
+    /**
+     * Revision conflict
+     */
+    409: ErrorEnvelope;
+    /**
+     * Validation error or invalid reference
+     */
+    422: ErrorEnvelope;
+    /**
+     * Internal error
+     */
+    500: ErrorEnvelope;
+    /**
+     * Service not configured or unavailable
+     */
+    503: ErrorEnvelope;
+    /**
+     * Service timeout
+     */
+    504: ErrorEnvelope;
+    /**
+     * Default Response
+     */
+    default: ErrorEnvelope;
+};
+
+export type GetImageCalibrationError = GetImageCalibrationErrors[keyof GetImageCalibrationErrors];
+
+export type GetImageCalibrationResponses = {
+    /**
+     * Successful Response
+     */
+    200: ImageCalibrationOut;
+};
+
+export type GetImageCalibrationResponse = GetImageCalibrationResponses[keyof GetImageCalibrationResponses];
+
+export type UpdateImageCalibrationData = {
+    body: ImageCalibrationUpdate;
+    path: {
+        /**
+         * Asset Id
+         */
+        asset_id: string;
+        /**
+         * Asset Version Id
+         */
+        asset_version_id: string;
+    };
+    query?: never;
+    url: '/api/v1/library/assets/{asset_id}/versions/{asset_version_id}/calibration';
+};
+
+export type UpdateImageCalibrationErrors = {
+    /**
+     * Authentication required
+     */
+    401: ErrorEnvelope;
+    /**
+     * Origin not allowed by the ComfyUI proxy
+     */
+    403: ErrorEnvelope;
+    /**
+     * Resource not found or outside the requested scope
+     */
+    404: ErrorEnvelope;
+    /**
+     * Method not allowed
+     */
+    405: ErrorEnvelope;
+    /**
+     * Revision conflict
+     */
+    409: ErrorEnvelope;
+    /**
+     * Validation error or invalid reference
+     */
+    422: ErrorEnvelope;
+    /**
+     * Internal error
+     */
+    500: ErrorEnvelope;
+    /**
+     * Service not configured or unavailable
+     */
+    503: ErrorEnvelope;
+    /**
+     * Service timeout
+     */
+    504: ErrorEnvelope;
+    /**
+     * Default Response
+     */
+    default: ErrorEnvelope;
+};
+
+export type UpdateImageCalibrationError = UpdateImageCalibrationErrors[keyof UpdateImageCalibrationErrors];
+
+export type UpdateImageCalibrationResponses = {
+    /**
+     * Successful Response
+     */
+    200: ImageOperationOut;
+};
+
+export type UpdateImageCalibrationResponse = UpdateImageCalibrationResponses[keyof UpdateImageCalibrationResponses];
+
+export type GetDatasetCalibrationData = {
+    body?: never;
+    path: {
+        /**
+         * Dataset Id
+         */
+        dataset_id: string;
+        /**
+         * Version Id
+         */
+        version_id: string;
+    };
+    query?: {
+        /**
+         * Member Asset Version Ids
+         */
+        member_asset_version_ids?: Array<string> | null;
+        /**
+         * Limit
+         */
+        limit?: number;
+        /**
+         * Offset
+         */
+        offset?: number;
+        /**
+         * Combination Key
+         */
+        combination_key?: string | null;
+    };
+    url: '/api/v1/datasets/{dataset_id}/versions/{version_id}/calibration';
+};
+
+export type GetDatasetCalibrationErrors = {
+    /**
+     * Authentication required
+     */
+    401: ErrorEnvelope;
+    /**
+     * Origin not allowed by the ComfyUI proxy
+     */
+    403: ErrorEnvelope;
+    /**
+     * Resource not found or outside the requested scope
+     */
+    404: ErrorEnvelope;
+    /**
+     * Method not allowed
+     */
+    405: ErrorEnvelope;
+    /**
+     * Revision conflict
+     */
+    409: ErrorEnvelope;
+    /**
+     * Validation error or invalid reference
+     */
+    422: ErrorEnvelope;
+    /**
+     * Internal error
+     */
+    500: ErrorEnvelope;
+    /**
+     * Service not configured or unavailable
+     */
+    503: ErrorEnvelope;
+    /**
+     * Service timeout
+     */
+    504: ErrorEnvelope;
+    /**
+     * Default Response
+     */
+    default: ErrorEnvelope;
+};
+
+export type GetDatasetCalibrationError = GetDatasetCalibrationErrors[keyof GetDatasetCalibrationErrors];
+
+export type GetDatasetCalibrationResponses = {
+    /**
+     * Successful Response
+     */
+    200: DatasetCalibrationPage;
+};
+
+export type GetDatasetCalibrationResponse = GetDatasetCalibrationResponses[keyof GetDatasetCalibrationResponses];
+
+export type UpdateDatasetCalibrationDefaultsData = {
+    body: DatasetCalibrationUpdate;
+    path: {
+        /**
+         * Dataset Id
+         */
+        dataset_id: string;
+    };
+    query?: never;
+    url: '/api/v1/datasets/{dataset_id}/calibration/defaults';
+};
+
+export type UpdateDatasetCalibrationDefaultsErrors = {
+    /**
+     * Authentication required
+     */
+    401: ErrorEnvelope;
+    /**
+     * Origin not allowed by the ComfyUI proxy
+     */
+    403: ErrorEnvelope;
+    /**
+     * Resource not found or outside the requested scope
+     */
+    404: ErrorEnvelope;
+    /**
+     * Method not allowed
+     */
+    405: ErrorEnvelope;
+    /**
+     * Revision conflict
+     */
+    409: ErrorEnvelope;
+    /**
+     * Validation error or invalid reference
+     */
+    422: ErrorEnvelope;
+    /**
+     * Internal error
+     */
+    500: ErrorEnvelope;
+    /**
+     * Service not configured or unavailable
+     */
+    503: ErrorEnvelope;
+    /**
+     * Service timeout
+     */
+    504: ErrorEnvelope;
+    /**
+     * Default Response
+     */
+    default: ErrorEnvelope;
+};
+
+export type UpdateDatasetCalibrationDefaultsError = UpdateDatasetCalibrationDefaultsErrors[keyof UpdateDatasetCalibrationDefaultsErrors];
+
+export type UpdateDatasetCalibrationDefaultsResponses = {
+    /**
+     * Successful Response
+     */
+    200: ImageOperationOut;
+};
+
+export type UpdateDatasetCalibrationDefaultsResponse = UpdateDatasetCalibrationDefaultsResponses[keyof UpdateDatasetCalibrationDefaultsResponses];
+
+export type UpdateDatasetCalibrationMembersData = {
+    body: DatasetMemberCalibrationUpdate;
+    path: {
+        /**
+         * Dataset Id
+         */
+        dataset_id: string;
+    };
+    query?: never;
+    url: '/api/v1/datasets/{dataset_id}/calibration/members';
+};
+
+export type UpdateDatasetCalibrationMembersErrors = {
+    /**
+     * Authentication required
+     */
+    401: ErrorEnvelope;
+    /**
+     * Origin not allowed by the ComfyUI proxy
+     */
+    403: ErrorEnvelope;
+    /**
+     * Resource not found or outside the requested scope
+     */
+    404: ErrorEnvelope;
+    /**
+     * Method not allowed
+     */
+    405: ErrorEnvelope;
+    /**
+     * Revision conflict
+     */
+    409: ErrorEnvelope;
+    /**
+     * Validation error or invalid reference
+     */
+    422: ErrorEnvelope;
+    /**
+     * Internal error
+     */
+    500: ErrorEnvelope;
+    /**
+     * Service not configured or unavailable
+     */
+    503: ErrorEnvelope;
+    /**
+     * Service timeout
+     */
+    504: ErrorEnvelope;
+    /**
+     * Default Response
+     */
+    default: ErrorEnvelope;
+};
+
+export type UpdateDatasetCalibrationMembersError = UpdateDatasetCalibrationMembersErrors[keyof UpdateDatasetCalibrationMembersErrors];
+
+export type UpdateDatasetCalibrationMembersResponses = {
+    /**
+     * Successful Response
+     */
+    200: ImageOperationOut;
+};
+
+export type UpdateDatasetCalibrationMembersResponse = UpdateDatasetCalibrationMembersResponses[keyof UpdateDatasetCalibrationMembersResponses];
+
+export type GetCalibrationOperationData = {
+    body?: never;
+    path: {
+        /**
+         * Request Id
+         */
+        request_id: string;
+    };
+    query?: never;
+    url: '/api/v1/calibration/operations/{request_id}';
+};
+
+export type GetCalibrationOperationErrors = {
+    /**
+     * Authentication required
+     */
+    401: ErrorEnvelope;
+    /**
+     * Origin not allowed by the ComfyUI proxy
+     */
+    403: ErrorEnvelope;
+    /**
+     * Resource not found or outside the requested scope
+     */
+    404: ErrorEnvelope;
+    /**
+     * Method not allowed
+     */
+    405: ErrorEnvelope;
+    /**
+     * Revision conflict
+     */
+    409: ErrorEnvelope;
+    /**
+     * Validation error or invalid reference
+     */
+    422: ErrorEnvelope;
+    /**
+     * Internal error
+     */
+    500: ErrorEnvelope;
+    /**
+     * Service not configured or unavailable
+     */
+    503: ErrorEnvelope;
+    /**
+     * Service timeout
+     */
+    504: ErrorEnvelope;
+    /**
+     * Default Response
+     */
+    default: ErrorEnvelope;
+};
+
+export type GetCalibrationOperationError = GetCalibrationOperationErrors[keyof GetCalibrationOperationErrors];
+
+export type GetCalibrationOperationResponses = {
+    /**
+     * Successful Response
+     */
+    200: ImageOperationOut;
+};
+
+export type GetCalibrationOperationResponse = GetCalibrationOperationResponses[keyof GetCalibrationOperationResponses];
+
 export type CancelMediaConsumerApiV1ProjectsProjectIdAssetReferencesReferenceIdPreviewsViewerConsumerConsumerIdDeleteData = {
     body?: never;
     path: {
@@ -9697,6 +13620,282 @@ export type MediaFileApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsViewerKey
 
 export type MediaFileApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsViewerKeyFileGetResponse = MediaFileApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsViewerKeyFileGetResponses[keyof MediaFileApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsViewerKeyFileGetResponses];
 
+export type CreateThumbnailBatchApiV1ThumbnailBatchesPostData = {
+    body: ThumbnailBatchCreate;
+    path?: never;
+    query?: never;
+    url: '/api/v1/thumbnail-batches';
+};
+
+export type CreateThumbnailBatchApiV1ThumbnailBatchesPostErrors = {
+    /**
+     * Authentication required
+     */
+    401: ErrorEnvelope;
+    /**
+     * Origin not allowed by the ComfyUI proxy
+     */
+    403: ErrorEnvelope;
+    /**
+     * Resource not found or outside the requested scope
+     */
+    404: ErrorEnvelope;
+    /**
+     * Method not allowed
+     */
+    405: ErrorEnvelope;
+    /**
+     * Revision conflict
+     */
+    409: ErrorEnvelope;
+    /**
+     * Validation error or invalid reference
+     */
+    422: ErrorEnvelope;
+    /**
+     * Internal error
+     */
+    500: ErrorEnvelope;
+    /**
+     * Service not configured or unavailable
+     */
+    503: ErrorEnvelope;
+    /**
+     * Service timeout
+     */
+    504: ErrorEnvelope;
+    /**
+     * Default Response
+     */
+    default: ErrorEnvelope;
+};
+
+export type CreateThumbnailBatchApiV1ThumbnailBatchesPostError = CreateThumbnailBatchApiV1ThumbnailBatchesPostErrors[keyof CreateThumbnailBatchApiV1ThumbnailBatchesPostErrors];
+
+export type CreateThumbnailBatchApiV1ThumbnailBatchesPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: ThumbnailBatchOut;
+};
+
+export type CreateThumbnailBatchApiV1ThumbnailBatchesPostResponse = CreateThumbnailBatchApiV1ThumbnailBatchesPostResponses[keyof CreateThumbnailBatchApiV1ThumbnailBatchesPostResponses];
+
+export type GetThumbnailBatchApiV1ThumbnailBatchesRequestIdGetData = {
+    body?: never;
+    path: {
+        /**
+         * Request Id
+         */
+        request_id: string;
+    };
+    query?: {
+        /**
+         * Limit
+         */
+        limit?: number;
+        /**
+         * Offset
+         */
+        offset?: number;
+    };
+    url: '/api/v1/thumbnail-batches/{request_id}';
+};
+
+export type GetThumbnailBatchApiV1ThumbnailBatchesRequestIdGetErrors = {
+    /**
+     * Authentication required
+     */
+    401: ErrorEnvelope;
+    /**
+     * Origin not allowed by the ComfyUI proxy
+     */
+    403: ErrorEnvelope;
+    /**
+     * Resource not found or outside the requested scope
+     */
+    404: ErrorEnvelope;
+    /**
+     * Method not allowed
+     */
+    405: ErrorEnvelope;
+    /**
+     * Revision conflict
+     */
+    409: ErrorEnvelope;
+    /**
+     * Validation error or invalid reference
+     */
+    422: ErrorEnvelope;
+    /**
+     * Internal error
+     */
+    500: ErrorEnvelope;
+    /**
+     * Service not configured or unavailable
+     */
+    503: ErrorEnvelope;
+    /**
+     * Service timeout
+     */
+    504: ErrorEnvelope;
+    /**
+     * Default Response
+     */
+    default: ErrorEnvelope;
+};
+
+export type GetThumbnailBatchApiV1ThumbnailBatchesRequestIdGetError = GetThumbnailBatchApiV1ThumbnailBatchesRequestIdGetErrors[keyof GetThumbnailBatchApiV1ThumbnailBatchesRequestIdGetErrors];
+
+export type GetThumbnailBatchApiV1ThumbnailBatchesRequestIdGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: ThumbnailBatchOut;
+};
+
+export type GetThumbnailBatchApiV1ThumbnailBatchesRequestIdGetResponse = GetThumbnailBatchApiV1ThumbnailBatchesRequestIdGetResponses[keyof GetThumbnailBatchApiV1ThumbnailBatchesRequestIdGetResponses];
+
+export type RetryThumbnailBatchApiV1ThumbnailBatchesRequestIdRetryPostData = {
+    body: ThumbnailRetry;
+    path: {
+        /**
+         * Request Id
+         */
+        request_id: string;
+    };
+    query?: never;
+    url: '/api/v1/thumbnail-batches/{request_id}/retry';
+};
+
+export type RetryThumbnailBatchApiV1ThumbnailBatchesRequestIdRetryPostErrors = {
+    /**
+     * Authentication required
+     */
+    401: ErrorEnvelope;
+    /**
+     * Origin not allowed by the ComfyUI proxy
+     */
+    403: ErrorEnvelope;
+    /**
+     * Resource not found or outside the requested scope
+     */
+    404: ErrorEnvelope;
+    /**
+     * Method not allowed
+     */
+    405: ErrorEnvelope;
+    /**
+     * Revision conflict
+     */
+    409: ErrorEnvelope;
+    /**
+     * Validation error or invalid reference
+     */
+    422: ErrorEnvelope;
+    /**
+     * Internal error
+     */
+    500: ErrorEnvelope;
+    /**
+     * Service not configured or unavailable
+     */
+    503: ErrorEnvelope;
+    /**
+     * Service timeout
+     */
+    504: ErrorEnvelope;
+    /**
+     * Default Response
+     */
+    default: ErrorEnvelope;
+};
+
+export type RetryThumbnailBatchApiV1ThumbnailBatchesRequestIdRetryPostError = RetryThumbnailBatchApiV1ThumbnailBatchesRequestIdRetryPostErrors[keyof RetryThumbnailBatchApiV1ThumbnailBatchesRequestIdRetryPostErrors];
+
+export type RetryThumbnailBatchApiV1ThumbnailBatchesRequestIdRetryPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: ThumbnailBatchOut;
+};
+
+export type RetryThumbnailBatchApiV1ThumbnailBatchesRequestIdRetryPostResponse = RetryThumbnailBatchApiV1ThumbnailBatchesRequestIdRetryPostResponses[keyof RetryThumbnailBatchApiV1ThumbnailBatchesRequestIdRetryPostResponses];
+
+export type GetDatasetMemberThumbnailApiV1DatasetsVersionsMembersThumbnailGetData = {
+    body?: never;
+    path: {
+        /**
+         * Dataset Id
+         */
+        dataset_id: string;
+        /**
+         * Dataset Version Id
+         */
+        dataset_version_id: string;
+        /**
+         * Asset Version Id
+         */
+        asset_version_id: string;
+    };
+    query?: never;
+    url: '/api/v1/datasets/{dataset_id}/versions/{dataset_version_id}/members/{asset_version_id}/thumbnail';
+};
+
+export type GetDatasetMemberThumbnailApiV1DatasetsVersionsMembersThumbnailGetErrors = {
+    /**
+     * Authentication required
+     */
+    401: ErrorEnvelope;
+    /**
+     * Origin not allowed by the ComfyUI proxy
+     */
+    403: ErrorEnvelope;
+    /**
+     * Resource not found or outside the requested scope
+     */
+    404: ErrorEnvelope;
+    /**
+     * Method not allowed
+     */
+    405: ErrorEnvelope;
+    /**
+     * Revision conflict
+     */
+    409: ErrorEnvelope;
+    /**
+     * Validation error or invalid reference
+     */
+    422: ErrorEnvelope;
+    /**
+     * Internal error
+     */
+    500: ErrorEnvelope;
+    /**
+     * Service not configured or unavailable
+     */
+    503: ErrorEnvelope;
+    /**
+     * Service timeout
+     */
+    504: ErrorEnvelope;
+    /**
+     * Default Response
+     */
+    default: ErrorEnvelope;
+};
+
+export type GetDatasetMemberThumbnailApiV1DatasetsVersionsMembersThumbnailGetError = GetDatasetMemberThumbnailApiV1DatasetsVersionsMembersThumbnailGetErrors[keyof GetDatasetMemberThumbnailApiV1DatasetsVersionsMembersThumbnailGetErrors];
+
+export type GetDatasetMemberThumbnailApiV1DatasetsVersionsMembersThumbnailGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: Blob | File;
+};
+
+export type GetDatasetMemberThumbnailApiV1DatasetsVersionsMembersThumbnailGetResponse = GetDatasetMemberThumbnailApiV1DatasetsVersionsMembersThumbnailGetResponses[keyof GetDatasetMemberThumbnailApiV1DatasetsVersionsMembersThumbnailGetResponses];
+
 export type RequestDisplayApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsDisplayPostData = {
     body?: never;
     path: {
@@ -10134,7 +14333,10 @@ export type ProjectAutoStretchApiV1ProjectsProjectIdAssetReferencesReferenceIdPr
 export type ProjectAutoStretchApiV1ProjectsProjectIdAssetReferencesReferenceIdPreviewsDisplayAutoStretchPostResponse = ProjectAutoStretchApiV1ProjectsProjectIdAssetReferencesReferenceIdPreviewsDisplayAutoStretchPostResponses[keyof ProjectAutoStretchApiV1ProjectsProjectIdAssetReferencesReferenceIdPreviewsDisplayAutoStretchPostResponses];
 
 export type InspectApiV1ImportInspectionsPostData = {
-    body: SourceInspection;
+    /**
+     * Body
+     */
+    body: SourceInspection | ImageInspectionHttpRequest;
     path?: never;
     query?: never;
     url: '/api/v1/import-inspections';
@@ -10187,9 +14389,11 @@ export type InspectApiV1ImportInspectionsPostError = InspectApiV1ImportInspectio
 
 export type InspectApiV1ImportInspectionsPostResponses = {
     /**
+     * Response Inspect Api V1 Import Inspections Post
+     *
      * Successful Response
      */
-    200: InspectionOut;
+    200: InspectionOut | ImageInspectionOut;
 };
 
 export type InspectApiV1ImportInspectionsPostResponse = InspectApiV1ImportInspectionsPostResponses[keyof InspectApiV1ImportInspectionsPostResponses];
@@ -10202,7 +14406,12 @@ export type GetInspectionApiV1ImportInspectionsScanIdGetData = {
          */
         scan_id: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * File Facts Only
+         */
+        file_facts_only?: boolean;
+    };
     url: '/api/v1/import-inspections/{scan_id}';
 };
 
@@ -10253,9 +14462,11 @@ export type GetInspectionApiV1ImportInspectionsScanIdGetError = GetInspectionApi
 
 export type GetInspectionApiV1ImportInspectionsScanIdGetResponses = {
     /**
+     * Response Get Inspection Api V1 Import Inspections  Scan Id  Get
+     *
      * Successful Response
      */
-    200: InspectionOut;
+    200: InspectionOut | ImageInspectionOut;
 };
 
 export type GetInspectionApiV1ImportInspectionsScanIdGetResponse = GetInspectionApiV1ImportInspectionsScanIdGetResponses[keyof GetInspectionApiV1ImportInspectionsScanIdGetResponses];
@@ -10270,6 +14481,26 @@ export type InspectionEntriesApiV1ImportInspectionsScanIdEntriesGetData = {
     };
     query?: {
         /**
+         * Text
+         */
+        text?: string | null;
+        /**
+         * Frame Class
+         */
+        frame_class?: 'subframe' | 'masterframe' | 'video' | null;
+        /**
+         * Frame Type
+         */
+        frame_type?: 'light' | 'bias' | 'dark' | 'flat' | 'dark_flat' | null;
+        /**
+         * Target Name
+         */
+        target_name?: string | null;
+        /**
+         * Supported
+         */
+        supported?: boolean | null;
+        /**
          * Limit
          */
         limit?: number;
@@ -10277,6 +14508,10 @@ export type InspectionEntriesApiV1ImportInspectionsScanIdEntriesGetData = {
          * Offset
          */
         offset?: number;
+        /**
+         * File Facts Only
+         */
+        file_facts_only?: boolean;
         /**
          * Group Id
          */
@@ -10336,9 +14571,11 @@ export type InspectionEntriesApiV1ImportInspectionsScanIdEntriesGetError = Inspe
 
 export type InspectionEntriesApiV1ImportInspectionsScanIdEntriesGetResponses = {
     /**
+     * Response Inspection Entries Api V1 Import Inspections  Scan Id  Entries Get
+     *
      * Successful Response
      */
-    200: InspectionPage;
+    200: ImageInspectionPage | InspectionPage;
 };
 
 export type InspectionEntriesApiV1ImportInspectionsScanIdEntriesGetResponse = InspectionEntriesApiV1ImportInspectionsScanIdEntriesGetResponses[keyof InspectionEntriesApiV1ImportInspectionsScanIdEntriesGetResponses];
@@ -11922,7 +16159,10 @@ export type LibraryTrashDeleteApiV1LibraryTrashDeletePostResponses = {
 export type LibraryTrashDeleteApiV1LibraryTrashDeletePostResponse = LibraryTrashDeleteApiV1LibraryTrashDeletePostResponses[keyof LibraryTrashDeleteApiV1LibraryTrashDeletePostResponses];
 
 export type CreateImportApiV1ImportsPostData = {
-    body: ImportCreate;
+    /**
+     * Body
+     */
+    body: ImportCreate | ExplicitImportRequest;
     path?: never;
     query?: never;
     url: '/api/v1/imports';
@@ -11975,12 +16215,216 @@ export type CreateImportApiV1ImportsPostError = CreateImportApiV1ImportsPostErro
 
 export type CreateImportApiV1ImportsPostResponses = {
     /**
+     * Response Create Import Api V1 Imports Post
+     *
      * Successful Response
      */
-    202: ImportAccepted;
+    202: ImageImportReceipt | ImportAccepted;
 };
 
 export type CreateImportApiV1ImportsPostResponse = CreateImportApiV1ImportsPostResponses[keyof CreateImportApiV1ImportsPostResponses];
+
+export type RetryImageImportPublicationData = {
+    body: PublicationRetryBody;
+    path: {
+        /**
+         * Task Id
+         */
+        task_id: string;
+    };
+    query?: never;
+    url: '/api/v1/imports/{task_id}/dataset-publication';
+};
+
+export type RetryImageImportPublicationErrors = {
+    /**
+     * Authentication required
+     */
+    401: ErrorEnvelope;
+    /**
+     * Origin not allowed by the ComfyUI proxy
+     */
+    403: ErrorEnvelope;
+    /**
+     * Resource not found or outside the requested scope
+     */
+    404: ErrorEnvelope;
+    /**
+     * Method not allowed
+     */
+    405: ErrorEnvelope;
+    /**
+     * Revision conflict
+     */
+    409: ErrorEnvelope;
+    /**
+     * Validation error or invalid reference
+     */
+    422: ErrorEnvelope;
+    /**
+     * Internal error
+     */
+    500: ErrorEnvelope;
+    /**
+     * Service not configured or unavailable
+     */
+    503: ErrorEnvelope;
+    /**
+     * Service timeout
+     */
+    504: ErrorEnvelope;
+    /**
+     * Default Response
+     */
+    default: ErrorEnvelope;
+};
+
+export type RetryImageImportPublicationError = RetryImageImportPublicationErrors[keyof RetryImageImportPublicationErrors];
+
+export type RetryImageImportPublicationResponses = {
+    /**
+     * Successful Response
+     */
+    200: ImageImportReceipt;
+};
+
+export type RetryImageImportPublicationResponse = RetryImageImportPublicationResponses[keyof RetryImageImportPublicationResponses];
+
+export type GetImageImportRequestData = {
+    body?: never;
+    path: {
+        /**
+         * Request Id
+         */
+        request_id: string;
+    };
+    query?: never;
+    url: '/api/v1/imports/requests/{request_id}';
+};
+
+export type GetImageImportRequestErrors = {
+    /**
+     * Authentication required
+     */
+    401: ErrorEnvelope;
+    /**
+     * Origin not allowed by the ComfyUI proxy
+     */
+    403: ErrorEnvelope;
+    /**
+     * Resource not found or outside the requested scope
+     */
+    404: ErrorEnvelope;
+    /**
+     * Method not allowed
+     */
+    405: ErrorEnvelope;
+    /**
+     * Revision conflict
+     */
+    409: ErrorEnvelope;
+    /**
+     * Validation error or invalid reference
+     */
+    422: ErrorEnvelope;
+    /**
+     * Internal error
+     */
+    500: ErrorEnvelope;
+    /**
+     * Service not configured or unavailable
+     */
+    503: ErrorEnvelope;
+    /**
+     * Service timeout
+     */
+    504: ErrorEnvelope;
+    /**
+     * Default Response
+     */
+    default: ErrorEnvelope;
+};
+
+export type GetImageImportRequestError = GetImageImportRequestErrors[keyof GetImageImportRequestErrors];
+
+export type GetImageImportRequestResponses = {
+    /**
+     * Response Getimageimportrequest
+     *
+     * Successful Response
+     */
+    200: ImageImportReceipt | BatchOut;
+};
+
+export type GetImageImportRequestResponse = GetImageImportRequestResponses[keyof GetImageImportRequestResponses];
+
+export type WaitImageImportRequestData = {
+    body: ImageWaitBody;
+    path: {
+        /**
+         * Request Id
+         */
+        request_id: string;
+    };
+    query?: never;
+    url: '/api/v1/imports/requests/{request_id}/wait';
+};
+
+export type WaitImageImportRequestErrors = {
+    /**
+     * Authentication required
+     */
+    401: ErrorEnvelope;
+    /**
+     * Origin not allowed by the ComfyUI proxy
+     */
+    403: ErrorEnvelope;
+    /**
+     * Resource not found or outside the requested scope
+     */
+    404: ErrorEnvelope;
+    /**
+     * Method not allowed
+     */
+    405: ErrorEnvelope;
+    /**
+     * Revision conflict
+     */
+    409: ErrorEnvelope;
+    /**
+     * Validation error or invalid reference
+     */
+    422: ErrorEnvelope;
+    /**
+     * Internal error
+     */
+    500: ErrorEnvelope;
+    /**
+     * Service not configured or unavailable
+     */
+    503: ErrorEnvelope;
+    /**
+     * Service timeout
+     */
+    504: ErrorEnvelope;
+    /**
+     * Default Response
+     */
+    default: ErrorEnvelope;
+};
+
+export type WaitImageImportRequestError = WaitImageImportRequestErrors[keyof WaitImageImportRequestErrors];
+
+export type WaitImageImportRequestResponses = {
+    /**
+     * Response Waitimageimportrequest
+     *
+     * Successful Response
+     */
+    200: ImageImportReceipt | BatchOut;
+};
+
+export type WaitImageImportRequestResponse = WaitImageImportRequestResponses[keyof WaitImageImportRequestResponses];
 
 export type CreateUploadApiV1UploadsPostData = {
     body: UploadImportCreate;
@@ -12336,6 +16780,10 @@ export type GetAssetTaskApiV1AssetTasksTaskIdGetData = {
          * Items Offset
          */
         items_offset?: number;
+        /**
+         * Image Query
+         */
+        image_query?: boolean;
     };
     url: '/api/v1/asset-tasks/{task_id}';
 };
@@ -12387,9 +16835,11 @@ export type GetAssetTaskApiV1AssetTasksTaskIdGetError = GetAssetTaskApiV1AssetTa
 
 export type GetAssetTaskApiV1AssetTasksTaskIdGetResponses = {
     /**
+     * Response Get Asset Task Api V1 Asset Tasks  Task Id  Get
+     *
      * Successful Response
      */
-    200: AssetTaskOut;
+    200: AssetTaskOut | ImageImportReceipt;
 };
 
 export type GetAssetTaskApiV1AssetTasksTaskIdGetResponse = GetAssetTaskApiV1AssetTasksTaskIdGetResponses[keyof GetAssetTaskApiV1AssetTasksTaskIdGetResponses];
@@ -12866,7 +17316,10 @@ export type GetAssetApiV1LibraryAssetsAssetIdGetResponses = {
 export type GetAssetApiV1LibraryAssetsAssetIdGetResponse = GetAssetApiV1LibraryAssetsAssetIdGetResponses[keyof GetAssetApiV1LibraryAssetsAssetIdGetResponses];
 
 export type PatchAssetApiV1LibraryAssetsAssetIdPatchData = {
-    body: AssetPatch;
+    /**
+     * Body
+     */
+    body: AssetPatch | ImageUpdate;
     path: {
         /**
          * Asset Id
@@ -12924,9 +17377,11 @@ export type PatchAssetApiV1LibraryAssetsAssetIdPatchError = PatchAssetApiV1Libra
 
 export type PatchAssetApiV1LibraryAssetsAssetIdPatchResponses = {
     /**
+     * Response Patch Asset Api V1 Library Assets  Asset Id  Patch
+     *
      * Successful Response
      */
-    200: AssetOut;
+    200: AssetOut | ImageDetail;
 };
 
 export type PatchAssetApiV1LibraryAssetsAssetIdPatchResponse = PatchAssetApiV1LibraryAssetsAssetIdPatchResponses[keyof PatchAssetApiV1LibraryAssetsAssetIdPatchResponses];
@@ -13171,7 +17626,24 @@ export type GetVersionHeaderApiV1LibraryAssetsAssetIdVersionsVersionIdHdusHduInd
          */
         hdu_index: number;
     };
-    query?: never;
+    query?: {
+        /**
+         * Keywords
+         */
+        keywords?: Array<string> | null;
+        /**
+         * Limit
+         */
+        limit?: number;
+        /**
+         * Offset
+         */
+        offset?: number;
+        /**
+         * Paged
+         */
+        paged?: boolean;
+    };
     url: '/api/v1/library/assets/{asset_id}/versions/{version_id}/hdus/{hdu_index}/header';
 };
 
@@ -13222,9 +17694,11 @@ export type GetVersionHeaderApiV1LibraryAssetsAssetIdVersionsVersionIdHdusHduInd
 
 export type GetVersionHeaderApiV1LibraryAssetsAssetIdVersionsVersionIdHdusHduIndexHeaderGetResponses = {
     /**
+     * Response Get Version Header Api V1 Library Assets  Asset Id  Versions  Version Id  Hdus  Hdu Index  Header Get
+     *
      * Successful Response
      */
-    200: FitsHeaderOut;
+    200: ImageHeaderPage | FitsHeaderOut;
 };
 
 export type GetVersionHeaderApiV1LibraryAssetsAssetIdVersionsVersionIdHdusHduIndexHeaderGetResponse = GetVersionHeaderApiV1LibraryAssetsAssetIdVersionsVersionIdHdusHduIndexHeaderGetResponses[keyof GetVersionHeaderApiV1LibraryAssetsAssetIdVersionsVersionIdHdusHduIndexHeaderGetResponses];
@@ -14533,7 +19007,7 @@ export type ListEquipmentApiV1EquipmentGetData = {
         /**
          * Kind
          */
-        kind?: 'camera' | 'telescope' | 'filter' | null;
+        kind?: 'camera' | 'telescope' | 'filter' | 'mount' | null;
     };
     url: '/api/v1/equipment';
 };
@@ -14602,7 +19076,9 @@ export type CreateEquipmentApiV1EquipmentPostData = {
         kind: 'filter';
     } & FilterCreate) | ({
         kind: 'telescope';
-    } & TelescopeCreate);
+    } & TelescopeCreate) | ({
+        kind: 'mount';
+    } & MountCreate);
     path?: never;
     query?: never;
     url: '/api/v1/equipment';
@@ -14665,7 +19141,9 @@ export type CreateEquipmentApiV1EquipmentPostResponses = {
         kind: 'filter';
     } & FilterOut) | ({
         kind: 'telescope';
-    } & TelescopeOut);
+    } & TelescopeOut) | ({
+        kind: 'mount';
+    } & MountOut);
 };
 
 export type CreateEquipmentApiV1EquipmentPostResponse = CreateEquipmentApiV1EquipmentPostResponses[keyof CreateEquipmentApiV1EquipmentPostResponses];
@@ -14739,7 +19217,9 @@ export type GetEquipmentApiV1EquipmentEquipmentIdGetResponses = {
         kind: 'filter';
     } & FilterOut) | ({
         kind: 'telescope';
-    } & TelescopeOut);
+    } & TelescopeOut) | ({
+        kind: 'mount';
+    } & MountOut);
 };
 
 export type GetEquipmentApiV1EquipmentEquipmentIdGetResponse = GetEquipmentApiV1EquipmentEquipmentIdGetResponses[keyof GetEquipmentApiV1EquipmentEquipmentIdGetResponses];
@@ -14754,7 +19234,9 @@ export type PatchEquipmentApiV1EquipmentEquipmentIdPatchData = {
         kind: 'filter';
     } & FilterPatch) | ({
         kind: 'telescope';
-    } & TelescopePatch);
+    } & TelescopePatch) | ({
+        kind: 'mount';
+    } & MountPatch);
     path: {
         /**
          * Equipment Id
@@ -14822,7 +19304,9 @@ export type PatchEquipmentApiV1EquipmentEquipmentIdPatchResponses = {
         kind: 'filter';
     } & FilterOut) | ({
         kind: 'telescope';
-    } & TelescopeOut);
+    } & TelescopeOut) | ({
+        kind: 'mount';
+    } & MountOut);
 };
 
 export type PatchEquipmentApiV1EquipmentEquipmentIdPatchResponse = PatchEquipmentApiV1EquipmentEquipmentIdPatchResponses[keyof PatchEquipmentApiV1EquipmentEquipmentIdPatchResponses];
@@ -14842,7 +19326,7 @@ export type ListSetupsApiV1EquipmentSetupsGetData = {
         /**
          * Sort By
          */
-        sort_by?: 'created_at' | 'name' | 'camera' | 'telescope' | 'filter';
+        sort_by?: 'created_at' | 'name' | 'camera' | 'telescope' | 'filter' | 'mount';
         /**
          * Order
          */
@@ -14858,7 +19342,7 @@ export type ListSetupsApiV1EquipmentSetupsGetData = {
         /**
          * Component Kind
          */
-        component_kind?: 'camera' | 'telescope' | 'filter' | null;
+        component_kind?: 'camera' | 'telescope' | 'filter' | 'mount' | null;
     };
     url: '/api/v1/equipment-setups';
 };
@@ -15110,15 +19594,111 @@ export type PatchSetupApiV1EquipmentSetupsSetupIdPatchResponses = {
 
 export type PatchSetupApiV1EquipmentSetupsSetupIdPatchResponse = PatchSetupApiV1EquipmentSetupsSetupIdPatchResponses[keyof PatchSetupApiV1EquipmentSetupsSetupIdPatchResponses];
 
-export type ListSetupPresetsApiV1EquipmentSetupsSetupIdPresetsGetData = {
+export type ListDatasetMemberSummariesData = {
     body?: never;
     path: {
         /**
-         * Setup Id
+         * Dataset Id
          */
-        setup_id: string;
+        dataset_id: string;
+        /**
+         * Version Id
+         */
+        version_id: string;
     };
     query?: {
+        /**
+         * Role
+         */
+        role?: Array<'raw' | 'calibration' | 'intermediate' | 'final'>;
+        /**
+         * Frame Class
+         */
+        frame_class?: Array<'subframe' | 'masterframe' | 'video'>;
+        /**
+         * Frame Type
+         */
+        frame_type?: Array<'light' | 'bias' | 'dark' | 'flat' | 'dark_flat'>;
+        /**
+         * Camera Id
+         */
+        camera_id?: Array<string>;
+        /**
+         * Optical System Id
+         */
+        optical_system_id?: Array<string>;
+        /**
+         * Filter Id
+         */
+        filter_id?: Array<string>;
+        /**
+         * Parameter Mode
+         */
+        parameter_mode?: Array<'iso' | 'gain' | 'standard'>;
+        /**
+         * Binning
+         */
+        binning?: Array<string>;
+        /**
+         * Exposure Min
+         */
+        exposure_min?: number | null;
+        /**
+         * Exposure Max
+         */
+        exposure_max?: number | null;
+        /**
+         * Integration Min
+         */
+        integration_min?: number | null;
+        /**
+         * Integration Max
+         */
+        integration_max?: number | null;
+        /**
+         * Temperature Min
+         */
+        temperature_min?: number | null;
+        /**
+         * Temperature Max
+         */
+        temperature_max?: number | null;
+        /**
+         * Iso Min
+         */
+        iso_min?: number | null;
+        /**
+         * Iso Max
+         */
+        iso_max?: number | null;
+        /**
+         * Gain Min
+         */
+        gain_min?: number | null;
+        /**
+         * Gain Max
+         */
+        gain_max?: number | null;
+        /**
+         * Offset Min
+         */
+        offset_min?: number | null;
+        /**
+         * Offset Max
+         */
+        offset_max?: number | null;
+        /**
+         * Q
+         */
+        q?: string | null;
+        /**
+         * Sort By
+         */
+        sort_by?: 'created_at' | 'name' | 'classification' | 'camera' | 'parameter_mode' | 'exposure_seconds' | 'sensor_temperature_c' | 'binning' | 'cfa_pattern' | 'optical_system' | 'filter' | 'integration_seconds' | 'storage_mode' | 'status' | 'notes' | 'position';
+        /**
+         * Order
+         */
+        order?: 'asc' | 'desc';
         /**
          * Limit
          */
@@ -15127,31 +19707,11 @@ export type ListSetupPresetsApiV1EquipmentSetupsSetupIdPresetsGetData = {
          * Offset
          */
         offset?: number;
-        /**
-         * Sort By
-         */
-        sort_by?: 'created_at' | 'name';
-        /**
-         * Order
-         */
-        order?: 'asc' | 'desc';
-        /**
-         * Q
-         */
-        q?: string | null;
-        /**
-         * Status
-         */
-        status?: 'active' | 'archived' | 'all';
-        /**
-         * Equipment Setup Id
-         */
-        equipment_setup_id?: string | null;
     };
-    url: '/api/v1/equipment-setups/{setup_id}/presets';
+    url: '/api/v1/datasets/{dataset_id}/versions/{version_id}/member-summaries';
 };
 
-export type ListSetupPresetsApiV1EquipmentSetupsSetupIdPresetsGetErrors = {
+export type ListDatasetMemberSummariesErrors = {
     /**
      * Authentication required
      */
@@ -15194,310 +19754,130 @@ export type ListSetupPresetsApiV1EquipmentSetupsSetupIdPresetsGetErrors = {
     default: ErrorEnvelope;
 };
 
-export type ListSetupPresetsApiV1EquipmentSetupsSetupIdPresetsGetError = ListSetupPresetsApiV1EquipmentSetupsSetupIdPresetsGetErrors[keyof ListSetupPresetsApiV1EquipmentSetupsSetupIdPresetsGetErrors];
+export type ListDatasetMemberSummariesError = ListDatasetMemberSummariesErrors[keyof ListDatasetMemberSummariesErrors];
 
-export type ListSetupPresetsApiV1EquipmentSetupsSetupIdPresetsGetResponses = {
+export type ListDatasetMemberSummariesResponses = {
     /**
      * Successful Response
      */
-    200: CapturePresetPage;
+    200: DatasetMemberSummaryPage;
 };
 
-export type ListSetupPresetsApiV1EquipmentSetupsSetupIdPresetsGetResponse = ListSetupPresetsApiV1EquipmentSetupsSetupIdPresetsGetResponses[keyof ListSetupPresetsApiV1EquipmentSetupsSetupIdPresetsGetResponses];
-
-export type CreatePresetApiV1EquipmentSetupsSetupIdPresetsPostData = {
-    body: CapturePresetCreate;
-    path: {
-        /**
-         * Setup Id
-         */
-        setup_id: string;
-    };
-    query?: never;
-    url: '/api/v1/equipment-setups/{setup_id}/presets';
-};
-
-export type CreatePresetApiV1EquipmentSetupsSetupIdPresetsPostErrors = {
-    /**
-     * Authentication required
-     */
-    401: ErrorEnvelope;
-    /**
-     * Origin not allowed by the ComfyUI proxy
-     */
-    403: ErrorEnvelope;
-    /**
-     * Resource not found or outside the requested scope
-     */
-    404: ErrorEnvelope;
-    /**
-     * Method not allowed
-     */
-    405: ErrorEnvelope;
-    /**
-     * Revision conflict
-     */
-    409: ErrorEnvelope;
-    /**
-     * Validation error or invalid reference
-     */
-    422: ErrorEnvelope;
-    /**
-     * Internal error
-     */
-    500: ErrorEnvelope;
-    /**
-     * Service not configured or unavailable
-     */
-    503: ErrorEnvelope;
-    /**
-     * Service timeout
-     */
-    504: ErrorEnvelope;
-    /**
-     * Default Response
-     */
-    default: ErrorEnvelope;
-};
-
-export type CreatePresetApiV1EquipmentSetupsSetupIdPresetsPostError = CreatePresetApiV1EquipmentSetupsSetupIdPresetsPostErrors[keyof CreatePresetApiV1EquipmentSetupsSetupIdPresetsPostErrors];
-
-export type CreatePresetApiV1EquipmentSetupsSetupIdPresetsPostResponses = {
-    /**
-     * Successful Response
-     */
-    201: CapturePresetOut;
-};
-
-export type CreatePresetApiV1EquipmentSetupsSetupIdPresetsPostResponse = CreatePresetApiV1EquipmentSetupsSetupIdPresetsPostResponses[keyof CreatePresetApiV1EquipmentSetupsSetupIdPresetsPostResponses];
-
-export type ListPresetsApiV1CapturePresetsGetData = {
-    body?: never;
-    path?: never;
-    query?: {
-        /**
-         * Limit
-         */
-        limit?: number;
-        /**
-         * Offset
-         */
-        offset?: number;
-        /**
-         * Sort By
-         */
-        sort_by?: 'created_at' | 'name';
-        /**
-         * Order
-         */
-        order?: 'asc' | 'desc';
-        /**
-         * Q
-         */
-        q?: string | null;
-        /**
-         * Status
-         */
-        status?: 'active' | 'archived' | 'all';
-        /**
-         * Equipment Setup Id
-         */
-        equipment_setup_id?: string | null;
-    };
-    url: '/api/v1/capture-presets';
-};
-
-export type ListPresetsApiV1CapturePresetsGetErrors = {
-    /**
-     * Authentication required
-     */
-    401: ErrorEnvelope;
-    /**
-     * Origin not allowed by the ComfyUI proxy
-     */
-    403: ErrorEnvelope;
-    /**
-     * Resource not found or outside the requested scope
-     */
-    404: ErrorEnvelope;
-    /**
-     * Method not allowed
-     */
-    405: ErrorEnvelope;
-    /**
-     * Revision conflict
-     */
-    409: ErrorEnvelope;
-    /**
-     * Validation error or invalid reference
-     */
-    422: ErrorEnvelope;
-    /**
-     * Internal error
-     */
-    500: ErrorEnvelope;
-    /**
-     * Service not configured or unavailable
-     */
-    503: ErrorEnvelope;
-    /**
-     * Service timeout
-     */
-    504: ErrorEnvelope;
-    /**
-     * Default Response
-     */
-    default: ErrorEnvelope;
-};
-
-export type ListPresetsApiV1CapturePresetsGetError = ListPresetsApiV1CapturePresetsGetErrors[keyof ListPresetsApiV1CapturePresetsGetErrors];
-
-export type ListPresetsApiV1CapturePresetsGetResponses = {
-    /**
-     * Successful Response
-     */
-    200: CapturePresetPage;
-};
-
-export type ListPresetsApiV1CapturePresetsGetResponse = ListPresetsApiV1CapturePresetsGetResponses[keyof ListPresetsApiV1CapturePresetsGetResponses];
-
-export type GetPresetApiV1CapturePresetsPresetIdGetData = {
-    body?: never;
-    path: {
-        /**
-         * Preset Id
-         */
-        preset_id: string;
-    };
-    query?: never;
-    url: '/api/v1/capture-presets/{preset_id}';
-};
-
-export type GetPresetApiV1CapturePresetsPresetIdGetErrors = {
-    /**
-     * Authentication required
-     */
-    401: ErrorEnvelope;
-    /**
-     * Origin not allowed by the ComfyUI proxy
-     */
-    403: ErrorEnvelope;
-    /**
-     * Resource not found or outside the requested scope
-     */
-    404: ErrorEnvelope;
-    /**
-     * Method not allowed
-     */
-    405: ErrorEnvelope;
-    /**
-     * Revision conflict
-     */
-    409: ErrorEnvelope;
-    /**
-     * Validation error or invalid reference
-     */
-    422: ErrorEnvelope;
-    /**
-     * Internal error
-     */
-    500: ErrorEnvelope;
-    /**
-     * Service not configured or unavailable
-     */
-    503: ErrorEnvelope;
-    /**
-     * Service timeout
-     */
-    504: ErrorEnvelope;
-    /**
-     * Default Response
-     */
-    default: ErrorEnvelope;
-};
-
-export type GetPresetApiV1CapturePresetsPresetIdGetError = GetPresetApiV1CapturePresetsPresetIdGetErrors[keyof GetPresetApiV1CapturePresetsPresetIdGetErrors];
-
-export type GetPresetApiV1CapturePresetsPresetIdGetResponses = {
-    /**
-     * Successful Response
-     */
-    200: CapturePresetOut;
-};
-
-export type GetPresetApiV1CapturePresetsPresetIdGetResponse = GetPresetApiV1CapturePresetsPresetIdGetResponses[keyof GetPresetApiV1CapturePresetsPresetIdGetResponses];
-
-export type PatchPresetApiV1CapturePresetsPresetIdPatchData = {
-    body: CapturePresetPatch;
-    path: {
-        /**
-         * Preset Id
-         */
-        preset_id: string;
-    };
-    query?: never;
-    url: '/api/v1/capture-presets/{preset_id}';
-};
-
-export type PatchPresetApiV1CapturePresetsPresetIdPatchErrors = {
-    /**
-     * Authentication required
-     */
-    401: ErrorEnvelope;
-    /**
-     * Origin not allowed by the ComfyUI proxy
-     */
-    403: ErrorEnvelope;
-    /**
-     * Resource not found or outside the requested scope
-     */
-    404: ErrorEnvelope;
-    /**
-     * Method not allowed
-     */
-    405: ErrorEnvelope;
-    /**
-     * Revision conflict
-     */
-    409: ErrorEnvelope;
-    /**
-     * Validation error or invalid reference
-     */
-    422: ErrorEnvelope;
-    /**
-     * Internal error
-     */
-    500: ErrorEnvelope;
-    /**
-     * Service not configured or unavailable
-     */
-    503: ErrorEnvelope;
-    /**
-     * Service timeout
-     */
-    504: ErrorEnvelope;
-    /**
-     * Default Response
-     */
-    default: ErrorEnvelope;
-};
-
-export type PatchPresetApiV1CapturePresetsPresetIdPatchError = PatchPresetApiV1CapturePresetsPresetIdPatchErrors[keyof PatchPresetApiV1CapturePresetsPresetIdPatchErrors];
-
-export type PatchPresetApiV1CapturePresetsPresetIdPatchResponses = {
-    /**
-     * Successful Response
-     */
-    200: CapturePresetOut;
-};
-
-export type PatchPresetApiV1CapturePresetsPresetIdPatchResponse = PatchPresetApiV1CapturePresetsPresetIdPatchResponses[keyof PatchPresetApiV1CapturePresetsPresetIdPatchResponses];
+export type ListDatasetMemberSummariesResponse = ListDatasetMemberSummariesResponses[keyof ListDatasetMemberSummariesResponses];
 
 export type ListDatasetsApiV1DatasetsGetData = {
     body?: never;
     path?: never;
     query?: {
         /**
+         * Text
+         */
+        text?: string | null;
+        /**
+         * Status
+         */
+        status?: 'active' | 'archived' | 'all';
+        /**
+         * Target Name
+         */
+        target_name?: string | null;
+        /**
+         * Frame Class
+         */
+        frame_class?: 'subframe' | 'masterframe' | 'video' | null;
+        /**
+         * Frame Type
+         */
+        frame_type?: 'light' | 'bias' | 'dark' | 'flat' | 'dark_flat' | null;
+        /**
+         * Camera Id
+         */
+        camera_id?: string | null;
+        /**
+         * Telescope Id
+         */
+        telescope_id?: string | null;
+        /**
+         * Filter Id
+         */
+        filter_id?: string | null;
+        /**
+         * Parameter Mode
+         */
+        parameter_mode?: 'iso' | 'gain' | 'standard' | null;
+        /**
+         * Binning X
+         */
+        binning_x?: number | null;
+        /**
+         * Binning Y
+         */
+        binning_y?: number | null;
+        /**
+         * Exposure Min
+         */
+        exposure_min?: number | null;
+        /**
+         * Exposure Max
+         */
+        exposure_max?: number | null;
+        /**
+         * Temperature Min
+         */
+        temperature_min?: number | null;
+        /**
+         * Temperature Max
+         */
+        temperature_max?: number | null;
+        /**
+         * Gain Min
+         */
+        gain_min?: number | null;
+        /**
+         * Gain Max
+         */
+        gain_max?: number | null;
+        /**
+         * Offset Min
+         */
+        offset_min?: number | null;
+        /**
+         * Offset Max
+         */
+        offset_max?: number | null;
+        /**
+         * Iso Min
+         */
+        iso_min?: number | null;
+        /**
+         * Iso Max
+         */
+        iso_max?: number | null;
+        /**
+         * Captured From
+         */
+        captured_from?: string | null;
+        /**
+         * Captured To
+         */
+        captured_to?: string | null;
+        /**
+         * Master Created From
+         */
+        master_created_from?: string | null;
+        /**
+         * Master Created To
+         */
+        master_created_to?: string | null;
+        /**
+         * Sort By
+         */
+        sort_by?: 'name' | 'created_at' | 'capture_start' | 'master_created_at';
+        /**
+         * Order
+         */
+        order?: 'asc' | 'desc';
+        /**
          * Limit
          */
         limit?: number;
@@ -15506,21 +19886,17 @@ export type ListDatasetsApiV1DatasetsGetData = {
          */
         offset?: number;
         /**
-         * Sort By
+         * Match
          */
-        sort_by?: 'created_at' | 'name';
+        match?: 'any' | 'all';
         /**
-         * Order
+         * Image Query
          */
-        order?: 'asc' | 'desc';
+        image_query?: boolean;
         /**
          * Q
          */
         q?: string | null;
-        /**
-         * Status
-         */
-        status?: 'active' | 'archived' | 'all';
     };
     url: '/api/v1/datasets';
 };
@@ -15572,15 +19948,20 @@ export type ListDatasetsApiV1DatasetsGetError = ListDatasetsApiV1DatasetsGetErro
 
 export type ListDatasetsApiV1DatasetsGetResponses = {
     /**
+     * Response List Datasets Api V1 Datasets Get
+     *
      * Successful Response
      */
-    200: DatasetPage;
+    200: DatasetImagePage | DatasetPage;
 };
 
 export type ListDatasetsApiV1DatasetsGetResponse = ListDatasetsApiV1DatasetsGetResponses[keyof ListDatasetsApiV1DatasetsGetResponses];
 
 export type CreateDatasetApiV1DatasetsPostData = {
-    body: DatasetCreate;
+    /**
+     * Body
+     */
+    body: DatasetCreate | ImageDatasetCreate;
     path?: never;
     query?: never;
     url: '/api/v1/datasets';
@@ -15633,9 +20014,11 @@ export type CreateDatasetApiV1DatasetsPostError = CreateDatasetApiV1DatasetsPost
 
 export type CreateDatasetApiV1DatasetsPostResponses = {
     /**
+     * Response Create Dataset Api V1 Datasets Post
+     *
      * Successful Response
      */
-    201: DatasetOut;
+    201: DatasetOut | ImageOperationOut;
 };
 
 export type CreateDatasetApiV1DatasetsPostResponse = CreateDatasetApiV1DatasetsPostResponses[keyof CreateDatasetApiV1DatasetsPostResponses];
@@ -15707,7 +20090,10 @@ export type GetDatasetApiV1DatasetsDatasetIdGetResponses = {
 export type GetDatasetApiV1DatasetsDatasetIdGetResponse = GetDatasetApiV1DatasetsDatasetIdGetResponses[keyof GetDatasetApiV1DatasetsDatasetIdGetResponses];
 
 export type PatchDatasetApiV1DatasetsDatasetIdPatchData = {
-    body: DatasetPatch;
+    /**
+     * Body
+     */
+    body: DatasetPatch | ImageDatasetUpdate;
     path: {
         /**
          * Dataset Id
@@ -15765,9 +20151,11 @@ export type PatchDatasetApiV1DatasetsDatasetIdPatchError = PatchDatasetApiV1Data
 
 export type PatchDatasetApiV1DatasetsDatasetIdPatchResponses = {
     /**
+     * Response Patch Dataset Api V1 Datasets  Dataset Id  Patch
+     *
      * Successful Response
      */
-    200: DatasetOut;
+    200: DatasetOut | DatasetImageDetail;
 };
 
 export type PatchDatasetApiV1DatasetsDatasetIdPatchResponse = PatchDatasetApiV1DatasetsDatasetIdPatchResponses[keyof PatchDatasetApiV1DatasetsDatasetIdPatchResponses];
@@ -16063,9 +20451,17 @@ export type ListDatasetMembersData = {
     };
     query?: {
         /**
-         * Role
+         * Text
          */
-        role?: Array<'raw' | 'calibration' | 'intermediate' | 'final'>;
+        text?: string | null;
+        /**
+         * Status
+         */
+        status?: 'active' | 'archived' | 'all';
+        /**
+         * Target Name
+         */
+        target_name?: string | null;
         /**
          * Frame Class
          */
@@ -16079,9 +20475,9 @@ export type ListDatasetMembersData = {
          */
         camera_id?: Array<string>;
         /**
-         * Optical System Id
+         * Telescope Id
          */
-        optical_system_id?: Array<string>;
+        telescope_id?: string | null;
         /**
          * Filter Id
          */
@@ -16091,9 +20487,13 @@ export type ListDatasetMembersData = {
          */
         parameter_mode?: Array<'iso' | 'gain' | 'standard'>;
         /**
-         * Binning
+         * Binning X
          */
-        binning?: Array<string>;
+        binning_x?: number | null;
+        /**
+         * Binning Y
+         */
+        binning_y?: number | null;
         /**
          * Exposure Min
          */
@@ -16103,14 +20503,6 @@ export type ListDatasetMembersData = {
          */
         exposure_max?: number | null;
         /**
-         * Integration Min
-         */
-        integration_min?: number | null;
-        /**
-         * Integration Max
-         */
-        integration_max?: number | null;
-        /**
          * Temperature Min
          */
         temperature_min?: number | null;
@@ -16118,14 +20510,6 @@ export type ListDatasetMembersData = {
          * Temperature Max
          */
         temperature_max?: number | null;
-        /**
-         * Iso Min
-         */
-        iso_min?: number | null;
-        /**
-         * Iso Max
-         */
-        iso_max?: number | null;
         /**
          * Gain Min
          */
@@ -16143,13 +20527,33 @@ export type ListDatasetMembersData = {
          */
         offset_max?: number | null;
         /**
-         * Q
+         * Iso Min
          */
-        q?: string | null;
+        iso_min?: number | null;
+        /**
+         * Iso Max
+         */
+        iso_max?: number | null;
+        /**
+         * Captured From
+         */
+        captured_from?: string | null;
+        /**
+         * Captured To
+         */
+        captured_to?: string | null;
+        /**
+         * Master Created From
+         */
+        master_created_from?: string | null;
+        /**
+         * Master Created To
+         */
+        master_created_to?: string | null;
         /**
          * Sort By
          */
-        sort_by?: 'created_at' | 'name' | 'classification' | 'camera' | 'parameter_mode' | 'exposure_seconds' | 'sensor_temperature_c' | 'binning' | 'cfa_pattern' | 'optical_system' | 'filter' | 'integration_seconds' | 'storage_mode' | 'status' | 'notes' | 'position';
+        sort_by?: 'created_at' | 'name' | 'classification' | 'camera' | 'parameter_mode' | 'exposure_seconds' | 'sensor_temperature_c' | 'binning' | 'cfa_pattern' | 'optical_system' | 'filter' | 'integration_seconds' | 'storage_mode' | 'status' | 'notes' | 'position' | 'capture_start' | 'master_created_at';
         /**
          * Order
          */
@@ -16162,6 +20566,34 @@ export type ListDatasetMembersData = {
          * Offset
          */
         offset?: number;
+        /**
+         * Role
+         */
+        role?: Array<'raw' | 'calibration' | 'intermediate' | 'final'>;
+        /**
+         * Optical System Id
+         */
+        optical_system_id?: Array<string>;
+        /**
+         * Binning
+         */
+        binning?: Array<string>;
+        /**
+         * Integration Min
+         */
+        integration_min?: number | null;
+        /**
+         * Integration Max
+         */
+        integration_max?: number | null;
+        /**
+         * Q
+         */
+        q?: string | null;
+        /**
+         * Image Query
+         */
+        image_query?: boolean;
     };
     url: '/api/v1/datasets/{dataset_id}/versions/{version_id}/members';
 };
@@ -16213,9 +20645,11 @@ export type ListDatasetMembersError = ListDatasetMembersErrors[keyof ListDataset
 
 export type ListDatasetMembersResponses = {
     /**
+     * Response Listdatasetmembers
+     *
      * Successful Response
      */
-    200: DatasetMemberPage;
+    200: DatasetImageMemberPage | DatasetMemberPage;
 };
 
 export type ListDatasetMembersResponse = ListDatasetMembersResponses[keyof ListDatasetMembersResponses];

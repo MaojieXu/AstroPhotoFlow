@@ -5,7 +5,7 @@ import { computed, watch } from 'vue'
 import { ApiClientError } from '../api/client'
 import { useImportTasks } from './queries'
 import { useResumeImport } from './mutations'
-import { taskSchema } from '../api/contracts'
+import type { AssetTaskSummary } from '../../../generated/api/types.gen'
 import LibraryButton from '../components/LibraryButton.vue'
 import type { ImportNotice } from '../workspace/libraryControls'
 
@@ -13,7 +13,7 @@ const { refreshToken, watchTaskIds = [], workspace = window.location.origin } = 
   refreshToken:number; watchTaskIds?:string[]; workspace?:string
 }>()
 const emit=defineEmits<{completed:[taskId:string];registered:[taskId:string];succeeded:[message:string];notice:[notice:ImportNotice]}>()
-type Task=ReturnType<typeof taskSchema.parse>
+type Task=AssetTaskSummary
 const taskQuery = useImportTasks(() => workspace)
 const resumeImport = useResumeImport()
 const tasks = computed(() => taskQuery.data.value?.items ?? [])

@@ -13,9 +13,13 @@ class AssetTask(Base):
     __table_args__ = (
         CheckConstraint(f"status IN {get_args(TaskStatus)!r}", name="ck_asset_task_status"),
         Index("ix_asset_task_created", "created_at"),
+        Index("uq_asset_task_request_id", "request_id", unique=True),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    request_id: Mapped[str | None] = mapped_column(String(36))
+    request_fingerprint: Mapped[str | None] = mapped_column(String(64))
+    image_import_plan: Mapped[dict | None] = mapped_column(JSON)
     status: Mapped[TaskStatus] = mapped_column(String(32), nullable=False, default="queued")
     sources: Mapped[list] = mapped_column(JSON, nullable=False)
     storage_mode: Mapped[str] = mapped_column(String(16), nullable=False)

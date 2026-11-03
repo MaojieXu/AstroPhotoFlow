@@ -29,7 +29,7 @@ class TileService:
 
     def pixel_source(self, job, check_cancel=None):
         return PixelSource(Path(job.get("pixel_path", job["path"])), job.get("pixel_category", job["category"]),
-            job["selection"], job["parameters"], job["folder"], self.cache.reserve, check_cancel)
+            job["selection"], job["parameters"], job["folder"], self.cache.reserve, check_cancel, self.cache.record)
 
 
     def tile(self, job, level, x, y):

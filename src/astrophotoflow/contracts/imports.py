@@ -6,6 +6,7 @@ from uuid import UUID
 from pydantic import ConfigDict, Field, JsonValue, field_validator, model_validator
 
 from astrophotoflow.contracts.common import PageMetadata, SnapshotModel, StrictModel, UuidInput
+from astrophotoflow.contracts.image_management import EquipmentApplication
 from astrophotoflow.contracts.metadata import AssetClassification, AssetParameters
 
 TaskStatus = Literal["queued", "running", "cancelling", "completed", "completed_with_errors", "failed", "cancelled", "interrupted"]
@@ -122,8 +123,29 @@ class AssetTaskOut(StrictModel):
     items_offset: int
 
 
+class ImportProgressSummary(StrictModel):
+    registration: ImportRegistrationProgress | None = None
+    content: ImportContentProgress | None = None
+    preview: ImportPreviewProgress | None = None
+
+
+class AssetTaskSummary(StrictModel):
+    id: UUID
+    status: TaskStatus
+    dataset_name: str | None
+    target_dataset_id: UUID | None
+    dataset_id: UUID | None
+    enumeration_completed: bool
+    report: ImportProgressSummary
+    error: dict | None
+    created_at: datetime
+    updated_at: datetime
+    items_total: int = Field(ge=0)
+    items_completed: int = Field(ge=0)
+
+
 class AssetTaskPage(PageMetadata):
-    items: list[AssetTaskOut]
+    items: list[AssetTaskSummary]
 
 
 class ImportSource(StrictModel):
@@ -147,7 +169,7 @@ class ImportCreate(StrictModel):
     parameters: AssetParameters = Field(default_factory=AssetParameters)
     notes: str | None = None
     dataset_name: str | None = None
-    capture_preset_id: UuidInput | None = None
+    equipment: EquipmentApplication | None = None
 
     @model_validator(mode="after")
     def direct_paths_are_managed(self):
@@ -192,7 +214,7 @@ class UploadImportCreate(StrictModel):
     notes: str | None = None
     dataset_name: str | None = None
     create_dataset: bool = False
-    capture_preset_id: UuidInput | None = None
+    equipment: EquipmentApplication | None = None
 
 
 class RetryCreate(StrictModel):
@@ -213,4 +235,4 @@ class PhotoImportOptions(StrictModel):
     notes: str | None = None
     dataset_name: str | None = None
     create_dataset: bool = False
-    capture_preset_id: UuidInput | None = None
+    equipment: EquipmentApplication | None = None

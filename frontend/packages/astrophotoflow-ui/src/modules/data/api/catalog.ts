@@ -1,8 +1,4 @@
 import { getServiceHealth } from '../../../generated/api/sdk.gen'
-import { listPresetsApiV1CapturePresetsGet } from '../../../generated/api/sdk.gen'
-import type { ListPresetsApiV1CapturePresetsGetData } from '../../../generated/api/types.gen'
-import { listSetupPresetsApiV1EquipmentSetupsSetupIdPresetsGet } from '../../../generated/api/sdk.gen'
-import type { ListSetupPresetsApiV1EquipmentSetupsSetupIdPresetsGetData } from '../../../generated/api/types.gen'
 import { createPlatformClient } from '../../../core/api/client'
 import type { FetchApi } from '../../../core/api/client'
 import {
@@ -24,6 +20,7 @@ import type {
   ListProjectAssetsApiV1ProjectsProjectIdAssetsGetData,
   ListProjectDatasetsApiV1ProjectsProjectIdDatasetsGetData
 } from '../../../generated/api/types.gen'
+import { zAssetPage, zDatasetPage } from '../../../generated/api/zod.gen'
 
 export function nonEmptyQuery(values: Record<string, unknown>) {
   return Object.fromEntries(
@@ -40,22 +37,6 @@ export function createCatalogClient(fetchApi: FetchApi) {
   } as const
   return {
     health:async(signal?:AbortSignal)=>(await getServiceHealth<true>({...options,signal})).data,
-    allPresets:async(query:NonNullable<ListPresetsApiV1CapturePresetsGetData['query']>,signal?:AbortSignal)=>(await listPresetsApiV1CapturePresetsGet<true>({...options,query,signal})).data,
-    presets: async (
-      setupId: string,
-      query: NonNullable<
-        ListSetupPresetsApiV1EquipmentSetupsSetupIdPresetsGetData['query']
-      >,
-      signal?: AbortSignal
-    ) =>
-      (
-        await listSetupPresetsApiV1EquipmentSetupsSetupIdPresetsGet<true>({
-          ...options,
-          path: { setup_id: setupId },
-          query,
-          signal
-        })
-      ).data,
     capabilities: async (signal?: AbortSignal) =>
       (await getServiceCapabilities<true>({ ...options, signal })).data,
     projects: async (
@@ -90,12 +71,12 @@ export function createCatalogClient(fetchApi: FetchApi) {
       query: NonNullable<ListDatasetsApiV1DatasetsGetData['query']>,
       signal?: AbortSignal
     ) =>
-      (await listDatasetsApiV1DatasetsGet<true>({ ...options, query, signal }))
-        .data,
+      zDatasetPage.parse((await listDatasetsApiV1DatasetsGet<true>({ ...options, query: { ...query, image_query: false }, signal }))
+        .data),
     assets: async (
       query: NonNullable<ListLibraryAssetsData['query']>,
       signal?: AbortSignal
-    ) => (await listLibraryAssets<true>({ ...options, query, signal })).data,
+    ) => zAssetPage.parse((await listLibraryAssets<true>({ ...options, query: { ...query, image_query: false }, signal })).data),
     projectAssets: async (
       projectId: string,
       query: NonNullable<

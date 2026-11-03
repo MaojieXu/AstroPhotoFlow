@@ -8,6 +8,9 @@ import LibraryInfo from '../components/LibraryInfo.vue'
 import LibraryButton from '../components/LibraryButton.vue'
 import LibraryCheckbox from '../components/LibraryCheckbox.vue'
 import LibraryCanvasSource from './LibraryCanvasSource.vue'
+import InlineCalibrationCell from './InlineCalibrationCell.vue'
+import LibraryThumbnail from './LibraryThumbnail.vue'
+import { calibrationSlots } from './inlineCalibration'
 const props = defineProps<{
   rows: readonly LibraryTableRow[]
   library: boolean
@@ -40,8 +43,10 @@ const columns = computed(() => {
   const extras = props.viewMode==='detail'&&props.sortable
     ? [['binning','Bin'],['cfa_pattern','CFA'],['optical_system',uiT('apfUi.imaging_system')],['filter',uiT('apfUi.filter')],['integration_seconds',uiT('apfUi.total_exposurevalue',{p0:''})],['storage_mode',uiT('apfUi.storage')],['status',uiT('apfUi.status')],['notes',uiT('apfUi.notes')]]
     : !props.library ? [['optical_system',uiT('apfUi.imaging_system')],['filter',uiT('apfUi.filter')],['storage_mode',uiT('apfUi.storage')],['status',uiT('apfUi.status')],['notes',uiT('apfUi.notes')]] : []
-  return [...base,...extras.map(([key,label])=>({key,label,className:'',sortable:props.sortable}))]
+  const calibration = visibleCalibrationSlots.value.map(slot => ({key:`calibration_${slot}`,label:props.rows.flatMap(row=>row.calibration??[]).find(cell=>cell.slot===slot)?.label ?? slot,className:'apf-column-calibration',sortable:false}))
+  return [base[0],...calibration,...base.slice(1),...extras.map(([key,label])=>({key,label,className:'',sortable:props.sortable}))]
 })
+const visibleCalibrationSlots = computed(() => calibrationSlots.filter(slot => props.rows.some(row => row.calibration?.some(cell => cell.slot===slot && cell.value.status!=='not_applicable'))))
 function aria(field:string) { return props.sort.by===field?(props.sort.order==='asc'?'ascending':'descending'):undefined }
 function arrow(field:string) { return props.sort.by===field?(props.sort.order==='asc'?' ▲':' ▼'):'' }
 </script>
@@ -59,10 +64,12 @@ function arrow(field:string) { return props.sort.by===field?(props.sort.order===
                 <LibraryCanvasSource v-for="row in rows" :key="row.key" as="tr" :source="row.source" click-target=".apf-material-name" :aria-selected="row.selected" @click="emit('row-click',row.key,$event)" @dblclick.capture="selectMode?$event.stopPropagation():undefined">
                 <td v-if="selectMode&&selectionAllowed"><span @click.stop><LibraryCheckbox :label="$t('apfUi.select_beb481')+row.title" :model-value="row.selected" :disabled="deleting" @update:model-value="emit('toggle',row.key)" /></span></td>
                 <td><button type="button" class="apf-thumb" :aria-label="$t('apfUi.view') + row.title + $t('apfUi.full_size')" @click.stop="emit('preview',row.key)">
-                  <img v-if="row.thumbnail" :src="row.thumbnail" alt="" :draggable="false" />
-                  <span v-else>{{ $t('apfUi.no_preview_yet') }}</span>
+                  <LibraryThumbnail :read="row.thumbnailUrl" :fallback="row.thumbnail" :prioritize="row.prioritizeThumbnail" />
                 </button></td>
-                <td class="apf-column-name"><InlineField class="apf-material-name" v-bind="row.fields.name" /><template v-if="row.dataset"><button type="button" class="apf-member-open" @click.stop="emit('open-dataset',row.key)">{{ $t('apfUi.image_group_photos_value', { p0: (row.memberCount) }) }}</button><small v-if="row.mixedUse">{{ $t('apfUi.mixed_use_group_open_to_see_all_members') }}</small></template><small v-else>{{row.subtitle}}</small><small v-if="row.issue" class="apf-processing-issue" role="status">{{row.issue.label}} · {{row.issue.availability}}<LibraryInfo :label="row.title+$t('apfUi.processing_status')" :text="row.issue.text" /></small><small v-if="sortable" class="apf-content-state" role="status">{{row.readiness}}</small><small class="apf-compact-meta">{{row.parametersDisplay}}</small></td>
+                <td class="apf-column-name"><InlineField class="apf-material-name" v-bind="row.fields.name" /><template v-if="row.dataset"><button type="button" class="apf-member-open" @click.stop="emit('open-dataset',row.key)">{{ $t('apfUi.image_group_photos_value', { p0: (row.memberCount) }) }}</button><small class="apf-group-total">{{ row.exposureSummary }}</small><small v-if="row.mixedUse">{{ $t('apfUi.mixed_use_group_open_to_see_all_members') }}</small></template><small v-else>{{row.subtitle}}</small><small v-if="row.issue" class="apf-processing-issue" role="status">{{row.issue.label}} · {{row.issue.availability}}<LibraryInfo :label="row.title+$t('apfUi.processing_status')" :text="row.issue.text" /></small><small v-if="sortable" class="apf-content-state" role="status">{{row.readiness}}</small><small class="apf-compact-meta">{{row.parametersDisplay}}</small></td>
+                <td v-for="slot in visibleCalibrationSlots" :key="slot" class="apf-column-calibration" @click.stop @dblclick.stop>
+                  <InlineCalibrationCell v-for="binding in row.calibration?.filter(cell=>cell.slot===slot)" :key="binding.slot" :binding="binding" /><span v-if="!row.calibration?.some(cell=>cell.slot===slot)">—</span>
+                </td>
                 <td v-if="row.dataset" class="apf-column-classification">
                   <InlineField v-bind="row.fields.groupClass" /><span class="apf-classification-separator" aria-hidden="true">/</span>
                   <InlineField v-bind="row.fields.groupType" />
@@ -82,7 +89,7 @@ function arrow(field:string) { return props.sort.by===field?(props.sort.order===
                   <td><InlineField v-bind="row.fields.cfa" /></td>
                   <td><InlineField v-bind="row.fields.opticalSystem" /></td>
                   <td><InlineField v-bind="row.fields.filter" /></td>
-                  <td><InlineField v-bind="row.fields.integration" /></td>
+                  <td><span v-if="row.dataset">{{ row.exposureSummary }}</span><InlineField v-else v-bind="row.fields.integration" /></td>
                   <td>{{row.storage}}</td>
                   <td><InlineField v-bind="row.fields.status" /><small>{{row.availability}}</small></td>
                   <td class="apf-note-cell"><InlineField v-bind="row.fields.notes" /></td>

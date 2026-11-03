@@ -22,6 +22,22 @@
       "path": "/asset-tasks/{task_id}/retry"
     },
     {
+      "method": "POST",
+      "path": "/calibration/check"
+    },
+    {
+      "method": "POST",
+      "path": "/calibration/import-check"
+    },
+    {
+      "method": "GET",
+      "path": "/calibration/operations/{request_id}"
+    },
+    {
+      "method": "POST",
+      "path": "/calibration/search"
+    },
+    {
       "method": "GET",
       "path": "/calibration/targets"
     },
@@ -47,18 +63,6 @@
     },
     {
       "method": "GET",
-      "path": "/capture-presets"
-    },
-    {
-      "method": "GET",
-      "path": "/capture-presets/{preset_id}"
-    },
-    {
-      "method": "PATCH",
-      "path": "/capture-presets/{preset_id}"
-    },
-    {
-      "method": "GET",
       "path": "/data-nodes/{run_id}/{execution_id}"
     },
     {
@@ -78,6 +82,22 @@
       "path": "/datasets/{dataset_id}"
     },
     {
+      "method": "POST",
+      "path": "/datasets/{dataset_id}/calibration/defaults"
+    },
+    {
+      "method": "POST",
+      "path": "/datasets/{dataset_id}/calibration/members"
+    },
+    {
+      "method": "GET",
+      "path": "/datasets/{dataset_id}/detail"
+    },
+    {
+      "method": "POST",
+      "path": "/datasets/{dataset_id}/member-edits"
+    },
+    {
       "method": "PATCH",
       "path": "/datasets/{dataset_id}/member-parameters"
     },
@@ -91,7 +111,19 @@
     },
     {
       "method": "GET",
+      "path": "/datasets/{dataset_id}/versions/{dataset_version_id}/members/{asset_version_id}/thumbnail"
+    },
+    {
+      "method": "GET",
       "path": "/datasets/{dataset_id}/versions/{version_id}"
+    },
+    {
+      "method": "GET",
+      "path": "/datasets/{dataset_id}/versions/{version_id}/calibration"
+    },
+    {
+      "method": "GET",
+      "path": "/datasets/{dataset_id}/versions/{version_id}/member-summaries"
     },
     {
       "method": "GET",
@@ -128,14 +160,6 @@
     {
       "method": "PATCH",
       "path": "/equipment-setups/{setup_id}"
-    },
-    {
-      "method": "GET",
-      "path": "/equipment-setups/{setup_id}/presets"
-    },
-    {
-      "method": "POST",
-      "path": "/equipment-setups/{setup_id}/presets"
     },
     {
       "method": "GET",
@@ -206,12 +230,32 @@
       "path": "/imports"
     },
     {
+      "method": "GET",
+      "path": "/imports/requests/{request_id}"
+    },
+    {
+      "method": "POST",
+      "path": "/imports/requests/{request_id}/wait"
+    },
+    {
       "method": "POST",
       "path": "/imports/select-local"
     },
     {
+      "method": "POST",
+      "path": "/imports/{task_id}/dataset-publication"
+    },
+    {
       "method": "GET",
       "path": "/library/assets"
+    },
+    {
+      "method": "POST",
+      "path": "/library/assets/equipment-applications"
+    },
+    {
+      "method": "POST",
+      "path": "/library/assets/metadata-updates"
     },
     {
       "method": "GET",
@@ -231,7 +275,19 @@
     },
     {
       "method": "GET",
+      "path": "/library/assets/{asset_id}/detail"
+    },
+    {
+      "method": "GET",
       "path": "/library/assets/{asset_id}/versions"
+    },
+    {
+      "method": "GET",
+      "path": "/library/assets/{asset_id}/versions/{asset_version_id}/calibration"
+    },
+    {
+      "method": "POST",
+      "path": "/library/assets/{asset_id}/versions/{asset_version_id}/calibration"
     },
     {
       "method": "GET",
@@ -244,6 +300,14 @@
     {
       "method": "GET",
       "path": "/library/assets/{asset_id}/versions/{version_id}/hdus/{hdu_index}/header"
+    },
+    {
+      "method": "GET",
+      "path": "/library/assets/{asset_id}/versions/{version_id}/master-provenance"
+    },
+    {
+      "method": "PATCH",
+      "path": "/library/assets/{asset_id}/versions/{version_id}/master-provenance"
     },
     {
       "method": "POST",
@@ -288,6 +352,10 @@
     {
       "method": "POST",
       "path": "/library/canvas-data/inspect"
+    },
+    {
+      "method": "GET",
+      "path": "/library/change-state"
     },
     {
       "method": "GET",
@@ -544,6 +612,18 @@
     {
       "method": "DELETE",
       "path": "/software/preview/{consumer_id}"
+    },
+    {
+      "method": "POST",
+      "path": "/thumbnail-batches"
+    },
+    {
+      "method": "GET",
+      "path": "/thumbnail-batches/{request_id}"
+    },
+    {
+      "method": "POST",
+      "path": "/thumbnail-batches/{request_id}/retry"
     },
     {
       "method": "POST",

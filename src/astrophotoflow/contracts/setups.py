@@ -2,11 +2,10 @@ from datetime import datetime
 from typing import Annotated, Literal
 from uuid import UUID
 
-from pydantic import Field, field_validator, model_serializer
+from pydantic import Field, field_validator
 
-from astrophotoflow.contracts.common import EquipmentKind, PageMetadata, StrictModel, UuidInput, check_name, finite
+from astrophotoflow.contracts.common import EquipmentKind, PageMetadata, StrictModel, UuidInput, check_name
 from astrophotoflow.contracts.equipment import EquipmentCreate
-from astrophotoflow.contracts.metadata import ParameterMode
 
 
 class RegisteredComponent(StrictModel):
@@ -76,67 +75,8 @@ class EquipmentSetupPage(PageMetadata):
 class EquipmentSetupQuery(StrictModel):
     limit: int = Field(default=50, ge=1, le=200, strict=False)
     offset: int = Field(default=0, ge=0, strict=False)
-    sort_by: Literal["created_at", "name", "camera", "telescope", "filter"] = "created_at"
+    sort_by: Literal["created_at", "name", "camera", "telescope", "filter", "mount"] = "created_at"
     order: Literal["asc", "desc"] = "desc"
     q: str | None = None
     status: Literal["active", "archived", "all"] = "active"
     component_kind: EquipmentKind | None = None
-
-
-class PresetEquipmentSelection(StrictModel):
-    """Omitted filter inherits; null disables; UUID selects an owned filter member."""
-
-    filter: UuidInput | None = None
-
-    @model_serializer(mode="wrap")
-    def serialize_selection(self, handler):
-        return {key: value for key, value in handler(self).items() if key in self.model_fields_set}
-
-
-class PresetParametersPatch(StrictModel):
-    parameter_mode: ParameterMode | None = None
-    iso: int | None = Field(default=None, gt=0)
-    gain: float | None = None
-    offset: float | None = None
-    exposure_seconds: float | None = Field(default=None, ge=0)
-    sensor_temperature_c: float | None = None
-
-    _finite = field_validator("gain", "offset", "exposure_seconds", "sensor_temperature_c")(finite)
-
-
-class CapturePresetQuery(StrictModel):
-    limit: int = Field(default=50, ge=1, le=200, strict=False)
-    offset: int = Field(default=0, ge=0, strict=False)
-    sort_by: Literal["created_at", "name"] = "created_at"
-    order: Literal["asc", "desc"] = "desc"
-    q: str | None = None
-    status: Literal["active", "archived", "all"] = "active"
-    equipment_setup_id: UuidInput | None = None
-
-
-class CapturePresetCreate(StrictModel):
-    equipment_selection: PresetEquipmentSelection = Field(default_factory=PresetEquipmentSelection)
-    parameters: PresetParametersPatch = Field(default_factory=PresetParametersPatch)
-
-
-class CapturePresetPatch(StrictModel):
-    base_revision: int = Field(ge=1)
-    equipment_selection: PresetEquipmentSelection | None = None
-    parameters: PresetParametersPatch | None = None
-    status: Literal["active", "archived"] | None = None
-
-
-class CapturePresetOut(CapturePresetCreate):
-    name: str
-    parameters: PresetParametersPatch = Field(...)
-    equipment_selection: PresetEquipmentSelection = Field(...)
-    id: UUID
-    equipment_setup_id: UUID
-    status: Literal["active", "archived"]
-    revision: int
-    created_at: datetime
-    updated_at: datetime
-
-
-class CapturePresetPage(PageMetadata):
-    items: list[CapturePresetOut]

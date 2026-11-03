@@ -11,9 +11,10 @@ import {
 import type {
   ListDatasetVersionsApiV1DatasetsDatasetIdVersionsGetData,
   ListCalibrationTargetsApiV1CalibrationTargetsGetData,
-  CreateDatasetApiV1DatasetsPostData,
+  DatasetCreate,
   CreateDatasetVersionApiV1DatasetsDatasetIdVersionsPostData
 } from '../../../generated/api/types.gen'
+import { zDatasetOut } from '../../../generated/api/zod.gen'
 
 export function createDatasetClient(fetchApi: FetchApi) {
   const options = {
@@ -67,8 +68,8 @@ export function createDatasetClient(fetchApi: FetchApi) {
           signal
         })
       ).data,
-    create: async (body: CreateDatasetApiV1DatasetsPostData['body']) =>
-      (await createDatasetApiV1DatasetsPost<true>({ ...options, body })).data,
+    create: async (body: DatasetCreate) =>
+      zDatasetOut.parse((await createDatasetApiV1DatasetsPost<true>({ ...options, body })).data),
     publish: async (
       id: string,
       body: CreateDatasetVersionApiV1DatasetsDatasetIdVersionsPostData['body']

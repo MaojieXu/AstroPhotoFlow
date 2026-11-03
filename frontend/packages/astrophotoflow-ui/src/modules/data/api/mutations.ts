@@ -27,8 +27,6 @@ import {
   patchEquipmentApiV1EquipmentEquipmentIdPatch,
   createSetupApiV1EquipmentSetupsPost,
   patchSetupApiV1EquipmentSetupsSetupIdPatch,
-  createPresetApiV1EquipmentSetupsSetupIdPresetsPost,
-  patchPresetApiV1CapturePresetsPresetIdPatch,
   patchAssetApiV1LibraryAssetsAssetIdPatch,
   patchDatasetApiV1DatasetsDatasetIdPatch,
   archiveManagementEntriesApiV1SettingsTrashArchivePost
@@ -40,12 +38,11 @@ import type {
   PatchEquipmentApiV1EquipmentEquipmentIdPatchData,
   CreateSetupApiV1EquipmentSetupsPostData,
   PatchSetupApiV1EquipmentSetupsSetupIdPatchData,
-  CreatePresetApiV1EquipmentSetupsSetupIdPresetsPostData,
-  PatchPresetApiV1CapturePresetsPresetIdPatchData,
-  PatchAssetApiV1LibraryAssetsAssetIdPatchData,
-  PatchDatasetApiV1DatasetsDatasetIdPatchData,
+  AssetPatch,
+  DatasetPatch,
   ArchiveManagementEntriesApiV1SettingsTrashArchivePostData
 } from '../../../generated/api/types.gen'
+import { zAssetOut, zDatasetOut } from '../../../generated/api/zod.gen'
 
 export function createMutationClient(fetchApi: FetchApi) {
   const options = {
@@ -162,50 +159,28 @@ export function createMutationClient(fetchApi: FetchApi) {
           path: { setup_id: id }
         })
       ).data,
-    createPreset: async (
-      id: string,
-      body: CreatePresetApiV1EquipmentSetupsSetupIdPresetsPostData['body']
-    ) =>
-      (
-        await createPresetApiV1EquipmentSetupsSetupIdPresetsPost<true>({
-          ...options,
-          body,
-          path: { setup_id: id }
-        })
-      ).data,
-    patchPreset: async (
-      id: string,
-      body: PatchPresetApiV1CapturePresetsPresetIdPatchData['body']
-    ) =>
-      (
-        await patchPresetApiV1CapturePresetsPresetIdPatch<true>({
-          ...options,
-          body,
-          path: { preset_id: id }
-        })
-      ).data,
     patchAsset: async (
       id: string,
-      body: PatchAssetApiV1LibraryAssetsAssetIdPatchData['body']
+      body: AssetPatch
     ) =>
-      (
+      zAssetOut.parse((
         await patchAssetApiV1LibraryAssetsAssetIdPatch<true>({
           ...options,
           body,
           path: { asset_id: id }
         })
-      ).data,
+      ).data),
     patchDataset: async (
       id: string,
-      body: PatchDatasetApiV1DatasetsDatasetIdPatchData['body']
+      body: DatasetPatch
     ) =>
-      (
+      zDatasetOut.parse((
         await patchDatasetApiV1DatasetsDatasetIdPatch<true>({
           ...options,
           body,
           path: { dataset_id: id }
         })
-      ).data,
+      ).data),
     archive: async (
       body: ArchiveManagementEntriesApiV1SettingsTrashArchivePostData['body']
     ) =>

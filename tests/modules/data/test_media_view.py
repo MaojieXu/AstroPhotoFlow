@@ -25,6 +25,38 @@ from astrophotoflow.modules.data.media.ownership import owned_preview_locations
 AUTH = {"Authorization": "Bearer media-view-test"}
 
 
+def test_available_view_prepare_is_read_only_and_does_not_replay_import_history(media_service, monkeypatch):
+    _, app, client, source = media_service
+    app.state.thumbnails.pause()
+    fits.PrimaryHDU(np.arange(64 * 64, dtype=np.float32).reshape(64, 64)).writeto(source / 'cached.fits')
+    base, item = add(client, 'cached.fits')
+    state = prepare(client, base)
+    assert state['status'] == 'available'
+    monkeypatch.setattr(app.state.database, 'write_session', lambda: pytest.fail('cache hit took a write transaction'))
+    monkeypatch.setattr('astrophotoflow.modules.data.media.recipes.backfill_context',
+        lambda *args: pytest.fail('viewer replayed import history'))
+    cached = app.state.media_views.prepare(item['asset_version_id'], MediaSelection())
+    assert cached.status == 'available' and cached.key == state['key']
+
+
+def test_group_view_uses_strict_fixed_first_member_stretch(media_service):
+    _, app, client, source = media_service
+    app.state.thumbnails.pause()
+    first = np.random.default_rng(7).normal(.01, .001, (64, 64)).astype(np.float32)
+    second = first * 15
+    fits.PrimaryHDU(first).writeto(source / 'first.fits')
+    fits.PrimaryHDU(second).writeto(source / 'second.fits')
+    first_base, one = add(client, 'first.fits')
+    second_base, two = add(client, 'second.fits')
+    group = client.post('/api/v1/datasets', headers=AUTH, json={
+        'name': 'fixed reference', 'asset_version_ids': [one['asset_version_id'], two['asset_version_id']]}).json()
+    standalone = prepare(client, first_base)
+    grouped = prepare(client, second_base, {'dataset_version_id': group['current_version_id']})
+    assert standalone['status'] == grouped['status'] == 'available'
+    assert grouped['display_recipe']['auto_stretch'] == standalone['display_recipe']['auto_stretch']
+    assert grouped['selection']['dataset_version_id'] == group['current_version_id']
+
+
 @pytest.fixture
 def media_service(tmp_path):
     source = tmp_path / "sources"

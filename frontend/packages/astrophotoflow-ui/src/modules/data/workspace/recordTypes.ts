@@ -52,7 +52,6 @@ export function recordVersion(row: WorkspaceRecord) {
 }
 
 export function acknowledgeAsset(row: AssetRecord, updated: AssetOut): WorkspaceRecord {
-  if (isMemberRecord(row)) return {...row,...updated,asset:updated,version:row.version}
   if ('asset' in row) return {...row,asset:updated}
   if ('version_id' in row) return {...row,name:updated.name,notes:updated.notes,status:updated.status,revision:updated.revision}
   return updated

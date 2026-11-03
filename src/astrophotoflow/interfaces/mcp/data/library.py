@@ -13,7 +13,7 @@ def build_server() -> FastMCP:
 
     @mcp.tool(
         name="search",
-        description="List the library view containing logical datasets and independent assets.\n读取包含逻辑图像组与独立素材的素材库视图。\n关键词: 素材库 搜索 筛选 分页 ",
+        description="List logical datasets and independent assets with batched effective Master calibration columns. exposure_summary is a read-only whole-group sum of subframe exposure_seconds, with known/unknown counts; pagination/filtering never changes that total. Do not add integration_seconds or Masters. Browsing performs no scientific calibration check.\n读取素材库、有效Master校准列和自动累计曝光，未知不按0处理。\n关键词: 素材库 搜索 筛选 分页 累计曝光 校准 ",
     )
     @service_errors
     def list_library_items(query: LibraryQuery | None = None, *, client: AssetClient = Depends(service_client)) -> LibraryItemPage:

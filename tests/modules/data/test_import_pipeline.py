@@ -1,4 +1,5 @@
 from __future__ import annotations
+import astrophotoflow.modules.data.media.display as owner_display
 import astrophotoflow.modules.data.imports.errors as owner_errors
 import astrophotoflow.modules.data.media.import_previews as owner_import_previews
 import astrophotoflow.modules.data.imports.enumeration as owner_enumeration
@@ -29,11 +30,37 @@ from astrophotoflow.interfaces.http.app import create_app
 from astrophotoflow.modules.data.assets.metadata import asset_parameters
 from astrophotoflow.modules.data.assets.models import Asset, AssetVersion
 from astrophotoflow.modules.data.datasets.models import DatasetVersion
-from astrophotoflow.modules.data.equipment.models import CapturePreset, EquipmentSetup
+from astrophotoflow.modules.data.equipment.models import EquipmentSetup
 from astrophotoflow.modules.data.imports.models import AssetTask, AssetTaskItem
 from astrophotoflow.modules.data.media.models import Preview
 
 AUTH = {"Authorization": "Bearer import-pipeline-test"}
+
+
+def test_task_directory_omits_frozen_plans_and_batches_item_counts(service):
+    _, app, client, _ = service
+    task_id = str(uuid4())
+    source = {'path': 'source.fits', 'header_snapshot': 'large-frozen-header' * 10000}
+    with app.state.database.write_session() as session:
+        session.add(AssetTask(id=task_id, status='completed', sources=[source], storage_mode='managed',
+            classification={}, parameters={}, report={'registration': {'total': 2, 'registered': 2, 'completed': True},
+                'internal_frozen_plan': 'private-large-plan' * 10000}, enumeration_completed=True))
+        session.flush()
+        for position, status in enumerate(('completed', 'failed')):
+            item_id = str(uuid4())
+            session.add(AssetTaskItem(id=item_id, task_id=task_id, root_item_id=item_id, root_id='',
+                source_path=f'{position}.fits', source_identity=str(position), position=position, status=status))
+    response = client.get('/api/v1/asset-tasks', headers=AUTH)
+    assert response.status_code == 200
+    summary = next(item for item in response.json()['items'] if item['id'] == task_id)
+    assert summary['items_total'] == summary['items_completed'] == 2
+    assert summary['report']['registration']['registered'] == 2
+    assert 'sources' not in summary and 'items' not in summary
+    assert 'internal_frozen_plan' not in summary['report']
+    detail = client.get(f'/api/v1/asset-tasks/{task_id}', headers=AUTH)
+    assert detail.status_code == 200
+    assert detail.json()['sources'] == [source]
+    assert len(detail.json()['items']) == 2
 
 
 def test_direct_absolute_import_without_configured_roots_keeps_original_and_manages_copy(service):
@@ -218,6 +245,22 @@ def run(app, settings, task_id):
     return thread
 
 
+def requested_previews(app, settings, task_id, *, auto=False):
+    """Explicitly open every member for tests that exercise pixel rendering."""
+    display = owner_display.DisplayPreviews(app.state.database, settings, app.state.import_workers[1], recover=False)
+    with app.state.database.read_session() as session:
+        rows = list(session.scalars(select(AssetTaskItem).where(AssetTaskItem.task_id == task_id).order_by(AssetTaskItem.position)))
+        versions = [row.asset_version_id for row in rows if row.content_status == "available" and row.metadata_status != "failed"]
+    for version_id in versions:
+        state = display.schedule(version_id, auto=auto)
+        deadline = time.monotonic() + 5
+        while state["status"] == "generating" and time.monotonic() < deadline:
+            time.sleep(.01)
+            state = display.status(version_id)
+        assert state["status"] != "generating", state
+    return display
+
+
 def task(client, task_id):
     return client.get(f"/api/v1/asset-tasks/{task_id}", headers=AUTH).json()
 
@@ -298,17 +341,14 @@ def test_header_classification_and_missing_fields(service, label, expected):
         assert asset["current_version"]["calibration_level"] is None
 
 
-def test_mixed_batch_manual_override_and_frozen_preset_priority(service):
+def test_mixed_batch_manual_override_and_frozen_equipment_selection(service):
     settings, app, client, root = service
     image(root / "a.fits", "Light Frame", EXPTIME=11, GAIN=9, BAYERPAT="RGGB")
     image(root / "b.fits", "Master Dark", EXPTIME=12, GAIN=8)
-    setup_id, preset_id = str(uuid4()), str(uuid4())
+    setup_id = str(uuid4())
     with app.state.database.write_session() as session:
         session.add(EquipmentSetup(id=setup_id, name="Setup", members=[]))
-        session.flush()
-        session.add(CapturePreset(id=preset_id, equipment_setup_id=setup_id, name="Preset", parameters={
-            "parameter_mode": "gain", "gain": 50, "offset": 7, "exposure_seconds": 30}))
-    # Freeze defaults at acceptance, then edit the live preset before processing.
+    equipment = {"choice": {"source": "setup", "setup_id": setup_id, "expected_revision": 1}, "fields": ["camera"]}
     import astrophotoflow.modules.data.public as routes
     process = routes.run_import_task
     captured = []
@@ -316,12 +356,10 @@ def test_mixed_batch_manual_override_and_frozen_preset_priority(service):
     try:
         accepted = client.post("/api/v1/imports", headers=AUTH, json={
             "sources": [{"root_id": "science", "path": ""}], "storage_mode": "reference",
-            "capture_preset_id": preset_id, "parameters": {"gain": 0}})
+            "equipment": equipment, "parameters": {"gain": 0, "offset": 7}})
     finally:
         routes.run_import_task = process
     task_id = accepted.json()["task_id"]
-    with app.state.database.write_session() as session:
-        session.get(CapturePreset, preset_id).parameters = {"offset": 99}
     process(*captured[0])
     current = task(client, task_id)
     assets = [client.get(f"/api/v1/library/assets/{item['asset_id']}", headers=AUTH).json() for item in current["items"]]
@@ -331,18 +369,17 @@ def test_mixed_batch_manual_override_and_frozen_preset_priority(service):
     assert assets[0]["parameters"]["exposure_seconds"] == 11
     assert assets[0]["parameters"]["cfa_pattern"] == "RGGB"
     assert assets[0]["value_sources"]["gain"] == "manual"
-    assert assets[0]["value_sources"]["offset"] == "preset"
+    assert assets[0]["value_sources"]["offset"] == "manual"
     assert assets[0]["value_sources"]["exposure_seconds"] == "file"
     assert assets[0]["value_sources"]["iso"] == "unknown"
     provenance = assets[0]["current_version"]["capture_snapshot"]["import_provenance"]
-    assert provenance["defaults_snapshot"]["parameters"]["offset"] == 7
     assert provenance["defaults_snapshot"]["equipment_setup"]["id"] == setup_id
     before = deepcopy(assets[0]["current_version"]["capture_snapshot"])
     edited = client.patch(f"/api/v1/library/assets/{assets[0]['id']}", headers=AUTH,
                           json={"base_revision": 1, "parameters": {"gain": None}}).json()
     assert edited["current_version"]["capture_snapshot"] == before
     manual = client.post("/api/v1/imports", headers=AUTH, json={"sources": [{"root_id": "science", "path": ""}],
-        "storage_mode": "reference", "capture_preset_id": preset_id,
+        "storage_mode": "reference",
         "classification": {"frame_class": "masterframe", "frame_type": None}})
     overridden = task(client, manual.json()["task_id"])
     for item in overridden["items"]:
@@ -372,12 +409,13 @@ def test_service_worker_limits_are_shared_between_tasks(service, monkeypatch):
                     counters[kind] -= 1
         return wrapped
     monkeypatch.setattr(owner_stages, "read_hash_and_copy", measured("file", owner_stages.read_hash_and_copy))
-    monkeypatch.setattr(owner_import_previews, "fit_preview_rows", measured("preview", owner_import_previews.fit_preview_rows))
+    monkeypatch.setattr(owner_display.DisplayPreviews, "_render", measured("preview", owner_display.DisplayPreviews._render))
     ids = [enqueue(app, [group]) for group in ("one", "two")]
     threads = [run(app, settings, task_id) for task_id in ids]
     for thread in threads:
         thread.join(10)
         assert not thread.is_alive()
+    app.state.import_workers[1].submit(lambda: None).result()
     assert peaks == {"file": 2, "preview": 1}
     assert all(task(client, task_id)["status"] == "completed" for task_id in ids)
 
@@ -400,27 +438,31 @@ def test_each_photo_stretches_independently_of_content_order_and_survives_resume
     monkeypatch.setattr(owner_stages, "read_hash_and_copy", out_of_order)
     task_id = enqueue(app)
     owner_runner.run_import_task(app.state.database, settings, task_id, app.state.import_workers)
+    requested_previews(app, settings, task_id)
     current = task(client, task_id)
     assert completed.index("b.fits") < completed.index("a.fits")
     items = {Path(row["source_path"]).stem: row for row in current["items"]}
     with app.state.database.read_session() as session:
-        displays = {name: session.scalar(select(Preview).where(Preview.asset_version_id == items[name]["asset_version_id"])).display_parameters for name in ("a", "b", "d")}
+        displays = {name: session.scalar(select(Preview).where(Preview.size == "thumbnail", Preview.asset_version_id == items[name]["asset_version_id"])).display_parameters for name in ("a", "b", "d")}
     assert displays["b"]["auto_stretch"]["highlights"] == pytest.approx(displays["a"]["auto_stretch"]["highlights"] + 1000)
     assert displays["d"]["auto_stretch"]["highlights"] == pytest.approx(displays["a"]["auto_stretch"]["highlights"] + 2000)
     assert all("stretch_reference_version_id" not in recipe and "stretch_group" not in recipe
                for recipe in displays.values())
     assert "preview_stretch_groups" not in current["report"]
-    assert items["c"]["preview_status"] == "failed"
+    display = owner_display.DisplayPreviews(app.state.database, settings, app.state.import_workers[1], recover=False)
+    assert display.status(items["c"]["asset_version_id"])["status"] == "failed"
+    assert items["c"]["preview_status"] == "not_requested"
     with app.state.database.write_session() as session:
-        preview = session.scalar(select(Preview).where(Preview.asset_version_id == items["b"]["asset_version_id"]))
+        preview = session.scalar(select(Preview).where(Preview.size == "thumbnail", Preview.asset_version_id == items["b"]["asset_version_id"]))
         session.delete(preview)
         session.get(AssetTaskItem, items["b"]["id"]).status = "running"
         session.get(AssetTaskItem, items["b"]["id"]).preview_status = "pending"
         session.get(AssetTask, task_id).status = "running"
     owner_runner.recover_import_tasks(app.state.database)
     assert client.post(f"/api/v1/asset-tasks/{task_id}/resume", headers=AUTH, json={}).status_code == 202
+    requested_previews(app, settings, task_id)
     with app.state.database.read_session() as session:
-        regenerated = session.scalar(select(Preview).where(Preview.asset_version_id == items["b"]["asset_version_id"]))
+        regenerated = session.scalar(select(Preview).where(Preview.size == "thumbnail", Preview.asset_version_id == items["b"]["asset_version_id"]))
         assert regenerated.display_parameters == displays["b"]
         assert session.scalar(select(func.count()).select_from(Asset)) == 4
         assert session.scalar(select(func.count()).select_from(DatasetVersion)) == 1
@@ -496,21 +538,15 @@ def test_cancelled_managed_copy_retries_registered_identity_and_preserves_source
         assert session.scalar(select(func.count()).select_from(DatasetVersion)) == 1
 
 
-def test_upload_accepts_preset_snapshot_before_task_items_are_flushed(service):
+def test_upload_accepts_explicit_parameters_before_task_items_are_flushed(service):
     _, app, client, _ = service
-    setup_id, preset_id = str(uuid4()), str(uuid4())
-    with app.state.database.write_session() as session:
-        session.add(EquipmentSetup(id=setup_id, name="Setup", members=[]))
-        session.flush()
-        session.add(CapturePreset(id=preset_id, equipment_setup_id=setup_id, name="Preset",
-                                  parameters={"parameter_mode": "gain", "gain": 19}))
     accepted = client.post("/api/v1/uploads", headers=AUTH, json={
         "files": [{"name": "one.fits", "size": 100}, {"name": "two.fits", "size": 100}],
-        "capture_preset_id": preset_id})
+        "parameters": {"parameter_mode": "gain", "gain": 19}})
     assert accepted.status_code == 202, accepted.text
     with app.state.database.read_session() as session:
         row = session.get(AssetTask, accepted.json()["task_id"])
-        assert row.import_defaults_snapshot["parameters"]["gain"] == 19
+        assert row.parameters["gain"] == 19
         assert session.scalar(select(func.count()).select_from(AssetTaskItem)) == 2
 
 
@@ -578,32 +614,32 @@ def test_preview_retry_computes_failed_photos_own_stretch_and_keeps_other_recipe
     settings, app, client, root = service
     image(root / "a.fits")
     image(root / "b.fits", offset=1000)
-    create = owner_import_previews.create_preview
-    def fail_first(path, *args, **kwargs):
-        if path.name == "a.fits":
+    render = owner_display.DisplayPreviews._render
+    def fail_first(self, job):
+        if job["path"].name == "a.fits":
             raise ValueError("injected first preview failure")
-        return create(path, *args, **kwargs)
-    monkeypatch.setattr(owner_import_previews, "create_preview", fail_first)
+        return render(self, job)
+    monkeypatch.setattr(owner_display.DisplayPreviews, "_render", fail_first)
     task_id = enqueue(app, storage_mode="reference")
     owner_runner.run_import_task(app.state.database, settings, task_id, app.state.import_workers)
+    display = requested_previews(app, settings, task_id)
     original = task(client, task_id)
     first, second = original["items"]
-    assert first["preview_status"] == "failed"
+    assert original["status"] == "completed"
+    assert display.status(first["asset_version_id"])["status"] == "failed"
+    assert display.status(second["asset_version_id"])["status"] == "available"
+    assert first["preview_status"] == second["preview_status"] == "not_requested"
     with app.state.database.read_session() as session:
-        other_recipe = dict(session.scalar(select(Preview).where(
-            Preview.asset_version_id == second["asset_version_id"])).display_parameters)
-    monkeypatch.setattr(owner_import_previews, "create_preview", create)
-    retried = client.post(f"/api/v1/asset-tasks/{task_id}/retry", headers=AUTH, json={"item_ids": [first["id"]]})
-    recovered = task(client, retried.json()["task_id"])
-    assert recovered["status"] == "completed"
-    assert recovered["items"][0]["asset_version_id"] == first["asset_version_id"]
+        other_recipe = dict(session.scalar(select(Preview).where(Preview.asset_version_id == second["asset_version_id"], Preview.size == "thumbnail")).display_parameters)
+    monkeypatch.setattr(owner_display.DisplayPreviews, "_render", render)
+    requested_previews(app, settings, task_id)
+    assert display.status(first["asset_version_id"])["status"] == "available"
     with app.state.database.read_session() as session:
-        preview = session.scalar(select(Preview).where(Preview.asset_version_id == first["asset_version_id"]))
+        preview = session.scalar(select(Preview).where(Preview.asset_version_id == first["asset_version_id"], Preview.size == "thumbnail"))
         assert preview.display_parameters["auto_stretch"]["highlights"] == pytest.approx(other_recipe["auto_stretch"]["highlights"] - 1000)
         assert "stretch_reference_version_id" not in preview.display_parameters
-        assert not recovered["report"].get("preview_stretch_groups")
-        assert session.scalar(select(Preview).where(
-            Preview.asset_version_id == second["asset_version_id"])).display_parameters == other_recipe
+        assert session.scalar(select(Preview).where(Preview.asset_version_id == second["asset_version_id"], Preview.size == "thumbnail")).display_parameters == other_recipe
+        assert session.scalar(select(func.count()).select_from(Asset)) == 2
 
 
 @pytest.mark.parametrize("service", [{"preview_workers": 2}], indirect=True)
@@ -611,33 +647,32 @@ def test_second_preview_can_finish_while_first_is_blocked(service, monkeypatch):
     settings, app, client, root = service
     image(root / "a.fits")
     image(root / "b.fits", offset=1000)
-    entered, release, second_finished = Event(), Event(), Event()
-    process = owner_stages.prepare_preview
-
-    def blocked(database, current_settings, task_data, item_id):
-        with database.read_session() as session:
-            name = Path(session.get(AssetTaskItem, item_id).source_path).name
-        if name == "a.fits":
+    entered, release = Event(), Event()
+    render = owner_display.DisplayPreviews._render
+    def blocked(self, job):
+        if job["path"].name == "a.fits":
             entered.set()
             assert release.wait(5)
-        process(database, current_settings, task_data, item_id)
-        if name == "b.fits":
-            second_finished.set()
-
-    monkeypatch.setattr(owner_stages, "prepare_preview", blocked)
-    task_id = enqueue(app)
+        return render(self, job)
+    monkeypatch.setattr(owner_display.DisplayPreviews, "_render", blocked)
+    task_id = enqueue(app, storage_mode="reference")
     thread = run(app, settings, task_id)
     try:
         assert entered.wait(3)
-        assert second_finished.wait(3)
         current = task(client, task_id)
-        assert current["report"]["content"]["completed"] is True
-        assert current["items"][1]["preview_status"] == "available"
+        assert current["status"] == "completed"
+        second = current["items"][1]
+        display = owner_display.DisplayPreviews(app.state.database, settings, app.state.import_workers[1], recover=False)
+        display.schedule(second["asset_version_id"])
+        deadline = time.monotonic() + 3
+        while display.status(second["asset_version_id"])["status"] == "generating" and time.monotonic() < deadline:
+            time.sleep(.01)
+        assert display.status(second["asset_version_id"])["status"] == "available"
+        assert task(client, task_id)["status"] == "completed"
     finally:
         release.set()
         thread.join(5)
     assert not thread.is_alive()
-    assert task(client, task_id)["status"] == "completed"
 
 
 @pytest.mark.parametrize("service", [{"preview_workers": 2}], indirect=True)
@@ -665,7 +700,7 @@ def test_folder_subframes_reuse_first_object_recipe_and_masters_measure_independ
                        image_metadata={"FITSKeywords": keywords})
         originals[path] = path.read_bytes()
     measured = []
-    module = codec_formats_fits if category == "fits" else codec_formats_xisf if category == "xisf" else codec_formats_raster
+    module = owner_display
     calculate = module.calculate_stretch
 
     def counted(pixels):
@@ -675,10 +710,11 @@ def test_folder_subframes_reuse_first_object_recipe_and_masters_measure_independ
     monkeypatch.setattr(module, "calculate_stretch", counted)
     task_id = enqueue(app, paths=[f"{name}.{category}" for name, *_ in cases])
     owner_runner.run_import_task(app.state.database, settings, task_id, app.state.import_workers)
+    requested_previews(app, settings, task_id)
     result = task(client, task_id)
     assert result["status"] == "completed"
     with app.state.database.read_session() as session:
-        recipes = [session.scalar(select(Preview).where(Preview.asset_version_id == item["asset_version_id"])).display_parameters
+        recipes = [session.scalar(select(Preview).where(Preview.size == "thumbnail", Preview.asset_version_id == item["asset_version_id"])).display_parameters
                    for item in result["items"]]
     assert sorted(measured) == [0, 2000, 3000, 4000, 6000, 7000]
     assert recipes[0]["auto_stretch"] == recipes[1]["auto_stretch"]
@@ -702,55 +738,55 @@ def test_same_object_in_different_folders_or_incompatible_layouts_never_shares_r
     hdu.writeto(root / "one/rgb.fits")
     task_id = enqueue(app, paths=["one/a.fits", "two/b.fits", "one/rgb.fits"])
     owner_runner.run_import_task(app.state.database, settings, task_id, app.state.import_workers)
+    requested_previews(app, settings, task_id)
     result = task(client, task_id)
     assert result["status"] == "completed"
     assert len(result["report"]["preview_stretch_groups"]) == 3
     with app.state.database.read_session() as session:
         for item in result["items"]:
-            recipe = session.scalar(select(Preview).where(Preview.asset_version_id == item["asset_version_id"])).display_parameters
+            recipe = session.scalar(select(Preview).where(Preview.size == "thumbnail", Preview.asset_version_id == item["asset_version_id"])).display_parameters
             assert recipe["stretch_reference_version_id"] == item["asset_version_id"]
 
 
 def test_first_failed_subframe_uses_next_valid_frame_then_retry_and_backfill_keep_shared_recipe(service, monkeypatch):
-    from astrophotoflow.modules.data.formats import fits as codec_formats_fits
-
     settings, app, client, root = service
     for name, offset in (("a", 0), ("b", 1000), ("c", 2000)):
         image(root / f"{name}.fits", OBJECT="M42", offset=offset)
-    create = owner_import_previews.create_preview
-
-    def fail_first(path, *args, **kwargs):
-        if path.name == "a.fits":
+    render = owner_display.DisplayPreviews._render
+    def fail_first(self, job):
+        if job["path"].name == "a.fits":
             raise ValueError("controlled first-frame failure")
-        return create(path, *args, **kwargs)
-
-    monkeypatch.setattr(owner_import_previews, "create_preview", fail_first)
+        return render(self, job)
+    monkeypatch.setattr(owner_display.DisplayPreviews, "_render", fail_first)
     task_id = enqueue(app, storage_mode="reference")
     owner_runner.run_import_task(app.state.database, settings, task_id, app.state.import_workers)
     original = task(client, task_id)
+    assert original["status"] == "completed"
+    assert original["items"][1]["preview_status"] == "not_requested"
+    requested_previews(app, settings, task_id)
+    original = task(client, task_id)
     first, second, third = original["items"]
-    assert first["preview_status"] == "failed" and second["preview_status"] == third["preview_status"] == "available"
-    monkeypatch.setattr(owner_import_previews, "create_preview", create)
-
-    def no_measurement(*args, **kwargs):
+    display = owner_display.DisplayPreviews(app.state.database, settings, app.state.import_workers[1], recover=False)
+    assert display.status(first["asset_version_id"])["status"] == "failed"
+    assert display.status(second["asset_version_id"])["status"] == display.status(third["asset_version_id"])["status"] == "available"
+    assert all(item["preview_status"] == "not_requested" for item in original["items"])
+    monkeypatch.setattr(owner_display.DisplayPreviews, "_render", render)
+    def no_measurement(*_args, **_kwargs):
         raise AssertionError("a saved group recipe must be reused")
-
-    monkeypatch.setattr(codec_formats_fits, "calculate_stretch", no_measurement)
-    retried = client.post(f"/api/v1/asset-tasks/{task_id}/retry", headers=AUTH, json={"item_ids": [first["id"]]})
-    recovered = task(client, retried.json()["task_id"])
-    assert recovered["status"] == "completed"
-    assert recovered["items"][0]["asset_version_id"] == first["asset_version_id"]
-    assert recovered["report"]["preview_stretch_groups"] == original["report"]["preview_stretch_groups"]
+    monkeypatch.setattr(owner_display, "calculate_stretch", no_measurement)
+    requested_previews(app, settings, task_id)
     with app.state.database.write_session() as session:
-        row = session.scalar(select(Preview).where(Preview.asset_version_id == third["asset_version_id"]))
+        row = session.scalar(select(Preview).where(Preview.asset_version_id == third["asset_version_id"], Preview.size == "thumbnail"))
         recipe = dict(row.display_parameters)
         assert recipe["stretch_reference_version_id"] == second["asset_version_id"]
         session.delete(row)
     (root / "b.fits").unlink()
     assert owner_import_previews.backfill_missing_previews(app.state.database, settings) == {"generated": 1, "failed": 0}
     with app.state.database.read_session() as session:
-        assert session.scalar(select(Preview).where(Preview.asset_version_id == third["asset_version_id"])).display_parameters == recipe
-    assert task(client, task_id) == original
+        restored = session.scalar(select(Preview).where(Preview.asset_version_id == third["asset_version_id"], Preview.size == "thumbnail")).display_parameters
+        assert restored["auto_stretch"] == recipe["auto_stretch"]
+        assert restored["stretch_reference_version_id"] == recipe["stretch_reference_version_id"]
+        assert session.scalar(select(func.count()).select_from(Asset)) == 3
 
 
 def test_resume_recovers_first_subframe_recipe_from_published_thumbnail_after_report_gap(service, monkeypatch):
@@ -761,10 +797,11 @@ def test_resume_recovers_first_subframe_recipe_from_published_thumbnail_after_re
     image(root / "b.fits", OBJECT="M42", offset=1000)
     task_id = enqueue(app)
     owner_runner.run_import_task(app.state.database, settings, task_id, app.state.import_workers)
+    requested_previews(app, settings, task_id)
     result = task(client, task_id)
     first, second = result["items"]
     with app.state.database.write_session() as session:
-        row = session.scalar(select(Preview).where(Preview.asset_version_id == second["asset_version_id"]))
+        row = session.scalar(select(Preview).where(Preview.size == "thumbnail", Preview.asset_version_id == second["asset_version_id"]))
         recipe = dict(row.display_parameters)
         session.delete(row)
         item = session.get(AssetTaskItem, second["id"])
@@ -776,46 +813,46 @@ def test_resume_recovers_first_subframe_recipe_from_published_thumbnail_after_re
     def no_measurement(*args, **kwargs):
         raise AssertionError("the first published thumbnail owns the measured values")
 
-    monkeypatch.setattr(codec_formats_fits, "calculate_stretch", no_measurement)
+    monkeypatch.setattr(owner_display, "calculate_stretch", no_measurement)
     owner_runner.run_import_task(app.state.database, settings, task_id, app.state.import_workers)
+    requested_previews(app, settings, task_id)
     assert task(client, task_id)["status"] == "completed"
     with app.state.database.read_session() as session:
-        restored = session.scalar(select(Preview).where(Preview.asset_version_id == second["asset_version_id"]))
+        restored = session.scalar(select(Preview).where(Preview.size == "thumbnail", Preview.asset_version_id == second["asset_version_id"]))
         assert restored.display_parameters == recipe
         assert restored.display_parameters["stretch_reference_version_id"] == first["asset_version_id"]
 
 
 def test_backfill_after_all_group_previews_failed_uses_fixed_member_order_without_rewriting_history(service, monkeypatch):
     from astrophotoflow.modules.data.formats import fits as codec_formats_fits
-
     settings, app, client, root = service
     image(root / "a.fits", OBJECT="M42")
     image(root / "b.fits", OBJECT="M42", offset=1000)
-    create = owner_import_previews.create_preview
-
-    def failed(*args, **kwargs):
+    render = owner_display.DisplayPreviews._render
+    def failed(*_args, **_kwargs):
         raise ValueError("controlled preview outage")
-
-    monkeypatch.setattr(owner_import_previews, "create_preview", failed)
+    monkeypatch.setattr(owner_display.DisplayPreviews, "_render", failed)
     task_id = enqueue(app, paths=["b.fits", "a.fits"])
     owner_runner.run_import_task(app.state.database, settings, task_id, app.state.import_workers)
+    requested_previews(app, settings, task_id)
     original = task(client, task_id)
+    assert original["status"] == "completed"
     first, second = original["items"]
-    assert all(item["preview_status"] == "failed" for item in original["items"])
-    monkeypatch.setattr(owner_import_previews, "create_preview", create)
+    display = owner_display.DisplayPreviews(app.state.database, settings, app.state.import_workers[1], recover=False)
+    assert all(display.status(item["asset_version_id"])["status"] == "failed" for item in original["items"])
+    assert all(item["preview_status"] == "not_requested" for item in original["items"])
+    monkeypatch.setattr(owner_display.DisplayPreviews, "_render", render)
     calculate = codec_formats_fits.calculate_stretch
     measured = []
-
     def counted(pixels):
         measured.append(float(np.min(pixels)))
         return calculate(pixels)
-
     monkeypatch.setattr(codec_formats_fits, "calculate_stretch", counted)
     assert owner_import_previews.backfill_missing_previews(app.state.database, settings) == {"generated": 2, "failed": 0}
     assert measured == [1000]
     with app.state.database.read_session() as session:
         for item in (first, second):
-            recipe = session.scalar(select(Preview).where(Preview.asset_version_id == item["asset_version_id"])).display_parameters
+            recipe = session.scalar(select(Preview).where(Preview.asset_version_id == item["asset_version_id"], Preview.size == "thumbnail")).display_parameters
             assert recipe["stretch_reference_version_id"] == first["asset_version_id"]
     assert task(client, task_id) == original
 
@@ -839,11 +876,12 @@ def test_import_and_missing_cache_backfill_use_each_photos_own_range(service, ca
         originals[path] = path.read_bytes()
     task_id = enqueue(app)
     owner_runner.run_import_task(app.state.database, settings, task_id, app.state.import_workers)
+    requested_previews(app, settings, task_id)
     current = task(client, task_id)
     assert current["status"] == "completed"
     first, second = current["items"]
     with app.state.database.write_session() as session:
-        rows = [session.scalar(select(Preview).where(Preview.asset_version_id == item["asset_version_id"]))
+        rows = [session.scalar(select(Preview).where(Preview.size == "thumbnail", Preview.asset_version_id == item["asset_version_id"]))
                 for item in (first, second)]
         recipes = [dict(row.display_parameters) for row in rows]
         assert recipes[1]["stretch_low"] == pytest.approx(recipes[0]["stretch_low"] + 1000)
@@ -851,7 +889,7 @@ def test_import_and_missing_cache_backfill_use_each_photos_own_range(service, ca
     assert owner_import_previews.backfill_missing_previews(app.state.database, settings) == {"generated": 1, "failed": 0}
     with app.state.database.read_session() as session:
         for item, recipe in zip((first, second), recipes):
-            restored = session.scalar(select(Preview).where(
+            restored = session.scalar(select(Preview).where(Preview.size == "thumbnail",
                 Preview.asset_version_id == item["asset_version_id"])).display_parameters
             assert {key: restored[key] for key in ("stretch_low", "stretch_high")} == {
                 key: recipe[key] for key in ("stretch_low", "stretch_high")}
@@ -892,7 +930,7 @@ def test_high_depth_thumbnail_maps_only_preview_sized_pixels(tmp_path, monkeypat
     assert path.read_bytes() == original
 
 
-def test_xisf_headers_register_without_pixels_and_override_preset_defaults(service, monkeypatch):
+def test_xisf_headers_register_without_pixels_and_preserve_explicit_overrides(service, monkeypatch):
     from xisf import XISF
     settings, app, client, root = service
     keywords = {
@@ -969,7 +1007,7 @@ def test_xisf_missing_headers_remain_unknown_and_metadata_failure_retries(servic
     owner_runner.run_import_task(app.state.database, settings, failed_id, app.state.import_workers)
     item = task(client, failed_id)["items"][0]
     assert item["metadata_status"] == "failed"
-    assert item["preview_status"] == "available"
+    assert item["preview_status"] == "not_requested"
     assert item["error"]["code"] == "XISF_PARSE_FAILED"
     monkeypatch.setattr(owner_stages, "inspect_xisf", inspect)
     retried = client.post(f"/api/v1/asset-tasks/{failed_id}/retry", headers=AUTH, json={"item_ids": [item["id"]]})
@@ -979,34 +1017,27 @@ def test_xisf_missing_headers_remain_unknown_and_metadata_failure_retries(servic
     assert recovered["items"][0]["metadata_status"] == "available"
 
 
-@pytest.mark.parametrize(("file_cfa", "preset_cfa", "manual_cfa", "expected_cfa", "expected_source", "expected_kind"), [
-    ("RGGB", "MONO", None, "RGGB", "file", "bayer"),
-    (None, "RGGB", None, "RGGB", "preset", "bayer"),
+@pytest.mark.parametrize(("file_cfa", "supplied_cfa", "manual_cfa", "expected_cfa", "expected_source", "expected_kind"), [
+    ("RGGB", "MONO", None, "MONO", "manual", "mono"),
+    (None, "RGGB", None, "RGGB", "manual", "bayer"),
     ("RGGB", "BGGR", "MONO", "MONO", "manual", "mono"),
     ("BGGR", "MONO", "RGGB", "RGGB", "manual", "bayer"),
 ])
 def test_fits_metadata_retry_preserves_cfa_precedence_and_frozen_snapshot(
-    service, monkeypatch, file_cfa, preset_cfa, manual_cfa, expected_cfa, expected_source, expected_kind,
+    service, monkeypatch, file_cfa, supplied_cfa, manual_cfa, expected_cfa, expected_source, expected_kind,
 ):
     from astrophotoflow.modules.data.assets.models import FitsHduMetadata
     settings, app, client, root = service
     original_bytes = image(root / "retry.fits", **({"BAYERPAT": file_cfa} if file_cfa else {}))
-    setup_id, preset_id = str(uuid4()), str(uuid4())
-    with app.state.database.write_session() as session:
-        session.add(EquipmentSetup(id=setup_id, name="CFA setup", members=[]))
-        session.flush()
-        session.add(CapturePreset(id=preset_id, equipment_setup_id=setup_id, name="CFA preset",
-                                  parameters={}))
-    # Reproduce a previously accepted historical default; current presets cannot set CFA.
     from astrophotoflow.contracts.snapshots import ImportDefaultsSnapshot
     monkeypatch.setattr("astrophotoflow.modules.data.imports.submission.capture_defaults_snapshot",
-                        lambda *_args: ImportDefaultsSnapshot(parameters={"cfa_pattern": preset_cfa}))
+                        lambda *_args: ImportDefaultsSnapshot(parameters={"cfa_pattern": supplied_cfa}))
     inspect = owner_stages.inspect_fits
     def failed(*_args, **_kwargs):
         raise OSError("controlled initial header failure")
     monkeypatch.setattr(owner_stages, "inspect_fits", failed)
     accepted = client.post("/api/v1/imports", headers=AUTH, json={
-        "sources": [{"root_id": "science", "path": "retry.fits"}], "storage_mode": "managed", "capture_preset_id": preset_id})
+        "sources": [{"root_id": "science", "path": "retry.fits"}], "storage_mode": "managed"})
     assert accepted.status_code == 202, accepted.text
     original_task = task(client, accepted.json()["task_id"])
     original_item = original_task["items"][0]
@@ -1022,6 +1053,7 @@ def test_fits_metadata_retry_preserves_cfa_precedence_and_frozen_snapshot(
                           json={"item_ids": [original_item["id"]]})
     assert retried.status_code == 202, retried.text
     recovered = task(client, retried.json()["task_id"])
+    requested_previews(app, settings, retried.json()["task_id"])
     assert recovered["status"] == "completed"
     item = recovered["items"][0]
     assert item["asset_id"] == original_item["asset_id"]
@@ -1031,7 +1063,7 @@ def test_fits_metadata_retry_preserves_cfa_precedence_and_frozen_snapshot(
         version = session.get(AssetVersion, item["asset_version_id"])
         hdu = session.scalar(select(FitsHduMetadata).where(FitsHduMetadata.asset_version_id == version.id,
                                                         FitsHduMetadata.is_selected.is_(True)))
-        preview = session.scalar(select(Preview).where(Preview.asset_version_id == version.id, Preview.size == "thumbnail"))
+        preview = session.scalar(select(Preview).where(Preview.size == "thumbnail", Preview.asset_version_id == version.id, Preview.size == "thumbnail"))
         assert asset_parameters(asset)["cfa_pattern"] == expected_cfa
         assert asset.value_sources["cfa_pattern"] == expected_source
         assert hdu.supported_kind == expected_kind
@@ -1060,7 +1092,7 @@ def test_local_task_freezes_accepted_scope_and_source_stamp(service, monkeypatch
         "total": 1, "succeeded": 1, "failed": 0, "skipped": 0, "metadata_failed": 0,
         "bytes_total": len(original), "bytes_copied": len(original), "completed": True,
     }
-    assert result["report"]["preview"]["completed"] is True
+    assert result["report"]["preview"]["completed"] is False
     assert (root / "first.fits").read_bytes() == original
     with app.state.database.read_session() as session:
         version = session.get(AssetVersion, result["items"][0]["asset_version_id"])
@@ -1092,7 +1124,7 @@ def test_copy_starts_before_last_registration_and_originals_finish_before_previe
     for index in range(3):
         image(root / f"{index}.fits")
     copied, second_copy, release_copy, preview_entered, release_preview = Event(), Event(), Event(), Event(), Event()
-    original_read, original_register, original_preview = owner_stages.read_hash_and_copy, owner_stages.register_asset, owner_stages.prepare_preview
+    original_read, original_register, original_preview = owner_stages.read_hash_and_copy, owner_stages.register_asset, owner_display.DisplayPreviews._render
     def read(*args, **kwargs):
         copied.set()
         if args[0].name == "1.fits":
@@ -1112,7 +1144,7 @@ def test_copy_starts_before_last_registration_and_originals_finish_before_previe
         return original_preview(*args, **kwargs)
     monkeypatch.setattr(owner_stages, "read_hash_and_copy", read)
     monkeypatch.setattr(owner_stages, "register_asset", register)
-    monkeypatch.setattr(owner_stages, "prepare_preview", preview)
+    monkeypatch.setattr(owner_display.DisplayPreviews, "_render", preview)
     task_id = enqueue(app)
     thread = run(app, settings, task_id)
     try:
@@ -1120,7 +1152,7 @@ def test_copy_starts_before_last_registration_and_originals_finish_before_previe
         release_copy.set()
         assert preview_entered.wait(5)
         current = task(client, task_id)
-        assert current["status"] == "running"
+        assert current["status"] == "completed"
         assert current["report"]["content"]["completed"] is True
         assert current["report"]["content"]["succeeded"] == 3
         assert current["report"]["preview"]["completed"] is False
@@ -1131,7 +1163,7 @@ def test_copy_starts_before_last_registration_and_originals_finish_before_previe
         release_preview.set()
         thread.join(10)
     assert not thread.is_alive()
-    assert task(client, task_id)["report"]["preview"]["completed"] is True
+    assert task(client, task_id)["status"] == "completed"
 
 
 def test_preview_only_retry_reuses_available_managed_content(service, monkeypatch):

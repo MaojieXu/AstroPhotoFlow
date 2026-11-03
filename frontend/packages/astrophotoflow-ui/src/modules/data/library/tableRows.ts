@@ -1,4 +1,5 @@
 import { uiT } from '../../../core/i18n'
+import { formatExposureSummary } from './exposurePresentation'
 import type {
   AssetRecord,
   DatasetRecord,
@@ -90,6 +91,7 @@ export function createLibraryTableRow(
     dataset: isDatasetRecord(row),
     video: rowClassification(row).frame_class === 'video',
     memberCount: isDatasetRecord(row) ? datasetRecord(row).member_count : 0,
+    exposureSummary: isDatasetRecord(row) ? formatExposureSummary('exposure_summary' in row ? row.exposure_summary : datasetRecord(row).exposure_summary) : undefined,
     mixedUse:
       isDatasetRecord(row) && datasetFieldValue(row, 'frame_type') === 'mixed',
     parametersDisplay: parameterModeDisplay(row),

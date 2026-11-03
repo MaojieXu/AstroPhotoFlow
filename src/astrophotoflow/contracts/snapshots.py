@@ -13,10 +13,7 @@ class FrozenEquipmentSelection(SnapshotModel):
     camera: UuidInput | None = None
     optical_system: UuidInput | None = None
     filter: UuidInput | None = None
-
-
-class FrozenOpticalAccessorySelection(SnapshotModel):
-    accessory_id: UuidInput | None
+    mount: UuidInput | None = None
 
 
 class FrozenRegisteredMember(SnapshotModel):
@@ -47,30 +44,23 @@ class FrozenEquipmentSetup(SnapshotModel):
     components: list[FrozenSetupMember]
 
 
-class FrozenCapturePreset(SnapshotModel):
-    id: UuidInput
-    revision: int = Field(ge=1)
-    name: str
-    optical_accessory_selection: FrozenOpticalAccessorySelection | None = None
-
-
 class ImportDefaultsSnapshot(SnapshotModel):
     parameters: AssetParametersPatch = Field(default_factory=AssetParametersPatch)
     classification: AssetClassification = Field(default_factory=AssetClassification)
     selected_equipment: EquipmentSnapshots = Field(default_factory=EquipmentSnapshots)
     selected_members: FrozenEquipmentSelection = Field(default_factory=FrozenEquipmentSelection)
     equipment_setup: FrozenEquipmentSetup | None = None
-    capture_preset: FrozenCapturePreset | None = None
     equipment_snapshots: dict[str, EquipmentSnapshot] = Field(default_factory=dict)
 
 
 class ImportProvenance(SnapshotModel):
-    value_sources: dict[str, Literal["manual", "file", "preset", "unknown"]] = Field(default_factory=dict)
+    value_sources: dict[str, Literal["manual", "file", "unknown"]] = Field(default_factory=dict)
     observed_parameters: JsonObject = Field(default_factory=dict)
     defaults_snapshot: ImportDefaultsSnapshot = Field(default_factory=ImportDefaultsSnapshot)
 
 
 class VersionCaptureSnapshot(SnapshotModel):
+    image_metadata: JsonObject | None = None
     parameters: AssetParametersPatch = Field(default_factory=AssetParametersPatch)
     classification: AssetClassification = Field(default_factory=AssetClassification)
     equipment_snapshot: EquipmentSnapshots = Field(default_factory=EquipmentSnapshots)

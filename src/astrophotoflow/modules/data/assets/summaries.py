@@ -5,7 +5,7 @@ from uuid import UUID
 
 from sqlalchemy.engine import RowMapping
 
-from astrophotoflow.contracts.assets import LibraryEquipmentLabel, LibraryMetadataSummary, LibraryParameterSummary
+from astrophotoflow.contracts.assets import ExposureSummary, LibraryEquipmentLabel, LibraryMetadataSummary, LibraryParameterSummary
 
 STATES = ("consistent", "mixed", "unknown")
 
@@ -35,3 +35,4 @@ class VersionSummaryFacts:
     input_ready: bool
     summary: LibraryMetadataSummary
     version_number: int | None
+    exposure_summary: ExposureSummary

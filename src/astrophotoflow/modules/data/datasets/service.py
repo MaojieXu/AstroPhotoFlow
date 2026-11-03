@@ -27,7 +27,7 @@ from astrophotoflow.modules.data.assets.metadata import (
 from astrophotoflow.modules.data.assets.models import Asset, AssetVersion
 from astrophotoflow.modules.data.assets.references import asset_version_scope
 from astrophotoflow.modules.data.datasets.bindings import default_bindings, member_bindings, set_default_bindings, set_member_bindings
-from astrophotoflow.modules.data.datasets.calibration import validate_bindings
+from astrophotoflow.modules.data.datasets.calibration import validate_bindings, validate_consumer_slots
 from astrophotoflow.modules.data.datasets.mapping import dataset_out, dataset_version_out
 from astrophotoflow.modules.data.datasets.models import Dataset, DatasetMember, DatasetVersion
 from astrophotoflow.modules.data.equipment.models import Equipment
@@ -66,6 +66,7 @@ def publish_dataset_members(session, dataset: Dataset, submitted_ids: list[str],
     for version_id, bindings in overrides.items():
         validate_bindings(session, bindings, retained_overrides.get(version_id, {}))
     next_overrides = {version_id: overrides.get(version_id, retained_overrides.get(version_id, {})) for version_id in submitted_ids}
+    validate_consumer_slots(session, submitted_ids, defaults, next_overrides)
     if previous_version and submitted_ids == old_ids and (defaults == previous_defaults) and (next_overrides == retained_overrides):
         return previous_version
     latest_number = session.scalar(select(func.max(DatasetVersion.version_number)).where(DatasetVersion.dataset_id == dataset.id)) or 0

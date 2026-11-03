@@ -15,10 +15,6 @@
 .apf-workspace .apf-equipment-management .apf-setup-table .apf-setup-name{display:block;width:100%;min-height:28px;padding:2px 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left;font-size:12px;background:transparent}
 .apf-equipment-management .apf-setup-equipment-cell{display:flex;align-items:center;min-width:0}
 .apf-equipment-management .apf-setup-equipment-cell>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.apf-equipment-management .apf-setup-presets{display:flex;flex-direction:column;align-items:flex-start;gap:8px;margin:8px 10px;min-width:0;max-width:calc(100% - 20px)}
-.apf-equipment-management .apf-setup-presets ul{margin:0;padding-left:0;list-style:none;max-width:100%}
-.apf-equipment-management .apf-setup-presets li{display:flex;align-items:center;gap:8px;min-width:0}
-.apf-equipment-management .apf-setup-presets .apf-preset-name{flex:0 1 auto;min-width:0;max-width:320px}
 .apf-equipment-management .apf-search{flex:1 1 160px;width:auto;min-width:120px;max-width:none;height:32px}
 .apf-equipment-management .apf-equipment-kind-filter{flex:0 1 120px;width:120px;min-width:100px;max-width:120px}
 .apf-workspace .apf-equipment-management .apf-toolbar>button{height:32px;min-height:32px;flex-shrink:0;font-size:12px}

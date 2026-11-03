@@ -4,23 +4,27 @@ from typing import Literal
 from uuid import UUID
 
 from sqlalchemy import case, func, literal, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, defer
 
 from astrophotoflow.contracts.datasets import (
     DatasetMemberPage,
     DatasetMemberQuery,
+    DatasetMemberSummaryPage,
     DatasetOut,
     DatasetPage,
     DatasetVersionOut,
     DatasetVersionPage,
 )
 from astrophotoflow.core.errors import not_found
+from astrophotoflow.modules.data.assets.exposure import summarize_dataset_exposures
 from astrophotoflow.modules.data.assets.filters import member_predicate
 from astrophotoflow.modules.data.assets.models import Asset, AssetVersion
 from astrophotoflow.modules.data.assets.ordering import compound_states, metadata_order
 from astrophotoflow.modules.data.assets.queries import empty_version_summary, summarize_dataset_versions
 from astrophotoflow.modules.data.assets.summary_columns import metadata_columns
+from astrophotoflow.modules.data.calibration.rows import member_calibration_projections
 from astrophotoflow.modules.data.datasets.mapping import dataset_member_out, dataset_out, dataset_version_out, dataset_version_summary
+from astrophotoflow.modules.data.datasets.member_summaries import member_summaries
 from astrophotoflow.modules.data.datasets.models import Dataset, DatasetMember, DatasetVersion
 
 
@@ -29,7 +33,8 @@ def list_dataset_members(
     dataset_id: UUID,
     version_id: UUID,
     query: DatasetMemberQuery,
-) -> DatasetMemberPage:
+    *, summaries: bool = False,
+) -> DatasetMemberPage | DatasetMemberSummaryPage:
     fixed_id = session.scalar(select(DatasetVersion.id).join(Dataset, Dataset.id == DatasetVersion.dataset_id)
                               .where(Dataset.id == str(dataset_id), DatasetVersion.id == str(version_id)))
     if fixed_id is None:
@@ -46,9 +51,9 @@ def list_dataset_members(
     ).outerjoin(Asset, Asset.id == AssetVersion.asset_id)
     if query.sort_by == "position":
         column = DatasetMember.position
-        rows = session.execute(statement.where(scope, predicate)
+        read = (statement.where(scope, predicate)
                                .order_by(column.desc() if query.order == "desc" else column.asc(), DatasetMember.id.asc())
-                               .limit(query.limit).offset(query.offset)).all()
+                               .limit(query.limit).offset(query.offset))
     else:
         columns = [DatasetMember.id.label("id"), literal("asset").label("entry_type"), Asset.name_search_key,
                    Asset.created_at, Asset.status, Asset.notes]
@@ -57,10 +62,19 @@ def list_dataset_members(
         values = statement.with_only_columns(*columns, maintain_column_froms=True).where(scope, predicate).cte("member_sort_values")
         keys = select(*values.c, *(expression.label(name) for name, expression in compound_states(values.c).items())).cte("member_sort_keys")
         page = select(keys).order_by(*metadata_order(keys.c, query.sort_by, query.order)).limit(query.limit).offset(query.offset).cte("member_page")
-        rows = session.execute(statement.join(page, page.c.id == DatasetMember.id)
-                               .order_by(*metadata_order(page.c, query.sort_by, query.order))).all()
+        read = statement.join(page, page.c.id == DatasetMember.id).order_by(*metadata_order(page.c, query.sort_by, query.order))
+    if summaries:
+        read = read.options(defer(AssetVersion.capture_snapshot, raiseload=True),
+            defer(AssetVersion.scientific_metadata, raiseload=True), defer(Asset.equipment_snapshot, raiseload=True),
+            defer(Asset.value_sources, raiseload=True)).add_columns(*(
+                Asset.equipment_snapshot[slot + '_id']['name'].as_string() for slot in ('camera', 'optical_system', 'filter')))
+    rows = session.execute(read).all()
+    calibrations = member_calibration_projections(session, [tuple(row[:3]) for row in rows])
+    if summaries:
+        return DatasetMemberSummaryPage(items=member_summaries(session, str(dataset_id), fixed_id, rows, calibrations),
+            total=total, limit=query.limit, offset=query.offset)
     return DatasetMemberPage(
-        items=[dataset_member_out(session, member, version, asset) for member, version, asset in rows],
+        items=[dataset_member_out(session, member, version, asset, calibration_projection=calibrations[member.id]) for member, version, asset in rows],
         total=total, limit=query.limit, offset=query.offset,
     )
 
@@ -87,7 +101,8 @@ def list_dataset_versions(session: Session, dataset_id: UUID, limit: int=50, off
         raise not_found()
     total = session.scalar(select(func.count()).select_from(DatasetVersion).where(DatasetVersion.dataset_id == dataset.id)) or 0
     rows = session.scalars(select(DatasetVersion).where(DatasetVersion.dataset_id == dataset.id).order_by(DatasetVersion.version_number.desc()).limit(limit).offset(offset)).all()
-    return DatasetVersionPage(items=[dataset_version_summary(row) for row in rows], total=total, limit=limit, offset=offset)
+    exposures = summarize_dataset_exposures(session, [row.id for row in rows], frozen=True)
+    return DatasetVersionPage(items=[dataset_version_summary(session, row, exposures[row.id]) for row in rows], total=total, limit=limit, offset=offset)
 
 def get_dataset_version(session: Session, dataset_id: UUID, version_id: UUID) -> DatasetVersionOut:
     dataset = session.get(Dataset, str(dataset_id))

@@ -9,11 +9,11 @@ from astrophotoflow.interfaces.mcp.data import (
     calibration,
     datasets,
     equipment,
+    equipment_management,
     exports,
     imports,
     library,
     media,
-    presets,
     projects,
     results,
     setups,
@@ -25,7 +25,7 @@ from astrophotoflow.interfaces.mcp.graph import canvas, nodes, receipts
 from astrophotoflow.interfaces.mcp.lifespan import service_lifespan
 from astrophotoflow.interfaces.mcp.software import calls, packages, previews
 
-INSTRUCTIONS = "Operate the selected local AstroPhotoFlow workspace through typed data/software/graph tools.\nKnown exact names are directly callable. search_tools returns at most ten complete definitions; BM25 is keyword retrieval, not a semantic model.\nImports: inspect sources, show groups/issues for user confirmation, submit once, then query/wait using the original request_id.\nCanvas edits require the exact page/workflow/graph IDs and current content_token. Stop on target/content changes; query the original operation_id for an unknown result, never replay blindly. Editing does not execute the graph. ComfyUI owns files, queue, history, progress and cancellation entry.\nKeep fixed asset versions, member order and original-file protection. Preview bytes are not scientific inputs. Permanent cleanup needs a current fingerprint and explicit user authorization. Software install/uninstall retains native confirmation. Cancellation acceptance, observed process stop and unknown results are distinct.\n中文：素材 设备 集合 导入 软件 节点 画布。先检索陌生能力，已知工具直接调用。科学输入固定版本和成员顺序；原件不覆盖。切图或内容过期停止修改；未知结果查询原回执，不自动重发。软件安装需原生确认，永久清理需用户明确授权。\n"
+INSTRUCTIONS = "Operate the selected local AstroPhotoFlow workspace through typed data/software/graph tools.\nKnown exact names are directly callable. search_tools returns at most ten complete definitions; BM25 is keyword retrieval, not a semantic model.\nImports: inspect file facts; the external Agent decides and confirms grouping. Import exact file IDs as one asset, one dataset, or an explicit append. Import calibration sources first, then lights with fixed bindings. Append bindings apply only to incoming members; missing slots are unconfigured, never silently inherited. Query/wait using the original request_id; retry publication without reimport. Binding does not execute calibration.\nCanvas edits require the exact page/workflow/graph IDs and current content_token. Stop on target/content changes; query the original operation_id for an unknown result, never replay blindly. Editing does not execute the graph. ComfyUI owns files, queue, history, progress and cancellation entry.\nKeep fixed asset versions, member order and original-file protection. Preview bytes are not scientific inputs. Permanent cleanup needs a current fingerprint and explicit user authorization. Software install/uninstall retains native confirmation. Cancellation acceptance, observed process stop and unknown results are distinct.\n中文：素材 设备 集合 导入 软件 节点 画布。先检索陌生能力，已知工具直接调用。科学输入固定版本和成员顺序；原件不覆盖。切图或内容过期停止修改；未知结果查询原回执，不自动重发。软件安装需原生确认，永久清理需用户明确授权。\n"
 
 
 def build_tool_catalog() -> FastMCP:
@@ -37,8 +37,8 @@ def build_tool_catalog() -> FastMCP:
     data.mount(library.build_server(), namespace="library")
     data.mount(datasets.build_server(), namespace="datasets")
     data.mount(equipment.build_server(), namespace="equipment")
+    data.mount(equipment_management.build_server(), namespace="equipment_management")
     data.mount(setups.build_server(), namespace="setups")
-    data.mount(presets.build_server(), namespace="presets")
     data.mount(projects.build_server(), namespace="projects")
     data.mount(imports.build_server(), namespace="imports")
     data.mount(tasks.build_server(), namespace="tasks")

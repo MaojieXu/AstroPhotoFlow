@@ -2,7 +2,7 @@ import { computed, toValue } from 'vue'
 import type { MaybeRefOrGetter } from 'vue'
 import { useStableQueryInput } from '../../../core/query/viewInput'
 import type { ListViewInput } from '../../../core/query/viewInput'
-import { zListDatasetMembersQuery } from '../../../generated/api/zod.gen'
+import { zListDatasetMemberSummariesQuery } from '../../../generated/api/zod.gen'
 import { useDatasetMembersQuery } from './queries'
 import type { DatasetMembersRequest } from './queries'
 
@@ -21,7 +21,7 @@ export function useDatasetMembersView(
       workspaceId: state.workspaceId,
       datasetId: state.dataset.id,
       versionId: state.dataset.versionId,
-      query: zListDatasetMembersQuery.parse({
+      query: zListDatasetMemberSummariesQuery.parse({
         limit: state.pageSize === 'all' ? 200 : state.pageSize,
         offset: state.pageSize === 'all' ? 0 : state.offset,
         q: state.search || undefined,

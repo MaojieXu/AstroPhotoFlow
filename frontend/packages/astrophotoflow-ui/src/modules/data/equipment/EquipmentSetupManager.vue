@@ -1,25 +1,23 @@
 <script setup lang="ts">
-import { zListSetupPresetsApiV1EquipmentSetupsSetupIdPresetsGetQuery } from '../../../generated/api/zod.gen'
 import { validatedInput } from '../../../core/api/input'
-import { zCreateEquipmentApiV1EquipmentPostBody, zCreateSetupApiV1EquipmentSetupsPostBody, zPatchSetupApiV1EquipmentSetupsSetupIdPatchBody, zCreatePresetApiV1EquipmentSetupsSetupIdPresetsPostBody, zPatchPresetApiV1CapturePresetsPresetIdPatchBody } from '../../../generated/api/zod.gen'
+import { zCreateEquipmentApiV1EquipmentPostBody, zCreateSetupApiV1EquipmentSetupsPostBody, zPatchSetupApiV1EquipmentSetupsSetupIdPatchBody } from '../../../generated/api/zod.gen'
 import { uiT } from '../../../core/i18n'
 
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
-import { useCreateEquipment, useSaveSetup, useSavePreset } from './mutations'
-import { type CapturePreset, type EquipmentSetup } from '../api/contracts'
-import { useEquipmentChoices, useSetupPresetsQuery, type SetupPresetsRequest } from './queries'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { useCreateEquipment, useSaveSetup } from './mutations'
+import { type EquipmentSetup } from '../api/contracts'
+import { useEquipmentChoices } from './queries'
 import { equipmentKinds, equipmentKindLabels } from './fields'
 import type { EquipmentDeleteItem } from './EquipmentDeleteDialog.vue'
 import LibraryTextField from '../components/LibraryTextField.vue'
 import LibraryButton from '../components/LibraryButton.vue'
-import LibraryInput from '../components/LibraryInput.vue'
 import LibraryDialog from '../components/LibraryDialog.vue'
 import LibraryMultiSelect from '../components/LibraryMultiSelect.vue'
 import LibrarySelect from '../components/LibrarySelect.vue'
 import LibraryTextarea from '../components/LibraryTextarea.vue'
 import EquipmentFields from './EquipmentFields.vue'
+import { equipmentInput } from './drafts'
 import { useSetupEditor } from './useSetupEditor'
-import { usePresetEditor } from './usePresetEditor'
 
 const props = defineProps<{
   workspace: string
@@ -36,7 +34,6 @@ const emit = defineEmits<{
 }>()
 const createEquipment = useCreateEquipment()
 const setupWrite = useSaveSetup()
-const presetWrite = useSavePreset()
 const selectedSetup = computed(() => props.selectedSetup)
 const equipmentQuery = useEquipmentChoices(() => props.workspace)
 const relatedEquipment = computed(() => equipmentQuery.data.value ?? [])
@@ -46,25 +43,20 @@ const loadRelatedEquipment = equipmentQuery.refresh
 const setupEditor = useSetupEditor(relatedEquipment)
 const { editingSetup, setupDraft, deviceEditor, equipmentOriginal, registeredIds, setRegistered,
   equipmentOptions, componentKind, componentEquipment, accessoryOptions, setAccessory, singleValue, singleOptions, setSingle, addRegistered, count, invalidCounts, applyInline } = setupEditor
-const presetEditor = usePresetEditor(selectedSetup, relatedEquipment)
-const { editingPreset, presetDraft, filterOptions, filterValue, setFilter,
-  presetName, visibleNumericParameters, setParameter } = presetEditor
 const equipmentNotice = ref('')
-const selectedPresetIds = ref<string[]>([])
-const presetStatus = ref('active')
 const saving = ref(false)
 watch(saving,value=>emit('saving',value),{flush:'sync'})
 const error = ref('')
 let setupSelectionGeneration = 0
 watch([() => props.workspace, () => props.viewKey, () => selectedSetup.value?.id], () => {setupSelectionGeneration++}, {flush:'sync'})
-const dirty = computed(() => setupEditor.dirty.value || presetEditor.dirty.value)
+const dirty = computed(() => setupEditor.dirty.value)
 watch(dirty, value => emit('dirty', value))
 onBeforeUnmount(() => {emit('dirty',false); emit('saving',false); setupSelectionGeneration++})
 
 function leaveDraft() {
   if (saving.value) return false
-  if (dirty.value && !window.confirm(uiT('apfUi.this_setup_or_preset_has_unsaved_changes_discard_them'))) return false
-  setupEditor.reset(); presetEditor.reset(); error.value = ''
+  if (dirty.value && !window.confirm(uiT('apfUi.this_setup_has_unsaved_changes_discard_them'))) return false
+  setupEditor.reset(); error.value = ''
   return true
 }
 function beginSetup(row: EquipmentSetup | null) {
@@ -98,7 +90,7 @@ async function saveEquipment(){
   try{
     const device=current.equipment
     const saved=await createEquipment.mutateAsync({workspaceId,body:validatedInput(zCreateEquipmentApiV1EquipmentPostBody,{
-      ...device,model:device.model||null,notes:device.notes||null
+      ...equipmentInput(device),model:device.model||null,notes:device.notes||null
     })})
     if(generation!==setupSelectionGeneration)return
     addRegistered(device.kind,saved.id)
@@ -117,7 +109,9 @@ async function saveSetup() {
   const currentView = () => generation === setupSelectionGeneration && props.viewKey === viewKey
   saving.value = true; error.value = ''
   try {
-    const payload = {...setupDraft.value,notes:setupDraft.value.notes || null}
+    const payload = {...setupDraft.value,notes:setupDraft.value.notes || null,
+      components: setupDraft.value.components.map(component => component.source === 'inline'
+        ? { ...component, equipment: equipmentInput(component.equipment) } : component)}
     const current = editingSetup.value
     const saved = current
       ? await setupWrite.mutateAsync({workspaceId,action:'update',setupId:current.id,body:validatedInput(zPatchSetupApiV1EquipmentSetupsSetupIdPatchBody,{...payload,base_revision:current.revision})})
@@ -129,66 +123,17 @@ async function saveSetup() {
   } catch (cause) {if(currentView())error.value = cause instanceof Error ? cause.message : uiT('apfUi.could_not_save_the_setup')}
   finally {saving.value = false}
 }
-const presetRequest = computed<SetupPresetsRequest | undefined>(() => selectedSetup.value
-  ? { workspaceId: props.workspace, setupId: selectedSetup.value.id,
-      query: zListSetupPresetsApiV1EquipmentSetupsSetupIdPresetsGetQuery.parse({ limit: 200, offset: 0, sort_by: 'name', order: 'asc', status: presetStatus.value }) }
-  : undefined)
-const presetsQuery = useSetupPresetsQuery(presetRequest, dirty)
-const presets = computed(() => presetRequest.value ? presetsQuery.data.value?.items ?? [] : [])
-const presetLoading = presetsQuery.isFetching
-const presetError = computed(() => presetsQuery.error.value?.message ?? '')
-async function loadPresets() {
-  selectedPresetIds.value = []
-  if (!presetRequest.value?.workspaceId) return
-  await nextTick()
-  await presetsQuery.refetch({ cancelRefetch: false })
-}
-watch([() => props.workspace, () => selectedSetup.value?.id, presetStatus, () => props.changeToken], () => {
-  setupEditor.reset(); presetEditor.reset()
-  void loadPresets()
-}, { immediate: true })
-watch(presets, rows => { selectedPresetIds.value = selectedPresetIds.value.filter(id => rows.some(row => row.id === id)) })
-function beginPreset(row: CapturePreset | null) {
-  if (!leaveDraft()) return
-  presetEditor.beginPreset(row)
-}
-async function savePreset() {
-  if(saving.value)return
-  const generation=setupSelectionGeneration
-  const workspaceId=props.workspace
-  const setupId=selectedSetup.value!.id
-  saving.value = true; error.value = ''
-  try {
-    const current = editingPreset.value
-    const payload = {parameters:presetDraft.value.parameters,equipment_selection:presetDraft.value.equipment_selection}
-    if(current) await presetWrite.mutateAsync({workspaceId,action:'update',presetId:current.id,body:validatedInput(zPatchPresetApiV1CapturePresetsPresetIdPatchBody,{...payload,base_revision:current.revision})})
-    else await presetWrite.mutateAsync({workspaceId,action:'create',setupId,body:validatedInput(zCreatePresetApiV1EquipmentSetupsSetupIdPresetsPostBody,payload)})
-    if(generation!==setupSelectionGeneration)return
-    editingPreset.value = undefined
-    await loadPresets()
-  } catch (cause) {if(generation===setupSelectionGeneration)error.value = cause instanceof Error ? cause.message : uiT('apfUi.could_not_save_the_preset')}
-  finally {saving.value = false}
-}
+watch([() => props.workspace, () => selectedSetup.value?.id, () => props.changeToken], () => setupEditor.reset())
+
 defineExpose({ beginSetup })
 </script>
 
 <template>
-  <section class="apf-setup-manager" :aria-label="$t('apfUi.equipment_setups_and_capture_presets_4a11e8')">
+  <section class="apf-setup-manager" :aria-label="$t('apfUi.equipment_setups')">
     <slot name="records" />
-    <section v-if="selectedSetup" class="apf-setup-presets" :aria-label="$t('apfUi.setup_capture_presets')">
-      <div class="flex flex-wrap gap-2" role="group" :aria-label="$t('apfUi.setup_actions')">
-        <LibraryButton v-if="selectedSetup.status!=='archived'" type="button" :disabled="saving||recordsLoading" @click="beginPreset(null)">{{ $t('apfUi.new_capture_preset') }}</LibraryButton>
-        <LibraryButton type="button" :disabled="saving||dirty||recordsLoading" @click="beginSetup(selectedSetup)">{{ $t('apfUi.edit_equipment_setup') }}</LibraryButton>
-      </div>
-      <p v-if="presetLoading" role="status">{{ $t('apfUi.reading_presets') }}</p>
-      <p v-else-if="presetError" role="alert">{{presetError}} <LibraryButton type="button" @click="loadPresets">{{ $t('apfUi.retry') }}</LibraryButton></p>
-      <ul v-else-if="presets.length"><li v-for="preset in presets" :key="preset.id">
-        <input v-model="selectedPresetIds" type="checkbox" :value="preset.id" :aria-label="$t('apfUi.select_preset')+preset.name" :disabled="saving||dirty" />
-        <LibraryButton type="button" class="apf-preset-name" :tooltip="preset.name" :disabled="saving||recordsLoading" @click="beginPreset(preset)"><span class="truncate">{{preset.name}}</span></LibraryButton>
-        <LibraryButton type="button" :disabled="saving||dirty||recordsLoading" @click="emit('delete', [{entry_type:'capture_preset',id:preset.id,revision:preset.revision}])">{{ $t('apfUi.delete_preset') }}</LibraryButton>
-      </li></ul>
-      <LibraryButton v-if="selectedPresetIds.length" type="button" :disabled="saving||dirty" @click="emit('delete', presets.filter(row=>selectedPresetIds.includes(row.id)).map(row=>({entry_type:'capture_preset',id:row.id,revision:row.revision})))">{{ $t('apfUi.delete_selected_presets_value', { p0: (selectedPresetIds.length) }) }}</LibraryButton>
-    </section>
+    <div v-if="selectedSetup" class="flex flex-wrap gap-2" role="group" :aria-label="$t('apfUi.setup_actions')">
+      <LibraryButton type="button" :disabled="saving||dirty||recordsLoading" @click="beginSetup(selectedSetup)">{{ $t('apfUi.edit_equipment_setup') }}</LibraryButton>
+    </div>
     <LibraryDialog :open="editingSetup!==undefined" :title="deviceEditor?(deviceEditor.source==='new'?$t('apfUi.new')+equipmentKindLabels[deviceEditor.equipment.kind]:$t('apfUi.edit_equipment_in_setup')):(editingSetup?$t('apfUi.edit'):$t('apfUi.new'))+$t('apfUi.equipment_setup')" :label="deviceEditor?$t('apfUi.equipment_form'):$t('apfUi.equipment_setup_form')" :busy="saving" @close="closeSetup">
       <form v-if="editingSetup!==undefined" class="apf-editor" :aria-label="deviceEditor?$t('apfUi.new_equipment_form'):$t('apfUi.equipment_setup_form')" @submit.prevent="deviceEditor?saveEquipment():saveSetup()">
         <div class="apf-equipment-dialog-body">
@@ -228,20 +173,6 @@ defineExpose({ beginSetup })
           <LibraryButton type="button" :disabled="saving" @click="closeSetup">{{deviceEditor?$t('apfUi.back_to_setup'):$t('apfUi.cancel')}}</LibraryButton>
           <LibraryButton type="submit" variant="primary" :disabled="saving">{{saving?$t('apfUi.saving'):deviceEditor?(deviceEditor.source==='new'?(deviceEditor.equipment.kind!=='filter'&&count(deviceEditor.equipment.kind)>0?$t('apfUi.save_device_and_replace'):$t('apfUi.save_and_add_device')):$t('apfUi.apply_to_setup_draft')):$t('apfUi.save_equipment_setup')}}</LibraryButton>
         </footer>
-      </form>
-    </LibraryDialog>
-    <LibraryDialog :open="editingPreset!==undefined" :title="(editingPreset?$t('apfUi.edit'):$t('apfUi.new'))+$t('apfUi.capture_preset')" :label="$t('apfUi.capture_preset_form')" :busy="saving" @close="leaveDraft">
-      <form v-if="editingPreset!==undefined" class="apf-editor" :aria-label="$t('apfUi.capture_preset_form')" @submit.prevent="savePreset">
-        <div class="apf-equipment-dialog-body">
-          <div class="apf-field-row"><span>{{ $t('apfUi.equipment_setup') }}</span><output>{{selectedSetup?.name}}</output></div>
-          <label class="apf-field-row">{{ $t('apfUi.filter') }}<LibrarySelect :model-value="filterValue" :label="$t('apfUi.preset_filter')" :options="filterOptions" :disabled="saving||relatedEquipmentLoading" @update:model-value="setFilter" /></label>
-          <label class="apf-field-row">{{ $t('apfUi.iso_gain') }}<LibrarySelect :model-value="presetDraft.parameters.parameter_mode??''" :label="$t('apfUi.iso_gain')" :options="[{value:'',name:$t('apfUi.not_set')},{value:'standard',name:$t('apfUi.general')},{value:'iso',name:'ISO'},{value:'gain',name:$t('apfUi.gain')}]" @update:model-value="setParameter('parameter_mode',String($event))" /></label>
-          <label v-for="field in visibleNumericParameters" :key="field.key" class="apf-field-row">{{field.label}}<LibraryInput :model-value="presetDraft.parameters[field.key]??''" :aria-label="field.label" type="number" :step="'integer' in field?1:'any'" :min="'min' in field?field.min:undefined" @update:model-value="setParameter(field.key,String($event??''))" /></label>
-          <div class="apf-field-row"><span>{{ $t('apfUi.full_name') }}</span><output :aria-label="$t('apfUi.full_preset_name')" class="min-w-0 break-words">{{presetName}}</output></div>
-          <p v-if="relatedEquipmentError" role="alert">{{relatedEquipmentError}}</p>
-          <p v-if="error" role="alert" class="apf-error">{{error}}</p>
-        </div>
-        <footer class="apf-equipment-dialog-footer"><LibraryButton type="button" :disabled="saving" @click="leaveDraft">{{ $t('apfUi.cancel') }}</LibraryButton><LibraryButton type="submit" variant="primary" :disabled="saving">{{ $t('apfUi.save_capture_preset') }}</LibraryButton></footer>
       </form>
     </LibraryDialog>
     <p v-if="equipmentNotice&&editingSetup===undefined" role="status">{{equipmentNotice}}</p>

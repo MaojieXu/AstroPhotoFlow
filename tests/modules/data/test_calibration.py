@@ -96,7 +96,7 @@ def test_explicit_groups_share_versions_and_preserve_mixed_original_and_notes(se
         assert session.scalar(select(func.count()).select_from(AssetVersion)) == 2
     assert path.read_bytes() == b"synthetic calibration input"
     targets = client.get("/api/v1/calibration/targets", headers=AUTH).json()["items"]
-    assert {item["name"] for item in targets} == {first["name"], second["name"]}
+    assert targets == []  # Raw groups are manageable, never calibration targets.
     light_items = client.get("/api/v1/library/items", headers=AUTH, params={"frame_type": "light"}).json()["items"]
     mixed = next(item for item in light_items if item["id"] == original["id"])
     assert mixed["member_count"] == 2
@@ -109,8 +109,8 @@ def test_binding_versions_inherit_none_override_and_cross_group_isolation(servic
     _, light, _ = photo(service, "light")
     _, light2, _ = photo(service, "light", True)
     _, master, _ = photo(service, "dark", True)
-    _, bias, _ = photo(service, "bias")
-    bias_group = group(client, "bias inputs", [bias])
+    _, bias, _ = photo(service, "bias", True)
+    group(client, "bias inputs", [bias])
     consumer = group(client, "light night", [light, light2])
     other = group(client, "same photos other scene", [light])
     old_version = version(client, consumer)
@@ -118,7 +118,7 @@ def test_binding_versions_inherit_none_override_and_cross_group_isolation(servic
     ref = client.post(f"/api/v1/projects/{project['id']}/dataset-references", headers=AUTH, json={
         "base_revision": 1, "dataset_id": consumer["id"], "dataset_version_id": old_version["id"],
     }).json()
-    defaults = {"dark": {"kind": "asset_version", "id": master}, "bias": {"kind": "dataset_version", "id": bias_group["current_version_id"]}}
+    defaults = {"dark": {"kind": "asset_version", "id": master}, "bias": {"kind": "asset_version", "id": bias}}
     overrides = {light: {"dark": None}, light2: {"flat": None, "dark": {"kind": "asset_version", "id": master}}}
     saved = publish(client, consumer, [light, light2], calibration_defaults=defaults, member_calibration_overrides=overrides)
     assert saved.status_code == 201, saved.text
@@ -211,7 +211,8 @@ def test_selected_consumer_and_target_retention_can_complete_on_retry(service, r
     target_id, target, target_path = photo(service, "dark", True)
     ids = [light, target] if overlap else [light]
     consumer = group(client, "selected consumer", ids)
-    bound = publish(client, consumer, ids, calibration_defaults={"dark": {"kind": "asset_version", "id": target}})
+    bound = publish(client, consumer, ids, calibration_defaults={"dark": {"kind": "asset_version", "id": target}},
+                    member_calibration_overrides={target: {"dark": None}} if overlap else {})
     assert bound.status_code == 201
     consumer = client.get(f"/api/v1/datasets/{consumer['id']}", headers=AUTH).json()
     entries = [{"entry_type": "dataset", "id": consumer["id"], "revision": consumer["revision"], "current_version_id": consumer["current_version_id"]},
@@ -236,7 +237,7 @@ def test_consumer_file_failure_retains_target_until_consumer_can_finish(service,
     _, light, light_path = photo(service, "light")
     target_id, target, path = photo(service, "dark", True)
     consumer = group(client, "locked consumer", [light, target])
-    assert publish(client, consumer, [light, target], calibration_defaults={"dark": {"kind": "asset_version", "id": target}}).status_code == 201
+    assert publish(client, consumer, [light, target], calibration_defaults={"dark": {"kind": "asset_version", "id": target}}, member_calibration_overrides={target: {"dark": None}}).status_code == 201
     consumer = client.get(f"/api/v1/datasets/{consumer['id']}", headers=AUTH).json()
     entries = [{"entry_type": "dataset", "id": consumer["id"], "revision": consumer["revision"], "current_version_id": consumer["current_version_id"]},
                {"entry_type": "asset", "id": target_id, "revision": 1, "current_version_id": target}]
@@ -262,48 +263,33 @@ def test_consumer_file_failure_retains_target_until_consumer_can_finish(service,
 
 
 @pytest.mark.parametrize("frame_type", ["bias", "dark", "flat", "dark_flat"])
-def test_all_calibration_types_accept_fixed_master_and_group_targets(service, frame_type):
+def test_all_calibration_types_accept_only_fixed_master_targets(service, frame_type):
     client, _, _ = service
-    _, light, _ = photo(service, "light")
+    _, consumer_frame, _ = photo(service, "flat" if frame_type == "dark_flat" else "light")
     _, raw, _ = photo(service, frame_type)
     _, master, _ = photo(service, frame_type, True)
     target_group = group(client, frame_type + " raw group", [raw])
-    consumer = group(client, "light", [light])
-    body = {frame_type: {"kind": "dataset_version", "id": target_group["current_version_id"]}}
-    assert publish(client, consumer, [light], calibration_defaults=body,
-                   member_calibration_overrides={light: {frame_type: {"kind": "asset_version", "id": master}}}).status_code == 201
+    consumer = group(client, "consumer", [consumer_frame])
+    for rejected in ({"kind": "dataset_version", "id": target_group["current_version_id"]}, {"kind": "asset_version", "id": raw}):
+        assert publish(client, consumer, [consumer_frame], calibration_defaults={frame_type: rejected}).status_code == 422
+    assert publish(client, consumer, [consumer_frame], calibration_defaults={frame_type: {"kind": "asset_version", "id": master}}).status_code == 201
     options = client.get("/api/v1/calibration/targets", headers=AUTH, params={"frame_type": frame_type}).json()["items"]
-    assert {item["target"]["id"] for item in options} == {master, target_group["current_version_id"]}
+    assert {item["target"]["id"] for item in options} == {master}
 
 
 @pytest.mark.parametrize("reverse", [False, True])
-def test_selected_dataset_target_and_consumer_finish_without_deadlock(service, reverse):
+def test_raw_group_cannot_be_bound_and_remains_independently_removable(service, reverse):
     client, database, _ = service
     _, light, _ = photo(service, "light")
     _, raw, target_path = photo(service, "flat")
     target_group = group(client, "flat inputs", [raw])
     consumer = group(client, "light consumer", [light])
-    assert publish(client, consumer, [light], calibration_defaults={"flat": {"kind": "dataset_version", "id": target_group["current_version_id"]}}).status_code == 201
-    consumer = client.get(f"/api/v1/datasets/{consumer['id']}", headers=AUTH).json()
-    target_entry = {"entry_type": "dataset", "id": target_group["id"], "revision": target_group["revision"], "current_version_id": target_group["current_version_id"]}
-    target_only = selection(client, [target_entry])
-    protected_preview, protected = clean(client, target_only)
-    assert protected.status_code == 409 and target_path.is_file()
-    assert any(ref["kind"] == "calibration" for ref in protected_preview["references"])
-    entries = [target_entry, {"entry_type": "dataset", "id": consumer["id"], "revision": consumer["revision"], "current_version_id": consumer["current_version_id"]}]
+    assert publish(client, consumer, [light], calibration_defaults={"flat": {"kind": "dataset_version", "id": target_group["current_version_id"]}}).status_code == 422
+    entries = [{"entry_type": "dataset", "id": target_group["id"], "revision": target_group["revision"], "current_version_id": target_group["current_version_id"]},
+        {"entry_type": "dataset", "id": consumer["id"], "revision": consumer["revision"], "current_version_id": consumer["current_version_id"]}]
     if reverse:
         entries.reverse()
     assert clean(client, selection(client, entries))[1].status_code == 200
-    remaining = client.get("/api/v1/library/trash", headers=AUTH).json()["items"]
-    retry = [{key: row[key] for key in ("entry_type", "id", "removed_at", "revision", "current_version_id")} for row in remaining]
-    if retry:
-        resumed = clean(client, retry)[1]
-        assert resumed.status_code == 200, resumed.text
-        # A retained target photo can become independent after its selected container disappears.
-        remaining = client.get("/api/v1/library/trash", headers=AUTH).json()["items"]
-        if remaining:
-            retry = [{key: row[key] for key in ("entry_type", "id", "removed_at", "revision", "current_version_id")} for row in remaining]
-            assert clean(client, retry)[1].status_code == 200
     with database.read_session() as session:
         assert session.get(Dataset, consumer["id"]) is None
         assert session.get(DatasetVersion, target_group["current_version_id"]) is None
@@ -331,7 +317,7 @@ def test_selected_protected_target_retains_shared_managed_path_until_retry(servi
     with database.write_session() as session:
         session.get(AssetVersion, light).storage_location = path.relative_to(settings.data_dir).as_posix()
     consumer = group(client, "shared path consumer", [light, target])
-    assert publish(client, consumer, [light, target], calibration_defaults={"dark": {"kind": "asset_version", "id": target}}).status_code == 201
+    assert publish(client, consumer, [light, target], calibration_defaults={"dark": {"kind": "asset_version", "id": target}}, member_calibration_overrides={target: {"dark": None}}).status_code == 201
     consumer = client.get(f"/api/v1/datasets/{consumer['id']}", headers=AUTH).json()
     entries = [{"entry_type": "dataset", "id": consumer["id"], "revision": consumer["revision"], "current_version_id": consumer["current_version_id"]},
                {"entry_type": "asset", "id": target_id, "revision": 1, "current_version_id": target}]
@@ -387,8 +373,8 @@ def test_binding_rows_distinguish_inherit_disable_and_fixed_targets(service):
         default = session.scalar(select(DatasetCalibration).where(DatasetCalibration.dataset_version_id == version_id))
         member = session.scalar(select(DatasetMember).where(DatasetMember.dataset_version_id == version_id))
         override = session.scalar(select(MemberCalibration).where(MemberCalibration.member_id == member.id))
-        assert not default.disabled and default.asset_version_id == dark and default.target_dataset_version_id is None
-        assert override.disabled and override.asset_version_id is None and override.target_dataset_version_id is None
+        assert not default.disabled and default.asset_version_id == dark
+        assert override.disabled and override.asset_version_id is None
         assert session.scalar(select(MemberCalibration).where(MemberCalibration.member_id == member.id, MemberCalibration.frame_type == "bias")) is None
     assert "calibration_defaults" not in {column["name"] for column in inspect(database.engine).get_columns("dataset_version")}
     assert "calibration_overrides" not in {column["name"] for column in inspect(database.engine).get_columns("dataset_member")}
@@ -404,9 +390,24 @@ def test_database_requires_one_target_or_explicit_disable(service, owner, both):
     consumer = group(client, "invalid relation", [light])
     fixed = version(client, consumer)
     with pytest.raises(IntegrityError, match="_target"), database.write_session() as session:
-        values = {"frame_type": "dark", "disabled": False,
-                  "asset_version_id": dark if both else None,
-                  "target_dataset_version_id": fixed["id"] if both else None}
+        values = {"frame_type": "dark", "disabled": both,
+                  "asset_version_id": dark if both else None}
         record = DatasetCalibration(dataset_version_id=fixed["id"], **values) if owner == "default" else MemberCalibration(member_id=fixed["members"][0]["id"], **values)
         session.add(record)
         session.flush()
+
+
+@pytest.mark.parametrize("consumer_type,slot,accepted", [
+    ("light", "dark_flat", False), ("flat", "flat", False),
+    ("flat", "dark_flat", True), ("dark", "bias", True),
+    ("dark_flat", "bias", True), ("bias", "bias", False),
+])
+def test_complete_publication_checks_consumer_slot_purpose_without_science_requirements(service, consumer_type, slot, accepted):
+    client, _, _ = service
+    _, consumer_version, _ = photo(service, consumer_type)
+    _, master, _ = photo(service, slot, True)
+    consumer = group(client, "purpose consumer", [consumer_version])
+    result = publish(client, consumer, [consumer_version], calibration_defaults={slot: {"kind": "asset_version", "id": master}})
+    assert result.status_code == (201 if accepted else 422), result.text
+    if not accepted:
+        assert version(client, consumer)["calibration_defaults"] == {}

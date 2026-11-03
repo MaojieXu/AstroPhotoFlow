@@ -208,10 +208,10 @@ def test_client_sparse_patch_archive_create_and_retry_use_shared_schemas(client)
 
 
 def test_client_rejects_invalid_domain_body_before_http(client):
-    from astrophotoflow.contracts.setups import CapturePresetCreate
+    from astrophotoflow.contracts.setups import EquipmentSetupCreate
     api,calls=client
     with pytest.raises(ValueError,match='invented'):
-        api.create_capture_preset(str(uuid4()),CapturePresetCreate.model_validate({'name':'night','parameters':{'invented':1}}))
+        api.create_equipment_setup(EquipmentSetupCreate.model_validate({'name':'night','invented':1}))
     assert not calls
 
 

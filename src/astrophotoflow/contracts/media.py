@@ -2,11 +2,13 @@ from typing import Literal
 
 from pydantic import ConfigDict, Field, FiniteFloat, field_validator, model_validator
 
-from astrophotoflow.contracts.common import StrictModel
+from astrophotoflow.contracts.common import StrictModel, UuidInput
 from astrophotoflow.contracts.previews import PreviewIssue
 
 
 class MediaSelection(StrictModel):
+    dataset_version_id: UuidInput | None = None
+    prefetch: bool = False
     consumer_id: str | None = Field(default=None, max_length=64)
     generation: int = Field(default=0, ge=0)
     hdu_index: int | None = Field(default=None, ge=0)

@@ -26,7 +26,7 @@ export function useSaveDatasetDescription() {
   return useMutation({
     mutationFn: ({ datasetId, body }: { workspaceId: string; datasetId: string; body: Parameters<typeof mutationApi.patchDataset>[1] }) => mutationApi.patchDataset(datasetId, body),
     retry: false,
-    onSettled: (_data, _error, { workspaceId }) => invalidateLibraryData(cache, workspaceId)
+    onSettled: (_data, _error, { workspaceId, datasetId }) => invalidateLibraryData(cache, workspaceId, {datasetIds:[datasetId]})
   })
 }
 
@@ -35,7 +35,7 @@ export function usePublishCalibration() {
   return useMutation({
     mutationFn: ({ datasetId, body }: { workspaceId: string; datasetId: string; body: Parameters<typeof datasetApi.publish>[1] }) => datasetApi.publish(datasetId, body),
     retry: false,
-    onSettled: (_data, _error, { workspaceId }) => invalidateLibraryData(cache, workspaceId)
+    onSettled: (_data, _error, { workspaceId, datasetId }) => invalidateLibraryData(cache, workspaceId, {datasetIds:[datasetId]})
   })
 }
 
@@ -78,6 +78,7 @@ export function useUpdateDatasetMembers() {
       })
     },
     retry: false,
-    onSettled: (_data, _error, { workspaceId }) => invalidateLibraryData(cache, workspaceId)
+    onSettled: (data, _error, { workspaceId, datasetId }) => invalidateLibraryData(cache, workspaceId,
+      {datasetIds:[datasetId],assetIds:data?.assets.map(asset=>asset.id)})
   })
 }

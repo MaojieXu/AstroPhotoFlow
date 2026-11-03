@@ -107,7 +107,7 @@ def finish_task(database: Database, task_id: str, was_cancelled: bool) -> None:
             return
         items = session.scalars(select(AssetTaskItem).where(AssetTaskItem.task_id == task_id)).all()
         successes = sum(item.content_status == "available" for item in items)
-        errors = any(item.status in {"failed", "completed_with_errors"} or item.metadata_status == "failed" or item.preview_status == "failed" for item in items)
+        errors = any(item.status in {"failed", "completed_with_errors"} or item.metadata_status == "failed" for item in items)
         skipped = sum(item.status == "skipped" for item in items)
         if was_cancelled:
             status = "cancelled"
@@ -126,7 +126,7 @@ def finish_task(database: Database, task_id: str, was_cancelled: bool) -> None:
                 "failed": sum(item.status == "failed" for item in items),
                 "skipped": skipped,
                 "processing_issues": sum(
-                    item.status == "completed_with_errors" or item.metadata_status == "failed" or item.preview_status == "failed" for item in items
+                    item.status == "completed_with_errors" or item.metadata_status == "failed" for item in items
                 ),
                 "cancelled": sum(item.status == "cancelled" for item in items),
             },

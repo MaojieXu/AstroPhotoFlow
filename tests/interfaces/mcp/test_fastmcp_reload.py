@@ -3,6 +3,7 @@
 import asyncio
 import json
 import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -15,7 +16,11 @@ from fastmcp.client.transports import StdioTransport
 @pytest.mark.skipif(os.environ.get('APF_TEST_MCP_RELOAD') != '1', reason='Explicit isolated process opt-in')
 def test_official_reload_restarts_the_actual_catalog_and_allows_reconnection(tmp_path):
     root = Path(__file__).resolve().parents[3]
-    workspace = root / '.artifacts/workspaces/modernization-current'
+    configured = os.environ.get('APF_TEST_WORKSPACE')
+    assert configured, 'Set APF_TEST_WORKSPACE to an isolated prepared Feature workspace'
+    workspace = Path(configured).resolve(strict=True)
+    assert workspace.is_relative_to(root / '.artifacts/workspaces')
+    assert workspace.name not in {'dev', 'default'}
     script = tmp_path / 'reload_catalog.py'
     template = '''import os
 from astrophotoflow.interfaces.mcp.server import build_tool_catalog
@@ -61,7 +66,7 @@ def factory():
         async with Client(transport(), timeout=15, init_timeout=15) as client:
             try:
                 tools = await client.list_tools()
-                assert len(tools) == 98
+                assert len(tools) == 113
                 before = (await client.call_tool('reload_probe', {})).structured_content
                 assert before['value'] == 1
                 original = psutil.Process(before['pid'])
@@ -86,7 +91,9 @@ def factory():
             after = (await client.call_tool('reload_probe', {})).structured_content
             assert after['value'] == 2
             assert before['pid'] != after['pid']
-        (root / '.artifacts/reports/modernization/g7/mcp-real-reload.json').write_text(
+        report = root / '.artifacts/reports/mcp-development'
+        report.mkdir(parents=True, exist_ok=True)
+        (report / 'stdio-reload.json').write_text(
             json.dumps({'before': before, 'after': after, 'catalog_tools_with_probe': len(tools),
                         'original_server_exited_before_disconnect': True, 'explicit_reconnect': True,
                         'development_watcher_stopped_explicitly': True}, indent=2),
@@ -94,3 +101,31 @@ def factory():
         )
 
     asyncio.run(scenario())
+
+
+@pytest.mark.skipif(os.environ.get('APF_TEST_MCP_RELOAD') != '1', reason='Explicit isolated process opt-in')
+def test_http_reload_updates_behavior_membership_schema_and_real_service(tmp_path):
+    root = Path(__file__).resolve().parents[3]
+    workspace = os.environ.get('APF_TEST_WORKSPACE')
+    assert workspace, 'Set APF_TEST_WORKSPACE to an isolated prepared Feature workspace'
+    report = root / '.artifacts/reports/mcp-development/http-test'
+    result = subprocess.run(
+        [sys.executable, str(root / 'scripts/verify_mcp_development.py'),
+         '--workspace', workspace, '--report', str(report)],
+        cwd=root, text=True, encoding='utf-8', capture_output=True, timeout=150, check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    evidence = json.loads((report / 'development.json').read_text(encoding='utf-8'))
+    assert evidence['passed'] and evidence['owned_process_tree_stopped']
+    assert evidence['before']['present'] == 'removed' and evidence['after']['present'] == 'added'
+
+
+@pytest.mark.parametrize('workspace', ['.artifacts/workspaces/dev', '.artifacts/workspaces/default', '.artifacts/workspaces'])
+def test_development_entry_rejects_shared_or_unselected_workspace(workspace):
+    root = Path(__file__).resolve().parents[3]
+    result = subprocess.run(
+        [sys.executable, str(root / 'scripts/dev_mcp.py'), '--workspace', workspace, '--port', '32631'],
+        cwd=root, text=True, encoding='utf-8', capture_output=True, timeout=15, check=False,
+    )
+    assert result.returncode == 2
+    assert 'private Feature workspace' in result.stderr

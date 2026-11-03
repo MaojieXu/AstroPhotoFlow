@@ -45,4 +45,4 @@ def project_dataset_reference_out(session: Session, reference: ProjectDatasetRef
                                       dataset_id=UUID(reference.dataset_id), dataset_version_id=UUID(reference.dataset_version_id),
                                       base_revision=reference.base_revision,
                                       added_at=reference.added_at.replace(tzinfo=UTC) if reference.added_at.tzinfo is None else reference.added_at.astimezone(UTC),
-                                      dataset=dataset_out(session, dataset, current), version=dataset_version_summary(version))
+                                      dataset=dataset_out(session, dataset, current), version=dataset_version_summary(session, version))

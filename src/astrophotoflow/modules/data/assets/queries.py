@@ -11,6 +11,7 @@ from sqlalchemy import and_, case, func, literal, select
 from sqlalchemy.orm import Session
 
 from astrophotoflow.contracts.assets import AssetPage, AssetQuery, FilterEquipmentOption, LibraryFilterOptions, NumericRangeOut
+from astrophotoflow.modules.data.assets.exposure import exposure_summary, summarize_dataset_exposures
 from astrophotoflow.modules.data.assets.mapping import asset_out
 from astrophotoflow.modules.data.assets.models import Asset, AssetVersion
 from astrophotoflow.modules.data.assets.visibility import visible_asset_ids
@@ -99,7 +100,8 @@ def summarize_dataset_versions(session: Session, version_ids: list[str]) -> dict
     values = select(*columns).select_from(DatasetVersion).outerjoin(aggregate, aggregate.c.id == DatasetVersion.id).where(
         DatasetVersion.id.in_(version_ids)).cte("fixed_summary_values")
     rows = session.execute(select(*values.c, *(expression.label(name) for name, expression in compound_states(values.c).items()))).mappings()
-    return {row["id"]: VersionSummaryFacts(row["member_count"], bool(row["input_ready"]), metadata_summary(row), row["version_number"]) for row in rows}
+    exposures = summarize_dataset_exposures(session, version_ids)
+    return {row["id"]: VersionSummaryFacts(row["member_count"], bool(row["input_ready"]), metadata_summary(row), row["version_number"], exposures[row['id']]) for row in rows}
 
 
 def empty_version_summary() -> VersionSummaryFacts:
@@ -107,4 +109,4 @@ def empty_version_summary() -> VersionSummaryFacts:
     values = {field + "__state": 2 for field in fields}
     values.update({field + "__value": None for field in fields})
     values.update({slot + "_summary_state": 2 for slot in ("camera", "optical_system", "filter")})
-    return VersionSummaryFacts(0, False, metadata_summary(values), None)
+    return VersionSummaryFacts(0, False, metadata_summary(values), None, exposure_summary())

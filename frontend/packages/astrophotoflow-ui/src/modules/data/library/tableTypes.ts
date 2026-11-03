@@ -1,6 +1,7 @@
 import type InlineField from '../components/InlineField.vue'
 import type ParameterModeField from '../equipment/ParameterModeField.vue'
 import type { CanvasDataRequest } from '../api/canvas'
+import type { InlineCalibrationBinding } from './inlineCalibration'
 export type InlineBinding = Pick<InstanceType<typeof InlineField>['$props'], 'value' | 'display' | 'title' | 'editValue' | 'kind' | 'choices' | 'choicesMessage' | 'save' | 'onCancelled'>
 export type ParameterBinding = Pick<InstanceType<typeof ParameterModeField>['$props'], 'value' | 'display' | 'unsetMode' | 'save' | 'onCancelled'>
 export interface LibraryTableRow {
@@ -14,12 +15,16 @@ export interface LibraryTableRow {
   mixedUse: boolean
   source?: CanvasDataRequest
   thumbnail?: string
+  thumbnailUrl?: () => string | undefined
+  prioritizeThumbnail?: () => void
   readiness: string
   parametersDisplay: string
   parameterSource: string
   issue?: { label: string; availability: string; text: string }
   storage: string
   availability: string
+  calibration?: InlineCalibrationBinding[]
+  exposureSummary?: string
   fields: {
     name: InlineBinding
     groupClass: InlineBinding

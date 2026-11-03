@@ -4,6 +4,17 @@ import numpy as np
 
 CFA_PATTERNS = {"RGGB", "BGGR", "GRBG", "GBRG"}
 
+
+def apply_cfa_override(hdu_rows: list[dict], pattern: str | None) -> None:
+    """Derive the final interpretation of cached 2D HDUs without reading pixels."""
+    if not pattern:
+        return
+    kind = {"MONO": "mono", "XTRANS": "xtrans", "QUAD_BAYER": "quad_bayer"}.get(pattern, "bayer")
+    for row in hdu_rows:
+        if len(row["shape"]) == 2 and row["supported_kind"] is not None:
+            row["supported_kind"] = kind
+
+
 def fits_image_kind(hdu, cfa_override: str | None = None) -> str | None:
     if not hdu.is_image:
         return None

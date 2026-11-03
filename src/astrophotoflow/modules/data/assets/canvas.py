@@ -15,6 +15,7 @@ from astrophotoflow.core.database.db import Database
 from astrophotoflow.core.errors import ApiError, not_found
 from astrophotoflow.modules.data.assets.metadata import asset_parameters
 from astrophotoflow.modules.data.assets.models import Asset, AssetVersion, FitsHduMetadata
+from astrophotoflow.modules.data.calibration.service import latest_configuration
 from astrophotoflow.modules.data.datasets.models import Dataset, DatasetMember, DatasetVersion
 from astrophotoflow.modules.data.equipment.models import Equipment
 from astrophotoflow.modules.data.formats.layout import rgb_channel_first
@@ -42,8 +43,10 @@ def prepare_canvas_data(database: Database, body: CanvasDataRequest) -> CanvasDa
             asset, version = _available_asset(session, str(body.version_id))
             if asset.id != str(body.id):
                 raise not_found()
+            configuration = latest_configuration(session, version.id)
             return CanvasDataOut(title=asset.name, native_type='APF_FILE_REFERENCE' if (version.scientific_metadata or {}).get('format') == 'other' else 'APF_DATA_REFERENCE', reference=AssetInputReference(
                 kind="asset_version", asset_version_id=version.id,
+                binding_version_id=configuration.id if configuration else None,
                 selection=ScienceSelection(kind="whole_file"),
             ))
         dataset = session.get(Dataset, str(body.id))

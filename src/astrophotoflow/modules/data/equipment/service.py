@@ -24,7 +24,7 @@ def get_equipment(session: Session, equipment_id: UUID) -> EquipmentOut:
 def create_equipment(session: Session, body: EquipmentCreate) -> EquipmentOut:
     now = datetime.now(UTC)
     row = Equipment(id=str(uuid4()), kind=body.kind, name=body.name, model=body.model,
-                    notes=body.notes, specs=body.specs.model_dump(mode="json"),
+                    notes=body.notes, specs={} if body.kind == "mount" else body.specs.model_dump(mode="json"),
                     status="active", revision=1, created_at=now, updated_at=now)
     session.add(row)
     session.flush()

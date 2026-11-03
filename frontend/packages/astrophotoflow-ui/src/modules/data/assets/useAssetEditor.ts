@@ -4,7 +4,7 @@ import type {
   AssetOut,
   AssetParametersPatch
 } from '../../../generated/api/types.gen'
-import { zPatchAssetApiV1LibraryAssetsAssetIdPatchBody } from '../../../generated/api/zod.gen'
+import { zAssetPatch } from '../../../generated/api/zod.gen'
 import { validatedInput } from '../../../core/api/input'
 import { useUpdateAsset } from './mutations'
 
@@ -47,7 +47,7 @@ export function useAssetEditor(workspaceId: MaybeRefOrGetter<string>) {
       workspaceId: toValue(workspaceId),
       assetId: asset.id,
       body: validatedInput(
-        zPatchAssetApiV1LibraryAssetsAssetIdPatchBody,
+        zAssetPatch,
         payload
       )
     })
@@ -59,7 +59,7 @@ export function useAssetEditor(workspaceId: MaybeRefOrGetter<string>) {
     return write.mutateAsync({
       workspaceId: toValue(workspaceId),
       assetId: asset.id,
-      body: validatedInput(zPatchAssetApiV1LibraryAssetsAssetIdPatchBody, {
+      body: validatedInput(zAssetPatch, {
         base_revision: asset.revision,
         parameters
       })
