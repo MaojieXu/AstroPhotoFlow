@@ -1,5 +1,5 @@
 import { zCameraSnapshot } from '@ui/generated/api/zod.gen'
-import { libraryAsset as assetSummary, libraryDataset as datasetSummary, metadataForMembers } from '../../../fixtures/library-summary'
+import { libraryAsset as assetSummary, libraryDataset as datasetSummary, metadataForMembers, exposureForMembers } from '../../../fixtures/library-summary'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { nextTick } from 'vue'
@@ -509,7 +509,7 @@ describe('first-stage regression fixes', () => {
     const versionId=idAt(700)
     const datasetVersion={id:versionId,dataset_id:idAt(701),version_number:1,created_at:createdAt,members:[]}
     const dataset={id:idAt(701),name:'Group',notes:null,status:'active',revision:1,current_version_id:versionId,
-      member_count:0,current_version_number:1,summary:metadataForMembers([]),input_ready:false,created_at:createdAt,updated_at:createdAt}
+      member_count:0,current_version_number:1,summary:metadataForMembers([]),exposure_summary:exposureForMembers([]),input_ready:false,created_at:createdAt,updated_at:createdAt}
     get.mockImplementation(async(path:string)=>{
       if(path.endsWith('/capabilities'))return capabilities
       if(path.includes('/library/items'))return page([datasetSummary(dataset,datasetVersion,datasetVersion.members.length)])
@@ -541,7 +541,7 @@ describe('first-stage regression fixes', () => {
     const versionId=idAt(721)
     const version={id:versionId,dataset_id:datasetId,version_number:1,created_at:createdAt,members:[]}
     let dataset={id:datasetId,name:'Old name',notes:null,status:'active',revision:1,current_version_id:versionId,
-      member_count:0,current_version_number:1,summary:metadataForMembers([]),input_ready:false,created_at:createdAt,updated_at:createdAt}
+      member_count:0,current_version_number:1,summary:metadataForMembers([]),exposure_summary:exposureForMembers([]),input_ready:false,created_at:createdAt,updated_at:createdAt}
     const item=()=>(datasetSummary(dataset,version,version.members.length))
     get.mockImplementation(async(path:string)=>{
       if(path.endsWith('/capabilities'))return capabilities
@@ -570,7 +570,7 @@ describe('first-stage regression fixes', () => {
     const versionId=idAt(723)
     const version={id:versionId,dataset_id:datasetId,version_number:1,created_at:createdAt,members:[]}
     let dataset={id:datasetId,name:'Old name',notes:null,status:'active',revision:1,current_version_id:versionId,
-      member_count:0,current_version_number:1,summary:metadataForMembers([]),input_ready:false,created_at:createdAt,updated_at:createdAt}
+      member_count:0,current_version_number:1,summary:metadataForMembers([]),exposure_summary:exposureForMembers([]),input_ready:false,created_at:createdAt,updated_at:createdAt}
     let removed=false
     const item=()=>(datasetSummary(dataset,version,version.members.length))
     get.mockImplementation(async(path:string)=>{
@@ -616,7 +616,7 @@ describe('first-stage regression fixes', () => {
     const versionId=idAt(725)
     const version={id:versionId,dataset_id:datasetId,version_number:1,created_at:createdAt,members:[]}
     let dataset={id:datasetId,name:'Old name',notes:null,status:'active',revision:1,current_version_id:versionId,
-      member_count:0,current_version_number:1,summary:metadataForMembers([]),input_ready:false,created_at:createdAt,updated_at:createdAt}
+      member_count:0,current_version_number:1,summary:metadataForMembers([]),exposure_summary:exposureForMembers([]),input_ready:false,created_at:createdAt,updated_at:createdAt}
     const item=()=>(datasetSummary(dataset,version,version.members.length))
     get.mockImplementation(async(path:string)=>{
       if(path.endsWith('/capabilities'))return capabilities
@@ -796,11 +796,11 @@ describe('first-stage regression fixes', () => {
     const addableAsset = {...libraryAsset,current_version_id:versionId,current_version:version}
     const datasetVersion = {id:datasetVersionId,dataset_id:datasetId,version_number:1,created_at:createdAt,members:[]}
     const dataset = {id:datasetId,name:'Project dataset',notes:null,status:'active',revision:1,current_version_id:datasetVersionId,
-      member_count:0,current_version_number:1,summary:metadataForMembers([]),input_ready:false,created_at:createdAt,updated_at:createdAt}
+      member_count:0,current_version_number:1,summary:metadataForMembers([]),exposure_summary:exposureForMembers([]),input_ready:false,created_at:createdAt,updated_at:createdAt}
     Object.assign(dataset, {summary: metadataForMembers([]), input_ready: false})
     const assetReference = {view_base: `/astrophotoflow/api/v1/projects/${project.id}/asset-references/${idAt(502)}/previews`, id:idAt(502),project_id:project.id,asset_version_id:versionId,added_at:createdAt,asset:addableAsset,version}
     const datasetReference = {id:idAt(505),project_id:project.id,dataset_id:datasetId,dataset_version_id:datasetVersionId,
-      base_revision:4,added_at:createdAt,dataset,version:{id:datasetVersionId,dataset_id:datasetId,version_number:1,created_at:createdAt}}
+      base_revision:4,added_at:createdAt,dataset,version:{id:datasetVersionId,dataset_id:datasetId,version_number:1,created_at:createdAt,exposure_summary:exposureForMembers([])}}
     let currentProject=project
     let assetReferenced=false
     let datasetReferenced=false

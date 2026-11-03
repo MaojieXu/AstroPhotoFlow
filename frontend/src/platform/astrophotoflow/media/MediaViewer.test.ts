@@ -198,7 +198,7 @@ describe('shared original-resolution media viewer', () => {
     await screen.findByText('Frame 999')
     finish?.(image('late'))
     await waitFor(() =>
-      expect(vi.mocked(createImageViewport).mock.calls.at(-1)?.[1].key).toBe(
+      expect(view.viewport.replace.mock.calls.at(-1)?.[0].key).toBe(
         '/frame/998'
       )
     )
@@ -440,7 +440,8 @@ describe('shared original-resolution media viewer', () => {
     })
     expect(overview).toHaveClass('max-w-none')
     await user.click(screen.getByRole('button', { name: 'g.nextImage' }))
-    await waitFor(() => expect(createImageViewport).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(view.viewport.replace).toHaveBeenCalledOnce())
+    expect(createImageViewport).toHaveBeenCalledOnce()
     first.bounds({ left: 999, top: 999, width: 999, height: 999 })
     await nextTick()
     const current = screen.getByAltText('Frame 2')
@@ -448,4 +449,29 @@ describe('shared original-resolution media viewer', () => {
     expect(current).not.toHaveStyle({ left: '999px' })
     view.unmount()
   })
+})
+
+
+it('keeps the previous image while a new request is preparing or fails', async () => {
+  const view = setup(1)
+  await waitFor(() => expect(createImageViewport).toHaveBeenCalled())
+  let fail!: (cause: Error) => void
+  view.prepare.mockImplementationOnce(() => new Promise((_resolve, reject) => { fail = reject }))
+  await view.rerender({ request: { index: 0, total: 1, member: async () => ({title:'new', basePath:'/new'}) } })
+  await waitFor(() => expect(view.prepare).toHaveBeenCalledWith('/new', expect.anything(), expect.any(AbortSignal)))
+  expect(view.viewport.destroy).not.toHaveBeenCalled()
+  fail(new Error('new image failed'))
+  await screen.findByRole('alert')
+  expect(view.viewport.destroy).not.toHaveBeenCalled()
+  view.unmount()
+  expect(view.viewport.destroy).toHaveBeenCalled()
+})
+
+it('clears the previous image when the workspace changes', async () => {
+  const view = setup(1)
+  await waitFor(() => expect(createImageViewport).toHaveBeenCalled())
+  nativeWorkspace.workspaceId.value = '/another-workspace'
+  await nextTick()
+  expect(view.viewport.destroy).toHaveBeenCalled()
+  view.unmount()
 })

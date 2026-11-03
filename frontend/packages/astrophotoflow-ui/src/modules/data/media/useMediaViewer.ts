@@ -154,9 +154,19 @@ export function useMediaViewer(
   const nextRequest = shallowRef<MediaViewRequest>()
   const nextMedia = useMediaView(nextRequest, client)
   let nextOverview: AbortController | undefined
+  watch(view, () => {
+    nextRequest.value = undefined
+    nextOverview?.abort()
+    nextOverview = undefined
+  }, { flush: 'sync' })
   watch([media.state, () => members.value.map(value => value.data)], () => {
     const current = scope.value
-    if (!current || media.state.value?.status !== 'available' || media.state.value.kind !== 'image') return
+    if (!current || media.state.value?.status !== 'available' || media.state.value.kind !== 'image') {
+      nextRequest.value = undefined
+      nextOverview?.abort()
+      nextOverview = undefined
+      return
+    }
     const next = members.value.find(value => value.data?.index === view.value.index + 1)?.data
     const target = next?.member
     if (!target || next.scope !== current.id) {

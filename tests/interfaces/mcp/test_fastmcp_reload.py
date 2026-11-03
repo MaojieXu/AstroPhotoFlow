@@ -66,7 +66,9 @@ def factory():
         async with Client(transport(), timeout=15, init_timeout=15) as client:
             try:
                 tools = await client.list_tools()
-                assert len(tools) == 113
+                from astrophotoflow.interfaces.mcp.server import build_tool_catalog
+                expected = {tool.name for tool in await build_tool_catalog().list_tools()}
+                assert {tool.name for tool in tools} == expected | {'reload_probe'}
                 before = (await client.call_tool('reload_probe', {})).structured_content
                 assert before['value'] == 1
                 original = psutil.Process(before['pid'])

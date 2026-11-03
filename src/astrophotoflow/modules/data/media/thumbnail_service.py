@@ -27,6 +27,7 @@ from astrophotoflow.modules.data.media.thumbnail_batches import (
     retry_thumbnail_items,
     thumbnail_batch_status,
 )
+from astrophotoflow.modules.data.science.files import read_hash_and_copy
 from astrophotoflow.modules.data.trash.models import LibraryEntryRemoval
 
 logger = logging.getLogger(__name__)
@@ -60,8 +61,9 @@ class ThumbnailService:
         self._thread.start()
 
     def close(self):
-        self._stop.set()
-        self.pause()
+        with self._admission:
+            self._paused = True
+            self._stop.set()
         self._wake.set()
         if self._thread is not None:
             self._thread.join()
@@ -289,7 +291,7 @@ class ThumbnailService:
                 raise ValueError("Image layout is incompatible with the first group member.")
             if reference_layout.get("unit") and layout["unit"] and reference_layout["unit"] != layout["unit"]:
                 raise ValueError("Image units are incompatible with the first group member.")
-        return path, category, hdu.supported_kind if hdu else None, parameters, recipe, reference_id, layout
+        return path, category, hdu.supported_kind if hdu else None, parameters, recipe, reference_id, layout, version.byte_size, version.content_hash
 
     def _generate(self, preview_id):
         temporary = None
@@ -306,9 +308,20 @@ class ThumbnailService:
                 preview = session.get(Preview, preview_id)
                 if preview is None or preview.status != "generating":
                     return
-                path, category, kind, parameters, recipe, reference_id, layout = self._read_context(session, preview)
+                path, category, kind, parameters, recipe, reference_id, layout, expected_size, expected_hash = self._read_context(session, preview)
                 hdu_index, version_id = preview.hdu_index, preview.asset_version_id
             before = path.stat()
+            if expected_size is not None and before.st_size != expected_size:
+                raise ValueError("Original image size differs from the fixed version.")
+            if expected_hash:
+                observed_hash, observed_size = read_hash_and_copy(path, None, self._stop.is_set)
+                after_hash = path.stat()
+                if observed_hash != expected_hash:
+                    raise ValueError("Original image content differs from the fixed version.")
+                if observed_size != before.st_size or (before.st_size, before.st_mtime_ns) != (after_hash.st_size, after_hash.st_mtime_ns):
+                    raise ValueError("Original image changed while verifying the fixed version.")
+            if self._stop.is_set():
+                raise RuntimeError('Thumbnail service stopped.')
             image, stretch = render_thumbnail(path, category, hdu_index, kind, parameters, recipe=recipe)
             after = path.stat()
             if (before.st_size, before.st_mtime_ns) != (after.st_size, after.st_mtime_ns):
@@ -318,22 +331,26 @@ class ThumbnailService:
             final.parent.mkdir(parents=True, exist_ok=True)
             temporary = final.with_suffix(".tmp")
             image.save(temporary, format="JPEG", quality=80, optimize=False)
-            with self.database.write_session() as session:
-                preview = session.get(Preview, preview_id)
-                if preview is None or preview.status != "generating":
-                    return
-                os.replace(temporary, final)
-                preview.storage_path = relative.as_posix()
-                preview.width, preview.height = image.size
-                preview.display_parameters = {"reference_version_id": reference_id, "auto_stretch": stretch, "layout": layout}
-                preview.status, preview.error = "available", None
+            with self._admission:
+                if self._stop.is_set():
+                    raise RuntimeError('Thumbnail service stopped.')
+                with self.database.write_session() as session:
+                    preview = session.get(Preview, preview_id)
+                    if preview is None or preview.status != "generating":
+                        return
+                    os.replace(temporary, final)
+                    preview.storage_path = relative.as_posix()
+                    preview.width, preview.height = image.size
+                    preview.display_parameters = {"reference_version_id": reference_id, "auto_stretch": stretch, "layout": layout}
+                    preview.status, preview.error = "available", None
         except Exception as exc:
-            logger.exception("Library thumbnail failed preview_id=%s", preview_id)
+            if not self._stop.is_set():
+                logger.exception("Library thumbnail failed preview_id=%s", preview_id)
             with self.database.write_session() as session:
                 preview = session.get(Preview, preview_id)
                 if preview is not None and preview.status == "generating":
-                    preview.status = "unsupported" if isinstance(exc, UnsupportedThumbnail) else "failed"
-                    preview.error = str(exc)
+                    preview.status = "queued" if self._stop.is_set() else "unsupported" if isinstance(exc, UnsupportedThumbnail) else "failed"
+                    preview.error = None if self._stop.is_set() else str(exc)
         finally:
             if temporary is not None:
                 temporary.unlink(missing_ok=True)

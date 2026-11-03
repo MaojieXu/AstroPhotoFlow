@@ -460,7 +460,7 @@ def retry_image_publication(session, task_id, body):
         if previous['fingerprint'] != fingerprint:
             raise ApiError(409, 'IMPORT_REQUEST_CONFLICT', 'Publication request_id has different content.')
         return image_import_receipt(session, root)
-    if task.status in {'queued', 'running', 'cancelling'}:
+    if any(member.status in {'queued', 'running', 'cancelling'} for member in _task_family(session, root)):
         raise ApiError(409, 'TASK_STATE_CONFLICT', 'Wait for import originals before retrying publication.')
     publish_image_import(session, root, expected_revision=request['expected_revision'], base_version_id=request['base_version_id'])
     plan = deepcopy(root.image_import_plan)
@@ -468,6 +468,12 @@ def retry_image_publication(session, task_id, body):
     root.image_import_plan = plan
     if not root.image_import_plan['publication'].get('errors'):
         root.report = {key: value for key, value in (root.report or {}).items() if key != 'dataset_publish_error'}
-    root.status = 'completed_with_errors' if root.image_import_plan['publication'].get('errors') or any(item.status in {'failed', 'completed_with_errors'} for item in _family_items(session, root)) else 'completed'
+    rows = _family_items(session, root)
+    publication = root.image_import_plan['publication']
+    failed = publication.get('state') != 'published' or bool(publication.get('errors')) or any(
+        item.content_status != 'available' or item.metadata_status not in {'available', 'unsupported'} for item in rows
+    )
+    if root.status not in {'cancelled', 'interrupted'}:
+        root.status = 'completed_with_errors' if failed and any(item.content_status == 'available' for item in rows) else 'failed' if failed else 'completed'
     session.flush()
     return image_import_receipt(session, root)

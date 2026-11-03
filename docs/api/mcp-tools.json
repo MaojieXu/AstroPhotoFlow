@@ -88340,7 +88340,7 @@
   {
     "name": "data_equipment_management_preview_delete",
     "title": "Data Equipment Management Preview Delete",
-    "description": "Preview deletion of equipment and equipment setups, selected in targets.equipment/setups with exact id and revision. Return all dependency effects and the current preview_fingerprint. Does not delete anything. 删除 设备 设备组合 setup 影响 预检 确认指纹 批量删除。",
+    "description": "Preview deletion of equipment and equipment setups, selected in targets.equipment/setups with exact id and revision. Return all dependency effects and the current preview_fingerprint. Does not delete anything. 删除设备 影响预检 删除 设备 设备组合 setup 影响 预检 确认指纹 批量删除。",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {

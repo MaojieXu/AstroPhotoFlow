@@ -94,7 +94,8 @@ it('reads only the selected member and its immediate neighbors and prepares only
   expect(member.mock.calls.map((call) => call[0]).sort()).toEqual([
     499, 500, 501
   ])
-  expect(client.prepare).toHaveBeenCalledExactlyOnceWith(
+  expect(client.prepare.mock.calls.filter(([, selection]) => !selection.prefetch)).toHaveLength(1)
+  expect(client.prepare).toHaveBeenCalledWith(
     '/member/500',
     expect.objectContaining({
       hdu_index: 0,
@@ -110,7 +111,7 @@ it('reads only the selected member and its immediate neighbors and prepares only
   expect(member.mock.calls.map((call) => call[0]).sort()).toEqual([
     499, 500, 501, 502
   ])
-  expect(client.prepare).toHaveBeenLastCalledWith(
+  expect(client.prepare).toHaveBeenCalledWith(
     '/member/501',
     expect.objectContaining({
       hdu_index: 0,
@@ -133,7 +134,8 @@ it('revokes old thumbnails on a direct jump and all remaining URLs and consumers
   wrapper!.unmount()
   wrapper = undefined
   expect(urls.size).toBe(0)
-  expect(client.release).toHaveBeenCalledTimes(2)
+  for (const [base, selection] of client.prepare.mock.calls)
+    expect(client.release).toHaveBeenCalledWith(base, selection.consumer_id)
 })
 it('aborts an old workspace member and never prepares or displays its late reply', async () => {
   let finish!: (value: MediaMember) => void
@@ -187,4 +189,24 @@ it('resets to the new request and releases the previous display state', async ()
   expect(viewer.index.value).toBe(4)
   expect(viewer.member.value?.title).toBe('Replacement 4')
   expect(client.release).toHaveBeenCalledWith('/member/30', expect.any(String))
+})
+
+it('cancels the stale neighbor prefetch when a new selection fails', async () => {
+  const { viewer, client } = await setup(0, 10)
+  let oldSignal: AbortSignal | undefined
+  client.prepare.mockImplementation((base: string, selection: {prefetch?: boolean}, signal: AbortSignal) => {
+    if (base === '/member/2' && selection.prefetch) {
+      oldSignal = signal
+      return new Promise(() => {})
+    }
+    if (base === '/member/5') return Promise.reject(new Error('new image failed'))
+    return Promise.resolve(state(base))
+  })
+  viewer.open(1)
+  await flushPromises()
+  expect(oldSignal).toBeDefined()
+  viewer.open(5)
+  await flushPromises()
+  expect(oldSignal?.aborted).toBe(true)
+  expect(viewer.error.value).toMatchObject({message:'new image failed'})
 })

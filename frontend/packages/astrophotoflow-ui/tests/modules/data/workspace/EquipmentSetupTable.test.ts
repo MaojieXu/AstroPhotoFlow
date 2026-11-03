@@ -99,7 +99,7 @@ describe('equipment setup table', () => {
     await first.trigger('click')
     await flushPromises()
     const actions=mounted.get('[role="group"][aria-label="组合操作"]')
-    expect(actions.findAll('button').map(button=>button.text())).toEqual(['新建拍摄预设','编辑设备组合'])
+    expect(actions.findAll('button').map(button=>button.text())).toEqual(['编辑设备组合'])
     expect(mounted.findAll('button').filter(button=>button.text()==='编辑设备组合')).toHaveLength(1)
     expect(mounted.find('section[aria-label="设备组合详情"]').exists()).toBe(false)
     const more=mounted.get('details')
@@ -155,7 +155,7 @@ describe('equipment setup table', () => {
     expect(table.text()).not.toContain('Original camera')
   })
 
-  it.each(['组合', '预设'])('blocks sorting while the %s draft is dirty', async editor => {
+  it.each(['组合'])('blocks sorting while the %s draft is dirty', async editor => {
     const { mounted } = await open()
     await mounted.get('button[aria-label="查看组合 Rig 100"]').trigger('click')
     await flushPromises()
@@ -200,7 +200,7 @@ describe('equipment setup table', () => {
     await click(mounted, '完成')
     await mounted.get('button[aria-label="查看组合 Rig 100"]').trigger('click')
     await flushPromises()
-    expect(mounted.find('section[aria-label="组合拍摄预设"]').exists()).toBe(true)
+    expect(mounted.find('section[aria-label="组合拍摄预设"]').exists()).toBe(false)
     await click(mounted, '相机')
     await mounted.vm.selectArea('library')
     await flushPromises()

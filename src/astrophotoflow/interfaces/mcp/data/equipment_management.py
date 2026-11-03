@@ -13,7 +13,7 @@ from astrophotoflow.interfaces.mcp.lifespan import service_client
 def build_server() -> FastMCP:
     mcp = tool_namespace("equipment_management")
 
-    @mcp.tool(name="preview_delete", annotations=READ_ONLY, description="Preview deletion of equipment and equipment setups, selected in targets.equipment/setups with exact id and revision. Return all dependency effects and the current preview_fingerprint. Does not delete anything. 删除 设备 设备组合 setup 影响 预检 确认指纹 批量删除。")
+    @mcp.tool(name="preview_delete", annotations=READ_ONLY, description="Preview deletion of equipment and equipment setups, selected in targets.equipment/setups with exact id and revision. Return all dependency effects and the current preview_fingerprint. Does not delete anything. 删除设备 影响预检 删除 设备 设备组合 setup 影响 预检 确认指纹 批量删除。")
     @service_errors
     def preview_delete(targets: ConfigurationTargets, *, client: AssetClient = Depends(service_client)) -> ManagementTrashPreviewOut:
         return client.preview_equipment_delete(targets.to_selection())

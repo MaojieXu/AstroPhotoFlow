@@ -393,3 +393,112 @@ def test_cache_reconciliation_keeps_different_historical_group_contexts(library)
         assert session.get(Preview, old_member).display_parameters == old_recipe
         assert session.get(Preview, current_member).display_parameters == new_recipe
         assert old_recipe["reference_version_id"] != new_recipe["reference_version_id"]
+
+
+def test_thumbnail_rejects_original_changed_before_generation(library):
+    settings, database, images = library
+    asset_id, version_id, original, data = images[0]
+    with database.write_session() as session:
+        session.get(AssetVersion, version_id).byte_size = len(data)
+    original.write_bytes(data + b'changed')
+    batch = create_thumbnail_batch(database, _request({"kind": "asset", "asset_id": asset_id, "asset_version_id": version_id}))
+    preview_id = _preview_ids(database, batch)[0]
+    with PreviewExecutor(1) as executor:
+        service = ThumbnailService(database, settings, executor)
+        service._generate(preview_id)
+    with database.read_session() as session:
+        assert session.get(Preview, preview_id).status == 'failed'
+
+
+def test_thumbnail_rejects_same_size_original_replacement(library):
+    from astrophotoflow.modules.data.science.files import hash_file
+
+    settings, database, images = library
+    asset_id, version_id, original, data = images[0]
+    original_hash, _, _ = hash_file(original)
+    with database.write_session() as session:
+        version = session.get(AssetVersion, version_id)
+        version.byte_size = len(data)
+        version.content_hash = original_hash
+    original.write_bytes(data[:-1] + bytes([data[-1] ^ 1]))
+    batch = create_thumbnail_batch(database, _request({"kind": "asset", "asset_id": asset_id, "asset_version_id": version_id}))
+    preview_id = _preview_ids(database, batch)[0]
+    with PreviewExecutor(1) as executor:
+        ThumbnailService(database, settings, executor)._generate(preview_id)
+    with database.read_session() as session:
+        assert session.get(Preview, preview_id).status == 'failed'
+
+
+def test_thumbnail_shutdown_during_hash_requeues(library, monkeypatch):
+    from astrophotoflow.modules.data.media import thumbnail_service
+    from astrophotoflow.modules.data.science.files import hash_file
+
+    settings, database, images = library
+    asset_id, version_id, original, data = images[0]
+    expected_hash, _, _ = hash_file(original)
+    with database.write_session() as session:
+        version = session.get(AssetVersion, version_id)
+        version.byte_size = len(data)
+        version.content_hash = expected_hash
+    batch = create_thumbnail_batch(database, _request({"kind": "asset", "asset_id": asset_id, "asset_version_id": version_id}))
+    preview_id = _preview_ids(database, batch)[0]
+    with PreviewExecutor(1) as executor:
+        service = ThumbnailService(database, settings, executor)
+        def interrupted(_path, _destination, cancelled):
+            service._stop.set()
+            assert cancelled()
+            raise ApiError(409, 'CANCELLED', 'cancelled')
+        monkeypatch.setattr(thumbnail_service, 'read_hash_and_copy', interrupted)
+        service._generate(preview_id)
+    with database.read_session() as session:
+        preview = session.get(Preview, preview_id)
+        assert preview.status == 'queued' and preview.error is None
+
+def test_thumbnail_shutdown_during_render_does_not_publish(library, monkeypatch):
+    from astrophotoflow.modules.data.media import thumbnail_service
+    settings, database, images = library
+    asset_id, version_id, _original, _data = images[0]
+    batch = create_thumbnail_batch(database, _request({"kind": "asset", "asset_id": asset_id, "asset_version_id": version_id}))
+    preview_id = _preview_ids(database, batch)[0]
+    with PreviewExecutor(1) as executor:
+        service = ThumbnailService(database, settings, executor)
+        def stopped_render(*_args, **_kwargs):
+            service._stop.set()
+            return Image.new('RGB', (1, 1)), {}
+        monkeypatch.setattr(thumbnail_service, 'render_thumbnail', stopped_render)
+        service._generate(preview_id)
+    with database.read_session() as session:
+        preview = session.get(Preview, preview_id)
+        assert preview.status == 'queued' and not preview.storage_path
+
+def test_thumbnail_stop_serializes_with_final_publication(library, monkeypatch):
+    from threading import Event, Thread
+    from astrophotoflow.modules.data.media import thumbnail_service
+    settings, database, images = library
+    asset_id, version_id, _original, _data = images[0]
+    batch = create_thumbnail_batch(database, _request({"kind": "asset", "asset_id": asset_id, "asset_version_id": version_id}))
+    preview_id = _preview_ids(database, batch)[0]
+    entered, release, stopped = Event(), Event(), Event()
+    original_replace = thumbnail_service.os.replace
+    def delayed_replace(source, destination):
+        entered.set()
+        assert release.wait(10)
+        original_replace(source, destination)
+    monkeypatch.setattr(thumbnail_service.os, 'replace', delayed_replace)
+    with PreviewExecutor(1) as executor:
+        service = ThumbnailService(database, settings, executor)
+        generator = Thread(target=service._generate, args=(preview_id,))
+        generator.start()
+        try:
+            assert entered.wait(10)
+            stopper = Thread(target=lambda: (service.close(), stopped.set()))
+            stopper.start()
+            assert not stopped.wait(0.2)
+            assert not service._stop.is_set()
+        finally:
+            release.set()
+            generator.join(timeout=10)
+        stopper.join(timeout=10)
+        assert not generator.is_alive() and not stopper.is_alive() and stopped.is_set()
+    with database.read_session() as session:
+        assert session.get(Preview, preview_id).status == 'available'

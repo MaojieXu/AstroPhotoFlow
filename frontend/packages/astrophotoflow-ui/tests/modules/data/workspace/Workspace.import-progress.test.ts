@@ -15,12 +15,11 @@ const capabilities = {
 }
 const emptyPage = { items: [], total: 0, limit: 50, offset: 0 }
 const baseTask = {
-  id: '00000000-0000-4000-8000-000000000001', status: 'running', sources: [], storage_mode: 'managed',
-  classification: {}, parameters: {}, notes: null, dataset_name: 'M31', target_dataset_id: null,
-  dataset_base_revision: null, dataset_id: null, enumeration_completed: true, retry_of_task_id: null,
+  id: '00000000-0000-4000-8000-000000000001', status: 'running', dataset_name: 'M31', target_dataset_id: null,
+  dataset_id: null, enumeration_completed: true,
   report: { registration: { total: 10, registered: 2, completed: false } }, error: null,
   created_at: '2026-10-22T20:00:00Z', updated_at: '2026-10-22T20:00:01Z',
-  items: [], items_total: 10, items_completed: 9, items_limit: 20, items_offset: 0
+  items_total: 10, items_completed: 9
 }
 let wrapper: ReturnType<typeof mount> | undefined
 beforeEach(() => { localStorage.clear(); get.mockReset(); send.mockReset(); vi.useFakeTimers() })
@@ -31,7 +30,7 @@ describe('workspace import registration progress', () => {
     get.mockImplementation(async (path: string) => {
       if (path.endsWith('/health')) return {status:'ok',api_version:'v1',database:'ready',schema_revision:'0001',workspace:'/isolated-test-workspace'}
       if (path.endsWith('/capabilities')) return capabilities
-      if (path.includes('/asset-tasks?')) return { ...emptyPage, items: [{ ...baseTask, status: 'completed_with_errors', error: null, report: { counts: { failed: 1, processing_issues: 1 } } }], total: 1 }
+      if (path.includes('/asset-tasks?')) return { ...emptyPage, items: [{ ...baseTask, status: 'completed_with_errors', error: null, report: {} }], total: 1 }
       if (path.includes('/library/items?')) return { ...emptyPage, total: 1, items: [{...libraryAsset({
         id: baseTask.id, name: 'invalid.fit', scope: 'shared', owner_project_id: null, role: 'raw', calibration_level: null,
         current_version_id: null, classification: {}, parameters: {}, equipment_snapshot: {}, value_sources: {}, notes: null,

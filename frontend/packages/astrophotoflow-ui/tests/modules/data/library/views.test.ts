@@ -14,7 +14,7 @@ const { search, members } = vi.hoisted(() => ({
   members: vi.fn()
 }))
 vi.mock('@ui/modules/data/api/index', () => ({
-  libraryApi: { search, members },
+  libraryApi: { search, members, memberSummaries: members, changeState: vi.fn().mockResolvedValue({revision_token:'stable',thumbnail_token:'stable'}) },
   catalogApi: {}
 }))
 let wrapper: ReturnType<typeof mount> | undefined

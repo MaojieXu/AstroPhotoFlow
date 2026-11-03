@@ -480,3 +480,59 @@ def test_legacy_directory_import_also_schedules_only_one_cover(environment):
         assert session.scalar(select(func.count()).select_from(AssetVersion)) == 2
     assert len(previews.jobs) == 1
     previews.render()
+
+
+@pytest.mark.parametrize(('original_status', 'expected'), [('interrupted', 'interrupted'), ('completed_with_errors', 'failed')])
+def test_retry_publication_does_not_report_unavailable_originals_as_completed(monkeypatch, original_status, expected):
+    from types import SimpleNamespace
+    from astrophotoflow.modules.data.imports import explicit
+
+    task_id = str(uuid4())
+    root = SimpleNamespace(id=task_id, status=original_status, report={}, image_import_plan={
+        'root_task_id': task_id, 'publication': {'state': 'blocked', 'errors': []},
+    })
+    session = SimpleNamespace(get=lambda *_args: root, flush=lambda: None)
+    monkeypatch.setattr(explicit, 'publish_image_import', lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(explicit, '_task_family', lambda *_args: [root])
+    monkeypatch.setattr(explicit, '_family_items', lambda *_args: [SimpleNamespace(
+        content_status='pending', metadata_status='pending', status='cancelled',
+    )])
+    monkeypatch.setattr(explicit, 'image_import_receipt', lambda _session, task: {'status': task.status})
+    body = ImagePublicationRetry(request_id=uuid4(), task_id=UUID(task_id), expected_revision=1, base_version_id=uuid4())
+    assert retry_image_publication(session, task_id, body)['status'] == expected
+
+
+def test_retry_publication_rejects_active_child_before_recording_request(monkeypatch):
+    from types import SimpleNamespace
+    from astrophotoflow.modules.data.imports import explicit
+
+    task_id = str(uuid4())
+    root = SimpleNamespace(id=task_id, status='interrupted', report={}, image_import_plan={
+        'root_task_id': task_id, 'publication': {'state': 'blocked', 'errors': []},
+    })
+    session = SimpleNamespace(get=lambda *_args: root, flush=lambda: None)
+    monkeypatch.setattr(explicit, '_task_family', lambda *_args: [root, SimpleNamespace(status='running')])
+    published = []
+    monkeypatch.setattr(explicit, 'publish_image_import', lambda *_args, **_kwargs: published.append(True))
+    body = ImagePublicationRetry(request_id=uuid4(), task_id=UUID(task_id), expected_revision=1, base_version_id=uuid4())
+    with pytest.raises(ApiError) as error:
+        retry_image_publication(session, task_id, body)
+    assert error.value.code == 'TASK_STATE_CONFLICT'
+    assert not published and not root.image_import_plan.get('publication_requests')
+
+def test_retry_publication_keeps_pending_metadata_incomplete(monkeypatch):
+    from types import SimpleNamespace
+    from astrophotoflow.modules.data.imports import explicit
+    task_id = str(uuid4())
+    root = SimpleNamespace(id=task_id, status='completed_with_errors', report={}, image_import_plan={
+        'root_task_id': task_id, 'publication': {'state': 'published', 'errors': []},
+    })
+    session = SimpleNamespace(get=lambda *_args: root, flush=lambda: None)
+    monkeypatch.setattr(explicit, '_task_family', lambda *_args: [root])
+    monkeypatch.setattr(explicit, 'publish_image_import', lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(explicit, '_family_items', lambda *_args: [SimpleNamespace(
+        content_status='available', metadata_status='pending', status='cancelled',
+    )])
+    monkeypatch.setattr(explicit, 'image_import_receipt', lambda _session, task: {'status': task.status})
+    body = ImagePublicationRetry(request_id=uuid4(), task_id=UUID(task_id), expected_revision=1, base_version_id=uuid4())
+    assert retry_image_publication(session, task_id, body)['status'] == 'completed_with_errors'

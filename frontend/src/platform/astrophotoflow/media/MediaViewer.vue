@@ -174,6 +174,7 @@ async function attachImage(image: MediaState, scope: string | undefined) {
         renderError.value = t('astrophotoflow.media.tileError')
     }
   }
+  imageBounds.value = undefined
   if (viewer.value) viewer.value.replace(image, options)
   else viewer.value = createImageViewport(stage.value, image, options)
   presentedImage.value = image
@@ -199,10 +200,6 @@ watch([state, model.scope], ([result, scope]) => {
   if (result.kind === 'image' && !result.needs_selection)
     void attachImage(result, scope)
   if (result.kind === 'video') playbackSelection = model.selection.value
-})
-watch(model.scope, () => {
-  disposeImage()
-  presentedImage.value = undefined
 })
 watch(
   index,
@@ -299,6 +296,11 @@ function keydown(event: KeyboardEvent) {
   event.preventDefault()
 }
 
+watch(workspace.workspaceId, () => {
+  disposeImage()
+  presentedImage.value = undefined
+  savedViewport = undefined
+})
 watch([() => request, workspace.workspaceId], () => {
   savedViewport = undefined
   pausedFrame.value = false
