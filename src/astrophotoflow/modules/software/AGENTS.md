@@ -1,7 +1,7 @@
-# ③ 外部软件接入与环境开发边界
+# 软件模块约束
 
-- 先读本目录 [README](README.md)、受影响代码与测试；跨模块才查 [架构](../../../../docs/architecture/overview.md)，不默认读取历史草案。
-- Bundle维护与热加载遵循[软件和节点需求](../../../../docs/requirements/README.md#fr-03-软件适配与能力目录)。记录准确Bundle／软件版本；当前只做开发构建，未知先查询，不自动重放。
-- 通过公开入口合作，不读他模块私有ORM；只改任务范围，不创建占位接口或空服务。
-- 当前状态统一看 [上下文](../../../../docs/development/current-context.md)，不在AGENTS重复“已实现／未实现”。
-- 相关验证在`tests/modules/software`；运行遵循根AGENTS和用户本次要求，不因列有命令就自动执行。
+- 本模块拥有固定软件包、安装/就绪状态与实际调用观察；节点定义归 nodes，图/队列/执行历史归 ComfyUI，已检查结果归 data，跨模块装配归 `interfaces/application`。
+- Bundle 维护与热加载按需求执行；记录准确的 Bundle 与软件版本；只做开发构建与发布目录快照，不从裸 checkout 运行。
+- 进程退出不等于节点结果就绪；未知结果先查询，不自动重放；取消受理、观测到进程停止与未知结果是不同事实。
+- 安装状态原子替换遵循 Windows 重试上限；进度写入失败只记日志并保留上次进度；最终状态写入失败要返回可核对的错误。
+- 测试位置 `tests/modules/software/`；Bundle 夹具在 `tests/fixtures/bundles/`，真实 Siril 只在集成测试中运行。

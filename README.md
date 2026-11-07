@@ -1,12 +1,12 @@
 # AstroPhotoFlow
 
-基于 ComfyUI 的本地天文图像工作台。用户在网页中导入素材、连接节点、调用外部软件并查看结果，也可让外部 Agent 通过平台 MCP 操作同一工作台。
+[English](README.en.md) | 中文
 
-已有素材、固定版本、设备与校准管理，以及 Siril Auto Stretch 的 Bundle 接入和在线画布局部操作。完整的项目工作流关联、跨重启运行记录和结果比较仍需补齐；集成与验证状态见 [当前上下文](docs/development/current-context.md)。Windows 优先，Linux／WSL 尚未验收。
+AstroPhotoFlow 是本地运行的天文图像工作台：把拍摄的 FITS 整理成可追溯素材，在原生画布上把外部软件操作连成处理图，真实执行后查看、比较并保存结果。平台运行两个常驻服务（ComfyUI 网页与引擎、FastAPI 领域服务）；用户直接操作网页，外部通用 Agent 经平台 MCP 操作同一份数据和用户明确授权的画布。
 
-## Quickstart（Windows x64）
+## Quickstart
 
-安装 Git 后，在 PowerShell 中执行；不需要 Agent，也不需要先手工安装 Python、uv、Node 或 pnpm：
+需要 Windows x64、Git 与 PowerShell。入口复用 PATH 中符合版本的本机工具，缺失时下载固定归档到项目 `.artifacts` 并校验，不修改全局 PATH、Python 注册或默认 workspace。
 
 ```powershell
 git clone --branch dev --depth 1 https://github.com/MaojieXu/AstroPhotoFlow.git
@@ -14,19 +14,25 @@ cd AstroPhotoFlow
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/bootstrap.ps1 --workspace .artifacts/workspaces/dev --build --start
 ```
 
-入口复用符合要求的本机工具，缺失时下载到项目的 `.artifacts`，校验固定 Node／uv 归档，不修改全局 PATH、Python 注册或默认 workspace。首次会下载依赖并构建，完成后打开回执中的实际网页地址。普通使用也可按[工作台使用](docs/development/workbench.md)安装开发 wheel。
+首次运行安装依赖并构建前端，完成后按回执中的实际地址打开工作台。同一源码基点再次运行可省略 `--build` 复用产物。
 
-同一源码基点后续省略 `--build` 即可复用已有产物；只准备开发依赖和空 workspace 时同时省略 `--start`。前端热更新使用同一个入口：
+前端热更新使用同一入口：
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/bootstrap.ps1 --watch --workspace .artifacts/workspaces/dev --port 32589 --strictPort
 ```
 
-参数、缓存、停止和验证规则统一见[开发命令](docs/development/README.md)。
+## 文档入口
 
-- 想了解要做成什么：读 [产品需求](docs/requirements/README.md)。
-- 想开发：读 [Agent 约定](AGENTS.md)、[当前任务](docs/development/implementation-plan.md) 和 [开发命令](docs/development/README.md)。
-- 想安装或使用：读 [工作台使用](docs/development/workbench.md)。
-- 想找具体资料：从 [文档入口](docs/README.md) 按需进入。
-
-平台不内置 Agent 或聊天；现有数据工具继续保留。当前只有开发构建，正式发布另行批准。
+| 我想… | 读 |
+| --- | --- |
+| 查看全部文档与任务入口 | [文档入口](docs/README.md) |
+| 了解产品要求与边界 | [产品需求](docs/product/README.md) |
+| 定位模块、数据归属与依赖 | [架构](docs/architecture.md) |
+| 搭建环境、运行本地命令 | [开发](docs/development.md) |
+| 跑测试、写验证回执 | [测试](docs/testing.md) |
+| 构建与发布开发版本 | [发行](docs/release.md) |
+| 查询 HTTP、MCP 与 CLI 接口 | [参考](docs/references.md) |
+| 操作工作台 | [使用说明](docs/user/workbench.md) |
+| 参与开发与提交 PR | [贡献指南](CONTRIBUTING.md) |
+| 了解仓库级 Agent 约定 | [AGENTS](AGENTS.md) |

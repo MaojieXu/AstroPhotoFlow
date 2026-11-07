@@ -1,7 +1,15 @@
-# 节点界面与客户端
+# 节点界面
 
-当前`client.ts`通过core/api独立客户端消费生成SDK，节点目录／定义类型和schema均直接来自生成契约，公开导出以包`src/index.ts`为准。通用节点制作、影响确认和最近测试界面仍待补，不由目录查询推定已实现。
+提供节点目录与定义的读取客户端与类型；节点制作、参数编辑与画布操作不在本模块，原生注册、控件、连线与子图协调属宿主桥接。
 
-未来界面展示定义、常用／高级参数、真实加载原因及最近测试。保存不以测试通过为门槛；确认更新后参数与端口规则统一按 [需求](../../../../../../docs/requirements/README.md)执行，不在UI另建版本或测试权威。
+## 结构
 
-原生节点注册、控件、连线与子图协调属于 [宿主桥接](../../../../../src/platform/astrophotoflow)，UI不导入其Store或画布。定义权威见 [nodes](../../../../../../src/astrophotoflow/modules/nodes/README.md)，进度／验收统一见 [当前上下文](../../../../../../docs/development/current-context.md)。
+`client.ts` 的 `createNodeClient` 经 core 的 `createPlatformClient` 与生成 SDK 读取 `list` 与 `get`；`NodeCapability`、`SavedNode`、`NodeParameter` 直接从生成契约重导出，不手写模型。
+
+## 边界
+
+定义权威在 Python `nodes` 模块；本模块不写工作流 JSON、不执行节点、不操作画布，也不缓存定义副本。
+
+## 测试
+
+包内 `tests/modules/nodes/`（根 `pnpm test`）。

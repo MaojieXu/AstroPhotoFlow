@@ -21,6 +21,7 @@
     "test:browser": "pnpm --dir frontend exec playwright test --config ../tests/browser/playwright.config.mjs",
     "test:watch": "pnpm --dir frontend --filter @astrophotoflow/ui test:watch",
     "check:boundaries": "python -m pytest tests/architecture -q && pnpm --dir frontend exec depcruise src/platform/astrophotoflow packages/astrophotoflow-ui/src --config .dependency-cruiser.json --do-not-follow \"node_modules|^src/(?!platform/astrophotoflow/)\" --output-type err-long",
+    "check:docs": "python scripts/verify_docs.py all",
     "test:browser:modernization": "pnpm --dir frontend exec playwright test --config ../tests/browser/modernization.config.mjs",
     "test:browser:native": "pnpm --dir frontend exec playwright test --config ../tests/browser/modernization-native.config.mjs"
   }

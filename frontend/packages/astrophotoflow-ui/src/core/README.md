@@ -1,7 +1,17 @@
 # 前端公共基础
 
-`WorkbenchSettings.vue`展示保存值、实际采用值及显式重启；`client.ts`／`contracts.ts`保存配置客户端与实际共用HTTP／错误类型。业务DTO留所属模块，data客户端复用同一实现。
+存放跨业务模块共用的 HTTP 与错误契约、查询客户端、宿主查询插件、国际化与工作台配置；单一业务模块使用的逻辑留在该模块。
 
-保存不自动重启，未保存内容不用于重启；断连只查询已有请求。隐藏的`import_roots`在整组保存中保留。跨端口自动重连尚不支持，实际地址从回执／status查询。
+## 入口
 
-不创建第二个Vue应用或Pinia容器，不导入业务模块或原生Store。公共能力只在真实复用时提取；宿主组件和设置挂载在 [原生桥接](../../../../src/platform/astrophotoflow)。配置规则见 [需求](../../../../../docs/requirements/README.md)，状态统一见 [当前上下文](../../../../../docs/development/current-context.md)。
+- `client.ts` 与 `contracts.ts`：`WorkbenchClient`（选择目录、读取/保存配置、重启与重启观察）及生成契约的公开名字；业务 DTO 不放这里。
+- `query/client.ts`：`createPlatformQueryClient` 与 `PlatformQueryPlugin`；`query/identity.ts`：`useWorkspaceIdentity`，按连接身份验证服务与 workspace。
+- `api/`：`createPlatformClient`、`FetchApi` 与 `ApiClientError`；`i18n.ts`：`uiMessages`、`configureUII18n` 与 `uiT`。
+
+## 不变量
+
+工作台配置保存不自动重启，未保存内容不用于重启；重启按 operation_id 轮询并校验回执身份；断连时只允许已有请求。共用逻辑不导入业务模块、原生 Store 或画布单例，也不创建第二个 Vue 应用或 Pinia 容器。
+
+## 测试
+
+包内 `tests/core/`（根 `pnpm test`）。集成关系见[前端子系统](../../../../../docs/subsystems/frontend.md)。

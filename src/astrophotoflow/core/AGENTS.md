@@ -1,7 +1,7 @@
-# ① 公共基础设施开发边界
+# 基础设施约束
 
-- 先读本目录 [README](README.md)、受影响代码与测试；跨模块才查 [架构](../../../docs/architecture/overview.md)，不默认读取历史草案。
-- 不改用户默认workspace、全局MCP或真实数据。配置保存不重启，性能参数下次显式重启采用；繁忙／不能确认空闲拒绝。不建配置历史、workspace登记或搬迁服务。
-- 通过公开入口合作，不读他模块私有ORM；只改任务范围，不创建占位接口或空服务。
-- 当前状态统一看 [上下文](../../../docs/development/current-context.md)，不在AGENTS重复“已实现／未实现”。
-- 相关验证在`tests/core tests/packaging`；运行遵循根AGENTS和用户本次要求，不因列有命令就自动执行。
+- 先读本目录 README；`core` 不拥有业务事实，不导入 `modules`，不读其他模块私有 ORM。
+- 不改用户默认 workspace、全局 MCP 注册、真实素材或正在运行的服务；启停与重启只经 `core` 的公开控制入口。
+- 配置保存不自动重启；性能类参数在下次显式重启后生效；繁忙或无法确认空闲时拒绝重启。
+- 不新建配置历史、workspace 登记表或数据搬迁服务；结构变化只通过 `database/` 下的 Alembic 迁移。
+- 测试位置 `tests/core/`、`tests/packaging/`。

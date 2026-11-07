@@ -1,19 +1,22 @@
-# ② 数据与资产管理
+# data 模块
 
-拥有素材／集合固定版本、项目资料、设备／预设快照、校准、原件与回收站。公开入口是`public.py`；HTTP路由由`interfaces/http/data/`装配；`science/inputs.py`提供固定输入解析，`science/outputs.py`负责输出检查／显式登记，`assets/content.py`负责内容确认。固定科学输入、内容接纳及所选结果交接已有实现。
+拥有素材与集合的固定版本、项目资料、设备与预设快照、校准、原件、预览、导入与回收站，是这些事实的唯一权威。
 
-软件实际消费的坏点表、ICC、比较星CSV、WCS和脚本也使用稳定文件版本，经`APF_FILE_REFERENCE`交接；它们不伪装为科学图像。来源格式可登记、可解码及可预览仍分开报告。运行输出复用同一查看器／缓存，按所选成员或HDU准备，不为整组预建金字塔，也不因查看而登记素材。颜色布局由软件契约明确声明，读取时只修改内存解释，不覆盖原件；FITS／SER容器保留实际帧数和精度资料。
+## 公开入口
 
-## 本模块必须保持
+`public.py` 显式导出跨模块能力：素材与版本查询、集合发布、导入任务、预览与缩略图、画布数据、结果检查与登记、校准、设备、项目与回收站；跨模块只经 `public.py`，HTTP 路由由 `interfaces/http/data/` 装配。
 
-保留稳定身份、固定成员顺序、资料revision及省略／null／0语义。新运行用纠正资料，旧运行不改。登记、原件可读、解析和预览分开；预览不当科学输入。公开交接不暴露私有ORM；已检查结果归data，图／队列／历史归ComfyUI，具体调用归software。
+## 职责边界
 
-实际类型看`contracts`及公开代码，不从旧详设抄签名。完整用户规则见 [需求](../../../../docs/requirements/README.md)，实现与验收状态见 [当前上下文](../../../../docs/development/current-context.md)；不在这里重复维护进度。
+- 已检查结果与素材内容归 data；图、队列、执行历史归 ComfyUI；具体软件调用归 software；跨模块装配归 interfaces。
+- 来源格式的登记、原件可读、解析与预览分开，预览与查看状态不进入科学输入。
+- `formats/` 只处理文件格式，不依赖导入流水线、ORM 或 HTTP；`science/conversion.py` 消费原始像素，像素源不反向依赖科学转换。
+- 稳定身份、固定成员顺序与资料 revision 是持久不变量；新运行使用纠正后的资料，旧运行不被改写；FITS 与 SER 保留实际帧数与精度。
 
-## 定位与验证
+## 关键协作
 
-- [源码导航](../../../../docs/architecture/module-map.md)定位真实入口；[架构](../../../../docs/architecture/overview.md)规定跨模块边界。
-- 测试位置：`tests/modules/data`。是否运行依用户当前要求，命令见 [开发流程](../../../../docs/development/README.md)。
-- 通用节点编辑、原生科学处理闭环、记忆及后续能力按 [当前计划](../../../../docs/development/implementation-plan.md)选择实际任务，不因目录或定义文件存在而认定交付。
+坏点表、ICC、比较星 CSV、WCS 与脚本以稳定文件版本经 `APF_FILE_REFERENCE` 交接；运行输出复用同一查看器与缓存，按所选成员或 HDU 准备；颜色布局由软件契约声明，读取只改内存解释，不覆盖原件。
 
-formats/只提供独立格式、布局、像素与文件解码，不依赖导入流水线／ORM／HTTP。science/conversion.py消费原始像素；PixelSource不反向导入科学转换。SER解析返回明确SerInfo；显示可选RGB呈现与科学转换保留完整通道分开处理。旧fits_preview／image_formats／media_sources／media_video／auto_stretch／science_inputs模块已删除，调用方使用当前所有者；导入流水线的阶段拆分仍待完成。
+## 测试
+
+`tests/modules/data/`；样本数据在 `tests/data/`。导入与预览行为见[素材库](../../../../docs/subsystems/library.md)与[导入流水线](../../../../docs/subsystems/import-pipeline.md)。

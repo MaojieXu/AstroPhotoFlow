@@ -9,7 +9,7 @@ Use the connected MCP server or apf with ASTROPHOTOFLOW_CONFIG set to the intend
 
 Known exact tools are directly callable. For unfamiliar capabilities use search_tools(query): built-in BM25 returns at most ten full definitions. It is keyword retrieval, not a semantic model. There is no domain gateway, discover or describe operation. Reconnect after schema/server changes.
 
-Read [the operation guide](../../../docs/development/library-agent-tools.md) for extended procedures. Live input schemas, apf call-tool TOOL --help and the [generated catalog](../../../docs/api/mcp-tools.json) define fields. Complex CLI arguments use JSON; do not maintain another parameter table.
+Read [the operation guide](../../../docs/subsystems/library.md) for extended procedures. Live input schemas, apf call-tool TOOL --help and the [generated catalog](../../../docs/api/mcp-tools.json) define fields. Complex CLI arguments use JSON; do not maintain another parameter table.
 
 ```powershell
 apf call-tool data_library_search --query '{"q":"M31","limit":50}'

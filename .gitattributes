@@ -1,4 +1,3 @@
-# Frozen requirement checksums cover exact bytes, including line endings.
-docs/requirements/v1.0/** -text
+# Vendored upstream trees keep exact bytes, including line endings.
 engine/** -text
 frontend/** -text

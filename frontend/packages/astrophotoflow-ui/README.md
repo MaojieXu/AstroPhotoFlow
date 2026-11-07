@@ -1,11 +1,19 @@
 # @astrophotoflow/ui
 
-私有workspace业务UI包，通过 [src/index.ts](src/index.ts) 公开导出，由原生网页编译；不独立运行或发布。实际导出包括素材Workspace、工作台配置、软件面板及节点／预览客户端，完整清单以代码为准。
+私有 workspace 业务 UI 包，由原生前端作为 workspace 依赖编译，不作为独立应用运行或发布；公开入口只有 `src/index.ts`。
 
-`src/core`保存实际共用HTTP／错误、查询缓存和工作台配置；业务在`src/modules/data`、`software`、`nodes`。原生组件通过宿主注入，本包不导入原生Store、画布单例或`frontend/src`。
+## 结构
 
-宿主在现有Vue应用安装公开的`PlatformQueryPlugin`，共用一个应用级Vue Query客户端。查询键包含workspace身份；查询与写入允许断开互联网，默认不重试，普通读取5秒新鲜期、非活动缓存5分钟，关闭聚焦刷新。导入任务的服务数据归查询缓存；可见任务目录每10秒发现跨入口任务；活动任务每1.5秒读取，结束或暂停后停止高频并恢复目录频率，恢复后按workspace失效任务查询。测试挂载使用同一插件，每个应用独立缓存。
+`src/core` 提供共用 HTTP 与错误契约、查询客户端、宿主查询插件、国际化与工作台配置；`src/modules/{data,software,nodes}` 提供业务界面、客户端与查询；`src/generated/api` 是 OpenAPI 生成的客户端与 Zod 模型，不手写。
 
-中英文消息通过公开入口的`uiMessages`合并到宿主现有vue-i18n实例；宿主使用`configureUII18n((key, values) => i18n.global.t(key, values))`注入同一个翻译函数，供非组件展示辅助函数使用。组件模板使用宿主注入的`$t`，本包不创建第二个应用或独立语言设置。
+## 宿主集成
 
-测试在`tests`，使用独立jsdom环境；测试、类型检查等命令见 [开发流程](../../../docs/development/README.md)，运行按用户当前要求。模块职责见 [架构](../../../docs/architecture/overview.md)，实现及验收见 [当前上下文](../../../docs/development/current-context.md)。
+宿主在原生 Vue 应用安装 `PlatformQueryPlugin`，每个应用一份查询缓存、卸载时清理，查询键必须包含 workspace 身份。默认不重试、5 秒新鲜期、5 分钟缓存、关闭聚焦刷新；轮询按模块区分，如活动导入 1.5 秒、目录类 10 秒、软件运行中 1 秒。
+
+## 国际化
+
+`uiMessages` 提供中英 `apfUi` 消息，宿主合并进 vue-i18n；组件内翻译经 `configureUII18n` 注入的函数，未注入时抛错。
+
+## 测试与检查
+
+`tests/` 下用 Vitest 与 jsdom（`@ui` 指向 `src`）；根命令 `pnpm test`、`pnpm typecheck`、`pnpm check:boundaries`。整合方式见[前端子系统](../../../docs/subsystems/frontend.md)。
