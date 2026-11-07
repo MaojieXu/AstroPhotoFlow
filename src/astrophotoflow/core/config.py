@@ -61,16 +61,26 @@ class Settings:
         return self.data_dir / ".database.lock"
 
 
+def default_workspace() -> Path | None:
+    return _default_workspace(_default_bytes())
+
+
 def resolve_config_path(path: Path | None = None) -> Path:
     if path is not None:
         return path.expanduser().resolve()
     configured = os.environ.get("ASTROPHOTOFLOW_CONFIG")
     if configured:
         return Path(configured).expanduser().resolve()
-    default = _default_workspace(_default_bytes())
+    default = default_workspace()
     if default is None:
-        raise ConfigurationError("未设置默认 workspace；请初始化或明确选择配置文件。")
-    return default / "config.toml"
+        raise ConfigurationError(
+            "未设置默认 workspace；请运行 apf init --workspace <路径> 初始化，或用 --workspace / ASTROPHOTOFLOW_CONFIG 明确指定。")
+    config_path = default / "config.toml"
+    if not config_path.is_file():
+        raise ConfigurationError(
+            f"默认 workspace 无效：{default} 下没有 config.toml；请运行 apf init --workspace <路径> 重新设置，"
+            "或用 --workspace / ASTROPHOTOFLOW_CONFIG 明确指定。")
+    return config_path
 
 
 def load_settings(config_path: Path | None = None) -> Settings:

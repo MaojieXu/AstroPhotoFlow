@@ -182,20 +182,45 @@ function Expand-ApfTool([string]$File, [string]$Uri, [string]$Sha256, [string]$D
         if (-not $apfPnpm) { throw 'Prepared pnpm version does not match packageManager' }
     }
     $env:PATH = (Split-Path -Parent $apfPnpm) + ';' + $env:PATH
-    $apfPython = Join-Path $apfArtifacts 'venvs/dev/Scripts/python.exe'
-    if (-not (Test-Path -LiteralPath $apfPython)) {
-        $apfPython = $null
-        try {
-            $apfPython = (& $apfUv python find --system --no-python-downloads 3.12 2>$null | Select-Object -Last 1)
-            if ($LASTEXITCODE -ne 0) { $apfPython = $null }
-        } catch { $apfPython = $null }
-        if (-not $apfPython) {
-            & $apfUv python install --no-registry 3.12.15
-            if ($LASTEXITCODE -ne 0) { throw "Python preparation failed: $LASTEXITCODE" }
-            $apfPython = (& $apfUv python find --managed-python 3.12.15 | Select-Object -Last 1)
-            if ($LASTEXITCODE -ne 0) { throw 'Prepared Python cannot be found' }
-        }
+    $apfPythonVersion = '3.12.15'
+    $env:UV_PYTHON_PREFERENCE = 'only-managed'
+    & $apfUv python install --no-registry $apfPythonVersion
+    if ($LASTEXITCODE -ne 0) { throw "Python preparation failed: $LASTEXITCODE" }
+    $apfBasePython = (& $apfUv python find $apfPythonVersion | Select-Object -Last 1)
+    if ($LASTEXITCODE -ne 0 -or -not $apfBasePython -or -not (Test-Path -LiteralPath $apfBasePython)) {
+        throw "Managed Python $apfPythonVersion cannot be found"
     }
+    $apfVenvDirectory = Join-Path $apfArtifacts 'venvs/dev'
+    $apfPython = Join-Path $apfVenvDirectory 'Scripts/python.exe'
+    if (Test-Path -LiteralPath $apfPython) {
+        $apfVenvHome = $null
+        $apfVenvConfig = Join-Path $apfVenvDirectory 'pyvenv.cfg'
+        if (Test-Path -LiteralPath $apfVenvConfig) {
+            $apfHomeLine = Get-Content -LiteralPath $apfVenvConfig | Where-Object { $_ -match '^home\s*=' } | Select-Object -First 1
+            if ($apfHomeLine) { $apfVenvHome = ($apfHomeLine -replace '^home\s*=\s*', '').Trim() }
+        }
+        $apfVenvMatches = $false
+        if ($apfVenvHome -and (Test-Path -LiteralPath $apfVenvHome)) {
+            try {
+                $apfVenvMatches = ((Resolve-Path -LiteralPath $apfVenvHome).Path -eq (Resolve-Path -LiteralPath (Split-Path -Parent $apfBasePython)).Path)
+            } catch { $apfVenvMatches = $false }
+        }
+        if (-not $apfVenvMatches) {
+            $apfVenvPython = Join-Path $apfVenvDirectory 'Scripts/python.exe'
+            try {
+                $apfVenvLock = [System.IO.File]::Open($apfVenvPython, 'Open', 'ReadWrite', 'None')
+                $apfVenvLock.Close()
+            } catch {
+                throw "Cannot recreate the development venv: $apfVenvPython is in use. Stop the workspace services or any other process using that venv, then retry."
+            }
+            Write-Host 'Recreating development venv for managed Python 3.12.15'
+            Remove-Item -LiteralPath $apfVenvDirectory -Recurse -Force
+            $apfPython = $apfBasePython
+        }
+    } else {
+        $apfPython = $apfBasePython
+    }
+    $env:ASTROPHOTOFLOW_DEV_PYTHON = $apfBasePython
     $apfEntry = Join-Path $PSScriptRoot 'dev_prepare.py'
     if ($apfArguments -contains '--watch') {
         $apfArguments = @($apfArguments | Where-Object { $_ -ne '--watch' })

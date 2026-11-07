@@ -89,16 +89,20 @@ def prepare(report: dict) -> int:
     parser.add_argument("--offline", action="store_true")
     parser.add_argument('--bundle-source', action='append', default=[], metavar='PACKAGE=PATH')
     parser.add_argument('--clear-bundle-source', action='append', default=[], metavar='PACKAGE')
-    parser.add_argument("--service-port", type=int, default=8190)
-    parser.add_argument("--comfyui-port", type=int, default=8188)
+    parser.add_argument("--service-port", type=int)
+    parser.add_argument("--comfyui-port", type=int)
     args = parser.parse_args()
     workspace = args.workspace.resolve()
     if not workspace.is_relative_to(ROOT / ".artifacts/workspaces"):
         parser.error("开发workspace必须位于本Worktree的.artifacts/workspaces下。")
     if sys.version_info[:2] != (3, 12):
         parser.error("请使用Python 3.12执行开发准备入口。")
-    if not (1 <= args.service_port <= 65535 and 1 <= args.comfyui_port <= 65535) or args.service_port == args.comfyui_port:
-        parser.error("两个服务需要不同的1–65535端口。")
+    for name, port in (("--service-port", args.service_port), ("--comfyui-port", args.comfyui_port)):
+        if port is not None and not 1 <= port <= 65535:
+            parser.error(f"{name} 必须是1–65535的端口。")
+    if args.service_port is not None and args.service_port == args.comfyui_port:
+        parser.error("两个服务需要不同的端口。")
+    base_python = os.environ.get("ASTROPHOTOFLOW_DEV_PYTHON") or sys._base_executable
     if args.build and args.frontend_assets:
         parser.error("--build和--frontend-assets只能选择一个。")
     if args.stop and (args.start or args.build or args.frontend_assets):
@@ -114,7 +118,7 @@ def prepare(report: dict) -> int:
     for name in ("LOCALAPPDATA", "APPDATA", "TEMP", "UV_PYTHON_BIN_DIR"):
         Path(env[name]).mkdir(parents=True, exist_ok=True)
     report.update({"workspace": str(workspace), "config_path": env["ASTROPHOTOFLOW_CONFIG"],
-              "runtime_path": env["ASTROPHOTOFLOW_RUNTIME"],
+              "runtime_path": env["ASTROPHOTOFLOW_RUNTIME"], "base_python": base_python,
               "python": str(Path(env["UV_PROJECT_ENVIRONMENT"]) / ("Scripts/python.exe" if os.name == "nt" else "bin/python")),
               "cache_dir": str(Path(env["UV_CACHE_DIR"]).parent)})
     logs = ROOT / ".artifacts/logs/dev-prepare" / report["run_id"]
@@ -178,7 +182,7 @@ def prepare(report: dict) -> int:
         stamp_path = ROOT / ".artifacts/dev-dependencies.json"
         stamps = json.loads(stamp_path.read_text(encoding="utf-8")) if stamp_path.is_file() else {}
         python_key = fingerprint([ROOT / name for name in ("uv.lock", "pyproject.toml", "setup.py")],
-                                 [sys.version, sys._base_executable, sys.platform])
+                                 [sys.version, base_python, sys.platform])
         inputs = [ROOT / name for name in tracked if name.startswith("frontend/") and
                   (name.endswith("/package.json") or name in {"frontend/pnpm-lock.yaml", "frontend/pnpm-workspace.yaml"}
                    or name.startswith("frontend/patches/"))]
@@ -201,7 +205,7 @@ def prepare(report: dict) -> int:
         else:
             stamps.pop("python", None)
             write_json(stamp_path, stamps)
-            run("python-dependencies", [tools["uv"], "sync", "--locked", "--extra", "dev", "--python", sys._base_executable])
+            run("python-dependencies", [tools["uv"], "sync", "--locked", "--extra", "dev", "--python", base_python])
             stamps["python"] = python_key
             write_json(stamp_path, stamps)
         if stamps.get("frontend") == frontend_key and (ROOT / "frontend/node_modules/.modules.yaml").is_file():
@@ -223,8 +227,11 @@ def prepare(report: dict) -> int:
             report["dirty"] = bool(run("built-changes", ["git", "status", "--porcelain"]).strip())
         if args.start:
             report["runtime"] = json.loads(run("runtime", cli + ["runtime", "prepare", *(["--reuse-only"] if active else [])]))
-        command = cli + ["workspace", "create", "--workspace", str(workspace), "--service-port", str(args.service_port),
-                         "--comfyui-port", str(args.comfyui_port)]
+        command = cli + ["workspace", "create", "--workspace", str(workspace)]
+        if args.service_port is not None:
+            command.extend(["--service-port", str(args.service_port)])
+        if args.comfyui_port is not None:
+            command.extend(["--comfyui-port", str(args.comfyui_port)])
         if args.start or args.build or args.frontend_assets or report.get('frontend_reuse'):
             manifest = json.loads((assets / "build-manifest.json").read_text(encoding="utf-8"))
             report["frontend"] = {"assets": str(assets), **manifest}

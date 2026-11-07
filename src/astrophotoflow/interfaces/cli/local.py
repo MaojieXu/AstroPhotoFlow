@@ -18,24 +18,39 @@ def workspace_config(workspace: Path | None) -> Path:
 def register_local(app: App) -> None:
     runtime = App(name="runtime", help="Prepare the fixed local CPU runtime.")
     workspace_app = App(name="workspace", help="Manage local workspace configuration.")
+    env_app = App(name="env", help="Inspect the local environment; read-only.")
     app.command(runtime)
     app.command(workspace_app)
+    app.command(env_app)
 
     @runtime.command(name="prepare")
     def runtime_prepare(*, reuse_only: bool = False) -> None:
         print(json.dumps(workbench.prepare_runtime(reuse_only=reuse_only), ensure_ascii=False, indent=2))
 
     @workspace_app.command(name="create")
-    def create(*, workspace: Path, service_port: int = 8190, comfyui_port: int = 8188, frontend_assets: Path | None = None) -> None:
+    def create(*, workspace: Path, service_port: int | None = None, comfyui_port: int | None = None,
+               frontend_assets: Path | None = None) -> None:
         result = workbench.create_workspace(workspace, service_port, comfyui_port, frontend_assets=frontend_assets)
         print(json.dumps({"workspace": str(result.parent), "config_path": str(result)}, ensure_ascii=False, indent=2))
+
+    @env_app.command(name="doctor")
+    def env_doctor(*, workspace: Path | None = None, as_json: bool = False) -> None:
+        checks = workbench.doctor_checks(workspace)
+        failed = [item for item in checks if item["status"] == "fail"]
+        if as_json:
+            print(json.dumps({"ok": not failed, "checks": checks}, ensure_ascii=False, indent=2))
+        else:
+            for item in checks:
+                print(f"{item['status'].upper():<4} {item['name']:<20} {item['detail']}")
+        if failed:
+            raise SystemExit(1)
 
     @app.command(name="init")
     def initialize(
         *,
         workspace: Path | None = None,
-        service_port: int = 8190,
-        comfyui_port: int = 8188,
+        service_port: int | None = None,
+        comfyui_port: int | None = None,
         frontend_assets: Path | None = None,
         reuse_runtime: bool = False,
         activate: bool = True,

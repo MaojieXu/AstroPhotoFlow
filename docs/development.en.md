@@ -8,7 +8,7 @@ Development on Windows x64 is prepared through the fixed `scripts/bootstrap.ps1`
 
 | Dependency | Version | Notes |
 | --- | --- | --- |
-| Python | 3.12 | `pyproject.toml` requires `>=3.12`; bootstrap prefers a local 3.12, otherwise it installs a managed copy |
+| Python | 3.12 | `pyproject.toml` requires `>=3.12`; bootstrap always installs and uses the uv-managed 3.12.15 instead of borrowing a system interpreter |
 | uv | 0.13.5 | Python dependency and toolchain entry |
 | Node.js | `>=26.8.2 <27` | Frontend build and tests |
 | pnpm | 11.13.1 | Pinned by `packageManager` in `package.json` |
@@ -30,12 +30,14 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/bootstrap.ps1 --work
 | `--frontend-assets` | Reuses a previously verified web output directory |
 | `--start`, `--stop` | Starts both services; stops only that workspace |
 | `--watch --port <port> --strictPort` | Runs Vite hot reload |
-| `--service-port`, `--comfyui-port` | Domain service and ComfyUI ports, defaulting to 8190 / 8188 |
+| `--service-port`, `--comfyui-port` | Domain service and ComfyUI ports; a new workspace defaults to 8190 / 8188, an existing `config.toml` is authoritative, and a conflicting explicit value is an error |
 | `--runtime-dir`, `--cache-dir` | Private runtime and tool/package cache directories |
 | `--offline` | Uses only local caches, no network |
 | `--bundle-source`, `--clear-bundle-source` | Binds or unbinds a development bundle source |
 
 Missing tools are downloaded as pinned archives into `.artifacts/toolchains` and verified; caches default to the main checkout's `.artifacts/cache` and can be overridden with `--cache-dir` or the `ASTROPHOTOFLOW_DEV_CACHE` environment variable. The receipt is written to `.artifacts/dev-prepare.json` and logs to `.artifacts/logs/dev-prepare/<run_id>`.
+
+The development venv's base interpreter is pinned to the uv-managed 3.12.15; bootstrap recreates an existing venv whose `pyvenv.cfg` points at another interpreter. `apf env doctor` checks the interpreter, tools, runtime, and workspace ports.
 
 ## Common commands
 
@@ -52,6 +54,8 @@ Missing tools are downloaded as pinned archives into `.artifacts/toolchains` and
 | Architecture boundary check | `pnpm check:boundaries` |
 | Documentation gate | `pnpm check:docs` |
 | Interface artifacts | `pnpm docs:api` |
+| Check the development environment | `apf env doctor` |
+| Prune expired temporary artifacts | `python scripts/prune_artifacts.py` (`--apply` deletes) |
 
 ## Artifacts and receipts
 
@@ -65,6 +69,7 @@ Missing tools are downloaded as pinned archives into `.artifacts/toolchains` and
 ## Debug entry points
 
 - The receipt's `completed` means the preparation request finished and `ready` means the services are ready; neither means the page has been displayed. Use the receipt's `web_url` as the page address.
+- Start no longer writes actual ports back into `config.toml`; use the receipt and `actual_ports` in `workspace/run/processes.json` for the effective addresses.
 - Point browser validation at your own receipt address with `APF_WEB_URL` and at your own workspace with `APF_TEST_WORKSPACE`.
 - Native queue and restart scenarios require `APF_ALLOW_NATIVE_QUEUE=1` and `APF_ALLOW_WORKBENCH_RESTART=1` explicitly set; otherwise they are reported as skipped.
 - Parallel pytest runs must each pass a distinct `--basetemp=.artifacts/pytest-<task>`.

@@ -66,6 +66,8 @@ def test_initialize_copies_native_web_and_start_uses_builtin_gateway(tmp_path, m
     monkeypatch.setattr(wb_paths, 'runtime_dir', lambda: runtime)
     monkeypatch.setattr(wb_runtime, 'uv_executable', lambda: "uv")
     monkeypatch.setattr(wb_runtime, 'run_command', lambda command, env=None: None)
+    monkeypatch.setattr(wb_runtime, 'probe_python',
+                        lambda python, *, timeout=120: {"version": "3.12.15", "base_prefix": str(tmp_path / "managed"), "torch": "2.14.1+cpu"})
     monkeypatch.setattr(app_config, "CONFIG_PATH", tmp_path / "user/config.toml")
 
     workspace = tmp_path / "workspace"
@@ -101,7 +103,7 @@ def test_initialize_copies_native_web_and_start_uses_builtin_gateway(tmp_path, m
         def poll(self):
             return None
 
-    monkeypatch.setattr(wb_processes, 'port_available', lambda host, port: True)
+    monkeypatch.setattr(wb_processes, 'port_available', lambda host, port: port != 18190)
     monkeypatch.setattr(wb_observations, 'service_healthy', lambda path: True)
     monkeypatch.setattr(wb_processes, 'launch_process', lambda command, cwd, env, log_path: (commands.append(command) or FakeProcess()))
     monkeypatch.setattr(wb_processes, 'record_process', lambda process, role, cwd, command: {
@@ -116,6 +118,9 @@ def test_initialize_copies_native_web_and_start_uses_builtin_gateway(tmp_path, m
     assert commands[1][commands[1].index("--base-directory") + 1] == str(workspace / "comfyui-data")
     assert commands[1][commands[1].index("--front-end-root") + 1] == str(workspace / "web")
     assert "--disable-all-custom-nodes" in commands[1]
+    record = json.loads((workspace / "run/processes.json").read_text(encoding="utf-8"))
+    assert record["actual_ports"] == {"service": 18191, "web": 18188}
+    assert (workspace / "config.toml").read_text(encoding="utf-8").count("port = 18190") == 1
 
 
 def test_create_workspace_needs_no_runtime_or_frontend_and_keeps_default(tmp_path, monkeypatch):
@@ -153,6 +158,13 @@ def test_runtime_receipt_skips_install_and_failed_update_cannot_be_reused(tmp_pa
         python.parent.mkdir(parents=True, exist_ok=True)
         python.touch()
 
+    probes = []
+
+    def probe(python, *, timeout=120):
+        probes.append(python)
+        return {"version": "3.12.15", "base_prefix": str(tmp_path / "managed"), "torch": "2.14.1+cpu"}
+
+    monkeypatch.setattr(wb_runtime, 'probe_python', probe)
     monkeypatch.setattr(wb_runtime, 'run_command', install)
     assert wb_runtime.prepare_runtime()["reused"] is False
     if os.name == "nt":
@@ -162,7 +174,9 @@ def test_runtime_receipt_skips_install_and_failed_update_cannot_be_reused(tmp_pa
     assert len(commands) == count
     receipt = runtime / ".apf-runtime.json"
     saved = json.loads(receipt.read_text(encoding="utf-8"))
-    saved["archive_sha256"] = "outdated"
+    assert saved["python"]["torch"] == "2.14.1+cpu"
+    assert probes and probes[0] == runtime / "comfyui-env" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+    saved["fingerprint"]["archive_sha256"] = "outdated"
     receipt.write_text(json.dumps(saved), encoding="utf-8")
 
     def fail(command, env=None):
@@ -174,6 +188,38 @@ def test_runtime_receipt_skips_install_and_failed_update_cannot_be_reused(tmp_pa
     assert not receipt.exists()
     with pytest.raises(wb_errors.WorkbenchError, match="未准备完成"):
         wb_runtime.prepare_runtime(reuse_only=True)
+
+
+def test_runtime_reuse_requires_a_runnable_embedded_python(tmp_path, monkeypatch):
+    vendor = tmp_path / "package/vendor"
+    vendor.mkdir(parents=True)
+    archive = vendor / "comfyui-0.42.0.zip"
+    with zipfile.ZipFile(archive, "w") as bundle:
+        bundle.writestr("ComfyUI/main.py", "")
+        bundle.writestr("ComfyUI/requirements.txt", "numpy\n")
+    manifest = {"commit": wb_constants.COMFY_COMMIT, "sha256": hashlib.sha256(archive.read_bytes()).hexdigest()}
+    (vendor / "comfyui-source.json").write_text(json.dumps(manifest), encoding="utf-8")
+    (vendor / "comfyui-0.42.0-windows-py312.lock").write_text("numpy==2.4.6\n", encoding="utf-8")
+    runtime = tmp_path / "runtime"
+    monkeypatch.setattr(wb_paths, "package_directory", lambda: Path(vendor.parent / "core/workbench.py").parents[1])
+    monkeypatch.setattr(wb_paths, "runtime_dir", lambda: runtime)
+    monkeypatch.setattr(wb_runtime, "uv_executable", lambda: "uv")
+
+    def install(command, env=None):
+        python = runtime / "comfyui-env" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+        python.parent.mkdir(parents=True, exist_ok=True)
+        python.touch()
+
+    monkeypatch.setattr(wb_runtime, "run_command", install)
+    working = {"version": "3.12.15", "base_prefix": str(tmp_path / "managed"), "torch": "2.14.1+cpu"}
+    monkeypatch.setattr(wb_runtime, "probe_python", lambda python, *, timeout=120: dict(working))
+    assert wb_runtime.prepare_runtime()["reused"] is False
+    assert wb_runtime.prepare_runtime()["reused"] is True
+    monkeypatch.setattr(wb_runtime, "probe_python", lambda python, *, timeout=120: None)
+    with pytest.raises(wb_errors.WorkbenchError, match="未准备完成"):
+        wb_runtime.prepare_runtime(reuse_only=True)
+    with pytest.raises(wb_errors.WorkbenchError, match="无法运行"):
+        wb_runtime.prepare_runtime()
 
 
 def test_workspace_native_web_assets_are_complete_and_isolated(tmp_path, monkeypatch):
@@ -708,21 +754,17 @@ def test_port_choice_skips_occupied_and_other_service_port(monkeypatch):
     assert checked == [31388, 31389, 31391]
 
 
-def test_actual_port_writeback_preserves_newly_saved_performance_and_current_values(tmp_path):
+def test_workspace_ports_come_from_existing_config_and_mismatch_is_rejected(tmp_path):
     config = write_workspace(tmp_path / "workspace")
-    before = app_config.get_configuration(config)
-    adopted = {"workspace": str(config.parent), "config_path": str(config),
-               "effective_settings": before.saved.model_dump(), "processes": [{"role": "asset-service"}]}
-    wb_state.write_state(config.parent, adopted)
-    changed = app_config.save_configuration(
-        config, before.saved.model_copy(update={"file_workers": 7}), before.config_token)
-    wb_control.write_actual_ports(config, 31490, ["http://127.0.0.1:31488"])
-    current = app_config.get_configuration(config)
-    assert current.saved.file_workers == 7
-    assert current.saved.service_port == 31490
-    assert current.saved.allowed_origins == ["http://127.0.0.1:31488"]
-    assert current.effective == changed.effective
-    assert current.restart_required
+    assert wb_workspaces.resolve_workspace_ports(config.parent, None, None) == (31390, 31388)
+    assert wb_workspaces.resolve_workspace_ports(config.parent, 31390, 31388) == (31390, 31388)
+    with pytest.raises(wb_errors.WorkbenchError, match="不一致"):
+        wb_workspaces.resolve_workspace_ports(config.parent, 31490, 31388)
+    with pytest.raises(wb_errors.WorkbenchError, match="不一致"):
+        wb_workspaces.resolve_workspace_ports(config.parent, 31390, 31389)
+    empty = tmp_path / "empty"
+    assert wb_workspaces.resolve_workspace_ports(empty, None, None) == (8190, 8188)
+    assert wb_workspaces.resolve_workspace_ports(empty, 9000, None) == (9000, 8188)
 
 
 def test_repeated_start_returns_actual_addresses_without_launch_or_default_change(tmp_path, monkeypatch):

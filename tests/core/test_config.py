@@ -118,6 +118,16 @@ def test_no_default_does_not_read_old_pointer_or_create_workspace(tmp_path):
     assert not (tmp_path / "old").exists()
 
 
+def test_invalid_default_pointer_reports_repair_hint(tmp_path):
+    pointer = tmp_path / "missing-workspace"
+    pointer.mkdir()
+    config.CONFIG_PATH.parent.mkdir(parents=True)
+    config.CONFIG_PATH.write_text(f'[workspace]\ndefault = "{pointer.as_posix()}"\n', encoding="utf-8")
+    assert config.default_workspace() == pointer
+    with pytest.raises(config.ConfigurationError, match="默认 workspace 无效"):
+        config.resolve_config_path()
+
+
 def test_configuration_read_has_no_side_effects_and_workspace_is_not_data_dir(tmp_path):
     path = write_config(tmp_path / "workspace/config.toml")
     state = config.get_configuration(path)

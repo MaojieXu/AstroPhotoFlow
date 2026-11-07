@@ -18,7 +18,6 @@ from filelock import FileLock, Timeout
 from astrophotoflow.contracts.workbench import BusyState, WorkbenchResult
 from astrophotoflow.core import config as app_config
 from astrophotoflow.core.config import resolve_config_path
-from astrophotoflow.core.errors import ApiError
 
 from . import observations, operations, paths, processes, state
 from .errors import WorkbenchError
@@ -31,15 +30,6 @@ def choose_port(host: str, preferred: int, *, exclude: int | None = None) -> int
         if port != exclude and processes.port_available(host, port):
             return port
     raise WorkbenchError("没有可用端口，请修改首选端口后重试。")
-
-
-def write_actual_ports(config_path: Path, service_port: int, origins: list[str]) -> None:
-    app_config.CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
-    with FileLock(str(app_config.CONFIG_PATH) + ".lock", timeout=0):
-        # Read the latest other values under the same lock as configuration saves.
-        current = app_config.get_configuration(config_path)
-        values = current.saved.model_copy(update={"service_port": service_port, "allowed_origins": origins})
-        app_config.write_configuration_file(config_path, app_config.configuration_text(values))
 
 
 def start_services(config_path: Path, result: WorkbenchResult, control: dict) -> None:
@@ -78,7 +68,8 @@ def start_services(config_path: Path, result: WorkbenchResult, control: dict) ->
                      "--front-end-root", str(workspace / "web"), "--disable-all-custom-nodes", "--disable-api-nodes"]
     manifest = json.loads((paths.package_directory() / "vendor/comfyui-source.json").read_text(encoding="utf-8"))
     record = {"workspace": str(workspace), "config_path": str(config_path), "effective_settings": values.model_dump(),
-              "web_url": web_url, "service_url": effective.service_url, "processes": [], "maintenance_operation_id": None,
+              "web_url": web_url, "service_url": effective.service_url,
+              "actual_ports": {"service": service_port, "web": web_port}, "processes": [], "maintenance_operation_id": None,
               "versions": {"platform": version("astrophotoflow"), "comfyui": manifest["comfyui_version"]}}
     state.write_state(workspace, record)
     pending_child = None
@@ -128,10 +119,6 @@ def start_services(config_path: Path, result: WorkbenchResult, control: dict) ->
             ) from startup_error
         raise
     result.web_url, result.service_url = web_url, effective.service_url
-    try:
-        write_actual_ports(config_path, service_port, origins)
-    except (OSError, Timeout, ApiError, app_config.ConfigurationError) as exc:
-        result.detail = f"服务已就绪，但实际端口未保存：{exc}"
 
 
 def operate_control(action: str, workspace_config: Path | None, operation_id: UUID | None = None) -> WorkbenchResult:

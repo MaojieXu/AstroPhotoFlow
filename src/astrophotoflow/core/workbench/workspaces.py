@@ -18,14 +18,33 @@ def load_workspace_config(path: Path) -> tuple[Settings, int, str, int]:
     return settings, settings.port, settings.host, parsed.port
 
 
-def prepare_workspace(workspace: Path, service_port: int, comfyui_port: int) -> Path:
+def resolve_workspace_ports(workspace: Path, service_port: int | None, comfyui_port: int | None) -> tuple[int, int]:
+    """Return the ports a workspace must use; an existing config owns its ports."""
+    for name, port in (("service-port", service_port), ("comfyui-port", comfyui_port)):
+        if port is not None and not 1 <= port <= 65535:
+            raise WorkbenchError(f"--{name} 必须是 1–65535 的端口。")
+    config_path = workspace / "config.toml"
+    if config_path.is_file():
+        settings, stored_service, _host, stored_comfy = load_workspace_config(config_path)
+        for name, requested, stored in (("service-port", service_port, stored_service),
+                                        ("comfyui-port", comfyui_port, stored_comfy)):
+            if requested is not None and requested != stored:
+                raise WorkbenchError(
+                    f"workspace 已存在且端口为 {stored_service}/{stored_comfy}；--{name} {requested} 与配置不一致。"
+                    f"请改用配置端口，或停止后修改 {settings.workspace / 'config.toml'} 再重试。")
+        return stored_service, stored_comfy
+    resolved_service = service_port if service_port is not None else 8190
+    resolved_comfy = comfyui_port if comfyui_port is not None else 8188
+    if resolved_service == resolved_comfy:
+        raise WorkbenchError("资产服务与 ComfyUI 必须使用不同端口。")
+    return resolved_service, resolved_comfy
+
+
+def prepare_workspace(workspace: Path, service_port: int | None = None, comfyui_port: int | None = None) -> Path:
     workspace = workspace.expanduser().resolve()
     workspace.mkdir(parents=True, exist_ok=True)
     config_path = workspace / "config.toml"
-    if not 1 <= service_port <= 65535 or not 1 <= comfyui_port <= 65535 or service_port == comfyui_port:
-        raise WorkbenchError("资产服务与 ComfyUI 必须配置为不同的 1–65535 端口。")
-    if config_path.exists():
-        load_workspace_config(config_path)
+    service_port, comfyui_port = resolve_workspace_ports(workspace, service_port, comfyui_port)
 
     for relative in ("data", "input", "output", "logs", "context", "comfyui-user", "comfyui-data", "run"):
         (workspace / relative).mkdir(parents=True, exist_ok=True)
@@ -50,7 +69,7 @@ def activate_workspace(config_path: Path) -> None:
     app_config.set_default_workspace(config_path.parent)
 
 
-def initialize(workspace: Path, service_port: int = 8190, comfyui_port: int = 8188, *,
+def initialize(workspace: Path, service_port: int | None = None, comfyui_port: int | None = None, *,
                frontend_assets: Path | None = None, activate: bool = True, reuse_runtime: bool = False) -> Path:
     workspace = workspace.expanduser().resolve()
     with operations.control_operation(workspace / "config.toml", "initialize"):
@@ -65,7 +84,7 @@ def initialize(workspace: Path, service_port: int = 8190, comfyui_port: int = 81
         return config_path
 
 
-def create_workspace(workspace: Path, service_port: int = 8190, comfyui_port: int = 8188, *,
+def create_workspace(workspace: Path, service_port: int | None = None, comfyui_port: int | None = None, *,
                      frontend_assets: Path | None = None) -> Path:
     workspace = workspace.expanduser().resolve()
     with operations.control_operation(workspace / "config.toml", "initialize"):
