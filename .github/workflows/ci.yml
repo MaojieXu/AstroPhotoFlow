@@ -54,22 +54,25 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '26.8.2'
+      - uses: pnpm/action-setup@v4
+        with:
+          version: '11.13.1'
       - uses: astral-sh/setup-uv@v6
         with:
           version: '0.13.5'
           enable-cache: false
       - name: Build frontend
         run: |
-          corepack pnpm --dir frontend install --frozen-lockfile --ignore-scripts
-          corepack pnpm build
+          pnpm --dir frontend install --frozen-lockfile --ignore-scripts
+          pnpm build
       - name: Discover browser tests (no services)
-        run: corepack pnpm test:browser --list
+        run: pnpm test:browser --list
       - name: Prepare Python project
         run: uv sync --locked --extra dev
       - name: Python product tests
         run: uv run --locked --no-sync pytest -q --junitxml=.artifacts/reports/python.xml
       - name: Frontend product tests
-        run: corepack pnpm test
+        run: pnpm test
       - name: Build and verify distributions
         run: |
           uv run --locked --no-sync python -m build --installer uv --outdir .artifacts/dist
