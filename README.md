@@ -34,5 +34,5 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/bootstrap.ps1 --watc
 | 构建与发布开发版本 | [发行](docs/release.md) |
 | 查询 HTTP、MCP 与 CLI 接口 | [参考](docs/references.md) |
 | 操作工作台 | [使用说明](docs/user/workbench.md) |
-| 参与开发与提交 PR | [贡献指南](CONTRIBUTING.md) |
+| 参与开发与集成 | [贡献指南](CONTRIBUTING.md) |
 | 了解仓库级 Agent 约定 | [AGENTS](AGENTS.md) |

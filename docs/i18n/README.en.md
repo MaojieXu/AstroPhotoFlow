@@ -38,4 +38,4 @@ Change the Chinese primary document first, then the English translation. Run `py
 
 ## Responsibility Boundary
 
-A passing hash only means the two sides matched when the record was generated; it does not mean the translation is good or semantically equivalent. Review belongs to an independent reviewer, and the gate does not replace human judgment.
+A passing hash check confirms that both sides match their recorded contents. Assessing translation quality and semantic equivalence requires human judgment.

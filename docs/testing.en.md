@@ -23,7 +23,7 @@ Test layers cover documentation, Python, architecture, frontend, browser, and di
 
 ## Writing receipts
 
-- The pull request's validation section lists the commands actually executed and their results; explain any check that was not run.
+- Before merging into `dev`, record the commands run and their results in the handoff summary. For a release pull request, use the Testing section. Explain any relevant checks that were skipped.
 - Put full logs under `.artifacts/reports`, for example `python.xml`, `browser/`, and `packaging.json`.
 - Report implementation, automated validation, real execution, and user acceptance separately; they never substitute for one another.
 - Do not rerun checks that already passed; add affected checks after the change scope changes.

@@ -49,7 +49,7 @@ Status: Implemented
 
 - 现状与规则：`docs/`。
 - 讨论过程与审查意见：PR。
-- 验证结果与日志：PR 的 Testing 与 `.artifacts/reports`。
+- 验证结果与日志：见[测试文档](../../docs/testing.md)。
 - 决定与后果：本目录。
 
 ## 门禁

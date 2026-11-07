@@ -34,5 +34,5 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/bootstrap.ps1 --watc
 | Build and release development versions | [Release](docs/release.en.md) |
 | Look up HTTP, MCP, and CLI interfaces | [References](docs/references.en.md) |
 | Use the workbench | [User guide](docs/user/workbench.en.md) |
-| Contribute and open pull requests | [Contributing](CONTRIBUTING.en.md) |
+| Contribute and integrate changes | [Contributing](CONTRIBUTING.en.md) |
 | Learn repository-level agent conventions | [AGENTS](AGENTS.md) |

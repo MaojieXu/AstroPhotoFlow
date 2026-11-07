@@ -2,32 +2,30 @@
 
 English | [中文](CONTRIBUTING.md)
 
-This repository creates branches from `dev` and opens pull requests against `dev`. A change must pass the documentation gate, product checks, and approval by one independent reviewer; releases are development versions only, `X.Y.Z-dev.N`, and `dev` → `main` goes through a release pull request. Repository-wide conventions are in [AGENTS](AGENTS.md), documentation rules in [docs/AGENTS](docs/AGENTS.md), validation in [Testing](docs/testing.en.md), and release steps in [Release](docs/release.en.md).
+Create branches from `dev`, verify changes locally, and merge them into `dev`. Repository-wide conventions are in [AGENTS](AGENTS.md), documentation rules in [docs/AGENTS](docs/AGENTS.md), validation in [Testing](docs/testing.en.md), and release steps in [Release](docs/release.en.md).
 
 ## Branches and commits
 
 - The integration branch is `dev`; every change starts from the current `dev`.
-- Never push directly to `dev` or `main`; push and pull-request creation follow user authorization.
+- Commits, merges, pushes, and pull request creation follow user authorization.
 - Keep each commit to a single purpose and exclude unrelated formatting, refactoring, or renames.
 - Before committing, read the `AGENTS.md`, code, and tests near the change.
 - Name branches after the change topic, not after old module names or historical task names.
 
-## Pull requests
+## Integration into `dev`
 
-- The pull request targets `dev`; describe the change using `.github/pull_request_template.md`.
-- Motivation states the problem, issue, or scenario; the change list is grouped by module.
-- The validation section lists only commands and results actually executed; explain any check not run.
-- Put full logs under `.artifacts/reports` and link their paths instead of pasting them.
-- Documentation changes state which layer was updated and whether `.i18n.yaml` was re-recorded.
+- Before merging, sync with the latest `dev`, run the checks that apply to the change, and record the results.
+- Once the checks pass, merge the feature branch into `dev` locally. A pull request and independent approval are optional.
+- After merging locally, push `dev` when authorized. The push triggers GitHub Actions.
 
-## Review and merge
+## Release pull request review and merge
 
-- Every pull request requires approval from one independent reviewer; the reviewer does not inherit the author's context and judges from the requirement and the diff alone.
+- Use `.github/pull_request_template.md` for the release pull request and describe the changes and actual validation results.
+- A release pull request requires approval from one independent reviewer. The reviewer judges from the requirements and the diff.
 - Reviewers raise findings and do not edit the code; after changes, authors ask reviewers to recheck the affected parts.
 - Merge only after all required checks pass and approval is recorded.
-- Delete the branch after merging and start the next change from the latest `dev`.
 
-## Required checks
+## Check commands
 
 | Check | Command |
 | --- | --- |
@@ -41,16 +39,14 @@ Add browser tests, packaging, and architecture boundary checks according to the 
 
 ## Branch protection
 
-GitHub repository administrators configure `dev` and `main` manually in the repository settings:
+GitHub repository administrators configure these rules in the repository settings.
 
-- Direct pushes are disabled; all changes merge through pull requests.
-- At least one approval is required before merging.
-- The required status check is `all checks passed` (CI aggregates the docs and product jobs).
-- Administrators keep an emergency override; the normal flow performs no exception merges.
+- `dev` allows authorized regular pushes to receive changes integrated locally.
+- `main` is updated through release pull requests and requires at least one approval and the `all checks passed` status check.
 
 ## AI usage declaration
 
-- Fill in the AI usage section of the pull request by stage: breakdown, design, testing, implementation, review.
+- Fill in the release pull request's AI usage section for breakdown, design, testing, implementation, and review.
 - Mark the assistance level for each stage: `none`, `assisted`, `generated`.
 - Declare only real usage; write `none` for unused stages instead of omitting them.
 - Generated content is the submitter's responsibility and is still verified and reviewed under this guide.

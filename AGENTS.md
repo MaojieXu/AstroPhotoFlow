@@ -14,11 +14,10 @@
 - 不创建空服务、假接口、预注册能力或第二套原生机制；只在真实复用需求出现时提取公共能力。
 - 不擅自启停共享 runtime、更新正常 dev、修改默认 workspace、全局 MCP、令牌或真实素材。
 
-## PR 流程
+## 集成与发布
 
-- 从 `dev` 开分支，完成后发 PR 到 `dev`；推送与建 PR 按用户授权，不直接推 `dev` 或 `main`。
-- PR 需通过文档门禁（`pnpm check:docs`）、产品检查（`python -m pytest`、`pnpm test`、构建）和 1 名独立 reviewer 批准后合并。
-- 发布只做 `X.Y.Z-dev.N`；`dev` → `main` 走发布 PR，主分支与 tag 需另行授权。
+- 从 `dev` 开分支，通过适用检查后可在本地合入 `dev`，无需 PR 或独立审批。合并及推送 `dev` 按用户授权，详见[贡献指南](CONTRIBUTING.md)。
+- 发布只做 `X.Y.Z-dev.N`。`dev` → `main` 走发布 PR，主分支合并与 tag 需另行授权。
 
 ## 必须保持的边界
 
@@ -36,4 +35,4 @@
 
 - 文档规则见 [docs/AGENTS.md](docs/AGENTS.md)：单一出处、预算、双语配对、Agent Notes、Skills 与门禁。
 - 文档只写当前状态；决定、修复与简化的取舍写 Agent Note，讨论留在 PR。
-- 验证回执写进 PR 的 Testing，完整日志放 `.artifacts/reports`；实现、自动验证、真实运行与用户验收分别说明，不能互相代替。
+- 按[测试文档](docs/testing.md)记录验证回执与日志，分别说明实现、自动验证、真实运行与用户验收。

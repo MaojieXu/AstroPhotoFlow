@@ -3,26 +3,26 @@
 # Re-record: python scripts/verify_docs.py pairing --write <source>.
 # Keys are heading-slug paths from the primary (Chinese) document.
 /贡献指南:
-  en: aa45335b16d31ce6
-  zh: 1d8c38d19dc8b8d6
+  en: bfcc1b72d231ad6d
+  zh: 038ae38c61369eb4
 /贡献指南/分支与提交:
-  en: 690fefc7552787b5
-  zh: db8fa6abb72283bf
-/贡献指南/pull-request:
-  en: 0a6ae07af3458f99
-  zh: 292cc7f9816dff21
-/贡献指南/审查与合并:
-  en: 8888abf3082c97d3
-  zh: 0903985a4bc11719
-/贡献指南/必需检查:
+  en: 555adfa9beaba7d5
+  zh: e64acfb16c2a7ef5
+/贡献指南/集成到-dev:
+  en: 5de5bbbd671771b8
+  zh: 9164a067e6dc8924
+/贡献指南/发布-pr-的审查与合并:
+  en: d04b682cbf107b5b
+  zh: b66afe0d939f273f
+/贡献指南/检查入口:
   en: 230c7bbb7fd82d96
   zh: 851b375cd8a4416a
 /贡献指南/分支保护:
-  en: 1d7fa14b55501483
-  zh: f9447b75d71a6d23
+  en: 48d58ed1bf29eca6
+  zh: c09349e93b4fc797
 /贡献指南/ai-使用声明:
-  en: c30b6ef92d8aca3c
-  zh: 64c7e0a9746d7d22
+  en: ea2615d82dc4c674
+  zh: b69827ce35f69736
 /贡献指南/发布:
   en: 8204c7fdd6cc2693
   zh: de24c835a6815898

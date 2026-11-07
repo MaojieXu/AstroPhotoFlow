@@ -1,13 +1,13 @@
 ---
 name: astrophotoflow-pre-push
-description: 提交、请求审查或发 PR 前使用：按改动范围跑对应检查，收集可复核的回执，并把结果写进 PR 的 Testing。准备推送或回复 reviewer 时先读本技能。
+description: 提交、集成、推送或发发布 PR 前使用，按改动范围运行检查并记录结果。
 ---
 
 # 提交前检查
 
 ## 触发
 
-准备提交、请求审查、发 PR 或回复 reviewer 时。
+准备提交、集成、推送、发发布 PR 或回复 reviewer 时。
 
 ## 步骤
 
@@ -16,8 +16,8 @@ description: 提交、请求审查或发 PR 前使用：按改动范围跑对应
 3. Python 改动：`uv run --locked --no-sync python -m pytest <相关测试> -q`；全量用 `python -m pytest -q`。
 4. 前端改动：`pnpm test`；必要时 `pnpm typecheck` 与 `pnpm build`。
 5. 只跑与改动范围匹配的检查；已通过且未再改动的检查不重复。失败先修，不注释测试。
-6. 把命令、退出码与关键输出摘要写进 PR 的 Testing；完整日志放 `.artifacts/reports`。区分自动验证、真实运行与用户验收。
-7. 在 PR 的 AI Usage 中如实填写五个阶段与协助等级。
+6. 按测试文档记录命令、退出码与关键输出，完整日志放 `.artifacts/reports`。区分自动验证、真实运行与用户验收。
+7. 发发布 PR 时在 AI Usage 中如实填写五个阶段与协助等级。
 
 ## 入口
 
