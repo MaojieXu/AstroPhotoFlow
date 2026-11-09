@@ -76,6 +76,24 @@ describe('keybindingService - Canvas Keybindings', () => {
     canvasContainer.remove()
   })
 
+  it('does not consume a saved shortcut for hidden upstream templates', async () => {
+    const commandId = 'Comfy.BrowseTemplates'
+    const combo = { key: 'j', ctrl: true, alt: false, shift: false }
+    useCommandStore().registerCommand({ id: commandId, function: vi.fn() })
+    const binding = new KeybindingImpl({ commandId, combo })
+    useKeybindingStore().addUserKeybinding(binding)
+    const event = createTestKeyboardEvent('j', {
+      ctrlKey: true,
+      target: canvasChild
+    })
+
+    await keybindingService.keybindHandler(event)
+
+    expect(useKeybindingStore().getKeybindingByCommandId(commandId)).toEqual(binding)
+    expect(useCommandStore().execute).not.toHaveBeenCalled()
+    expect(event.preventDefault).not.toHaveBeenCalled()
+  })
+
   it('should execute DeleteSelectedItems for Delete key on canvas', async () => {
     const event = createTestKeyboardEvent('Delete', {
       target: canvasChild

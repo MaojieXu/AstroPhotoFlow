@@ -56,6 +56,7 @@ import Badge from '@/components/ui/badge/Badge.vue'
 import { useSettingStore } from '@/platform/settings/settingStore'
 import { useNodeBookmarkStore } from '@/stores/nodeBookmarkStore'
 import type { ComfyNodeDefImpl } from '@/stores/nodeDefStore'
+import { isCloud, isDesktop } from '@/platform/distribution/types'
 import { useNodeFrequencyStore } from '@/stores/nodeDefStore'
 import { NodeSourceType } from '@/types/nodeSource'
 import { formatNumberWithSuffix } from '@/utils/formatUtil'
@@ -68,7 +69,7 @@ const showIdName = computed(() =>
   settingStore.get('Comfy.NodeSearchBoxImpl.ShowIdName')
 )
 const showNodeFrequency = computed(() =>
-  settingStore.get('Comfy.NodeSearchBoxImpl.ShowNodeFrequency')
+  (isCloud || isDesktop) && settingStore.get('Comfy.NodeSearchBoxImpl.ShowNodeFrequency')
 )
 const nodeFrequencyStore = useNodeFrequencyStore()
 const nodeFrequency = computed(() =>

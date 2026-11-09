@@ -23,7 +23,13 @@
         v-if="section.category && sortOrder !== 'alphabetical'"
         class="mb-0 px-4 py-2 text-xs font-medium tracking-wide text-muted-foreground uppercase"
       >
-        {{ $t(NODE_CATEGORY_LABELS[section.category]) }}
+        {{
+          $t(
+            !isCloud && !isDesktop && section.category === 'comfyNodes'
+              ? 'sideToolbar.nodes'
+              : NODE_CATEGORY_LABELS[section.category]
+          )
+        }}
       </h3>
       <TreeExplorerV2
         v-model:expanded-keys="expandedKeys"
@@ -38,6 +44,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 
+import { isCloud, isDesktop } from '@/platform/distribution/types'
 import TreeExplorerV2 from '@/components/common/TreeExplorerV2.vue'
 import { useNodeBookmarkStore } from '@/stores/nodeBookmarkStore'
 import type { ComfyNodeDefImpl } from '@/stores/nodeDefStore'

@@ -8,6 +8,11 @@ const hiddenSettings = new Set([
   'Comfy.NodeBadge.ShowApiPricing',
   'Comfy.ModelLibrary.AutoLoadAll',
   'Comfy.ModelLibrary.NameFormat',
+  'Comfy.ModelLibrary.UseAssetBrowser',
+  'Comfy.Memory.AllowManualUnload',
+  'Comfy.ErrorSystem.ShowMissingModels',
+  'Comfy.Workflow.ShowMissingModelsWarning',
+  'Comfy.NodeSearchBoxImpl.ShowNodeFrequency',
   'Comfy.VueNodes.Enabled',
   'Comfy.NodeLibrary.NewDesign',
   'Comfy.UseNewMenu',
@@ -70,19 +75,34 @@ export function settingCategoryLabelKey(category: string): string {
     : 'settingsCategories.' + normalizeI18nKey(category)
 }
 
-export function isSettingCommandVisible(id: string): boolean {
+const hiddenLocalCommands = new Set([
+  'Comfy.BrowseTemplates',
+  'Comfy.User.OpenSignInDialog',
+  'Comfy.User.SignOut',
+  'Comfy.OpenClipspace',
+  'Comfy.Memory.UnloadModels',
+  'Comfy.Memory.UnloadModelsAndExecutionCache',
+  'Comfy.Onboarding.Replay',
+  'Comfy.OpenManagerDialog',
+  'Comfy.ToggleHelpCenter',
+  'Workspace.ToggleSidebarTab.model-library'
+])
+
+export function isWorkbenchCommandAvailable(id: string): boolean {
   return (
     isCloud ||
     isDesktop ||
-    !(
-      id === 'Comfy.BrowseTemplates' ||
-      id === 'Experimental.ToggleVueNodes' ||
-      id === 'Comfy.OpenManagerDialog' ||
-      id === 'Comfy.ToggleHelpCenter' ||
-      id.startsWith('Comfy.MaskEditor.') ||
-      id.startsWith('Comfy.Manager.') ||
-      (id.startsWith('Comfy.Help.') && id !== 'Comfy.Help.AboutComfyUI')
-    )
+    (!hiddenLocalCommands.has(id) && !id.startsWith('Comfy.Manager.'))
+  )
+}
+
+export function isSettingCommandVisible(id: string): boolean {
+  if (isCloud || isDesktop) return true
+  return (
+    isWorkbenchCommandAvailable(id) &&
+    id !== 'Experimental.ToggleVueNodes' &&
+    !id.startsWith('Comfy.MaskEditor.') &&
+    (!id.startsWith('Comfy.Help.') || id === 'Comfy.Help.AboutComfyUI')
   )
 }
 

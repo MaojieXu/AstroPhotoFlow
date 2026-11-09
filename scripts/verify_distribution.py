@@ -31,7 +31,11 @@ def check_wheel(path: Path) -> None:
             "comfyui/proxy.py", "core/files.py", "web/index.html", "vendor/comfyui-source.json", "vendor/http-routes.json",
             "vendor/comfyui-0.42.0.zip", "vendor/comfyui-0.42.0-windows-py312.lock",
             "vendor/bundle-catalog.json",
+            "vendor/comfyui-frontend-LICENSE",
+            "web/assets/images/astrophotoflow-192.png",
+            "web/assets/images/astrophotoflow-512.png",
         }
+        assert any(name.endswith(".dist-info/licenses/LICENSE") for name in names)
         assert not any(name.startswith(prefix + "vendor/siril-") for name in names)
         missing_resources = sorted({prefix + name for name in required} - names)
         assert not missing_resources, f"Missing product resources in {path.name}: {missing_resources}"
@@ -49,11 +53,37 @@ def check_wheel(path: Path) -> None:
         comfy_archive_bytes = archive.read(prefix + "vendor/comfyui-0.42.0.zip")
         assert hashlib.sha256(comfy_archive_bytes).hexdigest() == comfy_manifest["sha256"]
         with zipfile.ZipFile(io.BytesIO(comfy_archive_bytes)) as engine:
+            assert "ComfyUI/LICENSE" in engine.namelist()
             packaged_server = engine.read("ComfyUI/server.py")
             assert b"apf_page_id_by_client" in packaged_server and b"apf_page_token" in packaged_server
         resources = ROOT / ".artifacts/build/frontend"
         expected = {path.relative_to(resources).as_posix() for path in resources.rglob("*") if path.is_file()}
         actual = {name.removeprefix(prefix + "web/") for name in names if name.startswith(prefix + "web/")}
+        assert not any(name.endswith(".map") for name in actual)
+        assert not actual.intersection({
+            "assets/favicon.ico",
+            "assets/images/comfy-cloud-logo.svg",
+            "assets/images/comfy-logo-mono.svg",
+            "assets/images/comfy-logo-single.svg",
+            "assets/images/comfy-logo-wordmark.svg",
+            "assets/images/comfy-icon-192.png",
+            "assets/images/comfy-icon-512.png",
+            "assets/images/cloud-subscription.webm",
+            "assets/images/og-image.png",
+            "assets/images/partner-nodes-signin.webp",
+            "assets/images/civitai.svg",
+            "assets/images/gemini.svg",
+            "assets/images/hf-logo.svg",
+            "assets/images/runway.svg",
+        })
+        assert not any("favicon_progress_16x16/" in name for name in actual)
+        manifest_path, = (name for name in actual if name.startswith("assets/manifest.astrophotoflow-"))
+        manifest = json.loads(archive.read(prefix + "web/" + manifest_path))
+        assert manifest["name"] == manifest["short_name"] == "AstroPhotoFlow"
+        assert {icon["sizes"] for icon in manifest["icons"]} == {"192x192", "512x512"}
+        assert all(icon["src"].lstrip("/") in actual for icon in manifest["icons"])
+        index = archive.read(prefix + "web/index.html").decode("utf-8")
+        assert manifest_path in index and "Loading AstroPhotoFlow" in index
         assert actual == expected
         for name in expected:
             assert archive.read(prefix + "web/" + name) == (resources / name).read_bytes()
@@ -105,7 +135,7 @@ def main() -> None:
         env.pop("PYTHONHOME", None)
         env["PYTHONNOUSERSITE"] = "1"
         env["UV_PROJECT_ENVIRONMENT"] = str(work / "venv")
-        env["UV_CACHE_DIR"] = str(artifacts / "cache" / "uv")
+        env.setdefault("UV_CACHE_DIR", str(artifacts / "cache" / "uv"))
         uv = [sys.executable, "-m", "uv"]
         run(uv + ["sync", "--project", str(ROOT), "--locked", "--no-install-project", "--python", sys.executable], cwd=work, env=env)
         python = work / "venv" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
@@ -165,6 +195,9 @@ assert 'capture_profile_id' not in metadata.tables['asset_version'].c
         assert (source / "frontend/packages/astrophotoflow-ui/src/index.ts").is_file()
         assert (source / "frontend/packages/shared-frontend-utils/src/formatUtil.ts").is_file()
         assert (source / "frontend/packages/account-ui/package.json").is_file()
+        assert (source / "frontend/LICENSE").is_file()
+        assert (source / "frontend/src/assets/astrophotoflow.svg").is_file()
+        assert (source / "engine/ComfyUI/LICENSE").is_file()
         assert (source / "docs/api/openapi.json").is_file()
         assert not (source / "src/astrophotoflow/backend").exists()
         assert not (source / "src/astrophotoflow/frontend").exists()

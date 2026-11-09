@@ -64,6 +64,21 @@ describe('commandStore', () => {
   })
 
   describe('execute', () => {
+    it('keeps registered upstream commands inert in the local workbench', async () => {
+      const store = useCommandStore()
+      const openTemplates = vi.fn()
+      const openSignIn = vi.fn()
+      store.registerCommand({ id: 'Comfy.BrowseTemplates', function: openTemplates })
+      store.registerCommand({ id: 'Comfy.User.OpenSignInDialog', function: openSignIn })
+
+      await store.execute('Comfy.BrowseTemplates')
+      await store.execute('Comfy.User.OpenSignInDialog')
+
+      expect(store.isRegistered('Comfy.BrowseTemplates')).toBe(true)
+      expect(openTemplates).not.toHaveBeenCalled()
+      expect(openSignIn).not.toHaveBeenCalled()
+    })
+
     it('executes a registered command', async () => {
       const store = useCommandStore()
       const fn = vi.fn()

@@ -23,9 +23,16 @@
             class="col-span-full row-span-full icon-[lucide--chevron-down] size-3 translate-x-4 text-muted-foreground"
           />
           <ComfyLogo
+            v-if="isCloud || isDesktop"
             alt="ComfyUI Logo"
             class="comfyui-logo col-span-full row-span-full size-4.5"
             mode="fill"
+          />
+          <span
+            v-else
+            aria-hidden="true"
+            class="col-span-full row-span-full size-6 bg-current"
+            :style="{ mask: brandMask }"
           />
         </div>
       </Button>
@@ -39,6 +46,7 @@ import { useI18n } from 'vue-i18n'
 
 import { cn } from '@comfyorg/tailwind-utils'
 
+import astroPhotoFlowMark from '@/assets/astrophotoflow.svg?no-inline'
 import ComfyLogo from '@/components/icons/ComfyLogo.vue'
 import Button from '@/components/ui/button/Button.vue'
 import Menu from '@/components/ui/menu/Menu.vue'
@@ -57,6 +65,7 @@ import { normalizeI18nKey } from '@/utils/formatUtil'
 import { useManagerState } from '@/workbench/extensions/manager/composables/useManagerState'
 import { ManagerTab } from '@/workbench/extensions/manager/types/comfyManagerTypes'
 
+const brandMask = `url("${astroPhotoFlowMark}") center / contain no-repeat`
 const { t } = useI18n()
 const menuItemStore = useMenuItemStore()
 const colorPaletteStore = useColorPaletteStore()

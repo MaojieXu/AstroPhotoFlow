@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 
+import { isWorkbenchCommandAvailable } from '@/platform/astrophotoflow/settings/settingsPresentation'
 import { useErrorHandling } from '@/composables/useErrorHandling'
 import type { CanvasInteractionModeReader } from '@/lib/litegraph/src/canvas/CanvasInteractionMode'
 import { EDITABLE_INTERACTION_MODE } from '@/lib/litegraph/src/canvas/CanvasInteractionMode'
@@ -116,6 +117,7 @@ export const useCommandStore = defineStore('command', () => {
       metadata?: Record<string, unknown>
     }
   ) => {
+    if (!isWorkbenchCommandAvailable(commandId)) return
     if (!(commandId in commandsById.value)) {
       throw new Error(`Command ${commandId} not found`)
     }

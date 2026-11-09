@@ -98,7 +98,8 @@ const mockDistributionState = vi.hoisted(() => ({ isCloud: false }))
 vi.mock(import('@/platform/distribution/types'), () => ({
   get isCloud() {
     return mockDistributionState.isCloud
-  }
+  },
+  isDesktop: false
 }))
 
 vi.mock(import('firebase/auth'))

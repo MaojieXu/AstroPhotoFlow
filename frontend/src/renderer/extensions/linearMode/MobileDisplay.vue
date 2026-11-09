@@ -10,6 +10,8 @@ import Button from '@/components/ui/button/Button.vue'
 import Menu from '@/components/ui/menu/Menu.vue'
 import MenuRadioGroup from '@/components/ui/menu/MenuRadioGroup.vue'
 import { useCurrentUser } from '@/composables/auth/useCurrentUser'
+import { projectLinks } from '@/platform/astrophotoflow/projectLinks'
+import { isCloud, isDesktop } from '@/platform/distribution/types'
 import { APP_MODE_FEEDBACK_FORM_URL } from '@/platform/surveys/appModeFeedback'
 import { useWorkflowService } from '@/platform/workflow/core/services/workflowService'
 import { useWorkflowStore } from '@/platform/workflow/management/stores/workflowStore'
@@ -99,7 +101,7 @@ const menuEntries = computed<MenuItem[]>(() => [
     label: t('sideToolbar.templates'),
     icon: 'icon-[comfy--template]'
   },
-  { separator: true },
+  { separator: true, visible: isCloud || isDesktop },
   {
     label: t('icon.file'),
     items: [
@@ -151,7 +153,11 @@ const menuEntries = computed<MenuItem[]>(() => [
     label: t('linearMode.giveFeedback'),
     icon: 'icon-[lucide--clipboard-pen]',
     command: () =>
-      window.open(APP_MODE_FEEDBACK_FORM_URL, '_blank', 'noopener,noreferrer')
+      window.open(
+        isCloud || isDesktop ? APP_MODE_FEEDBACK_FORM_URL : projectLinks.feedback,
+        '_blank',
+        'noopener,noreferrer'
+      )
   },
   {
     label: t('menu.fullscreen'),
@@ -200,7 +206,7 @@ const menuEntries = computed<MenuItem[]>(() => [
           :options="workflowOptions"
         />
       </Menu>
-      <CurrentUserButton v-if="isLoggedIn" :show-arrow="false" />
+      <CurrentUserButton v-if="(isCloud || isDesktop) && isLoggedIn" :show-arrow="false" />
     </header>
     <div class="size-full rounded-b-4xl contain-content">
       <div

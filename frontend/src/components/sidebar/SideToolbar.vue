@@ -55,8 +55,18 @@
       </div>
 
       <div ref="bottomToolbarRef" :class="cn('mt-auto', groupClasses)">
-        <SidebarLogoutIcon v-if="userStore.isMultiUserServer" :is-small />
-        <SidebarHelpCenterIcon :is-small />
+        <SidebarLogoutIcon v-if="(isCloud || isDesktop) && userStore.isMultiUserServer" :is-small />
+        <SidebarHelpCenterIcon v-if="isCloud || isDesktop" :is-small />
+        <Menu v-else :items="projectHelpItems" :label="t('sideToolbar.helpCenter')">
+          <template #trigger>
+            <SidebarIcon
+              icon="pi pi-question-circle"
+              data-testid="help-center-button"
+              :label="t('sideToolbar.helpCenter')"
+              :is-small
+            />
+          </template>
+        </Menu>
         <SidebarBottomPanelToggleButton
           v-if="!isCloud && !hideWorkspaceToggles"
           :is-small
@@ -65,7 +75,7 @@
         <SidebarSettingsButton :is-small />
       </div>
     </div>
-    <HelpCenterPopups :is-small />
+    <HelpCenterPopups v-if="isCloud || isDesktop" :is-small />
     <Suspense v-if="NightlySurveyController">
       <component :is="NightlySurveyController" />
     </Suspense>
@@ -86,6 +96,8 @@ import {
 } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import Menu from '@/components/ui/menu/Menu.vue'
+import { projectLinks } from '@/platform/astrophotoflow/projectLinks'
 import HelpCenterPopups from '@/components/helpcenter/HelpCenterPopups.vue'
 import ComfyMenuButton from '@/components/sidebar/ComfyMenuButton.vue'
 import SidebarBottomPanelToggleButton from '@/components/sidebar/SidebarBottomPanelToggleButton.vue'
@@ -124,6 +136,21 @@ const NightlySurveyController =
     : undefined
 
 const { t } = useI18n()
+const projectHelpItems = computed(() => [
+  {
+    label: t('apfSettings.documentation'),
+    command: () =>
+      window.open(projectLinks.documentation, '_blank', 'noopener,noreferrer')
+  },
+  {
+    label: t('apfSettings.feedback'),
+    command: () => useCommandStore().execute('Comfy.ContactSupport')
+  },
+  {
+    label: t('apfSettings.about'),
+    command: () => useCommandStore().execute('Comfy.Help.AboutComfyUI')
+  }
+])
 const workspaceStore = useWorkspaceStore()
 const settingStore = useSettingStore()
 const userStore = useUserStore()

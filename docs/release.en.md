@@ -20,6 +20,7 @@ uv run --locked --no-sync python scripts/build_release.py
 
 - The script requires Node and pnpm on PATH; it installs frontend dependencies from the lock file, builds the frontend, and then calls `python -m build`.
 - The wheel carries the web output and the pinned engine archive, so users need no Node after installation.
+- The local web build copies only listed public assets, and the distribution includes the project, engine and frontend licenses.
 - Artifacts go to `.artifacts/dist` and Python intermediates to `.artifacts/build/python`; the script confirms that both the wheel and the tar.gz exist and fails when either is missing.
 
 ## Distribution verification

@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
+import { projectLinks } from '../projectLinks'
 import SystemStatsPanel from '@/components/common/SystemStatsPanel.vue'
 import { useSystemStatsStore } from '@/stores/systemStatsStore'
+import upstreamLicense from '../../../../LICENSE?url'
 const { t } = useI18n()
 const statsStore = useSystemStatsStore()
 const version = __ASTROPHOTOFLOW_VERSION__
@@ -20,21 +22,21 @@ const frontendVersion = __COMFYUI_FRONTEND_VERSION__
     <nav class="flex flex-wrap gap-4 text-sm">
       <a
         class="underline"
-        href="https://github.com/MaojieXu/AstroPhotoFlow/blob/dev/docs/README.md"
+        :href="projectLinks.documentation"
         target="_blank"
         rel="noopener noreferrer"
         >{{ t('apfSettings.documentation') }}</a
       >
       <a
         class="underline"
-        href="https://github.com/MaojieXu/AstroPhotoFlow/issues"
+        :href="projectLinks.feedback"
         target="_blank"
         rel="noopener noreferrer"
         >{{ t('apfSettings.feedback') }}</a
       >
       <a
         class="underline"
-        href="https://github.com/MaojieXu/AstroPhotoFlow/blob/dev/LICENSE"
+        :href="projectLinks.license"
         target="_blank"
         rel="noopener noreferrer"
         >{{ t('apfSettings.license') }}</a
@@ -66,6 +68,13 @@ const frontendVersion = __COMFYUI_FRONTEND_VERSION__
           {{ frontendVersion }}
         </p>
         <p>{{ t('apfSettings.componentsHelp') }}</p>
+        <a
+          class="underline"
+          :href="upstreamLicense"
+          target="_blank"
+          rel="noopener noreferrer"
+          >{{ t('apfSettings.license') }} (GPLv3)</a
+        >
       </div>
     </details>
     <details

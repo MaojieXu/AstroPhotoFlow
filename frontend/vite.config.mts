@@ -22,6 +22,7 @@ import vueDevTools from 'vite-plugin-vue-devtools'
 import { createDevAgentConfig } from './build/devAgentConfig.ts'
 import { createWorkbenchDevProxy } from './build/astrophotoflowDevProxy.ts'
 import { comfyAPIPlugin } from './build/plugins/comfyAPIPlugin.ts'
+import { astrophotoflowBrand } from './build/plugins/astrophotoflowBrand.ts'
 import {
   hasCompleteSentryUploadConfig,
   resolveSentryUploadConfig
@@ -436,6 +437,7 @@ export default defineConfig({
     tailwindcss(),
     typegpuPlugin({}),
     comfyAPIPlugin(IS_DEV),
+    ...(DISTRIBUTION === 'localhost' ? [astrophotoflowBrand()] : []),
     {
       name: 'emit-build-manifest',
       generateBundle() {
@@ -636,6 +638,7 @@ export default defineConfig({
 
   build: {
     outDir: resolve('../.artifacts/build/frontend'),
+    copyPublicDir: DISTRIBUTION !== 'localhost',
     emptyOutDir: true,
     minify: SHOULD_MINIFY,
     target: 'es2022',
@@ -645,7 +648,9 @@ export default defineConfig({
     // (the .map files aren't served) without losing Sentry symbolication. See FE-1405.
     // A coverage build serves its own .map files and needs the comment back:
     // monocart maps V8 coverage to src/** only by following it.
-    sourcemap: GENERATE_SOURCEMAP && (COLLECT_COVERAGE || 'hidden'),
+    sourcemap:
+      GENERATE_SOURCEMAP &&
+      (COLLECT_COVERAGE || (DISTRIBUTION !== 'localhost' && 'hidden')),
     // Exclude heavy optional vendor chunks from initial module preload
     // These chunks are only needed when their features are used (3D, terminal, etc.)
     modulePreload: {
@@ -809,7 +814,8 @@ export default defineConfig({
   define: {
     __ASTROPHOTOFLOW_VERSION__: JSON.stringify(apfVersion),
     __COMFYUI_FRONTEND_VERSION__: JSON.stringify(
-      process.env.npm_package_version
+      process.env.npm_package_version ||
+        JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')).version
     ),
     __COMFYUI_FRONTEND_COMMIT__: JSON.stringify(GIT_COMMIT),
     __SENTRY_DSN__: JSON.stringify(process.env.SENTRY_DSN || ''),

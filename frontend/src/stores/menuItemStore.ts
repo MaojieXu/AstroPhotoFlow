@@ -3,6 +3,7 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 
 import type { MenuItem, MenuItemAction } from '@/components/ui/menu/types'
+import { isWorkbenchCommandAvailable } from '@/platform/astrophotoflow/settings/settingsPresentation'
 import { CORE_MENU_COMMANDS } from '@/constants/coreMenuCommands'
 import { useCanvasStore } from '@/renderer/core/canvas/canvasStore'
 import type { ComfyExtension } from '@/types/comfy'
@@ -74,6 +75,7 @@ export const useMenuItemStore = defineStore('menuItem', () => {
       icon: command.id === 'Comfy.NewBlankWorkflow' ? undefined : command.icon,
       tooltip: command.tooltip,
       commandId: command.id,
+      visible: () => isWorkbenchCommandAvailable(command.id),
       checked: command.active,
       shortcut: () => command.keybinding?.combo.toString(),
       pressAndHoldInterval:
@@ -87,7 +89,10 @@ export const useMenuItemStore = defineStore('menuItem', () => {
   }
 
   const registerCommands = (path: string[], commandIds: string[]) => {
-    const items = commandIds.map(commandIdToMenuItem)
+    const items = commandIds
+      .filter(isWorkbenchCommandAvailable)
+      .map(commandIdToMenuItem)
+    if (commandIds.length && !items.length) return
     registerMenuGroup(path, items)
   }
 

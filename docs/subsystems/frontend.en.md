@@ -16,6 +16,8 @@ The native ComfyUI web page hosts the interface, and platform UI is split into a
 - A fixed data reference uses one native undo transaction; a run receipt is checked against the actual Data and source wires; exports write copies only.
 - Native stores, canvas and conversion coordination live in this directory, and the UI package never depends on it in reverse.
 
+The local web app uses AstroPhotoFlow branding for the menu, startup and installation, with links to project documentation and feedback. Menus, shortcuts and settings hide upstream account, generation template and model management entry points. The node catalog shows nodes registered by the runtime.
+
 ## Queries and polling
 
 - One application-level Vue Query client is shared, with workspace identity in query keys; retries are off by default, the internet may be disconnected, and focus refetching is disabled.

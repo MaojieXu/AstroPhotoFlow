@@ -1,3 +1,4 @@
+import { isSettingCommandVisible } from '@/platform/astrophotoflow/settings/settingsPresentation'
 import { isCloud } from '@/platform/distribution/types'
 import { useSettingStore } from '@/platform/settings/settingStore'
 import { useCommandStore } from '@/stores/commandStore'
@@ -18,7 +19,9 @@ export function useKeybindingService() {
 
   function getExecutableKeybinding(keyCombo: KeyComboImpl) {
     const keybinding = keybindingStore.getKeybinding(keyCombo)
-    return keybinding && commandStore.isRegistered(keybinding.commandId)
+    return keybinding &&
+      isSettingCommandVisible(keybinding.commandId) &&
+      commandStore.isRegistered(keybinding.commandId)
       ? keybinding
       : undefined
   }

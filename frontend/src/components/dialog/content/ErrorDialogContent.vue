@@ -31,7 +31,7 @@
         variant="textonly"
         @click="showContactSupport"
       >
-        {{ $t('issueReport.helpFix') }}
+        {{ $t(isCloud || isDesktop ? 'issueReport.helpFix' : 'apfSettings.feedback') }}
       </Button>
     </div>
     <template v-if="reportOpen">
@@ -45,6 +45,7 @@
     </template>
     <div class="flex justify-end gap-4">
       <FindIssueButton
+        v-if="isCloud || isDesktop"
         :error-message="error.exceptionMessage"
         :repo-owner="repoOwner"
         :repo-name="repoName"
@@ -70,6 +71,7 @@ import NoResultsPlaceholder from '@/components/common/NoResultsPlaceholder.vue'
 import FindIssueButton from '@/components/dialog/content/error/FindIssueButton.vue'
 import Button from '@/components/ui/button/Button.vue'
 import { useCopyToClipboard } from '@/composables/useCopyToClipboard'
+import { isCloud, isDesktop } from '@/platform/distribution/types'
 import { resolveRunErrorMessage } from '@/platform/errorCatalog/errorMessageResolver'
 import type { RunErrorMessageSource } from '@/platform/errorCatalog/types'
 import { useTelemetry } from '@/platform/telemetry'

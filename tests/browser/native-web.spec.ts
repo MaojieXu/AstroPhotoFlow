@@ -9,6 +9,74 @@ import {
   zServiceHealth
 } from '../../frontend/packages/astrophotoflow-ui/src/generated/api/zod.gen'
 
+test('local workbench exposes its own brand and hides upstream product entry points', async ({
+  page,
+  request
+}) => {
+  await page.goto('/')
+  await expect(page.locator('#graph-canvas')).toBeVisible()
+  await expect(page.getByTestId('login-button')).toHaveCount(0)
+  const favicon = page.locator('link[rel="icon"]')
+  await expect(favicon).toHaveAttribute('href', /astrophotoflow.*\.svg/)
+  for (const event of ['execution_success', 'execution_interrupted']) {
+    const promptId = randomUUID()
+    await page.evaluate((id) => {
+      window.comfyAPI.api.api.dispatchEvent(
+        new CustomEvent('execution_start', { detail: { prompt_id: id } })
+      )
+    }, promptId)
+    await expect(favicon).toHaveAttribute('href', /^data:image\/svg\+xml,/)
+    await page.evaluate(({ event, promptId }) => {
+      window.comfyAPI.api.api.dispatchEvent(
+        new CustomEvent(event, { detail: { prompt_id: promptId } })
+      )
+    }, { event, promptId })
+    await expect(favicon).toHaveAttribute('href', /astrophotoflow.*\.svg/)
+  }
+  const manifestUrl = await page.locator('link[rel="manifest"]').getAttribute('href')
+  expect(manifestUrl).toBeTruthy()
+  const manifest = await (await request.get(manifestUrl!)).json()
+  expect(manifest.name).toBe('AstroPhotoFlow')
+  for (const icon of manifest.icons) {
+    const response = await request.get(icon.src)
+    expect(response.ok()).toBe(true)
+    expect(response.headers()['content-type']).toContain('image/png')
+  }
+  await page.getByTestId('help-center-button').click()
+  await expect(page.getByRole('menuitem')).toHaveText([
+    '使用文档', '问题反馈', '关于 AstroPhotoFlow'
+  ])
+  await page.keyboard.press('Escape')
+  await page.getByTestId('comfy-menu-button').click()
+  await page.getByRole('menuitem', { name: '视图', exact: true }).press('ArrowRight')
+  await expect(page.getByRole('menuitem', { name: '浏览模板' })).toHaveCount(0)
+  await page.keyboard.press('Escape')
+  await page.keyboard.press('Escape')
+  await openSidebar(page, 'node-library')
+  await expect(page.getByRole('tab', { name: '全部节点', exact: true })).toBeVisible()
+  await expect(page.getByRole('tab', { name: '基础', exact: true })).toHaveCount(0)
+})
+
+test('a local workbench still reports missing nodes in a legacy workflow', async ({
+  page
+}) => {
+  await page.goto('/')
+  await expect(page.locator('#graph-canvas')).toBeVisible()
+  await page.waitForFunction(() => Boolean(window.app?.graph))
+  const workflow = JSON.parse(
+    await readFile(
+      new URL('../../frontend/browser_tests/assets/missing/missing_nodes.json', import.meta.url),
+      'utf8'
+    )
+  )
+  await page.evaluate((graph) => window.app.loadGraphData(graph), workflow)
+  const overlay = page.getByTestId('error-overlay')
+  await expect(overlay).toBeVisible()
+  await overlay.getByTestId('error-overlay-see-errors').click()
+  await expect(page.getByTestId('missing-node-card')).toContainText('UNKNOWN NODE')
+  await expect(page.locator('#graph-canvas')).toBeVisible()
+})
+
 test('native sidebar ordering, authenticated proxy and close/reopen retain the canvas', async ({
   page,
   request

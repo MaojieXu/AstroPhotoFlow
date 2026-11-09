@@ -20,6 +20,7 @@ uv run --locked --no-sync python scripts/build_release.py
 
 - 脚本要求 PATH 中有 Node 与 pnpm；先按锁文件安装前端依赖并构建前端，再调用 `python -m build`。
 - wheel 携带网页产物与固定引擎归档，用户安装后不需要 Node。
+- 本地网页构建仅复制清单中的公共素材，发行物附带项目、引擎与前端的许可证。
 - 产物写 `.artifacts/dist`，Python 中间产物在 `.artifacts/build/python`；脚本确认 wheel 与 tar.gz 都产出，缺失即失败。
 
 ## 发行验证

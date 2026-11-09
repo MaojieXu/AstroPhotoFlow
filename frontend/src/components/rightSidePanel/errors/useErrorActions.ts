@@ -1,5 +1,7 @@
 import { useCommandStore } from '@/stores/commandStore'
 import { useExternalLink } from '@/composables/useExternalLink'
+import { projectLinks } from '@/platform/astrophotoflow/projectLinks'
+import { isCloud, isDesktop } from '@/platform/distribution/types'
 import { useTelemetry } from '@/platform/telemetry'
 
 export function useErrorActions() {
@@ -12,7 +14,11 @@ export function useErrorActions() {
       button_id: 'error_tab_github_issues_clicked',
       element_group: 'errors_panel'
     })
-    window.open(staticUrls.githubIssues, '_blank', 'noopener,noreferrer')
+    window.open(
+      isCloud || isDesktop ? staticUrls.githubIssues : projectLinks.feedback,
+      '_blank',
+      'noopener,noreferrer'
+    )
   }
 
   function contactSupport() {
@@ -25,6 +31,7 @@ export function useErrorActions() {
   }
 
   function findOnGitHub(errorMessage: string) {
+    if (!isCloud && !isDesktop) return openGitHubIssues()
     telemetry?.trackUiButtonClicked({
       button_id: 'error_tab_find_existing_issues_clicked',
       element_group: 'errors_panel'

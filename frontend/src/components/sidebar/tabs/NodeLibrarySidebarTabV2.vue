@@ -59,7 +59,7 @@
           class="scrollbar-custom min-h-0 flex-1 scrollbar-gutter-stable overscroll-none pb-2"
         >
           <TabPanel
-            v-if="flags.nodeLibraryEssentialsEnabled"
+            v-if="showEssentials"
             :model-value="selectedTab"
             value="essentials"
           >
@@ -116,6 +116,7 @@ import SearchInput from '@/components/ui/search-input/SearchInput.vue'
 import Button from '@/components/ui/button/Button.vue'
 import Menu from '@/components/ui/menu/Menu.vue'
 import MenuRadioGroup from '@/components/ui/menu/MenuRadioGroup.vue'
+import { isCloud, isDesktop } from '@/platform/distribution/types'
 import { useFeatureFlags } from '@/composables/useFeatureFlags'
 import { useNodeDragToCanvas } from '@/composables/node/useNodeDragToCanvas'
 import { usePerTabState } from '@/composables/usePerTabState'
@@ -148,6 +149,9 @@ import SidebarTabTemplate from './SidebarTabTemplate.vue'
 import SidebarTopArea from './SidebarTopArea.vue'
 
 const { flags } = useFeatureFlags()
+const showEssentials = computed(
+  () => (isCloud || isDesktop) && flags.nodeLibraryEssentialsEnabled
+)
 
 const scrollContainerRef = useTemplateRef('scrollContainerRef')
 
@@ -159,10 +163,10 @@ const selectedTab = useLocalStorage<TabId>(
 watchEffect(() => {
   if (selectedTab.value === 'blueprints') selectedTab.value = DEFAULT_TAB_ID
   if (
-    !flags.nodeLibraryEssentialsEnabled &&
+    !showEssentials.value &&
     selectedTab.value === 'essentials'
   ) {
-    selectedTab.value = DEFAULT_TAB_ID
+    selectedTab.value = 'all'
   }
 })
 
@@ -185,7 +189,9 @@ const sortingOptions = computed(() =>
 
 const nodeFilterLabels: Record<NodeCategoryId, string> = {
   blueprints: 'sideToolbar.nodeLibraryTab.filterOptions.blueprints',
-  comfyNodes: 'sideToolbar.nodeLibraryTab.filterOptions.comfyNodes',
+  comfyNodes: isCloud || isDesktop
+    ? 'sideToolbar.nodeLibraryTab.filterOptions.comfyNodes'
+    : 'sideToolbar.nodes',
   partnerNodes: 'sideToolbar.nodeLibraryTab.filterOptions.partnerNodes',
   extensions: 'sideToolbar.nodeLibraryTab.filterOptions.extensions'
 } as const
@@ -417,7 +423,7 @@ const tabs = computed<Array<{ value: TabId; label: string }>>(() => {
     value: 'all',
     label: t('sideToolbar.nodeLibraryTab.allNodes')
   } as const
-  if (!flags.nodeLibraryEssentialsEnabled) return [allNodesTab]
+  if (!showEssentials.value) return [allNodesTab]
   return [
     {
       value: 'essentials',

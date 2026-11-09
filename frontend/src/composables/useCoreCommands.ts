@@ -23,7 +23,8 @@ import type { Point } from '@/lib/litegraph/src/litegraph'
 import { useBillingContext } from '@/composables/billing/useBillingContext'
 import { openModelLibraryBrowser } from '@/platform/assets/composables/openModelLibraryBrowser'
 import { isSalesManagedTier } from '@/platform/cloud/subscription/constants/tierPricing'
-import { isCloud } from '@/platform/distribution/types'
+import { projectLinks } from '@/platform/astrophotoflow/projectLinks'
+import { isCloud, isDesktop } from '@/platform/distribution/types'
 import { useMissingModelStore } from '@/platform/missingModel/missingModelStore'
 import { resetOnboardingState } from '@/platform/onboarding/onboardingReset'
 import { useSettingStore } from '@/platform/settings/settingStore'
@@ -851,8 +852,10 @@ export function useCoreCommands(): ComfyCommand[] {
     {
       id: 'Comfy.Help.AboutComfyUI',
       icon: 'pi pi-info-circle',
-      label: 'Open About ComfyUI',
-      menubarLabel: 'About ComfyUI',
+      label: () =>
+        isCloud || isDesktop ? 'Open About ComfyUI' : t('apfSettings.about'),
+      menubarLabel: () =>
+        isCloud || isDesktop ? 'About ComfyUI' : t('apfSettings.about'),
       versionAdded: '1.6.4',
       function: () => {
         settingsDialog.showAbout()
@@ -883,6 +886,10 @@ export function useCoreCommands(): ComfyCommand[] {
       label: 'Contact Support',
       versionAdded: '1.17.8',
       function: () => {
+        if (!isCloud && !isDesktop) {
+          window.open(projectLinks.feedback, '_blank', 'noopener,noreferrer')
+          return
+        }
         const { userEmail, resolvedUserInfo } = useCurrentUser()
         const supportUrl = buildSupportUrl({
           userEmail: userEmail.value,

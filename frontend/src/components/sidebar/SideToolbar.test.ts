@@ -33,9 +33,13 @@ const spies = vi.hoisted(() => ({
   toggleAssets: vi.fn()
 }))
 
+const distribution = vi.hoisted(() => ({ desktop: false }))
+
 vi.mock(import('@/platform/distribution/types'), () => ({
   isCloud: false,
-  isDesktop: false,
+  get isDesktop() {
+    return distribution.desktop
+  },
   isNightly: false
 }))
 
@@ -95,6 +99,7 @@ const workflowsTab: SidebarTabExtension = {
 
 describe('SideToolbar', () => {
   beforeEach(() => {
+    distribution.desktop = false
     Object.assign(useUserStore(), { isMultiUserServer: false })
     useSidebarTabStore().sidebarTabs = [assetsTab, workflowsTab]
     useSidebarTabStore().activeSidebarTabId = null
@@ -153,7 +158,8 @@ describe('SideToolbar', () => {
     expect(spies.toggleAssets).toHaveBeenCalled()
   })
 
-  it('renders the logout icon only on a multi-user server', () => {
+  it('renders the upstream logout icon only on a Desktop multi-user server', () => {
+    distribution.desktop = true
     const { unmount } = renderToolbar()
     expect(screen.queryByTestId('logout')).not.toBeInTheDocument()
     unmount()
@@ -161,5 +167,11 @@ describe('SideToolbar', () => {
     Object.assign(useUserStore(), { isMultiUserServer: true })
     renderToolbar()
     expect(screen.getByTestId('logout')).toBeInTheDocument()
+  })
+
+  it('hides logout in the local workbench even with upstream user state', () => {
+    Object.assign(useUserStore(), { isMultiUserServer: true })
+    renderToolbar()
+    expect(screen.queryByTestId('logout')).not.toBeInTheDocument()
   })
 })

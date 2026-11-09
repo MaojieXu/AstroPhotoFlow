@@ -9,12 +9,21 @@ import { createI18n } from 'vue-i18n'
 import NodeLibrarySidebarTabV2 from './NodeLibrarySidebarTabV2.vue'
 
 const hoisted = vi.hoisted(() => ({
+  desktop: true,
   mockSearchNode: vi.fn<(query: string) => unknown[]>(() => [])
 }))
 
 vi.mock<unknown>(import('@/services/nodeSearchService'), () => ({
   NodeSearchService: class {
     searchNode = hoisted.mockSearchNode
+  }
+}))
+
+vi.mock(import('@/platform/distribution/types'), () => ({
+  isCloud: false,
+  isNightly: true,
+  get isDesktop() {
+    return hoisted.desktop
   }
 }))
 
@@ -63,6 +72,7 @@ const i18n = createI18n({
 
 describe('NodeLibrarySidebarTabV2', () => {
   beforeEach(() => {
+    hoisted.desktop = true
     vi.mocked(useLocalStorage).mockImplementation((_key, defaultValue) =>
       ref(defaultValue)
     )
@@ -79,6 +89,15 @@ describe('NodeLibrarySidebarTabV2', () => {
       }
     })
   }
+
+  it('opens registered nodes when a local workspace has an old Essentials selection', () => {
+    hoisted.desktop = false
+    renderComponent()
+
+    expect(screen.getAllByRole('tab')).toHaveLength(1)
+    expect(screen.getByTestId('all-panel')).toBeInTheDocument()
+    expect(screen.queryByTestId('essential-panel')).not.toBeInTheDocument()
+  })
 
   it('should render with tabs', () => {
     renderComponent()

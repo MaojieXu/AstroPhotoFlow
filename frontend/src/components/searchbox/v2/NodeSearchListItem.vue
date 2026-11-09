@@ -129,6 +129,7 @@ import { NODE_TO_ESSENTIALS_CATEGORY } from '@/constants/essentialsNodes'
 import { useSettingStore } from '@/platform/settings/settingStore'
 import { useNodeBookmarkStore } from '@/stores/nodeBookmarkStore'
 import type { ComfyNodeDefImpl } from '@/stores/nodeDefStore'
+import { isCloud, isDesktop } from '@/platform/distribution/types'
 import { useNodeFrequencyStore } from '@/stores/nodeDefStore'
 import { CORE_NODE_MODULES, NodeSourceType } from '@/types/nodeSource'
 import { getProviderIcon, getProviderName } from '@/utils/categoryUtil'
@@ -162,7 +163,7 @@ const showIdName = computed(
     nodeDef.nodeSource.type !== NodeSourceType.Blueprint
 )
 const showNodeFrequency = computed(() =>
-  settingStore.get('Comfy.NodeSearchBoxImpl.ShowNodeFrequency')
+  (isCloud || isDesktop) && settingStore.get('Comfy.NodeSearchBoxImpl.ShowNodeFrequency')
 )
 const nodeFrequencyStore = useNodeFrequencyStore()
 const nodeFrequency = computed(() =>

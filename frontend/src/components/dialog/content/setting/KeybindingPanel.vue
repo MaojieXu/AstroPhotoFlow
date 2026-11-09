@@ -118,6 +118,7 @@ import { useKeybindingStore } from '@/platform/keybindings/keybindingStore'
 import { useKeybindingPresetService } from '@/platform/keybindings/presetService'
 import { useSettingStore } from '@/platform/settings/settingStore'
 import { useCommandStore } from '@/stores/commandStore'
+import { isCloud, isDesktop } from '@/platform/distribution/types'
 import { isSettingCommandVisible } from '@/platform/astrophotoflow/settings/settingsPresentation'
 import { useDialogStore } from '@/stores/dialogStore'
 import { normalizeI18nKey } from '@/utils/formatUtil'
@@ -227,10 +228,13 @@ const commandsData = computed<KeybindingCommand[]>(() => {
         id: command.id,
         isModified: keybindingStore.isCommandKeybindingModified(command.id),
         keybindings,
-        label: t(
-          `commands.${normalizeI18nKey(command.id)}.label`,
-          command.label ?? command.id
-        ),
+        label:
+          !isCloud && !isDesktop && command.id === 'Comfy.Help.AboutComfyUI'
+            ? t('apfSettings.about')
+            : t(
+                `commands.${normalizeI18nKey(command.id)}.label`,
+                command.label ?? command.id
+              ),
         rowId: `keybinding-row-${command.id}`,
         source: command.source
       }

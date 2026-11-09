@@ -9,12 +9,20 @@ beforeEach(() => {
 })
 
 const mocks = vi.hoisted(() => ({
+  desktop: true,
   trackUiButtonClicked: vi.fn(),
   trackHelpResourceClicked: vi.fn(),
   telemetry: null as {
     trackUiButtonClicked: ReturnType<typeof vi.fn>
     trackHelpResourceClicked: ReturnType<typeof vi.fn>
   } | null
+}))
+
+vi.mock(import('@/platform/distribution/types'), () => ({
+  isCloud: false,
+  get isDesktop() {
+    return mocks.desktop
+  }
 }))
 
 vi.mock<unknown>(import('@/platform/telemetry'), () => ({
@@ -25,11 +33,23 @@ describe('useErrorActions', () => {
   let windowOpenSpy: ReturnType<typeof vi.spyOn>
 
   beforeEach(() => {
+    mocks.desktop = true
     mocks.telemetry = {
       trackUiButtonClicked: mocks.trackUiButtonClicked,
       trackHelpResourceClicked: mocks.trackHelpResourceClicked
     }
     windowOpenSpy = vi.spyOn(window, 'open').mockImplementation(() => null)
+  })
+
+  it('opens project feedback without sending the error text in the URL', () => {
+    mocks.desktop = false
+    useErrorActions().findOnGitHub('private filesystem path')
+
+    expect(windowOpenSpy).toHaveBeenCalledExactlyOnceWith(
+      'https://github.com/MaojieXu/AstroPhotoFlow/issues',
+      '_blank',
+      'noopener,noreferrer'
+    )
   })
 
   describe('openGitHubIssues', () => {

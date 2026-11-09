@@ -66,14 +66,14 @@
       class="ml-auto flex shrink-0 items-center gap-2 px-2"
     >
       <TopbarBadges />
-      <TopbarSubscribeButton />
+      <TopbarSubscribeButton v-if="isCloud || isDesktop" />
       <div
         v-if="topbarBadgeStore.badges.length"
         data-testid="environment-badge-separator"
         class="h-5 w-px shrink-0 bg-border-subtle"
       />
       <Button
-        v-if="isCloud || isNightly"
+        v-if="isCloud || (isDesktop && isNightly)"
         :tooltip="$t('actionbar.feedbackTooltip')"
         variant="muted-textonly"
         size="icon"
@@ -83,8 +83,10 @@
       >
         <i class="icon-[lucide--megaphone] size-4" />
       </Button>
-      <CurrentUserButton v-if="showCurrentUser" compact class="shrink-0 p-1" />
-      <LoginButton v-else class="p-1" />
+      <template v-if="isCloud || isDesktop">
+        <CurrentUserButton v-if="showCurrentUser" compact class="shrink-0 p-1" />
+        <LoginButton v-else class="p-1" />
+      </template>
       <template v-if="showAgentEntry">
         <div
           data-testid="agent-entry-separator"
@@ -99,7 +101,7 @@
     </div>
     <div v-else class="ml-auto flex h-full shrink-0 items-center">
       <TopbarBadges />
-      <TopbarSubscribeButton />
+      <TopbarSubscribeButton v-if="isCloud || isDesktop" />
     </div>
     <div
       v-if="isDesktop"
