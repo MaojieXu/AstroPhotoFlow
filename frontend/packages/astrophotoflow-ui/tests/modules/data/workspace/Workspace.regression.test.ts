@@ -864,7 +864,7 @@ describe('first-stage regression fixes', () => {
     await flushPromises()
     await wrapper.findAll('.apf-details button').find(button=>button.text()==='从项目移除')!.trigger('click')
     await flushPromises()
-    await wrapper.get('.apf-toolbar button').trigger('click')
+    await wrapper.get('.apf-heading button').trigger('click')
     await flushPromises()
     await wrapper.get('.apf-record').trigger('click')
     await flushPromises()

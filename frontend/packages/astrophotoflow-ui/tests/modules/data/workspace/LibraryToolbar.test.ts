@@ -48,7 +48,7 @@ async function open() {
 describe('minimal library toolbar', () => {
   it('keeps import and equipment beside a menu and removes the view and page-size toolbar buttons', async () => {
     const mounted = await open()
-    expect(mounted.findAll('.apf-heading-actions > button').map(button => button.text())).toEqual(['导入', '设备管理'])
+    expect(mounted.findAll('.apf-toolbar-actions .apf-import, .apf-toolbar-actions .apf-equipment').map(button => button.text())).toEqual(['导入', '设备管理'])
     expect(mounted.getComponent(LibraryMenu).props('items').map(item => item.label)).toEqual(['刷新', '批量管理', '回收站', '显示方式', '每页数量'])
     expect(mounted.findAll('.apf-library-categories [role="tab"]')).toHaveLength(3)
     expect(mounted.find('input[aria-label="搜索"]').exists()).toBe(true)
@@ -63,21 +63,21 @@ describe('minimal library toolbar', () => {
     const mounted = await open()
     await mounted.findAll('details button').find(button => button.text() === '批量管理')!.trigger('click')
     await flushPromises()
-    expect(mounted.get('.apf-heading-actions').text()).toContain('已选 0 项')
-    const remove = mounted.findAll('.apf-heading-actions button').find(button => button.text() === '删除')!
+    expect(mounted.get('.apf-toolbar-actions').text()).toContain('已选 0 项')
+    const remove = mounted.findAll('.apf-toolbar-actions button').find(button => button.text() === '删除')!
     expect(remove.attributes('disabled')).toBeDefined()
     await mounted.get('input[aria-label="选择 M31.fit"]').setValue(true)
-    expect(mounted.get('.apf-heading-actions').text()).toContain('已选 1 项')
+    expect(mounted.get('.apf-toolbar-actions').text()).toContain('已选 1 项')
     await remove.trigger('click')
     await mounted.findAll('.apf-trash-confirm button').find(button => button.text() === '取消')!.trigger('click')
     expect(send).not.toHaveBeenCalled()
     expect(mounted.get('input[aria-label="选择 M31.fit"]').element).toHaveProperty('checked', true)
-    await mounted.findAll('.apf-heading-actions button').find(button => button.text() === '完成')!.trigger('click')
+    await mounted.findAll('.apf-toolbar-actions button').find(button => button.text() === '完成')!.trigger('click')
     expect(mounted.find('input[type="checkbox"]').exists()).toBe(false)
     expect(mounted.find('.apf-import').exists()).toBe(true)
     await mounted.findAll('details button').find(button => button.text() === '批量管理')!.trigger('click')
     await flushPromises()
-    expect(mounted.get('.apf-heading-actions').text()).toContain('已选 0 项')
+    expect(mounted.get('.apf-toolbar-actions').text()).toContain('已选 0 项')
   })
 
   it('uses menu radio selections for display and page size while retaining server pagination', async () => {

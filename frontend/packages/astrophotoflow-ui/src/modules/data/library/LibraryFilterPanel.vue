@@ -115,7 +115,7 @@ onBeforeUnmount(()=>{resizeObserver?.disconnect();window.removeEventListener('re
 </script>
 
 <template>
-  <section ref="panel" class="apf-filter-panel" :aria-label="$t('apfUi.asset_filters')"
+  <section ref="panel" class="apf-filter-panel" data-apf-popup="library-filter" :aria-label="$t('apfUi.asset_filters')"
     :style="{left:placement.left+'px',top:placement.top+'px',width:placement.width+'px',height:(empty?150:placement.height)+'px',minWidth:placement.minWidth+'px',minHeight:(empty?0:placement.minHeight)+'px',maxWidth:placement.maxWidth+'px',maxHeight:placement.maxHeight+'px'}" @pointerdown.stop>
     <header><strong>{{ $t('apfUi.filter_assets') }}</strong></header>
     <div class="apf-filter-content">

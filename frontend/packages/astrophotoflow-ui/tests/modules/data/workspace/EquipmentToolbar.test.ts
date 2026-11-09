@@ -188,17 +188,18 @@ describe('compact equipment toolbar', () => {
     await click(mounted, '下一页')
     setups = setups.slice(0, 50)
     const more = mounted.get<HTMLDetailsElement>('details')
-    more.element.open = true
+    await more.get('summary').trigger('click')
     await click(mounted, '刷新')
     expect(more.element.open).toBe(false)
     expect(store.offset).toBe(0)
     expect(mounted.text()).toContain('Rig 1')
     expect(mounted.find('.apf-pagination').exists()).toBe(false)
-    more.element.open = true
+    await more.get('summary').trigger('click')
     await more.trigger('keydown', { key: 'Escape' })
     expect(more.element.open).toBe(false)
-    more.element.open = true
+    await more.get('summary').trigger('click')
     document.dispatchEvent(new Event('pointerdown', { bubbles: true }))
+    await mounted.vm.$nextTick()
     expect(more.element.open).toBe(false)
   })
 })

@@ -13,7 +13,7 @@ export interface ImportFlowOptions {
 
 export function useImportFlow(options: ImportFlowOptions) {
   const cache = useQueryClient()
-  const dialogOpen = ref(false), menuOpen = ref(false), createsDataset = ref(false)
+  const dialogOpen = ref(false), createsDataset = ref(false)
   const files = ref<LocalImportFile[]>([]), datasetName = ref('')
   const pickerMode = ref<'files'|'folder'>()
   const issue = ref<{taskId:string;category:'content'|'preview'}>()
@@ -24,7 +24,7 @@ export function useImportFlow(options: ImportFlowOptions) {
     if(workspaceId)return cache.invalidateQueries({queryKey:libraryQueryKey(workspaceId)})
   }
   function changed() { options.clearSelection(); void invalidateLibrary() }
-  function start(kind:'files'|'folder') { menuOpen.value=false;pickerMode.value=kind }
+  function start(kind:'files'|'folder') { pickerMode.value=kind }
   function selected(selectedFiles:LocalImportFile[],name:string,folder:boolean) {
     pickerMode.value=undefined;files.value=selectedFiles;createsDataset.value=folder
     datasetName.value=folder?name:'';dialogOpen.value=true
@@ -37,10 +37,10 @@ export function useImportFlow(options: ImportFlowOptions) {
   function showIssue(taskId:string,category:'content'|'preview') { issue.value={taskId,category} }
   function refresh() { refreshToken.value++ }
   watch(()=>toValue(options.workspace),()=>{
-    dialogOpen.value=false;menuOpen.value=false;pickerMode.value=undefined;files.value=[]
+    dialogOpen.value=false;pickerMode.value=undefined;files.value=[]
     datasetName.value='';createsDataset.value=false;issue.value=undefined;watchedTaskIds.value=[]
     refreshToken.value=0
   },{flush:'sync'})
-  return {dialogOpen,menuOpen,files,pickerMode,createsDataset,datasetName,issue,watchedTaskIds,refreshToken,
+  return {dialogOpen,files,pickerMode,createsDataset,datasetName,issue,watchedTaskIds,refreshToken,
     start,selected,submitted,registered:changed,completed,showIssue,notify:options.notify,refresh,invalidateLibrary}
 }

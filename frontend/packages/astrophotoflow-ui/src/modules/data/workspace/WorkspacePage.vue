@@ -79,6 +79,8 @@ type EditorType = 'project' | 'equipment'
 type WorkspaceArea = 'library' | 'settings'
 type SetupSortField = 'created_at' | 'name' | 'camera' | 'telescope' | 'mount' | 'filter'
 
+type ToolbarPopup = 'import' | 'library-filter' | 'project-filter' | 'equipment-category' | 'library-more' | 'equipment-more' | 'toolbar-search' | 'toolbar-view'
+
 const connectionReady = useQueryAvailability()
 const store = useWorkspaceStore()
 const calibrationCache = useQueryClient()
@@ -110,8 +112,92 @@ async function setupSaved(setup: EquipmentSetup, viewKey: string) {
   if (setupViewKey.value === viewKey) selected.value = setup
 }
 
-const equipmentMenu = ref<InstanceType<typeof LibraryMenu>>()
-const libraryMenu = ref<InstanceType<typeof LibraryMenu>>()
+const workspaceRoot = ref<HTMLElement>()
+const toolbar = ref<HTMLElement>()
+const toolbarWidth = ref(Infinity)
+const foldSecondaryActions = computed(() => toolbarWidth.value < 660)
+const foldSearch = computed(() => toolbarWidth.value < 500)
+const foldViewTabs = computed(() => toolbarWidth.value < 420)
+const toolbarSearchInput = ref<HTMLInputElement>()
+const toolbarPopup = ref<ToolbarPopup>()
+const toolbarFocusHandoffs = new Set<ToolbarPopup>()
+const importMenuOpen = popupOpen('import')
+const filterPanelOpen = popupOpen('library-filter')
+const managementFilterOpen = popupOpen('project-filter')
+const equipmentCategoryOpen = popupOpen('equipment-category')
+const libraryMenuOpen = popupOpen('library-more')
+const equipmentMenuOpen = popupOpen('equipment-more')
+const toolbarSearchOpen = popupOpen('toolbar-search')
+const toolbarViewOpen = popupOpen('toolbar-view')
+
+watch(toolbar, (element, _, onCleanup) => {
+  if (!element || typeof ResizeObserver === 'undefined') return
+  const observer = new ResizeObserver(([entry]) => { toolbarWidth.value = entry.contentRect.width })
+  observer.observe(element)
+  onCleanup(() => observer.disconnect())
+})
+
+watch(foldSearch, () => { toolbarSearchOpen.value = false })
+watch(foldViewTabs, () => { toolbarViewOpen.value = false })
+watch(foldSecondaryActions, () => { equipmentCategoryOpen.value = false })
+
+async function toggleToolbarSearch() {
+  toolbarSearchOpen.value = !toolbarSearchOpen.value
+  if (!toolbarSearchOpen.value) return
+  await nextTick()
+  toolbarSearchInput.value?.focus()
+}
+
+function popupOpen(popup: ToolbarPopup) {
+  return computed({
+    get: () => toolbarPopup.value === popup,
+    set(open: boolean) {
+      if (open) {
+        if (toolbarPopup.value !== popup) closeToolbarPopup()
+        toolbarFocusHandoffs.delete(popup)
+        toolbarPopup.value = popup
+      } else if (toolbarPopup.value === popup) {
+        toolbarPopup.value = undefined
+      }
+    }
+  })
+}
+
+function closeToolbarPopup() {
+  const popup = toolbarPopup.value
+  if (popup && isPortaledPopup(popup)) toolbarFocusHandoffs.add(popup)
+  toolbarPopup.value = undefined
+}
+
+function isPortaledPopup(popup: ToolbarPopup) {
+  if (popup === 'equipment-category' || popup === 'toolbar-view') return Boolean(props.controls?.select)
+  return (popup === 'library-more' || popup === 'equipment-more') && Boolean(props.controls?.menu)
+}
+
+function dismissToolbarOnPointerDown(event: PointerEvent) {
+  const popup = toolbarPopup.value
+  const root = workspaceRoot.value
+  if (!popup || !root) return
+  const path = event.composedPath()
+  if (isPortaledPopup(popup) && !path.includes(root)) return
+  if (path.some(node => node instanceof HTMLElement && root.contains(node) && node.dataset.apfPopup === popup)) return
+  closeToolbarPopup()
+}
+
+function dismissToolbarOnEscape(event: KeyboardEvent) {
+  const popup = toolbarPopup.value
+  if (!popup) return
+  toolbarPopup.value = undefined
+  event.preventDefault()
+  workspaceRoot.value?.querySelector<HTMLElement>(
+    `button[data-apf-popup="${popup}"], [data-apf-popup="${popup}"] button[aria-expanded], [data-apf-popup="${popup}"] summary`
+  )?.focus()
+}
+
+function preserveToolbarFocus(popup: ToolbarPopup, event: Event) {
+  if (toolbarFocusHandoffs.delete(popup) || toolbarPopup.value) event.preventDefault()
+}
+
 const lastManagementSection = ref<WorkspaceSection>('equipment-setups')
 const capabilities=computed(()=>props.capabilities)
 const libraryRows = computed(() => isLibrarySummaryView.value && libraryRequest.value ? libraryQuery.data.value?.items ?? [] : [])
@@ -265,7 +351,6 @@ function writeViewKey(){
     activeDataset.value?.id,viewingProjectAssets.value,viewingProjectDatasets.value,addingProjectAssets.value,addingProjectDatasets.value,
     libraryRequest.value,memberRequest.value,managementRequest.value,selectionRequest.value,projectRequest.value]):undefined
 }
-const managementFilterOpen = ref(false)
 const managementFilterCount = computed(()=>Number(Boolean(projectTargetFilter.value)))
 const setupDirty = ref(false)
 const setupSaving = ref(false)
@@ -275,7 +360,6 @@ const roleFilter = ref('')
 const frameTypeFilter = ref('')
 function emptyFilters(): LibraryFilters { return {} }
 const activeFilters = ref<LibraryFilters>(emptyFilters())
-const filterPanelOpen = ref(false)
 const filterButton = ref<HTMLElement>()
 const activeFilterCount = computed(() => Object.values(activeFilters.value).filter(value =>
   Array.isArray(value) ? value.length > 0 : value !== ''
@@ -304,7 +388,7 @@ const { bulkDeleteBusy, removalBlocksCurrentView, bulkDeleteNotice, bulkConfirmO
   removeSelectedLibraryEntries, confirmRemoveSelectedLibraryEntries } = removal
 const importFlow=useImportFlow({workspace:importWorkspace,clearSelection:clearBulkSelection,notify:notice=>emit('notify-import',notice)})
 const {dialogOpen:importDialogOpen,files:importFiles,pickerMode:localPickerMode,issue:importIssue,
-  menuOpen:importMenuOpen,createsDataset:importCreatesDataset,datasetName:importDatasetName,
+  createsDataset:importCreatesDataset,datasetName:importDatasetName,
   watchedTaskIds,refreshToken:progressRefreshToken,start:startImport,selected:localFilesSelected,
   submitted:importSubmitted,registered:importRegistrationCompleted,completed:importTaskCompleted,
   showIssue:showImportIssue,notify:notifyImport}=importFlow
@@ -371,27 +455,34 @@ const loadRelatedEquipment = equipmentChoicesQuery.refresh
 
 
 const managementFilterBlocked = computed(() => dirty.value || setupSaving.value || saving.value || savingInline.value > 0)
-function closeEquipmentMenu(restoreFocus = false) {
-  equipmentMenu.value?.close(restoreFocus)
-}
-function dismissEquipmentMenu(event: PointerEvent) {
-  equipmentMenu.value?.dismiss(event)
-  libraryMenu.value?.dismiss(event)
-}
 function filterEquipmentKind(value: string | number | null | undefined) {
   if (managementFilterBlocked.value) return
   store.offset = 0
   equipmentKindFilter.value = String(value ?? '')
 }
 async function refreshEquipment() {
-  closeEquipmentMenu()
+  closeToolbarPopup()
   await loadRelatedEquipment(true)
   await refreshRecords()
 }
 const dirty = computed(() => setupDirty.value || calibrationDirty.value || recordEditorOwner.dirty.value)
-const equipmentMenuItems = computed(() => {
+const equipmentCategoryOptions = computed(() => [
+  { value: '', name: uiT('apfUi.all_equipment') },
+  ...equipmentKinds.map(kind => ({ value: kind, name: equipmentKindLabels[kind] }))
+])
+const equipmentMenuItems = computed<LibraryMenuItem[]>(() => {
   const current=selected.value
   return [
+  ...(foldSecondaryActions.value && store.section === 'equipment' ? [{
+    label: uiT('apfUi.equipment_category'),
+    disabled: managementFilterBlocked.value,
+    radioGroup: {
+      value: equipmentKindFilter.value,
+      options: equipmentCategoryOptions.value.map(({ value, name }) => ({
+        value, label: name, command: () => filterEquipmentKind(value)
+      }))
+    }
+  }] : []),
   {get label() { return uiT('apfUi.refresh') },disabled:managementFilterBlocked.value||loading.value,command:refreshEquipment},
   ...(!managementSelectMode.value?[{get label() { return uiT('apfUi.manage_in_bulk') },disabled:managementFilterBlocked.value||loading.value,command:enterManagementSelectMode}]:[]),
   ...(store.section==='equipment-setups'&&current?[{get label() { return uiT('apfUi.delete_setup') },disabled:managementFilterBlocked.value||loading.value,command:()=>requestEquipmentDelete(managementSelectionEntry(store.section,current).reference)}]:[])
@@ -406,6 +497,25 @@ const isAssetTable = computed(() => (activeArea.value === 'library' && !viewingP
 const isDatasetTable = computed(() => store.section === 'projects' && viewingProjectDatasets.value)
 const isLibraryItemsView = computed(() => activeArea.value === 'library' && !viewingProjectAssets.value && !viewingProjectDatasets.value && !activeDataset.value)
 const isLibraryTableView = computed(() => activeArea.value === 'library' && !viewingProjectAssets.value && !viewingProjectDatasets.value)
+const compactToolbar = computed(() => isLibraryItemsView.value || isEquipmentManagement.value)
+const toolbarViewValue = computed(() => isEquipmentManagement.value ? store.section : libraryCategory.value)
+const newEquipmentLabel = computed(() => uiT(store.section === 'equipment-setups' ? 'apfUi.new_equipment_setup' : 'apfUi.new_equipment'))
+const toolbarViewLabel = computed(() => isEquipmentManagement.value
+  ? uiT(props.native ? 'apfUi.equipment_and_metadata_categories' : 'apfUi.settings_category')
+  : uiT('apfUi.asset_use'))
+const toolbarViews = computed(() => isEquipmentManagement.value ? [
+  { value: 'equipment-setups', label: uiT('apfUi.equipment_setup') },
+  { value: 'equipment', label: uiT('apfUi.my_equipment') }
+] : [
+  { value: 'all', label: uiT('apfUi.all_assets') },
+  { value: 'light', label: uiT('apfUi.light') },
+  { value: 'calibration', label: uiT('apfUi.calibration_library') }
+])
+const toolbarViewOptions = computed(() => toolbarViews.value.map(({ value, label }) => ({ value, name: label })))
+function switchToolbarView(value: string | number | null | undefined) {
+  if (value === 'equipment' || value === 'equipment-setups') return selectSection(value)
+  if (value === 'all' || value === 'light' || value === 'calibration') return selectLibraryCategory(value)
+}
 const isDatasetMembersView = computed(() => activeArea.value === 'library' && store.section === 'library' && Boolean(activeDataset.value) && !viewingProjectAssets.value && !viewingProjectDatasets.value)
 const isLibrarySummaryView = computed(() => isLibraryItemsView.value && store.section === 'library')
 const isSelectionRecordsView = computed(() => store.section === 'calibration' || addingProjectAssets.value || (store.section === 'projects' && viewingProjectDatasets.value && addingProjectDatasets.value))
@@ -413,6 +523,9 @@ const isProjectRecordsView = computed(() => !isSelectionRecordsView.value && (st
 
 const libraryToolbarBlocked = computed(() => bulkDeleteBusy.value || savingInline.value > 0 || Boolean(inlineSaveFailure.value) || setupDirty.value)
 const libraryMenuItems = computed<LibraryMenuItem[]>(() => [
+  ...(foldSecondaryActions.value && props.native && isLibraryItemsView.value ? [
+    { label: uiT('apfUi.equipment_manager'), command: () => emit('manage-equipment') }
+  ] : []),
   { get label() { return uiT('apfUi.refresh') }, disabled: libraryToolbarBlocked.value || loading.value, command: refreshLibrary },
   ...(isLibrarySummaryView.value ? [
     { get label() { return uiT('apfUi.manage_in_bulk') }, disabled: libraryToolbarBlocked.value || loading.value, command: enterBulkSelectMode }
@@ -645,7 +758,7 @@ function leaveManagementSelectMode(){managementSelectMode.value=false;management
 async function selectSection(section: WorkspaceSection) {
   if (dirty.value && !window.confirm(uiT('apfUi.this_form_has_unsaved_changes_discard_them_and_switch'))) return
   if(!await waitForInlineSave())return
-  closeEquipmentMenu()
+  closeToolbarPopup()
   leaveDatasetContext()
   recordEditorOwner.close()
   viewingProjectAssets.value = false
@@ -669,6 +782,7 @@ async function selectLibraryCategory(category:'all'|'light'|'calibration'){
   if(category===libraryCategory.value)return
   if(dirty.value&&!window.confirm(uiT('apfUi.this_form_has_unsaved_changes_discard_them_and_switch')))return
   if(!await waitForInlineSave())return
+  closeToolbarPopup()
   leaveDatasetContext();selected.value=undefined
   store.query='';store.offset=0;activeFilters.value=emptyFilters()
   libraryCategory.value=category
@@ -677,7 +791,7 @@ async function selectLibraryCategory(category:'all'|'light'|'calibration'){
 async function selectArea(area: WorkspaceArea, managementSection: WorkspaceSection = 'equipment-setups') {
   if (dirty.value && !window.confirm(uiT('apfUi.this_form_has_unsaved_changes_discard_them_and_switch'))) return false
   if(!await waitForInlineSave())return false
-  closeEquipmentMenu()
+  closeToolbarPopup()
   leaveDatasetContext()
   recordEditorOwner.close()
   viewingProjectAssets.value = false
@@ -712,6 +826,7 @@ async function selectArea(area: WorkspaceArea, managementSection: WorkspaceSecti
 }
 
 async function leavePage() {
+  closeToolbarPopup()
   return dirty.value ? selectArea(activeArea.value, store.section) : waitForInlineSave()
 }
 
@@ -1101,14 +1216,19 @@ return computed<RecordsPresentation>(() => {
 })()
 const RecordsPanel = () => h(WorkspaceRecords, { view: recordsPresentation.value })
 
+watch([
+  () => activeDataset.value?.id, settingsProjectMode, bulkSelectMode, managementSelectMode,
+  editorType, localPickerMode, importDialogOpen, importIssue, trashOpen, equipmentDeleteItems,
+  bulkConfirmOpen, pendingManagementArchive, photoPreview, mediaPreview
+], closeToolbarPopup, {flush:'sync'})
 watch(connectionReady,async available=>{
-  if(!available){closePhotoPreview();cancelThumbnails();return}
+  if(!available){closeToolbarPopup();closePhotoPreview();cancelThumbnails();return}
   await nextTick()
   if(writeViewActive&&connectionReady.value)void loadThumbnails(rows.value)
 })
 let thumbnailRefreshTimer: ReturnType<typeof setInterval> | undefined
 onMounted(() => {
-  document.addEventListener('pointerdown',dismissEquipmentMenu,true)
+  document.addEventListener('pointerdown',dismissToolbarOnPointerDown,true)
   thumbnailRefreshTimer = setInterval(() => {
     if (!connectionReady.value || document.hidden || !(isLibraryItemsView.value || isDatasetMembersView.value)) return
     const visible=rows.value.flatMap(value=>{const record=resolveMaterialRecord(value);return record?[record]:[]})
@@ -1118,15 +1238,15 @@ onMounted(() => {
 onBeforeUnmount(() => {
   if (thumbnailRefreshTimer) clearInterval(thumbnailRefreshTimer)
   cancelThumbnails()
-  document.removeEventListener('pointerdown', dismissEquipmentMenu, true)
+  document.removeEventListener('pointerdown', dismissToolbarOnPointerDown, true)
 })
 </script>
 
 <template>
   <section
-class="apf-workspace" :aria-label="$t('apfUi.astrophotoflow_astronomy_library')"
+    ref="workspaceRoot" class="apf-workspace" :aria-label="$t('apfUi.astrophotoflow_astronomy_library')"
     @pointerdown.stop @pointerup.stop @mousedown.stop @mouseup.stop
-    @click.stop @contextmenu.stop @keydown.stop @keyup.stop>
+    @click.stop @contextmenu.stop @keydown.stop @keydown.esc="dismissToolbarOnEscape" @keyup.stop>
       <nav v-if="!props.native" class="apf-nav" :aria-label="$t('apfUi.astrophotoflow_modules')">
         <button
 v-for="(title, area) in areaTitles" :key="area" type="button"
@@ -1136,61 +1256,88 @@ v-for="(title, area) in areaTitles" :key="area" type="button"
         </button>
       </nav>
     <main class="apf-main" :class="{'apf-equipment-management':isEquipmentManagement,'apf-library-workspace':activeArea==='library'}">
-          <div class="apf-toolbar">
-            <div class="apf-heading">
+            <div v-if="(!props.sidebar || activeDataset || activeArea !== 'library') && (!props.sidebar || activeArea !== 'settings' || settingsProjectMode !== 'projects')" class="apf-heading">
               <button v-if="activeDataset" type="button" @click="closeDataset">{{ $t('apfUi.back_to_library') }}</button>
               <button v-else-if="viewingProjectAssets || viewingProjectDatasets" type="button" @click="leaveProjectAssets">{{ $t('apfUi.back_to_project') }}</button>
               <LibraryButton v-else-if="props.native && activeArea === 'settings' && store.section !== 'projects'" type="button" class="apf-equipment-back" :aria-label="$t('apfUi.back_to_library_8979db')" :tooltip="$t('apfUi.back_to_library_8979db')" @click="emit('back-to-library')"><i class="pi pi-arrow-left" aria-hidden="true"></i></LibraryButton>
               <h1 v-if="!props.sidebar || activeDataset || activeArea !== 'library'">{{ activeDataset ? $t('apfUi.library_968e00')+activeDataset.name : activeArea === 'library' ? $t('apfUi.library') : (viewingProjectAssets ? $t('apfUi.project_assets') : viewingProjectDatasets ? $t('apfUi.project_image_groups') : store.section === 'projects' ? $t('apfUi.project') : $t('apfUi.equipment_manager')) }}</h1>
               <span v-if="activeDataset" class="apf-state">{{ $t('apfUi.image_group_photos_value', { p0: (activeDataset.member_count??0) }) }}</span>
-              <div v-if="isLibraryTableView" class="apf-heading-actions">
+            </div>
+          <div ref="toolbar" class="apf-toolbar" :class="{
+            'apf-compact-toolbar': compactToolbar,
+            'apf-toolbar-icons': compactToolbar && foldSearch
+          }">
+            <LibraryTabs v-if="compactToolbar && !foldViewTabs" :class="isEquipmentManagement ? 'apf-management-tabs' : 'apf-library-categories'" :value="toolbarViewValue" :options="toolbarViews" :label="toolbarViewLabel" @change="switchToolbarView" />
+            <LibrarySelect v-else-if="compactToolbar" v-model:open="toolbarViewOpen" class="apf-toolbar-view" data-apf-popup="toolbar-view" :model-value="toolbarViewValue" :options="toolbarViewOptions" :label="toolbarViewLabel" :modal="false" :searchable="false" density="compact" @update:model-value="switchToolbarView" @close-auto-focus="preserveToolbarFocus('toolbar-view', $event)" />
+            <div class="apf-toolbar-search" data-apf-popup="toolbar-search">
+              <LibraryButton v-if="compactToolbar && foldSearch" class="apf-toolbar-icon" :class="{ 'apf-toolbar-active': store.query }" :aria-label="$t('apfUi.search')" :aria-description="store.query || undefined" :tooltip="$t('apfUi.search')" :aria-expanded="toolbarSearchOpen" :disabled="bulkDeleteBusy||setupDirty" @click="toggleToolbarSearch">
+                <i class="pi pi-search" aria-hidden="true"></i>
+              </LibraryButton>
+              <label v-if="!compactToolbar || !foldSearch || toolbarSearchOpen" class="apf-search" :class="{ 'apf-search-popup': compactToolbar && foldSearch }">
+                <i class="pi pi-search" aria-hidden="true"></i>
+                <input ref="toolbarSearchInput" :value="store.query" :aria-label="$t('apfUi.search')" :placeholder="$t('apfUi.search_names')" :disabled="bulkDeleteBusy||setupDirty" @input="setQuery" />
+              </label>
+            </div>
+            <span v-if="isLibraryItemsView" ref="filterButton" data-apf-popup="library-filter">
+              <LibraryButton :disabled="bulkDeleteBusy" :aria-expanded="filterPanelOpen" :aria-label="$t('apfUi.filter_b5f154') + (activeFilterCount ? `（${activeFilterCount}）` : '')" :tooltip="foldSearch ? $t('apfUi.filter_b5f154') : undefined" @click="filterPanelOpen=!filterPanelOpen">
+                <i v-if="foldSearch" class="pi pi-filter" aria-hidden="true"></i>
+                <span v-else>{{ $t('apfUi.filter_b5f154') }}</span>
+                <span v-if="activeFilterCount">{{ foldSearch ? activeFilterCount : `（${activeFilterCount}）` }}</span>
+              </LibraryButton>
+            </span>
+              <div v-if="isLibraryTableView" class="apf-toolbar-actions">
                 <template v-if="bulkSelectMode">
-                  <span role="status">{{ $t('apfUi.selected_value', { p0: (bulkSelection.size) }) }}</span>
-                  <LibraryButton :disabled="bulkDeleteBusy||bulkSelection.size===0||savingInline>0||Boolean(inlineSaveFailure)" @click="removeSelectedLibraryEntries">{{bulkDeleteBusy?$t('apfUi.deleting'):$t('apfUi.delete')}}</LibraryButton>
+                  <span role="status" class="apf-toolbar-selection">{{ $t('apfUi.selected_value', { p0: (bulkSelection.size) }) }}</span>
+                  <LibraryButton :aria-label="$t('apfUi.delete_selected_value', { p0: bulkSelection.size })" :tooltip="foldSearch ? $t('apfUi.delete') : undefined" :disabled="bulkDeleteBusy||bulkSelection.size===0||savingInline>0||Boolean(inlineSaveFailure)" @click="removeSelectedLibraryEntries">
+                    <i v-if="compactToolbar && foldSearch" class="pi pi-trash" aria-hidden="true"></i>
+                    <span v-if="compactToolbar && foldSearch" aria-hidden="true">{{ bulkSelection.size }}</span>
+                    <span v-else>{{bulkDeleteBusy?$t('apfUi.deleting'):$t('apfUi.delete')}}</span>
+                  </LibraryButton>
                   <LibraryButton :disabled="bulkDeleteBusy" @click="leaveBulkSelectMode">{{ $t('apfUi.done') }}</LibraryButton>
                 </template>
                 <template v-else>
-                  <LibraryButton v-if="isLibraryItemsView" class="apf-import" variant="primary" :disabled="!capabilities?.asset_import" :aria-expanded="importMenuOpen" :tooltip="$t('apfUi.select_files_or_folder')" @click="importMenuOpen=!importMenuOpen"><i class="icon-[lucide--upload] size-4" aria-hidden="true" /><span>{{ $t('apfUi.import') }}</span></LibraryButton>
-                  <LibraryButton v-if="props.native&&isLibraryItemsView" class="apf-equipment" @click="emit('manage-equipment')">{{ $t('apfUi.equipment_manager') }}</LibraryButton>
-                  <LibraryMenu ref="libraryMenu" :items="libraryMenuItems" />
-                  <div v-if="importMenuOpen&&isLibraryItemsView" class="apf-import-menu">
-                    <LibraryButton @click="startImport('files')">{{ $t('apfUi.select_files') }}</LibraryButton>
-                    <LibraryButton @click="startImport('folder')">{{ $t('apfUi.select_folder') }}</LibraryButton>
+                  <div v-if="isLibraryItemsView" class="apf-import-control" data-apf-popup="import">
+                    <LibraryButton class="apf-import" :class="{ 'apf-toolbar-icon': foldViewTabs }" variant="primary" :disabled="!capabilities?.asset_import" :aria-label="$t('apfUi.import')" :aria-expanded="importMenuOpen" :tooltip="$t('apfUi.select_files_or_folder')" @click="importMenuOpen=!importMenuOpen">
+                      <i class="icon-[lucide--upload] size-4" aria-hidden="true" /><span v-if="!foldViewTabs">{{ $t('apfUi.import') }}</span>
+                    </LibraryButton>
+                    <div v-if="importMenuOpen" class="apf-import-menu">
+                      <LibraryButton @click="startImport('files')">{{ $t('apfUi.select_files') }}</LibraryButton>
+                      <LibraryButton @click="startImport('folder')">{{ $t('apfUi.select_folder') }}</LibraryButton>
+                    </div>
                   </div>
+                  <LibraryButton v-if="props.native&&isLibraryItemsView&&!foldSecondaryActions" class="apf-equipment" @click="emit('manage-equipment')">{{ $t('apfUi.equipment_manager') }}</LibraryButton>
+                  <LibraryMenu v-model:open="libraryMenuOpen" data-apf-popup="library-more" :items="libraryMenuItems" @close-auto-focus="preserveToolbarFocus('library-more', $event)" />
                 </template>
               </div>
-            </div>
-            <LibraryTabs v-if="activeArea==='library'&&!activeDataset" class="apf-library-categories" :value="libraryCategory" :options="[{value:'all',label:$t('apfUi.all_assets')},{value:'light',label:$t('apfUi.light')},{value:'calibration',label:$t('apfUi.calibration_library')}]" :label="$t('apfUi.asset_use')" @change="selectLibraryCategory($event as 'all'|'light'|'calibration')" />
-            <LibraryTabs v-if="activeArea === 'settings' && store.section !== 'projects' && !viewingProjectAssets && !viewingProjectDatasets" class="apf-management-tabs" :value="store.section" :options="[{value:'equipment-setups',label:$t('apfUi.equipment_setup')},{value:'equipment',label:$t('apfUi.my_equipment')}]" :label="props.native?$t('apfUi.equipment_and_metadata_categories'):$t('apfUi.settings_category')" @change="selectSection($event as WorkspaceSection)" />
-            <label class="apf-search">
-              <i class="pi pi-search" aria-hidden="true"></i>
-              <input :value="store.query" :aria-label="$t('apfUi.search')" :placeholder="$t('apfUi.search_names')" :disabled="bulkDeleteBusy||setupDirty" @input="setQuery" />
-            </label>
             <select
 v-if="activeArea !== 'settings' && (store.section === 'projects' || store.section === 'equipment' || store.section === 'equipment-setups')"
               v-model="statusFilter" :disabled="setupDirty" :aria-label="$t('apfUi.status_filter')">
               <option value="active">{{ $t('apfUi.active') }}</option><option value="archived">{{ $t('apfUi.archived') }}</option><option value="all">{{ $t('apfUi.all') }}</option>
             </select>
-            <LibrarySelect v-if="isEquipmentManagement&&store.section==='equipment'" class="apf-equipment-kind-filter" :searchable="false" density="compact" :model-value="equipmentKindFilter" :label="$t('apfUi.equipment_category')" :options="[{value:'',name:$t('apfUi.all_equipment')},...equipmentKinds.map(kind=>({value:kind,name:equipmentKindLabels[kind]}))]" :disabled="managementFilterBlocked" @update:model-value="filterEquipmentKind" />
-            <div v-if="activeArea==='settings' && store.section==='projects' && !viewingProjectAssets && !viewingProjectDatasets" class="apf-management-filter-control">
+            <LibrarySelect v-if="isEquipmentManagement&&store.section==='equipment'&&!foldSecondaryActions" v-model:open="equipmentCategoryOpen" class="apf-equipment-kind-filter" data-apf-popup="equipment-category" :modal="false" :searchable="false" density="compact" :model-value="equipmentKindFilter" :label="$t('apfUi.equipment_category')" :options="equipmentCategoryOptions" :disabled="managementFilterBlocked" @update:model-value="filterEquipmentKind" @close-auto-focus="preserveToolbarFocus('equipment-category', $event)" />
+            <div v-if="activeArea==='settings' && store.section==='projects' && !viewingProjectAssets && !viewingProjectDatasets" class="apf-management-filter-control" data-apf-popup="project-filter">
               <button type="button" :disabled="managementFilterBlocked" :aria-expanded="managementFilterOpen" @click="managementFilterOpen?managementFilterOpen=false:openManagementFilter()">{{ $t('apfUi.filter_b5f154') }}<span v-if="managementFilterCount">（{{managementFilterCount}}）</span></button>
               <div v-if="managementFilterOpen" class="apf-management-filter-panel">
                 <label v-if="store.section==='projects'">{{ $t('apfUi.target') }}<input v-model="projectTargetFilterDraft" :placeholder="$t('apfUi.filter_by_target')" /></label>
                 <div><button type="button" @click="clearManagementFilter">{{ $t('apfUi.clear') }}</button><button type="button" :disabled="managementFilterBlocked" @click="applyManagementFilter">{{ $t('apfUi.apply') }}</button></div>
               </div>
             </div>
-            <span v-if="isLibraryItemsView" ref="filterButton"><LibraryButton :disabled="bulkDeleteBusy" :aria-expanded="filterPanelOpen" @click="filterPanelOpen=!filterPanelOpen">{{ $t('apfUi.filter_b5f154') }}<span v-if="activeFilterCount">（{{activeFilterCount}}）</span>
-            </LibraryButton></span>
             <button v-if="!isEquipmentManagement&&(activeArea !== 'library' || viewingProjectAssets || viewingProjectDatasets)" type="button" :disabled="setupDirty" @click="refreshRecords"><i class="pi pi-refresh" aria-hidden="true"></i><span>{{ $t('apfUi.refresh') }}</span></button>
-            <template v-if="isEquipmentManagement">
+            <div v-if="isEquipmentManagement" class="apf-toolbar-actions">
               <template v-if="managementSelectMode">
-                <span role="status">{{ $t('apfUi.selected_value', { p0: (managementSelection.size) }) }}</span>
-                <LibraryButton type="button" :disabled="!managementSelection.size||managementArchiveBusy||managementFilterBlocked" @click="requestSelectedEquipmentDelete">{{ $t('apfUi.delete_selected_value', { p0: (managementSelection.size) }) }}</LibraryButton>
+                <span role="status" class="apf-toolbar-selection">{{ $t('apfUi.selected_value', { p0: (managementSelection.size) }) }}</span>
+                <LibraryButton type="button" :aria-label="$t('apfUi.delete_selected_value', { p0: managementSelection.size })" :tooltip="foldSearch ? $t('apfUi.delete') : undefined" :disabled="!managementSelection.size||managementArchiveBusy||managementFilterBlocked" @click="requestSelectedEquipmentDelete">
+                  <i v-if="foldSearch" class="pi pi-trash" aria-hidden="true"></i>
+                  <span v-if="foldSearch" aria-hidden="true">{{ managementSelection.size }}</span>
+                  <span v-else>{{ $t('apfUi.delete_selected_value', { p0: managementSelection.size }) }}</span>
+                </LibraryButton>
                 <LibraryButton type="button" :disabled="managementArchiveBusy" @click="leaveManagementSelectMode">{{ $t('apfUi.done') }}</LibraryButton>
               </template>
-              <LibraryButton v-else-if="statusFilter!=='archived'" type="button" variant="primary" :disabled="managementFilterBlocked||loading" @click="store.section==='equipment-setups'?setupManager?.beginSetup(null):openCreate('equipment')"><i class="pi pi-plus" aria-hidden="true"></i>{{store.section==='equipment-setups'?$t('apfUi.new_equipment_setup'):$t('apfUi.new_equipment')}}</LibraryButton>
-              <LibraryMenu ref="equipmentMenu" :items="equipmentMenuItems" />
-            </template>
+              <LibraryButton v-else-if="statusFilter!=='archived'" type="button" variant="primary" :class="{ 'apf-toolbar-icon': foldViewTabs }" :aria-label="newEquipmentLabel" :tooltip="foldViewTabs ? newEquipmentLabel : undefined" :disabled="managementFilterBlocked||loading" @click="store.section==='equipment-setups'?setupManager?.beginSetup(null):openCreate('equipment')">
+                <i class="pi pi-plus" aria-hidden="true"></i><span v-if="!foldViewTabs">{{ newEquipmentLabel }}</span>
+              </LibraryButton>
+              <LibraryMenu v-model:open="equipmentMenuOpen" data-apf-popup="equipment-more" :class="{ 'apf-toolbar-active': foldSecondaryActions && store.section==='equipment' && equipmentKindFilter }" :aria-description="foldSecondaryActions && store.section==='equipment' ? equipmentCategoryOptions.find(option => option.value === equipmentKindFilter && equipmentKindFilter)?.name : undefined" :items="equipmentMenuItems" @close-auto-focus="preserveToolbarFocus('equipment-more', $event)" />
+            </div>
             <template v-if="activeArea==='settings' && store.section==='projects' && !viewingProjectAssets && !viewingProjectDatasets">
               <template v-if="managementSelectMode">
                 <button type="button" :disabled="!managementSelection.size||managementArchiveBusy" @click="requestSelectedManagementArchive">{{ $t('apfUi.move_to_trash') }}</button>
@@ -1327,23 +1474,38 @@ v-if="recordEditor" v-model="recordEditor" :saving="saving" :saving-inline="savi
 .apf-record.selected { outline:1px solid var(--border-color,#4e4e4e); background:var(--comfy-menu-secondary-bg,#292929); }
 .apf-main { position:relative; display:flex; flex:1; flex-direction:column; gap:10px; min-width:0; min-height:0; overflow:auto; padding-top:8px; }
 .apf-toolbar { flex:none; display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
-.apf-heading { display:flex; align-items:center; gap:8px; flex:0 0 100%; min-width:0; white-space:nowrap; }
-.apf-heading h1 { flex:0 0 auto; white-space:nowrap; }
-.apf-heading-actions { display:flex; flex:0 0 auto; align-items:center; gap:6px; }
-.apf-toolbar, .apf-error, .apf-state, .apf-disabled, .apf-records, .apf-pagination, .apf-details { margin-left:10px; margin-right:10px; }
-.apf-heading { position:relative; display:flex; flex-wrap:wrap; flex:1 0 100%; align-items:center; gap:8px; min-width:0; }
+.apf-heading, .apf-toolbar, .apf-error, .apf-state, .apf-disabled, .apf-records, .apf-pagination, .apf-details { margin-left:10px; margin-right:10px; }
+.apf-heading { display:flex; flex:none; flex-wrap:wrap; align-items:center; gap:8px; min-width:0; }
 .apf-heading h1 { flex:0 0 auto; margin:4px 0; color:var(--input-text,#ddd); font-size:16px; font-weight:600; line-height:1.25; white-space:nowrap; }
-.apf-heading-actions { position:relative; display:flex; flex:0 1 auto; flex-wrap:wrap; min-width:0; align-items:center; gap:5px; margin-left:auto; }
+.apf-toolbar-actions { display:flex; flex:0 1 auto; flex-wrap:wrap; min-width:0; align-items:center; gap:6px; margin-inline-start:auto; }
+.apf-toolbar-search { flex:1 1 145px; min-width:0; }
+.apf-compact-toolbar { position:relative; flex-wrap:nowrap; gap:6px; white-space:nowrap; }
+.apf-compact-toolbar .apf-toolbar-actions { flex:none; flex-wrap:nowrap; }
+.apf-compact-toolbar .apf-toolbar-search { flex:1 1 160px; max-width:220px; }
+.apf-compact-toolbar .apf-library-categories,
+.apf-compact-toolbar .apf-management-tabs { flex:none; flex-wrap:nowrap; gap:4px; padding:0; border:0; }
+.apf-compact-toolbar .apf-toolbar-view { flex:0 1 152px; min-width:0; max-width:152px; }
+.apf-workspace .apf-compact-toolbar .apf-search { box-sizing:border-box; min-width:0; height:32px; }
+.apf-toolbar-icons .apf-toolbar-search { flex:none; }
+.apf-workspace .apf-compact-toolbar .apf-toolbar-icon { width:32px; min-width:32px; padding-inline:0; }
+.apf-workspace .apf-compact-toolbar .apf-toolbar-actions > button,
+.apf-workspace .apf-compact-toolbar .apf-import,
+.apf-workspace .apf-compact-toolbar [data-apf-popup="library-filter"] > button,
+.apf-workspace .apf-compact-toolbar .apf-toolbar-icon { height:32px; min-height:32px; }
+.apf-toolbar-icons .apf-toolbar-selection { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); }
+.apf-toolbar-active { position:relative; }
+.apf-toolbar-active::after { content:''; position:absolute; inset-block-start:3px; inset-inline-end:3px; width:5px; height:5px; border-radius:50%; background:var(--color-primary-background); pointer-events:none; }
+.apf-workspace .apf-search-popup { position:absolute; z-index:9; inset-block-start:calc(100% + 4px); inset-inline-start:0; width:min(220px, 100%); box-shadow:0 6px 18px #0008; }
 .apf-trash-confirm-backdrop { position:fixed; inset:0; z-index:30; display:grid; place-items:center; padding:16px; background:#000a; }
 .apf-trash-confirm { max-width:560px; max-height:80vh; overflow:auto; padding:18px; border:1px solid var(--border-color,#555); border-radius:10px; background:var(--comfy-menu-bg,#292929); box-shadow:0 8px 40px #0009; }
 .apf-trash-confirm h2 { margin:0 0 10px; font-size:16px; }
 .apf-trash-confirm li { margin:4px 0; }
 .apf-trash-confirm button+button { margin-left:8px; }
-.apf-workspace .apf-heading-actions button { min-height:28px; gap:6px; padding:5px 7px; font-size:11px; }
-.apf-import-menu { position:absolute; z-index:8; top:calc(100% + 4px); right:38px; display:flex; min-width:120px; flex-direction:column; gap:4px; padding:5px; border:1px solid var(--border-color,#555); border-radius:7px; background:var(--comfy-menu-bg,#272727); box-shadow:0 6px 18px #0008; }
+.apf-import-control { position:relative; }
+.apf-import-menu { position:absolute; z-index:8; top:calc(100% + 4px); inset-inline-end:0; display:flex; min-width:120px; flex-direction:column; gap:4px; padding:5px; border:1px solid var(--border-color,#555); border-radius:7px; background:var(--comfy-menu-bg,#272727); box-shadow:0 6px 18px #0008; }
 .apf-workspace .apf-import-menu button { justify-content:flex-start; }
 .apf-import { display:flex; align-items:center; }
-.apf-management-tabs { display:flex; flex:1 0 100%; gap:4px; padding:0 0 4px; border-bottom:1px solid var(--border-color,#4e4e4e); }
+.apf-management-tabs { display:flex; }
 .apf-workspace .apf-management-tabs button { background:transparent; color:var(--descrip-text,#999); }
 .apf-workspace .apf-management-tabs button:hover:not(:disabled), .apf-workspace .apf-management-tabs button[aria-current="page"] { color:var(--input-text,#ddd); background:var(--comfy-menu-secondary-bg,#292929); }
 .apf-toolbar select { max-width:100%; height:32px; padding:0 10px; border:1px solid var(--border-color,#4e4e4e); border-radius:8px; color:var(--input-text,#ddd); background:var(--comfy-input-bg,#222); font:inherit; font-size:12px; }
@@ -1408,5 +1570,5 @@ v-if="recordEditor" v-model="recordEditor" :saving="saving" :saving-inline="savi
 .apf-library-workspace .apf-sort-button:focus-visible{outline:1px solid var(--color-border-default);outline-offset:2px}
 .apf-workspace .apf-library-workspace button[data-slot=checkbox]{min-height:16px;height:16px;width:16px;padding:0;background:transparent;border:1px solid var(--color-border-default);border-radius:3px}
 .apf-workspace .apf-library-workspace button[data-slot=checkbox][data-state=checked],.apf-workspace .apf-library-workspace button[data-slot=checkbox][data-state=indeterminate]{background:var(--color-primary-background);border-color:var(--color-primary-background)}
-.apf-workspace .apf-library-workspace .apf-heading-actions button[data-variant=primary]{background:var(--color-primary-background);color:var(--color-base-foreground)}
+.apf-workspace .apf-library-workspace .apf-toolbar-actions button[data-variant=primary]{background:var(--color-primary-background);color:var(--color-base-foreground)}
 </style>

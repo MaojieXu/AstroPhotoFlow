@@ -2,6 +2,7 @@
   <SearchableSingleSelect
     v-if="searchable"
     v-model="selectedItem"
+    v-model:open="isOpen"
     v-bind="attrsWithoutClass"
     :class="attrsClass"
     :label
@@ -72,6 +73,8 @@
         position="popper"
         :side-offset="8"
         align="start"
+        :disable-outside-pointer-events="modal"
+        :body-lock="modal"
         :style="[optionStyle, contentStyle, liftedContentStyle]"
         :class="
           cn(
@@ -81,6 +84,7 @@
           )
         "
         @keydown="onContentKeydown"
+        @close-auto-focus="emit('closeAutoFocus', $event)"
       >
         <SelectViewport
           :style="{ maxHeight: `min(${listMaxHeight}, 50vh)` }"
@@ -129,7 +133,7 @@ import {
   SelectValue,
   SelectViewport
 } from 'reka-ui'
-import { computed, ref, useId } from 'vue'
+import { computed, useId } from 'vue'
 import type { StyleValue } from 'vue'
 import { useI18n } from 'vue-i18n'
 
@@ -160,6 +164,7 @@ const {
   invalid = false,
   loading = false,
   disabled = false,
+  modal = true,
   searchable = false,
   density = 'normal',
   searchPlaceholder,
@@ -178,6 +183,7 @@ const {
   loading?: boolean
   /** Disable the select */
   disabled?: boolean
+  modal?: boolean
   searchable?: boolean
   /** Compact non-searchable menu; other menus retain their existing density. */
   density?: 'normal' | 'compact'
@@ -194,6 +200,7 @@ const {
 const selectedItem = defineModel<string | number | undefined>({
   required: true
 })
+const emit = defineEmits<{ closeAutoFocus: [event: Event] }>()
 
 // Reka reserves the empty string for clearing; public options may use it for "All".
 const emptyOptionValue = `empty-option-${useId()}`
@@ -211,7 +218,7 @@ const selectedLabel = computed(
 )
 
 const { t } = useI18n()
-const isOpen = ref(false)
+const isOpen = defineModel<boolean>('open', { default: false })
 const liftedContentStyle = useModalLiftedZIndex(isOpen)
 
 function onContentKeydown(event: KeyboardEvent) {

@@ -171,7 +171,7 @@ const selectedItem = defineModel<string | number | undefined>({
 })
 const { t } = useI18n()
 const triggerRef = useTemplateRef('trigger')
-const isOpen = ref(false)
+const isOpen = defineModel<boolean>('open', { default: false })
 const searchQuery = ref('')
 const liftedContentStyle = useModalLiftedZIndex(isOpen)
 const filteredOptions = useSelectSearch(searchQuery, () => options)

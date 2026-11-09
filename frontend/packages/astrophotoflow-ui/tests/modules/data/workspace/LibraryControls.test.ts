@@ -24,17 +24,16 @@ describe('library native control adapters',()=>{
     wrapper.unmount()
   })
 
-  it('passes menu options to the injected menu and closes through its public operation',async()=>{
+  it('forwards the controlled menu state and close requests to the owner',async()=>{
     const command=vi.fn()
     const items=[{label:'批量管理',command}]
-    const wrapper=mount(LibraryMenu,{props:{items},global})
+    const wrapper=mount(LibraryMenu,{props:{items,open:true},global})
     expect(wrapper.find('details').exists()).toBe(false)
     expect(wrapper.getComponent(menu).props('items')).toEqual(items)
-    wrapper.getComponent(menu).vm.$emit('update:open',true)
-    await wrapper.vm.$nextTick()
     expect(wrapper.getComponent(menu).props('open')).toBe(true)
-    wrapper.vm.close()
-    await wrapper.vm.$nextTick()
+    wrapper.getComponent(menu).vm.$emit('update:open',false)
+    expect(wrapper.emitted('update:open')).toEqual([[false]])
+    await wrapper.setProps({open:false})
     expect(wrapper.getComponent(menu).props('open')).toBe(false)
     wrapper.unmount()
   })
