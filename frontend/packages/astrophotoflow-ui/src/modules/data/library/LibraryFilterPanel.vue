@@ -20,7 +20,7 @@ const numericFields = computed(() => [
   ['sensor_temperature_c',uiT('apfUi.temperature_c')],['iso','ISO'],['gain','Gain'],['offset','Offset']
 ] as const)
 
-const empty = computed(() => Boolean(options.value) && !groups.value.some(group => group.values.length) && !Object.keys(options.value!.numeric_ranges).length)
+const empty = computed(() => Boolean(options.value) && !groups.value.some(group => group.key !== 'calibration_status' && group.values.length) && !Object.keys(options.value!.numeric_ranges).length)
 let resizeObserver:ResizeObserver|undefined
 
 function copyFilters(value:Filters):Filters { return JSON.parse(JSON.stringify(value)) }
@@ -122,7 +122,7 @@ onBeforeUnmount(()=>{resizeObserver?.disconnect();window.removeEventListener('re
     <div class="apf-filter-content">
       <p v-if="error" class="apf-error" role="alert">{{error}}</p>
       <p v-if="!options && !error" role="status">{{ $t('apfUi.reading_filter_options') }}</p><p v-if="empty">{{ $t('apfUi.no_asset_metadata_to_filter_yet_import_assets_and_try_again') }}</p>
-      <template v-if="options">
+      <template v-if="options && !empty">
         <fieldset v-for="group in groups.filter(item=>item.values.length)" :key="group.key">
           <legend>{{group.label}}</legend>
           <label v-for="value in group.values" :key="value" class="apf-filter-choice">

@@ -19,7 +19,10 @@ export function resolveMaterialRecord(value: unknown): MaterialRecord | undefine
   }
   if ('member_position' in value && 'summary' in value) return zDatasetMemberSummary.parse(value)
   if ('member_position' in value) return memberViewSchema.parse(value)
-  if ('entry_type' in value) return zLibraryItemPage.shape.items.element.parse(value)
+  if ('entry_type' in value) {
+    if (value.entry_type === 'dataset' && !('matching_member_count' in value)) return datasetChoiceToRecord.parse(value)
+    return zLibraryItemPage.shape.items.element.parse(value)
+  }
   if ('member_count' in value) return zDatasetOut.parse(value)
   if ('storage_location' in value) return zAssetOut.parse(value)
 }

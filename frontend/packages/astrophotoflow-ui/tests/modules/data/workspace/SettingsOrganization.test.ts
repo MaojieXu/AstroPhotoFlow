@@ -73,7 +73,7 @@ describe('settings organization',()=>{
     await details.get('input').trigger('keydown',{key:'Enter'});await flushPromises()
     expect(send.mock.calls[0]).toEqual(['/astrophotoflow/api/v1/datasets/'+group.id,expect.anything(),'PATCH',{base_revision:3,name:'Revised group'}])
     expect(details.text()).toContain('Revised group')
-    send.mockResolvedValueOnce({id:id(23),project_id:project.id,dataset_id:group.id,base_revision:1,added_at:timestamp,dataset:group,summary:metadataForMembers([]),input_ready:false,calibration_status:'Unknown',calibration_counts:{UnCalibrated:0,Calibrated:0,Unknown:0},member_count:0})
+    send.mockResolvedValueOnce({id:id(23),project_id:project.id,dataset_id:group.id,base_revision:1,added_at:timestamp,dataset:group,summary:metadataForMembers([]),input_ready:false,member_count:0})
     await click('选用此数据集')
     expect(send.mock.calls[1][3]).toMatchObject({dataset_id:group.id,base_revision:1})
   })

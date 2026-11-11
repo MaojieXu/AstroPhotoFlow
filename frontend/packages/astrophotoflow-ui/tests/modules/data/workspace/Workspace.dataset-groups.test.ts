@@ -1,3 +1,4 @@
+import { previewJpegFixture } from '../../../fixtures/library-api'
 import type { DatasetMemberOut } from '@ui/generated/api/types.gen'
 import { assetFixture, datasetMemberFixture } from '../../../fixtures/library-members'
 import { libraryAsset, libraryDataset, metadataForMembers, exposureForMembers } from '../../../fixtures/library-summary'
@@ -34,14 +35,14 @@ const realApiFixture: {dataset:ReturnType<typeof dataset>;contents:ReturnType<ty
 let wrapper:ReturnType<typeof mount>
 let pinia:ReturnType<typeof createPinia>
 let urlNumber=0
-beforeEach(()=>{
+beforeEach(async()=>{
   pinia=createPinia();setActivePinia(pinia)
   get.mockReset();getBlob.mockReset();send.mockReset();urlNumber=0
   vi.stubGlobal('ResizeObserver',class{observe(){}disconnect(){}})
   class BrowserURL extends URL {}
   Object.assign(BrowserURL,{createObjectURL:vi.fn(()=>`blob:${++urlNumber}`),revokeObjectURL:vi.fn()})
   vi.stubGlobal('URL',BrowserURL)
-  getBlob.mockResolvedValue(new Blob(['preview'],{type:'image/jpeg'}))
+  getBlob.mockResolvedValue(await previewJpegFixture('preview'))
   send.mockImplementation(async(path:string,_schema:unknown,_method:string,body:Record<string,any>)=>{
     const assetId=path.split('/').at(-1)!
     const asset=assets.get(assetId)!
@@ -103,7 +104,7 @@ describe('dataset group member table',()=>{
     let ready=false
     getBlob.mockImplementation(async(path:string)=>{
       if(path.includes('/members/')&&!ready)throw new Error('not ready')
-      return new Blob(['preview'],{type:'image/jpeg'})
+      return previewJpegFixture('preview')
     })
     const nativeInterval=globalThis.setInterval
     let refresh:(()=>void)|undefined
@@ -153,6 +154,7 @@ describe('dataset group member table',()=>{
     send.mockResolvedValue({asset_id:asset.id,size:'display',status:'available',width:1080,height:720,error:null,
       stretch:{algorithm:'auto-mtf-1',input_offset:0,white_balance:[1],shadows:0,highlights:255,midtones:.2}})
     await wrapper.get('button.apf-thumb').trigger('click');await flushPromises()
+    await vi.waitFor(() => expect(wrapper.find('[role="dialog"] img').exists()).toBe(true))
     expect(send.mock.calls.at(-1)![0]).toBe('/astrophotoflow/api/v1/library/assets/'+asset.id+'/previews/display/auto-stretch')
     expect(wrapper.get('[role="dialog"]').text()).toContain('Pinned member.fit')
     expect(wrapper.get('[role="dialog"] img').attributes('src')).toContain('blob:')
@@ -253,7 +255,8 @@ describe('dataset group member table',()=>{
     const filterButton=wrapper.findAll('button').find(button=>button.text().startsWith('筛选'))!
     await filterButton.trigger('click');await flushPromises()
     expect(wrapper.find('.apf-filter-panel').exists()).toBe(true)
-    await wrapper.get('.apf-filter-panel input[type="checkbox"]').setValue(true)
+    const role = wrapper.findAll('.apf-filter-panel fieldset').find(group => group.get('legend').text() === '分类')!
+    await role.get('input[type="checkbox"]').setValue(true)
     await flushPromises()
     const countBefore=filterButton.text()
     const listRequestsBefore=get.mock.calls.filter(([path])=>String(path).includes('/library/items')).length

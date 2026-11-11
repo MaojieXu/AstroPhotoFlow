@@ -3,7 +3,7 @@ import { defineComponent,h,nextTick,ref } from 'vue'
 import { useQueryClient } from '@tanstack/vue-query'
 import { expect,it,vi } from 'vitest'
 import { useImportFlow } from '@ui/modules/data/imports/useImportFlow'
-import { libraryQueryKey } from '@ui/modules/data/library/queries'
+import { workspaceQueryKey } from '@ui/core/query/keys'
 
 it('clears previous workspace import intent and task tracking without carrying file choices across',async()=>{
   const workspace=ref('/first-workspace'),clear=vi.fn(),notify=vi.fn()
@@ -25,7 +25,7 @@ it('clears previous workspace import intent and task tracking without carrying f
   }finally{wrapper.unmount()}
 })
 
-it('invalidates only the current library resource for accepted, registered and completed task events',async()=>{
+it('invalidates only the current workspace for accepted, registered and completed task events',async()=>{
   let flow!:ReturnType<typeof useImportFlow>
   let invalidate!:ReturnType<typeof vi.spyOn>
   const clear=vi.fn()
@@ -38,7 +38,7 @@ it('invalidates only the current library resource for accepted, registered and c
     flow.submitted('task');flow.registered();flow.completed('task');await flushPromises()
     expect(clear).toHaveBeenCalledTimes(3)
     expect(invalidate).toHaveBeenCalledTimes(3)
-    for(const [filters] of invalidate.mock.calls)expect(filters).toEqual({queryKey:libraryQueryKey('/isolated-workspace')})
+    for(const [filters] of invalidate.mock.calls)expect(filters).toEqual({queryKey:workspaceQueryKey('/isolated-workspace')})
     expect(flow.watchedTaskIds.value).toEqual([])
     expect(flow.refreshToken.value).toBe(1)
   }finally{wrapper.unmount()}

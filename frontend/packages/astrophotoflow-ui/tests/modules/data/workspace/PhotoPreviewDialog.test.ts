@@ -1,3 +1,4 @@
+import { previewJpegFixture } from '../../../fixtures/library-api'
 import { datasetMemberFixture } from '../../../fixtures/library-members'
 import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -15,13 +16,13 @@ const state=(status:string,error:unknown=null)=>({asset_id:assetId,size:'display
 let wrapper:ReturnType<typeof mount>|undefined
 let createUrl:ReturnType<typeof vi.fn>
 let revokeUrl:ReturnType<typeof vi.fn>
-beforeEach(()=>{
+beforeEach(async()=>{
   vi.useFakeTimers();get.mockReset();send.mockReset();getBlob.mockReset()
   createUrl=vi.fn(()=> 'blob:display');revokeUrl=vi.fn()
   class BrowserURL extends URL {}
   Object.assign(BrowserURL,{createObjectURL:createUrl,revokeObjectURL:revokeUrl})
   vi.stubGlobal('URL',BrowserURL)
-  getBlob.mockResolvedValue(new Blob(['jpeg'],{type:'image/jpeg'}))
+  getBlob.mockResolvedValue(await previewJpegFixture('jpeg'))
 })
 afterEach(()=>{wrapper?.unmount();wrapper=undefined;vi.useRealTimers();vi.unstubAllGlobals()})
 
@@ -41,11 +42,12 @@ describe('lightweight photo preview',()=>{
   it('clears a display decode failure before an explicit retry',async()=>{
     send.mockResolvedValue(state('available'))
     wrapper=mount(PhotoPreviewDialog,{props:{workspaceId:'/test-workspace',photo}});await flushPromises()
+    await vi.waitFor(() => expect(wrapper!.find('img').exists()).toBe(true))
     await wrapper.get('img').trigger('error')
     expect(wrapper.get('[role="alert"]').text()).toContain('无法显示预览')
     await wrapper.findAll('button').find(button=>button.text()==='重试')!.trigger('click');await flushPromises()
     expect(wrapper.find('[role="alert"]').exists()).toBe(false)
-    expect(wrapper.get('img').attributes('src')).toBe('blob:display')
+    await vi.waitFor(() => expect(wrapper!.get('img').attributes('src')).toBe('blob:display'))
     expect(send).toHaveBeenCalledTimes(2)
   })
 
@@ -72,7 +74,7 @@ describe('lightweight photo preview',()=>{
     expect(displayPreviewSchema.parse({...state('available'),stretch:parameters}).stretch).toEqual(parameters)
     send.mockResolvedValue({...state('available'),stretch:parameters})
     wrapper=mount(PhotoPreviewDialog,{props:{workspaceId:'/test-workspace',photo}});await flushPromises()
-    expect(wrapper.get('img').attributes('src')).toBe('blob:display')
+    await vi.waitFor(() => expect(wrapper!.get('img').attributes('src')).toBe('blob:display'))
     expect(send).toHaveBeenCalledTimes(1)
     expect(send.mock.calls[0][0]).toMatch(/previews\/display\/auto-stretch$/)
   })
@@ -83,7 +85,7 @@ describe('lightweight photo preview',()=>{
     expect(wrapper.find('img').exists()).toBe(false)
     expect(wrapper.get('button[aria-label="关闭大图预览"]').attributes('disabled')).toBeUndefined()
     await wrapper.findAll('button').find(button=>button.text()==='重试')!.trigger('click');await flushPromises()
-    expect(wrapper.emitted('updated')).toEqual([[photo]])
+    await vi.waitFor(() => expect(wrapper!.emitted('updated')).toEqual([[photo]]))
   })
   it('finishes an existing legacy preview job before ensuring its own automatic recipe',async()=>{
     send.mockResolvedValue(state('generating'))
@@ -135,7 +137,7 @@ describe('lightweight photo preview',()=>{
     expect(wrapper.get('[role="alert"]').text()).toBe('原件尚未完成')
     await wrapper.findAll('button').find(button=>button.text()==='重试')!.trigger('click');await flushPromises()
     expect(send).toHaveBeenCalledTimes(2)
-    expect(wrapper.find('img').exists()).toBe(true)
+    await vi.waitFor(() => expect(wrapper!.find('img').exists()).toBe(true))
   })
   it('ignores a late response after closing and cancels polling on unmount',async()=>{
     let resolve!:(value:unknown)=>void
@@ -192,10 +194,11 @@ describe('project dataset member browser',()=>{
     expect(wrapper.text()).not.toContain('A member 10')
     await wrapper.get('button[aria-label="查看 A member 0 大图"]').trigger('click');await flushPromises()
     expect(send.mock.calls[0][0]).toContain('/assets/'+assetId+'/previews/display')
-    const before=getBlob.mock.calls.length
-    wrapper.getComponent(PhotoPreviewDialog).vm.$emit('updated',{assetId,title:'A member 0'})
-    await flushPromises()
-    expect(getBlob.mock.calls.length).toBe(before+1)
+    const initialThumbnail = getBlob.mock.calls.find(([path]) => path.includes(assetId))![0]
+    await vi.waitFor(() => {
+      expect(wrapper!.getComponent(PhotoPreviewDialog).get('img').attributes('src')).toBe('blob:display')
+      expect(getBlob.mock.calls.filter(([path]) => path === initialThumbnail)).toHaveLength(2)
+    })
     await wrapper.get('button[aria-label="关闭大图预览"]').trigger('click')
     await wrapper.findAll('button').find(button=>button.text()==='下一页')!.trigger('click');await flushPromises()
     expect(wrapper.get('[aria-label="数据集成员"]').findAll('li')).toHaveLength(1)

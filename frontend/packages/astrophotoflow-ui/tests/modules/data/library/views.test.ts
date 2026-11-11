@@ -96,7 +96,7 @@ it('returns to a fresh original library scope without another HTTP read', async 
   expect(view.query.data.value?.items).toEqual([])
 })
 
-it('cancels fixed member reads and never carries member data across a new fixed version while paused', async () => {
+it('cancels member reads and never carries member data across datasets while paused', async () => {
   const input = ref({
     workspaceId: '/one',
     active: true,
@@ -141,10 +141,10 @@ it('cancels fixed member reads and never carries member data across a new fixed 
   paused.value = false
   await flushPromises()
   expect(members).toHaveBeenCalledTimes(2)
-  expect(members.mock.calls[1].slice(0, 3)).toEqual([
+  expect(members.mock.calls[1]).toEqual([
     'dataset-b',
-    'fixed-b',
-    expect.objectContaining({ sort_by: 'position', offset: 0 })
+    expect.objectContaining({ sort_by: 'position', offset: 0 }),
+    expect.any(AbortSignal)
   ])
 })
 

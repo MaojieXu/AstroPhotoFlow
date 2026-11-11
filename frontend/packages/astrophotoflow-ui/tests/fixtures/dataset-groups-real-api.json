@@ -76,19 +76,21 @@
           "content_hash": "blake3:25a381709ea7f0506cea6d6a5731dba9ac9e4f9c61f36d4d50b69376f6938570",
           "availability": "available",
           "capture_snapshot": {
-            "camera_id": null,
-            "optical_system_id": null,
-            "filter_id": null,
-            "parameter_mode": "standard",
-            "iso": null,
-            "gain": 100.0,
-            "offset": 15.0,
-            "exposure_seconds": 30.0,
-            "integration_seconds": null,
-            "sensor_temperature_c": null,
-            "binning_x": 1,
-            "binning_y": 1,
-            "cfa_pattern": null
+            "parameters": {
+             "camera_id": null,
+              "optical_system_id": null,
+              "filter_id": null,
+              "parameter_mode": "standard",
+              "iso": null,
+              "gain": 100.0,
+              "offset": 15.0,
+              "exposure_seconds": 30.0,
+              "integration_seconds": null,
+              "sensor_temperature_c": null,
+              "binning_x": 1,
+              "binning_y": 1,
+              "cfa_pattern": null
+ }
           },
           "scientific_metadata": {
             "format": "fits",
@@ -172,19 +174,21 @@
           "content_hash": "blake3:25a381709ea7f0506cea6d6a5731dba9ac9e4f9c61f36d4d50b69376f6938570",
           "availability": "available",
           "capture_snapshot": {
-            "camera_id": null,
-            "optical_system_id": null,
-            "filter_id": null,
-            "parameter_mode": "standard",
-            "iso": null,
-            "gain": 100.0,
-            "offset": 15.0,
-            "exposure_seconds": 30.0,
-            "integration_seconds": null,
-            "sensor_temperature_c": null,
-            "binning_x": 1,
-            "binning_y": 1,
-            "cfa_pattern": null
+            "parameters": {
+             "camera_id": null,
+              "optical_system_id": null,
+              "filter_id": null,
+              "parameter_mode": "standard",
+              "iso": null,
+              "gain": 100.0,
+              "offset": 15.0,
+              "exposure_seconds": 30.0,
+              "integration_seconds": null,
+              "sensor_temperature_c": null,
+              "binning_x": 1,
+              "binning_y": 1,
+              "cfa_pattern": null
+ }
           },
           "scientific_metadata": {
             "format": "fits",
@@ -268,19 +272,21 @@
           "content_hash": "blake3:af3ae006a70340d0bc8a0b680391f2150fed26409fa6098953afbdc1ed43951c",
           "availability": "available",
           "capture_snapshot": {
-            "camera_id": null,
-            "optical_system_id": null,
-            "filter_id": null,
-            "parameter_mode": "standard",
-            "iso": null,
-            "gain": null,
-            "offset": null,
-            "exposure_seconds": 300.0,
-            "integration_seconds": null,
-            "sensor_temperature_c": null,
-            "binning_x": 1,
-            "binning_y": 1,
-            "cfa_pattern": "RGGB"
+            "parameters": {
+             "camera_id": null,
+              "optical_system_id": null,
+              "filter_id": null,
+              "parameter_mode": "standard",
+              "iso": null,
+              "gain": null,
+              "offset": null,
+              "exposure_seconds": 300.0,
+              "integration_seconds": null,
+              "sensor_temperature_c": null,
+              "binning_x": 1,
+              "binning_y": 1,
+              "cfa_pattern": "RGGB"
+ }
           },
           "scientific_metadata": {
             "format": "fits",
@@ -363,19 +369,21 @@
           "content_hash": "blake3:46e63d5f68da94285b4e35662f5a3165694bd02de6abeb291e6488f4f82739da",
           "availability": "available",
           "capture_snapshot": {
-            "camera_id": null,
-            "optical_system_id": null,
-            "filter_id": null,
-            "parameter_mode": "standard",
-            "iso": null,
-            "gain": null,
-            "offset": null,
-            "exposure_seconds": null,
-            "integration_seconds": null,
-            "sensor_temperature_c": null,
-            "binning_x": null,
-            "binning_y": null,
-            "cfa_pattern": null
+            "parameters": {
+             "camera_id": null,
+              "optical_system_id": null,
+              "filter_id": null,
+              "parameter_mode": "standard",
+              "iso": null,
+              "gain": null,
+              "offset": null,
+              "exposure_seconds": null,
+              "integration_seconds": null,
+              "sensor_temperature_c": null,
+              "binning_x": null,
+              "binning_y": null,
+              "cfa_pattern": null
+ }
           },
           "scientific_metadata": {
             "format": "xisf",
@@ -447,19 +455,21 @@
           "content_hash": "blake3:1f4f6c596c801f4cb9e3b51330118bbf5ea0fd1703c71db000dca0c9e9daccf9",
           "availability": "available",
           "capture_snapshot": {
-            "camera_id": null,
-            "optical_system_id": null,
-            "filter_id": null,
-            "parameter_mode": "standard",
-            "iso": null,
-            "gain": null,
-            "offset": null,
-            "exposure_seconds": null,
-            "integration_seconds": null,
-            "sensor_temperature_c": null,
-            "binning_x": null,
-            "binning_y": null,
-            "cfa_pattern": null
+            "parameters": {
+             "camera_id": null,
+              "optical_system_id": null,
+              "filter_id": null,
+              "parameter_mode": "standard",
+              "iso": null,
+              "gain": null,
+              "offset": null,
+              "exposure_seconds": null,
+              "integration_seconds": null,
+              "sensor_temperature_c": null,
+              "binning_x": null,
+              "binning_y": null,
+              "cfa_pattern": null
+ }
           },
           "scientific_metadata": {
             "format": "xisf",
@@ -531,19 +541,21 @@
           "content_hash": "blake3:1c5c4dfea6e01aeac3d792a6eaf01578e4860e8e8c3b7097fdab227e838b5338",
           "availability": "available",
           "capture_snapshot": {
-            "camera_id": null,
-            "optical_system_id": null,
-            "filter_id": null,
-            "parameter_mode": "standard",
-            "iso": null,
-            "gain": null,
-            "offset": null,
-            "exposure_seconds": null,
-            "integration_seconds": null,
-            "sensor_temperature_c": null,
-            "binning_x": null,
-            "binning_y": null,
-            "cfa_pattern": null
+            "parameters": {
+             "camera_id": null,
+              "optical_system_id": null,
+              "filter_id": null,
+              "parameter_mode": "standard",
+              "iso": null,
+              "gain": null,
+              "offset": null,
+              "exposure_seconds": null,
+              "integration_seconds": null,
+              "sensor_temperature_c": null,
+              "binning_x": null,
+              "binning_y": null,
+              "cfa_pattern": null
+ }
           },
           "scientific_metadata": {
             "format": "xisf",
@@ -615,19 +627,21 @@
           "content_hash": "blake3:ba1b264862b0892fbd31ab46c712ca4cd208923ef55bbbcfc538ee69bfe525ec",
           "availability": "available",
           "capture_snapshot": {
-            "camera_id": null,
-            "optical_system_id": null,
-            "filter_id": null,
-            "parameter_mode": "standard",
-            "iso": null,
-            "gain": null,
-            "offset": null,
-            "exposure_seconds": null,
-            "integration_seconds": null,
-            "sensor_temperature_c": null,
-            "binning_x": null,
-            "binning_y": null,
-            "cfa_pattern": null
+            "parameters": {
+             "camera_id": null,
+              "optical_system_id": null,
+              "filter_id": null,
+              "parameter_mode": "standard",
+              "iso": null,
+              "gain": null,
+              "offset": null,
+              "exposure_seconds": null,
+              "integration_seconds": null,
+              "sensor_temperature_c": null,
+              "binning_x": null,
+              "binning_y": null,
+              "cfa_pattern": null
+ }
           },
           "scientific_metadata": {
             "format": "xisf",
@@ -699,19 +713,21 @@
           "content_hash": "blake3:29405f06216e3da205ac09957bea7cebf64c3585a2afc070cdd6aad29e245781",
           "availability": "available",
           "capture_snapshot": {
-            "camera_id": null,
-            "optical_system_id": null,
-            "filter_id": null,
-            "parameter_mode": "standard",
-            "iso": null,
-            "gain": null,
-            "offset": null,
-            "exposure_seconds": null,
-            "integration_seconds": null,
-            "sensor_temperature_c": null,
-            "binning_x": null,
-            "binning_y": null,
-            "cfa_pattern": null
+            "parameters": {
+             "camera_id": null,
+              "optical_system_id": null,
+              "filter_id": null,
+              "parameter_mode": "standard",
+              "iso": null,
+              "gain": null,
+              "offset": null,
+              "exposure_seconds": null,
+              "integration_seconds": null,
+              "sensor_temperature_c": null,
+              "binning_x": null,
+              "binning_y": null,
+              "cfa_pattern": null
+ }
           },
           "scientific_metadata": {
             "format": "xisf",
@@ -783,19 +799,21 @@
           "content_hash": "blake3:281137066cdc32158676a272d0d4e85cc7c67d8e67788989a4deea2cc2a21954",
           "availability": "available",
           "capture_snapshot": {
-            "camera_id": null,
-            "optical_system_id": null,
-            "filter_id": null,
-            "parameter_mode": "standard",
-            "iso": null,
-            "gain": null,
-            "offset": null,
-            "exposure_seconds": null,
-            "integration_seconds": null,
-            "sensor_temperature_c": null,
-            "binning_x": null,
-            "binning_y": null,
-            "cfa_pattern": null
+            "parameters": {
+             "camera_id": null,
+              "optical_system_id": null,
+              "filter_id": null,
+              "parameter_mode": "standard",
+              "iso": null,
+              "gain": null,
+              "offset": null,
+              "exposure_seconds": null,
+              "integration_seconds": null,
+              "sensor_temperature_c": null,
+              "binning_x": null,
+              "binning_y": null,
+              "cfa_pattern": null
+ }
           },
           "scientific_metadata": {
             "format": "xisf",
@@ -867,19 +885,21 @@
           "content_hash": "blake3:f316b7a3b79af6e88f411cf61da64cb2ccce3b06a4eb8e913b47959f354ec11f",
           "availability": "available",
           "capture_snapshot": {
-            "camera_id": null,
-            "optical_system_id": null,
-            "filter_id": null,
-            "parameter_mode": "standard",
-            "iso": null,
-            "gain": null,
-            "offset": null,
-            "exposure_seconds": 300.0,
-            "integration_seconds": null,
-            "sensor_temperature_c": null,
-            "binning_x": 1,
-            "binning_y": 1,
-            "cfa_pattern": null
+            "parameters": {
+             "camera_id": null,
+              "optical_system_id": null,
+              "filter_id": null,
+              "parameter_mode": "standard",
+              "iso": null,
+              "gain": null,
+              "offset": null,
+              "exposure_seconds": 300.0,
+              "integration_seconds": null,
+              "sensor_temperature_c": null,
+              "binning_x": 1,
+              "binning_y": 1,
+              "cfa_pattern": null
+ }
           },
           "scientific_metadata": {
             "format": "fits",
@@ -961,19 +981,21 @@
           "content_hash": "blake3:a4f11e97386fd6b30aa77639708ffdf32a120d03693282b09f4df94e08d6267e",
           "availability": "available",
           "capture_snapshot": {
-            "camera_id": null,
-            "optical_system_id": null,
-            "filter_id": null,
-            "parameter_mode": "standard",
-            "iso": null,
-            "gain": null,
-            "offset": null,
-            "exposure_seconds": 300.0,
-            "integration_seconds": null,
-            "sensor_temperature_c": null,
-            "binning_x": 1,
-            "binning_y": 1,
-            "cfa_pattern": null
+            "parameters": {
+             "camera_id": null,
+              "optical_system_id": null,
+              "filter_id": null,
+              "parameter_mode": "standard",
+              "iso": null,
+              "gain": null,
+              "offset": null,
+              "exposure_seconds": 300.0,
+              "integration_seconds": null,
+              "sensor_temperature_c": null,
+              "binning_x": 1,
+              "binning_y": 1,
+              "cfa_pattern": null
+ }
           },
           "scientific_metadata": {
             "format": "fits",
@@ -1055,19 +1077,21 @@
           "content_hash": "blake3:c7ed15d7bcf7d4ff255b80bb9e99edeb3b7546781170a7621ab6917cce0580b4",
           "availability": "available",
           "capture_snapshot": {
-            "camera_id": null,
-            "optical_system_id": null,
-            "filter_id": null,
-            "parameter_mode": "standard",
-            "iso": null,
-            "gain": null,
-            "offset": null,
-            "exposure_seconds": 300.0,
-            "integration_seconds": null,
-            "sensor_temperature_c": null,
-            "binning_x": 1,
-            "binning_y": 1,
-            "cfa_pattern": null
+            "parameters": {
+             "camera_id": null,
+              "optical_system_id": null,
+              "filter_id": null,
+              "parameter_mode": "standard",
+              "iso": null,
+              "gain": null,
+              "offset": null,
+              "exposure_seconds": 300.0,
+              "integration_seconds": null,
+              "sensor_temperature_c": null,
+              "binning_x": 1,
+              "binning_y": 1,
+              "cfa_pattern": null
+ }
           },
           "scientific_metadata": {
             "format": "fits",
@@ -1149,19 +1173,21 @@
           "content_hash": "blake3:eebbdf29dc3601bfe0c4c1d977b5812db5f161d6bfeee008146eeb0d24c1964d",
           "availability": "available",
           "capture_snapshot": {
-            "camera_id": null,
-            "optical_system_id": null,
-            "filter_id": null,
-            "parameter_mode": "standard",
-            "iso": 800,
-            "gain": null,
-            "offset": null,
-            "exposure_seconds": 358.0,
-            "integration_seconds": null,
-            "sensor_temperature_c": null,
-            "binning_x": 1,
-            "binning_y": 1,
-            "cfa_pattern": null
+            "parameters": {
+             "camera_id": null,
+              "optical_system_id": null,
+              "filter_id": null,
+              "parameter_mode": "standard",
+              "iso": 800,
+              "gain": null,
+              "offset": null,
+              "exposure_seconds": 358.0,
+              "integration_seconds": null,
+              "sensor_temperature_c": null,
+              "binning_x": 1,
+              "binning_y": 1,
+              "cfa_pattern": null
+ }
           },
           "scientific_metadata": {
             "format": "fits",
@@ -1243,19 +1269,21 @@
           "content_hash": "blake3:c7b5a102dd5f3a3dec73b1fd5e0b988c92d42aa02d272b68a2ff2d46dc52c1ec",
           "availability": "available",
           "capture_snapshot": {
-            "camera_id": null,
-            "optical_system_id": null,
-            "filter_id": null,
-            "parameter_mode": "standard",
-            "iso": null,
-            "gain": null,
-            "offset": null,
-            "exposure_seconds": null,
-            "integration_seconds": null,
-            "sensor_temperature_c": null,
-            "binning_x": null,
-            "binning_y": null,
-            "cfa_pattern": null
+            "parameters": {
+             "camera_id": null,
+              "optical_system_id": null,
+              "filter_id": null,
+              "parameter_mode": "standard",
+              "iso": null,
+              "gain": null,
+              "offset": null,
+              "exposure_seconds": null,
+              "integration_seconds": null,
+              "sensor_temperature_c": null,
+              "binning_x": null,
+              "binning_y": null,
+              "cfa_pattern": null
+ }
           },
           "scientific_metadata": {
             "format": "xisf",
@@ -1327,19 +1355,21 @@
           "content_hash": "blake3:461691365c130733f7c2b04f8450cbeab7c1abc50b785387478fe92571d4d903",
           "availability": "available",
           "capture_snapshot": {
-            "camera_id": null,
-            "optical_system_id": null,
-            "filter_id": null,
-            "parameter_mode": "standard",
-            "iso": null,
-            "gain": null,
-            "offset": null,
-            "exposure_seconds": 120.0,
-            "integration_seconds": null,
-            "sensor_temperature_c": null,
-            "binning_x": 1,
-            "binning_y": 1,
-            "cfa_pattern": "RGGB"
+            "parameters": {
+             "camera_id": null,
+              "optical_system_id": null,
+              "filter_id": null,
+              "parameter_mode": "standard",
+              "iso": null,
+              "gain": null,
+              "offset": null,
+              "exposure_seconds": 120.0,
+              "integration_seconds": null,
+              "sensor_temperature_c": null,
+              "binning_x": 1,
+              "binning_y": 1,
+              "cfa_pattern": "RGGB"
+ }
           },
           "scientific_metadata": {
             "format": "fits",
@@ -1422,19 +1452,21 @@
           "content_hash": "blake3:5c0972fef63cdc556ac9cb0150f21fa30d8ceb5511fd76cc8f4774690f74c4b9",
           "availability": "available",
           "capture_snapshot": {
-            "camera_id": null,
-            "optical_system_id": null,
-            "filter_id": null,
-            "parameter_mode": "standard",
-            "iso": null,
-            "gain": null,
-            "offset": null,
-            "exposure_seconds": 120.0,
-            "integration_seconds": null,
-            "sensor_temperature_c": null,
-            "binning_x": 1,
-            "binning_y": 1,
-            "cfa_pattern": "RGGB"
+            "parameters": {
+             "camera_id": null,
+              "optical_system_id": null,
+              "filter_id": null,
+              "parameter_mode": "standard",
+              "iso": null,
+              "gain": null,
+              "offset": null,
+              "exposure_seconds": 120.0,
+              "integration_seconds": null,
+              "sensor_temperature_c": null,
+              "binning_x": 1,
+              "binning_y": 1,
+              "cfa_pattern": "RGGB"
+ }
           },
           "scientific_metadata": {
             "format": "fits",
@@ -1517,19 +1549,21 @@
           "content_hash": "blake3:2b7f40fc32e51a3626d57cdbe9777763b48360d7c3132dab2c77df630548e5bb",
           "availability": "available",
           "capture_snapshot": {
-            "camera_id": null,
-            "optical_system_id": null,
-            "filter_id": null,
-            "parameter_mode": "standard",
-            "iso": null,
-            "gain": null,
-            "offset": null,
-            "exposure_seconds": null,
-            "integration_seconds": null,
-            "sensor_temperature_c": null,
-            "binning_x": null,
-            "binning_y": null,
-            "cfa_pattern": null
+            "parameters": {
+             "camera_id": null,
+              "optical_system_id": null,
+              "filter_id": null,
+              "parameter_mode": "standard",
+              "iso": null,
+              "gain": null,
+              "offset": null,
+              "exposure_seconds": null,
+              "integration_seconds": null,
+              "sensor_temperature_c": null,
+              "binning_x": null,
+              "binning_y": null,
+              "cfa_pattern": null
+ }
           },
           "scientific_metadata": {
             "format": "xisf",
@@ -1601,19 +1635,21 @@
           "content_hash": "blake3:b39ab6529b9ea373493288ed314fee364973788eab1ea08ebb9acbc58cb71550",
           "availability": "available",
           "capture_snapshot": {
-            "camera_id": null,
-            "optical_system_id": null,
-            "filter_id": null,
-            "parameter_mode": "standard",
-            "iso": null,
-            "gain": null,
-            "offset": null,
-            "exposure_seconds": 180.0,
-            "integration_seconds": null,
-            "sensor_temperature_c": null,
-            "binning_x": 1,
-            "binning_y": 1,
-            "cfa_pattern": null
+            "parameters": {
+             "camera_id": null,
+              "optical_system_id": null,
+              "filter_id": null,
+              "parameter_mode": "standard",
+              "iso": null,
+              "gain": null,
+              "offset": null,
+              "exposure_seconds": 180.0,
+              "integration_seconds": null,
+              "sensor_temperature_c": null,
+              "binning_x": 1,
+              "binning_y": 1,
+              "cfa_pattern": null
+ }
           },
           "scientific_metadata": {
             "format": "fits",
@@ -1695,19 +1731,21 @@
           "content_hash": "blake3:57a5115d0b24d407a8a3e2fdfacd1cdfd4e40626c1e56d7644c88505a94da67d",
           "availability": "available",
           "capture_snapshot": {
-            "camera_id": null,
-            "optical_system_id": null,
-            "filter_id": null,
-            "parameter_mode": "standard",
-            "iso": null,
-            "gain": null,
-            "offset": null,
-            "exposure_seconds": 180.0,
-            "integration_seconds": null,
-            "sensor_temperature_c": null,
-            "binning_x": 1,
-            "binning_y": 1,
-            "cfa_pattern": null
+            "parameters": {
+             "camera_id": null,
+              "optical_system_id": null,
+              "filter_id": null,
+              "parameter_mode": "standard",
+              "iso": null,
+              "gain": null,
+              "offset": null,
+              "exposure_seconds": 180.0,
+              "integration_seconds": null,
+              "sensor_temperature_c": null,
+              "binning_x": 1,
+              "binning_y": 1,
+              "cfa_pattern": null
+ }
           },
           "scientific_metadata": {
             "format": "fits",
@@ -1789,19 +1827,21 @@
           "content_hash": "blake3:fb85b58ec8cca1b4a50af7c0dde2d16ec524f63df5a7e66ef1c7a5a2ea5a54ff",
           "availability": "available",
           "capture_snapshot": {
-            "camera_id": null,
-            "optical_system_id": null,
-            "filter_id": null,
-            "parameter_mode": "standard",
-            "iso": null,
-            "gain": null,
-            "offset": null,
-            "exposure_seconds": 120.0,
-            "integration_seconds": null,
-            "sensor_temperature_c": null,
-            "binning_x": 1,
-            "binning_y": 1,
-            "cfa_pattern": null
+            "parameters": {
+             "camera_id": null,
+              "optical_system_id": null,
+              "filter_id": null,
+              "parameter_mode": "standard",
+              "iso": null,
+              "gain": null,
+              "offset": null,
+              "exposure_seconds": 120.0,
+              "integration_seconds": null,
+              "sensor_temperature_c": null,
+              "binning_x": 1,
+              "binning_y": 1,
+              "cfa_pattern": null
+ }
           },
           "scientific_metadata": {
             "format": "fits",
@@ -1883,19 +1923,21 @@
           "content_hash": "blake3:d8b8a074ea12664f12ba9420f12d28ca5123eb059094f2cd5e7e925929315c3b",
           "availability": "available",
           "capture_snapshot": {
-            "camera_id": null,
-            "optical_system_id": null,
-            "filter_id": null,
-            "parameter_mode": "standard",
-            "iso": null,
-            "gain": null,
-            "offset": null,
-            "exposure_seconds": 180.0,
-            "integration_seconds": null,
-            "sensor_temperature_c": null,
-            "binning_x": 1,
-            "binning_y": 1,
-            "cfa_pattern": null
+            "parameters": {
+             "camera_id": null,
+              "optical_system_id": null,
+              "filter_id": null,
+              "parameter_mode": "standard",
+              "iso": null,
+              "gain": null,
+              "offset": null,
+              "exposure_seconds": 180.0,
+              "integration_seconds": null,
+              "sensor_temperature_c": null,
+              "binning_x": 1,
+              "binning_y": 1,
+              "cfa_pattern": null
+ }
           },
           "scientific_metadata": {
             "format": "fits",
@@ -1977,19 +2019,21 @@
           "content_hash": "blake3:809f9a1783f1c525cf579848fa3dfa480dedc30d729b1895e2337b6249fda9ea",
           "availability": "available",
           "capture_snapshot": {
-            "camera_id": null,
-            "optical_system_id": null,
-            "filter_id": null,
-            "parameter_mode": "standard",
-            "iso": null,
-            "gain": null,
-            "offset": null,
-            "exposure_seconds": 300.0,
-            "integration_seconds": null,
-            "sensor_temperature_c": null,
-            "binning_x": 1,
-            "binning_y": 1,
-            "cfa_pattern": "RGGB"
+            "parameters": {
+             "camera_id": null,
+              "optical_system_id": null,
+              "filter_id": null,
+              "parameter_mode": "standard",
+              "iso": null,
+              "gain": null,
+              "offset": null,
+              "exposure_seconds": 300.0,
+              "integration_seconds": null,
+              "sensor_temperature_c": null,
+              "binning_x": 1,
+              "binning_y": 1,
+              "cfa_pattern": "RGGB"
+ }
           },
           "scientific_metadata": {
             "format": "fits",
@@ -2072,19 +2116,21 @@
           "content_hash": "blake3:d0820470d1233910e3e8a39cbb4d4fc465025b68a2d8f44547d599e380978717",
           "availability": "available",
           "capture_snapshot": {
-            "camera_id": null,
-            "optical_system_id": null,
-            "filter_id": null,
-            "parameter_mode": "standard",
-            "iso": null,
-            "gain": null,
-            "offset": null,
-            "exposure_seconds": 300.0,
-            "integration_seconds": null,
-            "sensor_temperature_c": null,
-            "binning_x": 1,
-            "binning_y": 1,
-            "cfa_pattern": "RGGB"
+            "parameters": {
+             "camera_id": null,
+              "optical_system_id": null,
+              "filter_id": null,
+              "parameter_mode": "standard",
+              "iso": null,
+              "gain": null,
+              "offset": null,
+              "exposure_seconds": 300.0,
+              "integration_seconds": null,
+              "sensor_temperature_c": null,
+              "binning_x": 1,
+              "binning_y": 1,
+              "cfa_pattern": "RGGB"
+ }
           },
           "scientific_metadata": {
             "format": "fits",
@@ -2167,19 +2213,21 @@
           "content_hash": "blake3:6f5c2d17a807d2afbf75cb894dfb74fc2839cd36cde65d170c4b766f97ae56c6",
           "availability": "available",
           "capture_snapshot": {
-            "camera_id": null,
-            "optical_system_id": null,
-            "filter_id": null,
-            "parameter_mode": "standard",
-            "iso": null,
-            "gain": null,
-            "offset": null,
-            "exposure_seconds": 120.0,
-            "integration_seconds": null,
-            "sensor_temperature_c": null,
-            "binning_x": 1,
-            "binning_y": 1,
-            "cfa_pattern": "RGGB"
+            "parameters": {
+             "camera_id": null,
+              "optical_system_id": null,
+              "filter_id": null,
+              "parameter_mode": "standard",
+              "iso": null,
+              "gain": null,
+              "offset": null,
+              "exposure_seconds": 120.0,
+              "integration_seconds": null,
+              "sensor_temperature_c": null,
+              "binning_x": 1,
+              "binning_y": 1,
+              "cfa_pattern": "RGGB"
+ }
           },
           "scientific_metadata": {
             "format": "fits",
@@ -2262,19 +2310,21 @@
           "content_hash": "blake3:3a5c09e4116993a19966dc00d932bb7f528198246356ee034e3c2332602995b3",
           "availability": "available",
           "capture_snapshot": {
-            "camera_id": null,
-            "optical_system_id": null,
-            "filter_id": null,
-            "parameter_mode": "standard",
-            "iso": null,
-            "gain": null,
-            "offset": null,
-            "exposure_seconds": null,
-            "integration_seconds": null,
-            "sensor_temperature_c": null,
-            "binning_x": null,
-            "binning_y": null,
-            "cfa_pattern": null
+            "parameters": {
+             "camera_id": null,
+              "optical_system_id": null,
+              "filter_id": null,
+              "parameter_mode": "standard",
+              "iso": null,
+              "gain": null,
+              "offset": null,
+              "exposure_seconds": null,
+              "integration_seconds": null,
+              "sensor_temperature_c": null,
+              "binning_x": null,
+              "binning_y": null,
+              "cfa_pattern": null
+ }
           },
           "scientific_metadata": {
             "format": "xisf",
@@ -2346,19 +2396,21 @@
           "content_hash": "blake3:3bce494fee174ad4129268e683c0744d95c8822b940d63b45e7ef012da138e76",
           "availability": "available",
           "capture_snapshot": {
-            "camera_id": null,
-            "optical_system_id": null,
-            "filter_id": null,
-            "parameter_mode": "standard",
-            "iso": null,
-            "gain": null,
-            "offset": null,
-            "exposure_seconds": null,
-            "integration_seconds": null,
-            "sensor_temperature_c": null,
-            "binning_x": null,
-            "binning_y": null,
-            "cfa_pattern": null
+            "parameters": {
+             "camera_id": null,
+              "optical_system_id": null,
+              "filter_id": null,
+              "parameter_mode": "standard",
+              "iso": null,
+              "gain": null,
+              "offset": null,
+              "exposure_seconds": null,
+              "integration_seconds": null,
+              "sensor_temperature_c": null,
+              "binning_x": null,
+              "binning_y": null,
+              "cfa_pattern": null
+ }
           },
           "scientific_metadata": {
             "format": "xisf",
@@ -2430,19 +2482,21 @@
           "content_hash": "blake3:1587e458c0816917e40227e5f17dd8c504d8da6bc762dc16e6173aa6c941b106",
           "availability": "available",
           "capture_snapshot": {
-            "camera_id": null,
-            "optical_system_id": null,
-            "filter_id": null,
-            "parameter_mode": "standard",
-            "iso": null,
-            "gain": null,
-            "offset": null,
-            "exposure_seconds": null,
-            "integration_seconds": null,
-            "sensor_temperature_c": null,
-            "binning_x": null,
-            "binning_y": null,
-            "cfa_pattern": null
+            "parameters": {
+             "camera_id": null,
+              "optical_system_id": null,
+              "filter_id": null,
+              "parameter_mode": "standard",
+              "iso": null,
+              "gain": null,
+              "offset": null,
+              "exposure_seconds": null,
+              "integration_seconds": null,
+              "sensor_temperature_c": null,
+              "binning_x": null,
+              "binning_y": null,
+              "cfa_pattern": null
+ }
           },
           "scientific_metadata": {
             "format": "xisf",
@@ -2514,19 +2568,21 @@
           "content_hash": "blake3:544e6e171a665a566fd92592500d6b4a33638d5983df3167ae349cb9bda77f85",
           "availability": "available",
           "capture_snapshot": {
-            "camera_id": null,
-            "optical_system_id": null,
-            "filter_id": null,
-            "parameter_mode": "standard",
-            "iso": null,
-            "gain": null,
-            "offset": null,
-            "exposure_seconds": 300.0,
-            "integration_seconds": null,
-            "sensor_temperature_c": null,
-            "binning_x": 1,
-            "binning_y": 1,
-            "cfa_pattern": "RGGB"
+            "parameters": {
+             "camera_id": null,
+              "optical_system_id": null,
+              "filter_id": null,
+              "parameter_mode": "standard",
+              "iso": null,
+              "gain": null,
+              "offset": null,
+              "exposure_seconds": 300.0,
+              "integration_seconds": null,
+              "sensor_temperature_c": null,
+              "binning_x": 1,
+              "binning_y": 1,
+              "cfa_pattern": "RGGB"
+ }
           },
           "scientific_metadata": {
             "format": "fits",
@@ -2609,19 +2665,21 @@
           "content_hash": "blake3:f9f553d32ab57e429bc2b5df40e1607365626b13a22fb616a0beba2a92df8144",
           "availability": "available",
           "capture_snapshot": {
-            "camera_id": null,
-            "optical_system_id": null,
-            "filter_id": null,
-            "parameter_mode": "standard",
-            "iso": null,
-            "gain": null,
-            "offset": null,
-            "exposure_seconds": 300.0,
-            "integration_seconds": null,
-            "sensor_temperature_c": null,
-            "binning_x": 2,
-            "binning_y": 2,
-            "cfa_pattern": null
+            "parameters": {
+             "camera_id": null,
+              "optical_system_id": null,
+              "filter_id": null,
+              "parameter_mode": "standard",
+              "iso": null,
+              "gain": null,
+              "offset": null,
+              "exposure_seconds": 300.0,
+              "integration_seconds": null,
+              "sensor_temperature_c": null,
+              "binning_x": 2,
+              "binning_y": 2,
+              "cfa_pattern": null
+ }
           },
           "scientific_metadata": {
             "format": "fits",
@@ -2703,19 +2761,21 @@
           "content_hash": "blake3:5fa8ab3dcc62f8fbebe2151b3a6a4fe9b74ace74607d940704705c7b41802846",
           "availability": "available",
           "capture_snapshot": {
-            "camera_id": null,
-            "optical_system_id": null,
-            "filter_id": null,
-            "parameter_mode": "standard",
-            "iso": null,
-            "gain": null,
-            "offset": null,
-            "exposure_seconds": 300.0,
-            "integration_seconds": null,
-            "sensor_temperature_c": null,
-            "binning_x": 2,
-            "binning_y": 2,
-            "cfa_pattern": null
+            "parameters": {
+             "camera_id": null,
+              "optical_system_id": null,
+              "filter_id": null,
+              "parameter_mode": "standard",
+              "iso": null,
+              "gain": null,
+              "offset": null,
+              "exposure_seconds": 300.0,
+              "integration_seconds": null,
+              "sensor_temperature_c": null,
+              "binning_x": 2,
+              "binning_y": 2,
+              "cfa_pattern": null
+ }
           },
           "scientific_metadata": {
             "format": "fits",
@@ -2797,19 +2857,21 @@
           "content_hash": "blake3:89596e2875d49ee357787c93e5bf945d2272cc1ce1998ca2267a966c98de0522",
           "availability": "available",
           "capture_snapshot": {
-            "camera_id": null,
-            "optical_system_id": null,
-            "filter_id": null,
-            "parameter_mode": "standard",
-            "iso": null,
-            "gain": null,
-            "offset": null,
-            "exposure_seconds": 300.0,
-            "integration_seconds": null,
-            "sensor_temperature_c": null,
-            "binning_x": 2,
-            "binning_y": 2,
-            "cfa_pattern": null
+            "parameters": {
+             "camera_id": null,
+              "optical_system_id": null,
+              "filter_id": null,
+              "parameter_mode": "standard",
+              "iso": null,
+              "gain": null,
+              "offset": null,
+              "exposure_seconds": 300.0,
+              "integration_seconds": null,
+              "sensor_temperature_c": null,
+              "binning_x": 2,
+              "binning_y": 2,
+              "cfa_pattern": null
+ }
           },
           "scientific_metadata": {
             "format": "fits",

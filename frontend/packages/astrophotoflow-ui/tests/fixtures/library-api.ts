@@ -54,6 +54,10 @@ import {
 /** Existing component fixtures act as the server; exercise the real SDK adapter. */
 export const workspaceHealth: ServiceHealth = {status:'ok',api_version:'v1',database:'ready',schema_revision:'0001',workspace:'/test-workspace'}
 
+export function previewJpegFixture(contents: string) {
+  return new Response(contents, { headers: { 'Content-Type': 'image/jpeg' } }).blob()
+}
+
 export function createLibraryApiFixture(
   get: (
     path: string,

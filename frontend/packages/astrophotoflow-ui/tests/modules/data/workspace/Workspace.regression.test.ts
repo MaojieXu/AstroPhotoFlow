@@ -1,3 +1,4 @@
+import { previewJpegFixture } from '../../../fixtures/library-api'
 import { datasetFixture } from '../../../fixtures/library-summary'
 import { assetFixture } from '../../../fixtures/library-members'
 import { zCameraSnapshot } from '@ui/generated/api/zod.gen'
@@ -264,7 +265,7 @@ describe('first-stage regression fixes', () => {
     const version={view_base: `/astrophotoflow/api/v1/library/assets/${libraryAsset.id}/previews`, id: libraryAsset.id, availability:'available', storage_mode:'reference', created_at:createdAt, content_hash: 'blake3:' + 'a'.repeat(64), byte_size: 10}
     const asset={...libraryAsset, ...version}
     get.mockImplementation(async(path:string)=>path.endsWith('/capabilities')?capabilities:path.includes('/library/items')?page([assetSummary(asset)]):emptyPage)
-    getBlob.mockResolvedValue(new Blob(['thumb'],{type:'image/jpeg'}))
+    getBlob.mockResolvedValue(await previewJpegFixture('thumb'))
     Object.defineProperty(URL,'createObjectURL',{configurable:true,value:vi.fn(()=>'blob:thumb')})
     Object.defineProperty(URL,'revokeObjectURL',{configurable:true,value:vi.fn()})
     wrapper=mount(App,{global:{plugins:[pinia]}})
@@ -284,7 +285,7 @@ describe('first-stage regression fixes', () => {
                            })
     await thumb.trigger('click')
     await flushPromises()
-    expect(getBlob).toHaveBeenCalledTimes(requests+2)
+    await vi.waitFor(() => expect(getBlob).toHaveBeenCalledTimes(requests+2))
     expect(wrapper.find('[role="dialog"]').exists()).toBe(true)
     expect(send.mock.calls[0][0]).toContain('/library/assets/'+asset.id+'/previews/display')
     wrapper.getComponent(PhotoPreviewDialog).vm.$emit('updated',{assetId:asset.id,title:asset.name})
@@ -490,7 +491,7 @@ describe('first-stage regression fixes', () => {
     await binEditor.trigger('keydown',{key:'Enter'})
     await flushPromises()
     expect(send).toHaveBeenCalledWith('/astrophotoflow/api/v1/datasets/'+datasetId+'/member-parameters',expect.anything(),'PATCH',{
-      base_revision:1,base_version_id:versionId,members:members.map(member=>({asset_id:member.asset.id,revision:1})),
+      base_revision:1,members:members.map(member=>({asset_id:member.asset.id,revision:1})),
       parameters:{binning_x:3,binning_y:3}
     })
   })
@@ -892,9 +893,7 @@ describe('first-stage regression fixes', () => {
   })
 
   it('uses the updated active project revision when adding a reference after an inline project edit', async () => {
-    const versionId = idAt(501)
     const datasetId = idAt(503)
-    const datasetVersionId = idAt(504)
     const version = {
                       view_base: `/astrophotoflow/api/v1/library/assets/${libraryAsset.id}/previews`,
                       id: libraryAsset.id,
@@ -909,7 +908,6 @@ describe('first-stage regression fixes', () => {
                       created_at:createdAt
                     }
     const addableAsset = {...libraryAsset, ...version}
-    const datasetVersion = {id: datasetId, created_at:createdAt, members:[]}
     const dataset = datasetFixture({
                       id:datasetId,
                       name:'Project dataset',
@@ -924,15 +922,14 @@ describe('first-stage regression fixes', () => {
                       updated_at:createdAt
                     })
     Object.assign(dataset, {summary: metadataForMembers([]), input_ready: false})
-    const assetReference = {view_base: `/astrophotoflow/api/v1/projects/${project.id}/asset-references/${idAt(502)}/previews`, id:idAt(502), project_id:project.id, asset_id:versionId, added_at:createdAt, asset: assetFixture({...(addableAsset), ...(version), id: (addableAsset).id})}
+    const assetReference = {view_base: `/astrophotoflow/api/v1/projects/${project.id}/asset-references/${idAt(502)}/previews`, id:idAt(502), project_id:project.id, asset_id:addableAsset.id, added_at:createdAt, asset:assetFixture(addableAsset)}
     const datasetReference = {
                                id:idAt(505),
                                project_id:project.id,
                                dataset_id:datasetId,
                                base_revision:4,
                                added_at:createdAt,
-                               dataset,
-                               version:{id: datasetId, created_at:createdAt, exposure_summary:exposureForMembers([])}
+                               dataset
                              }
     let currentProject=project
     let assetReferenced=false
@@ -991,7 +988,7 @@ describe('first-stage regression fixes', () => {
     await flushPromises()
     await wrapper.get('.apf-assets-table tbody tr').trigger('click')
     await flushPromises()
-    await wrapper.findAll('.apf-details button').find(button=>button.text()==='选用此素材版本')!.trigger('click')
+    await wrapper.findAll('.apf-details button').find(button=>button.text()==='选用此素材')!.trigger('click')
     await flushPromises()
     await wrapper.get('.apf-assets-table tbody tr').trigger('click')
     await flushPromises()
@@ -1005,17 +1002,17 @@ describe('first-stage regression fixes', () => {
     await flushPromises()
     await wrapper.findAll('.apf-toolbar button').find(button=>button.text()==='添加图像组')!.trigger('click')
     await flushPromises()
-    await wrapper.get('.apf-assets-table tbody tr').trigger('click')
+    await wrapper.get('.apf-dataset-table tbody tr').trigger('click')
     await flushPromises()
-    await wrapper.findAll('.apf-details button').find(button=>button.text()==='选用此图像组版本')!.trigger('click')
+    await wrapper.findAll('.apf-details button').find(button=>button.text()==='选用此数据集')!.trigger('click')
     await flushPromises()
-    await wrapper.get('.apf-assets-table tbody tr').trigger('click')
+    await wrapper.get('.apf-dataset-table tbody tr').trigger('click')
     await flushPromises()
     await wrapper.findAll('.apf-details button').find(button=>button.text()==='从项目移除图像组')!.trigger('click')
     await flushPromises()
 
     expect(send.mock.calls[0][3]).toMatchObject({base_revision:1,name:'M42'})
-    expect(send.mock.calls[1][3]).toMatchObject({base_revision:2, asset_id:versionId})
+    expect(send.mock.calls[1][3]).toMatchObject({base_revision:2, asset_id:addableAsset.id})
     expect(send.mock.calls[2][3]).toMatchObject({base_revision:3})
     expect(send.mock.calls[3][3]).toMatchObject({base_revision:4, dataset_id:datasetId})
     expect(send.mock.calls[4][3]).toMatchObject({base_revision:5})

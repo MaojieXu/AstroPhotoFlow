@@ -33,7 +33,7 @@ export function assetRecord(row: WorkspaceRecord): AssetOut | undefined {
 }
 export function datasetRecord(row: DatasetRecord) {
   if ('dataset' in row) return row.dataset
-  if ('entry_type' in row && row.entry_type === 'dataset') return datasetChoiceToRecord.parse(row)
+  if ('entry_type' in row && !('matching_member_count' in row)) return datasetChoiceToRecord.parse(row)
   return row
 }
 export function recordEntity(row: WorkspaceRecord) {
