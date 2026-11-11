@@ -14,12 +14,14 @@ def import_destination(session, body):
     if body.project_id is not None:
         project = session.get(Project, str(body.project_id))
         if project is None or project.status != "active" or project.revision != body.project_base_revision:
-            raise ApiError(409, "REVISION_CONFLICT", "Read the active project and its current revision before importing.")
+            raise ApiError(409, "REVISION_CONFLICT", "Read the active project and its current revision before importing.",
+                           message_key="read_active_project_before_importing")
     dataset = None
     if body.mode == "append_dataset":
         dataset = require_referenceable(session, "dataset", body.target_dataset_id)
         if dataset.revision != body.dataset_base_revision:
-            raise ApiError(409, "REVISION_CONFLICT", "Read the destination dataset before importing.")
+            raise ApiError(409, "REVISION_CONFLICT", "Read the destination dataset before importing.",
+                           message_key="read_destination_dataset_before_importing")
     context = {
         "mode": body.mode,
         "project_id": str(body.project_id) if body.project_id else None,
@@ -38,11 +40,13 @@ def link_task_project(session, task):
         with session.begin_nested():
             project = session.get(Project, context["project_id"])
             if project is None or project.status != "active" or project.revision != context["project_base_revision"]:
-                raise ApiError(409, "REVISION_CONFLICT", "Import completed; the destination project changed or is unavailable.")
+                raise ApiError(409, "REVISION_CONFLICT", "Import completed; the destination project changed or is unavailable.",
+                               message_key="import_destination_project_changed")
             references = []
             if context["mode"] != "standalone":
                 if not task.dataset_id:
-                    raise ApiError(409, "DATASET_NOT_READY", "Originals are retained; organize the dataset before linking the project.")
+                    raise ApiError(409, "DATASET_NOT_READY", "Originals are retained; organize the dataset before linking the project.",
+                                   message_key="dataset_not_ready")
                 existing = session.scalar(
                     select(ProjectDatasetReference).where(
                         ProjectDatasetReference.project_id == project.id, ProjectDatasetReference.dataset_id == task.dataset_id
@@ -61,7 +65,8 @@ def link_task_project(session, task):
                     .order_by(AssetTaskItem.position)
                 ).all()
                 if not identities:
-                    raise ApiError(409, "ORIGINALS_NOT_READY", "No imported originals are ready to associate.")
+                    raise ApiError(409, "ORIGINALS_NOT_READY", "No imported originals are ready to associate.",
+                                   message_key="originals_not_ready")
                 for identity in identities:
                     existing = session.scalar(
                         select(ProjectAssetReference).where(

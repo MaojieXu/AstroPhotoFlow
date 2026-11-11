@@ -235,5 +235,6 @@ def update_dataset_members(session: Session, dataset_id: UUID, body: DatasetMemb
         raise not_found()
     if dataset.revision != body.base_revision:
         raise ApiError(409, "REVISION_CONFLICT", "The dataset changed; read it again.", message_key='the_dataset_changed_read_it_again')
-    publish_dataset_members(session, dataset, [str(value) for value in body.asset_ids], calibration=body.calibration)
+    calibration = body.model_dump(mode="json")["calibration"]
+    publish_dataset_members(session, dataset, [str(value) for value in body.asset_ids], calibration=calibration)
     return dataset_out(session, dataset)

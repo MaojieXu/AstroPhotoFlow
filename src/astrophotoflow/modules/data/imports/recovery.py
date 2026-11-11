@@ -25,7 +25,8 @@ def recover_import_organization(session, task_id, body):
     if task is None:
         raise not_found()
     if task.status in {"queued", "running", "cancelling", "interrupted"}:
-        raise ApiError(409, "IMPORT_ACTIVE", "Finish or cancel the import before repairing its organization.")
+        raise ApiError(409, "IMPORT_ACTIVE", "Finish or cancel the import before repairing its organization.",
+                       message_key="finish_import_before_repairing_organization")
     successful = set(
         session.scalars(
             select(AssetTaskItem.asset_id).where(
@@ -35,7 +36,8 @@ def recover_import_organization(session, task_id, body):
     )
     ids = [str(value) for value in body.asset_ids]
     if set(ids) - successful:
-        raise ApiError(422, "INVALID_REFERENCE", "Select only successful materials registered by this import task.")
+        raise ApiError(422, "INVALID_REFERENCE", "Select only successful materials registered by this import task.",
+                       message_key="select_materials_registered_by_import")
     if body.mode == "new_dataset":
         command = ImageDatasetCreate(
             request_id=uuid5(NAMESPACE_URL, str(body.request_id) + "/dataset"),

@@ -92,7 +92,7 @@ def test_native_call_is_idempotent_and_not_a_public_execution_route(tmp_path, mo
     monkeypatch.setattr(software_calls, 'get_bundle_metadata', lambda *_args: ({}, [{'operation': {'operation_id': definition.execution.operation_id}, 'automatic_result_preview': True}], {}))
     executed = []
 
-    async def run(_app, _settings, body):
+    async def run(_app, _settings, body, *, admission_lock):
         executed.append(body.call_id)
         path = call_record_path(settings, body.prompt_id, body.call_id)
         value = read_software_call(_settings, body.prompt_id, body.call_id)

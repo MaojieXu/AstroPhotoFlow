@@ -8,7 +8,7 @@ def test_backend_migrations_are_package_resources():
     assert backend.joinpath("alembic.ini").is_file()
     migrations = sorted(path.name for path in backend.joinpath("alembic/versions").iterdir() if path.suffix == ".py")
     assert migrations == [
-        "0001_subframe_library.py",
+        "0001_current_library.py",
     ]
 
 

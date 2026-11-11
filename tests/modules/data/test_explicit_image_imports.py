@@ -3,6 +3,7 @@ from uuid import UUID, uuid4
 import numpy as np
 import pytest
 from astropy.io import fits
+from pydantic import ValidationError
 from sqlalchemy import func, select
 from astrophotoflow.contracts.datasets import DatasetPatch
 from astrophotoflow.contracts.equipment import CameraCreate, CameraPatch
@@ -34,8 +35,8 @@ def environment(tmp_path):
     yield (source, settings, database)
     database.close()
 
-def photo(path, frame='Light Frame', gain=12, *, date_obs='2026-11-01T22:00:00Z', timesys=None):
-    hdu = fits.PrimaryHDU(np.arange(256, dtype=np.float32).reshape(16, 16))
+def photo(path, frame='Light Frame', gain=12, *, date_obs='2026-11-01T22:00:00Z', timesys=None, shape=(16, 16)):
+    hdu = fits.PrimaryHDU(np.arange(np.prod(shape), dtype=np.float32).reshape(shape))
     hdu.header['OBJECT'] = 'M31'
     hdu.header['IMAGETYP'] = frame
     hdu.header['GAIN'] = gain
@@ -232,8 +233,8 @@ def test_append_preserves_the_single_dataset_calibration(environment):
         version = session.get(Dataset, second['stages']['publication']['dataset_id'])
         members = list(session.scalars(select(DatasetMember).where(DatasetMember.dataset_id == version.id).order_by(DatasetMember.position)))
         assert dataset_bindings(version) == {'flat': None}
-        assert members[0].asset_id == first['items'][0]['asset_id']
-        assert len(list(session.scalars(select(DatasetMember).where(DatasetMember.dataset_id == first_publication['dataset_id'])))) == 1
+        assert version.id == first_publication['dataset_id']
+        assert [member.asset_id for member in members] == [first['items'][0]['asset_id'], second['items'][0]['asset_id']]
 
 def test_conflicting_append_retains_originals_and_retry_only_publishes(environment):
     source, settings, database = environment
@@ -261,15 +262,14 @@ def test_conflicting_append_retains_originals_and_retry_only_publishes(environme
         assert retry_image_publication(session, accepted['task_id'], retry)['stages']['publication']['dataset_id'] == version
         assert session.scalar(select(func.count()).select_from(Asset)) == 2
 
-def test_reference_mode_requires_configured_root_and_keeps_original(environment):
+def test_explicit_import_rejects_reference_storage_mode(environment):
     source, _, database = environment
     photo(source / 'a.fits')
     observed, entries = scan(environment)
-    result = submit(environment, request(observed, entries, {'mode': 'standalone'}, storage_mode='reference'))
-    assert result['status'] == 'completed'
+    with pytest.raises(ValidationError, match='storage_mode'):
+        request(observed, entries, {'mode': 'standalone'}, storage_mode='reference')
     with database.read_session() as session:
-        version = session.get(Asset, result['items'][0]['asset_id'])
-        assert version.storage_mode == 'reference' and version.storage_location == 'roots/night/a.fits'
+        assert session.scalar(select(func.count()).select_from(Asset)) == 0
     assert (source / 'a.fits').is_file()
 
 def test_failed_original_retry_preserves_identity_and_publishes_missing_member(environment, monkeypatch):
@@ -330,12 +330,9 @@ def test_known_scientific_conflict_excludes_only_affected_incoming_file(environm
     observed, entries = scan(environment)
     master = submit(environment, request(observed, entries, {'mode': 'standalone'}, defaults={'metadata': {'classification': {'frame_class': 'masterframe', 'frame_type': 'dark'}, 'parameters': {'parameter_mode': 'gain'}}}))
     photo(source / 'light-a.fits')
-    photo(source / 'light-b.fits')
+    photo(source / 'light-b.fits', shape=(16, 32))
     observed, entries = scan(environment, [source / 'light-a.fits', source / 'light-b.fits'])
     body = request(observed, entries, calibration={'dark': {'mode': 'target', 'target': {'kind': 'asset', 'id': master['items'][0]['asset_id']}}}, defaults={'metadata': {'parameters': {'parameter_mode': 'gain'}}}, accept_unknown=True)
-    raw = body.model_dump(mode='json', exclude_unset=True)
-    raw['files'][1]['metadata'] = {'parameters': {'gain': 999}}
-    body = ExplicitImportRequest.model_validate_json(json.dumps(raw))
     result = submit(environment, body)
     assert result['status'] == 'completed_with_errors'
     publication = result['stages']['publication']
@@ -485,7 +482,7 @@ def test_legacy_directory_import_also_schedules_only_one_cover(environment):
     photo(source / 'a.fits')
     photo(source / 'b.fits')
     with database.write_session() as session:
-        accepted = create_import(session, settings, ImportCreate.model_validate_json(json.dumps({'sources': [{'path': str(source)}], 'storage_mode': 'managed'})))
+        accepted = create_import(session, settings, ImportCreate.model_validate_json(json.dumps({'sources': [{'path': str(source)}], 'storage_mode': 'managed', 'mode': 'new_dataset'})))
     previews = DeferredPreviews()
     with ThreadPoolExecutor(max_workers=1) as files:
         run_import_task(database, settings, str(accepted.task_id), (files, previews))

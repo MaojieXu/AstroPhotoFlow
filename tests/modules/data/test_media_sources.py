@@ -32,7 +32,7 @@ def test_fits_region_read_requests_only_the_selected_columns(tmp_path, layout):
             requests.append(selection)
             return pixels[selection]
 
-    header = fits.Header({'BITPIX': -32})
+    header = fits.PrimaryHDU(pixels).header
     if layout == 'planar':
         header['CTYPE3'] = 'RGB'
     elif layout == 'interleaved':

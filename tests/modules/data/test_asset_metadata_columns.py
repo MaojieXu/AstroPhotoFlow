@@ -49,8 +49,8 @@ def test_fresh_baseline_supports_device_filters_and_member_reverse_lookup(databa
     asset_indexes = {tuple(index['column_names']) for index in inspector.get_indexes('asset')}
     for field in ('camera_id', 'optical_system_id', 'filter_id'):
         assert (field, 'scope', 'status', 'created_at', 'id') in asset_indexes
-    member_indexes = {tuple(index['column_names']) for index in inspector.get_indexes('dataset_member')}
-    assert ('asset_id',) in member_indexes
+    member_constraints = {tuple(constraint['column_names']) for constraint in inspector.get_unique_constraints('dataset_member')}
+    assert ('asset_id',) in member_constraints
     with database.engine.connect() as connection:
         plan = connection.exec_driver_sql('EXPLAIN QUERY PLAN SELECT id FROM dataset_member WHERE asset_id=?', ('missing-version',)).all()
-    assert any(('SEARCH' in row[3] and 'ix_dataset_member_asset' in row[3] for row in plan))
+    assert any('SEARCH' in row[3] and '(asset_id=?)' in row[3] for row in plan)

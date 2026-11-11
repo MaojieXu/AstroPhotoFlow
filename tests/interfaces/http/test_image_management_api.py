@@ -25,7 +25,12 @@ def service(tmp_path):
     database = Database(settings.database_path)
     with database.write_session() as session:
         images = []
-        for index, (name, target, frame, master) in enumerate((('early', 'M31', 'light', False), ('late', 'M42', 'light', False), ('master', None, 'dark', True))):
+        for index, (name, target, frame, master) in enumerate((
+            ('early', 'M31', 'light', False),
+            ('late', 'M42', 'light', False),
+            ('master', None, 'dark', True),
+            ('single', 'M31', 'light', False),
+        )):
             asset_id, = (str(uuid4()),)
             asset = Asset(id=asset_id, name=name, scope='shared', role='calibration' if master else 'raw', frame_class='masterframe' if master else 'subframe', frame_type=frame, status='active', revision=1, gain=10 + index, offset=5, exposure_seconds=30, parameter_mode='gain', binning_x=1, binning_y=1, storage_mode='managed', storage_location=f'objects/{asset_id}/source.fits', availability='available', byte_size=5, content_hash='blake3:' + '0' * 64, calibration_level='master' if master else 'individual', capture_snapshot={'parameters': {'gain': 10 + index}, 'classification': {'frame_class': 'masterframe' if master else 'subframe', 'frame_type': frame}}, scientific_metadata={'format': 'fits', 'export_provenance': {'actual_call': 'preserved'}})
             session.add(asset)
@@ -35,7 +40,7 @@ def service(tmp_path):
             session.add(FitsHduMetadata(id=str(uuid4()), asset_id=asset_id, hdu_index=0, hdu_type='PRIMARY', shape=[16, 16], parser_version='http-test', is_selected=True, supported_kind='mono', header_cards=[{'keyword': 'OBJECT', 'value': target, 'comment': ''}, {'keyword': 'GAIN', 'value': 10 + index, 'comment': ''}, {'keyword': 'EXPTIME', 'value': 30, 'comment': ''}]))
             images.append({'id': asset_id})
         mixed = create_dataset(session, DatasetCreate(name='Mixed objects', asset_ids=[row['id'] for row in images[:2]]))
-        single = create_dataset(session, DatasetCreate(name='Only M31', asset_ids=[images[0]['id']]))
+        single = create_dataset(session, DatasetCreate(name='Only M31', asset_ids=[images[3]['id']]))
         camera = create_equipment(session, CameraCreate(kind='camera', name='HTTP camera'))
         task_id, request_id = (str(uuid4()), str(uuid4()))
         file_ids = [str(uuid4()), str(uuid4())]
@@ -154,7 +159,7 @@ def test_task_get_image_flag_selects_explicit_receipt_and_pages_stable_file_ids(
     assert result['items'][0]['asset_id'] == images[1]['id']
     assert result['items'][0]['member_position'] == 1
     assert result['items'][0]['publication_status'] == 'published'
-    assert result['items'][0]['calibration_status'] == 'saved'
+    assert result['items'][0]['calibration_status'] == 'Unknown'
     assert result['items'][0]['errors'] == []
     legacy = get(client, f'/asset-tasks/{task_id}', items_limit=1)
     assert legacy['id'] == task_id and 'task_id' not in legacy
@@ -206,7 +211,7 @@ def test_calibration_relationship_browsing_exposes_names_sources_and_whole_group
 def test_calibration_import_precheck_http_does_not_register_scanned_files(service, tmp_path):
     client, images, *_ = service
     source = tmp_path / 'unregistered-light.fits'
-    hdu = fits.PrimaryHDU(np.zeros((16, 16), dtype=np.uint16))
+    hdu = fits.PrimaryHDU(np.zeros((16, 32), dtype=np.uint16))
     hdu.header['IMAGETYP'] = 'Light Frame'
     hdu.header['EXPTIME'] = 300
     hdu.writeto(source)
@@ -219,4 +224,8 @@ def test_calibration_import_precheck_http_does_not_register_scanned_files(servic
     assert result.status_code == 200, result.text
     assert result.json()['state'] == 'conflict'
     assert result.json()['items'][0]['file_id'] == entry['file_id']
+    assert any(
+        item['field'] == 'dimensions' and item['severity'] == 'conflict'
+        for item in result.json()['items'][0]['diagnostics']
+    )
     assert get(client, '/library/assets', image_query=True)['total'] == before

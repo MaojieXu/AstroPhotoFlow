@@ -26,7 +26,8 @@ def validate_dataset_members(session, asset_ids: list[str], dataset_id: str | No
     conflicts = [{'path': 'asset_ids.' + identity, 'message': f'Already belongs to dataset {owner_id} ({name}).'}
                  for identity, owner_id, name in owners if owner_id != dataset_id]
     if conflicts:
-        raise ApiError(409, 'ASSET_DATASET_OWNERSHIP', 'A material can belong to only one dataset.', conflicts)
+        raise ApiError(409, 'ASSET_DATASET_OWNERSHIP', 'A material can belong to only one dataset.', conflicts,
+                       message_key='asset_dataset_ownership')
     versions = {version.id: version for version in session.scalars(select(Asset).where(Asset.scope == 'shared', Asset.id.in_(asset_ids)))}
     for identity in asset_ids:
         if identity not in versions:

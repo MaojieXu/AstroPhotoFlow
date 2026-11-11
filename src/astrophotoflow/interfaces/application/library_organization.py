@@ -69,6 +69,7 @@ def execute_cleanup(database, settings, body, exports=None):
     result = preflight_cleanup(database, settings, body, exports)
     if result.blockers:
         raise ApiError(409, 'ORIGINALS_IN_USE', 'Selected originals are still in use.',
-                       [{'path': 'tasks', 'message': blocker} for blocker in result.blockers])
+                       [{'path': 'tasks', 'message': blocker} for blocker in result.blockers],
+                       message_key='originals_in_use')
     with database.read_session() as session:
         return delete_library_trash(session=session, database=database, settings=settings, body=body)

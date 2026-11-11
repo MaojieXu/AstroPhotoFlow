@@ -19,5 +19,5 @@ def require_referenceable(session: Session, entry_type: str, identity: UUID | st
     row = session.get(Asset if entry_type == 'asset' else Dataset, key)
     if row is None or row.status != 'active' or session.get(LibraryEntryRemoval, (entry_type, key)) is not None:
         raise ApiError(409, 'REFERENCE_UNAVAILABLE', 'The selected object is unavailable or in trash.',
-                       [{'path': entry_type + '_id', 'message': key}])
+                       [{'path': entry_type + '_id', 'message': key}], message_key='reference_unavailable')
     return row

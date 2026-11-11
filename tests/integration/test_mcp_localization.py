@@ -10,7 +10,7 @@ async def test_tool_identity_and_schema_are_stable_with_bilingual_descriptions()
     second = await build_tool_catalog().list_tools()
     assert {t.name: t.parameters for t in first} == {t.name: t.parameters for t in second}
     selected = next((t for t in first if t.name == 'data_assets_get'))
-    assert 'Read a shared asset' in selected.description and '素材' in selected.description
+    assert 'Read image facts/current revision' in selected.description and '素材' in selected.description
 
 def test_software_details_decode_json_paths_and_node_ids(tmp_path, monkeypatch):
     from astrophotoflow.client import AssetClient

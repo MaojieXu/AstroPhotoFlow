@@ -8,7 +8,7 @@ from astrophotoflow.contracts.equipment import CameraOut
 from astrophotoflow.contracts.software import BundlePreviewRequest
 from astrophotoflow.interfaces.serialization import json_value
 IDENTITY = '00000000-0000-4000-8000-000000000001'
-ASSET = {'id': IDENTITY, 'name': 'M31', 'scope': 'shared', 'owner_project_id': None, 'role': 'raw', 'calibration_level': None, 'classification': {}, 'parameters': {'gain': 0, 'offset': None}, 'equipment_snapshot': {}, 'value_sources': {}, 'notes': None, 'status': 'active', 'revision': 2, 'created_at': '2026-10-31T00:00:00Z', 'view_base': f'/library/assets/{IDENTITY}/previews', 'storage_mode': 'managed', 'storage_location': f'objects/{IDENTITY}/source.fits', 'byte_size': 1, 'content_hash': None, 'availability': 'unknown', 'capture_snapshot': None, 'scientific_metadata': None}
+ASSET = {'id': IDENTITY, 'name': 'M31', 'scope': 'shared', 'owner_project_id': None, 'role': 'raw', 'calibration_status': 'Unknown', 'calibration_level': None, 'classification': {}, 'parameters': {'gain': 0, 'offset': None}, 'equipment_snapshot': {}, 'value_sources': {}, 'notes': None, 'status': 'active', 'revision': 2, 'created_at': '2026-10-31T00:00:00Z', 'view_base': f'/library/assets/{IDENTITY}/previews', 'storage_mode': 'managed', 'storage_location': f'objects/{IDENTITY}/source.fits', 'byte_size': 1, 'content_hash': None, 'availability': 'unknown', 'capture_snapshot': None, 'scientific_metadata': None}
 
 def client_with_response(payload):
     client = AssetClient.__new__(AssetClient)

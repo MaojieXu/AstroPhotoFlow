@@ -16,7 +16,7 @@ def test_partial_file_failure_keeps_facts_and_blocks_database_finalization(tmp_p
             raise failure
         return original_unlink(path, *args, **kwargs)
     monkeypatch.setattr(Path, 'unlink', unlink)
-    plan = CleanupPlan('asset', frozenset({'version'}), (first, locked, last), frozenset(), frozenset())
+    plan = CleanupPlan('asset', (first, locked, last), frozenset(), frozenset())
     result = delete_owned_files(plan)
     assert result.removed_paths == [str(first)]
     assert result.deleted_bytes == 7
@@ -30,7 +30,7 @@ def test_finite_cleanup_skips_journaled_paths_and_counts_missing_files(tmp_path)
     preserved, missing, removed = [tmp_path / name for name in ('preserved', 'missing', 'removed')]
     preserved.write_bytes(b'already journaled')
     removed.write_bytes(b'owned')
-    plan = CleanupPlan('asset', frozenset(), (preserved, missing, removed), frozenset({str(preserved)}), frozenset())
+    plan = CleanupPlan('asset', (preserved, missing, removed), frozenset({str(preserved)}), frozenset())
     result = delete_owned_files(plan)
     assert result.error is None
     assert result.removed_paths == [str(removed)]

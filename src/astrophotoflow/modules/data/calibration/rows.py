@@ -14,7 +14,10 @@ def library_calibration_projections(session, items):
     datasets = session.scalars(select(Dataset).where(Dataset.id.in_(dataset_ids))).all() if dataset_ids else []
     grouped = {version.id: explicit_choices(dataset_bindings(version), complete=True) for version in datasets}
     standalone = {identity: explicit_choices(configurations[identity].calibration if identity in configurations else {}, complete=True) for identity in assets}
-    details = target_details(session, [*standalone.values(), *grouped.values()])
+    details = {
+        identity: {key: value for key, value in detail.items() if key != 'in_trash'}
+        for identity, detail in target_details(session, [*standalone.values(), *grouped.values()]).items()
+    }
     result = {}
     for identity, item in assets.items():
         result[identity] = LibraryCalibrationProjection.model_validate({'slots': slot_details(standalone[identity], details, standalone=True, frame_type=item.summary.classification.frame_type.value)})

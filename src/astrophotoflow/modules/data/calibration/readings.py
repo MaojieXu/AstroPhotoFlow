@@ -6,15 +6,17 @@ from astrophotoflow.modules.data.calibration.checks import ALLOWED_SLOTS
 from astrophotoflow.modules.data.calibration.choices import explicit_choices
 from astrophotoflow.modules.data.datasets.bindings import dataset_bindings
 from astrophotoflow.modules.data.datasets.models import Dataset, DatasetMember
+from astrophotoflow.modules.data.trash.models import LibraryEntryRemoval
 
 def target_details(session, choices):
     references = [choice['target'] for bindings in choices for choice in bindings.values() if choice['mode'] == 'target']
     asset_ids = {target['id'] for target in references if target['kind'] == 'asset'}
     result = {}
     if asset_ids:
-        for asset in session.scalars(select(Asset).where(Asset.id.in_(asset_ids))):
-            from astrophotoflow.modules.data.trash.models import LibraryEntryRemoval
-            in_trash = session.get(LibraryEntryRemoval, ('asset', asset.id)) is not None
+        removed = select(LibraryEntryRemoval.entry_id).where(
+            LibraryEntryRemoval.entry_type == 'asset', LibraryEntryRemoval.entry_id == Asset.id
+        ).exists()
+        for asset, in_trash in session.execute(select(Asset, removed).where(Asset.id.in_(asset_ids))):
             result['asset', asset.id] = {'in_trash': in_trash, 'target': {'kind': 'asset', 'id': asset.id}, 'asset_id': asset.id, 'name': asset.name, 'target_kind': 'master', 'master_required': False}
     return result
 

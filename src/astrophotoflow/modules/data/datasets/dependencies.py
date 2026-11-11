@@ -55,5 +55,6 @@ def validate_asset_dependencies(session, asset_ids: list[str]) -> None:
             check(asset.id, asset.frame_type, applied)
     if issues:
         raise ApiError(
-            409, "CALIBRATION_DEPENDENCY_CONFLICT", "Adjust the affected calibration relationships before changing classification.", issues
+            409, "CALIBRATION_DEPENDENCY_CONFLICT", "Adjust the affected calibration relationships before changing classification.",
+            issues, message_key="calibration_dependency_conflict",
         )

@@ -288,7 +288,8 @@ def test_registration_publishes_pending_members_and_keeps_trash_protected(servic
 def test_header_classification_and_missing_fields(service, label, expected):
     _, _, client, root = service
     image(root / 'Master_Light_filename_is_not_evidence.fits', label)
-    accepted = client.post('/api/v1/imports', headers=AUTH, json={'sources': [{'root_id': 'science', 'path': ''}], 'storage_mode': 'reference'})
+    accepted = client.post('/api/v1/imports', headers=AUTH, json={'sources': [{'root_id': 'science', 'path': ''}], 'storage_mode': 'managed'})
+    assert accepted.status_code == 202, accepted.text
     current = task(client, accepted.json()['task_id'])
     asset = client.get(f"/api/v1/library/assets/{current['items'][0]['asset_id']}", headers=AUTH).json()
     assert asset['classification'] == expected
@@ -310,9 +311,10 @@ def test_mixed_batch_manual_override_and_frozen_equipment_selection(service):
     captured = []
     routes.run_import_task = lambda *args: captured.append(args)
     try:
-        accepted = client.post('/api/v1/imports', headers=AUTH, json={'sources': [{'root_id': 'science', 'path': ''}], 'storage_mode': 'reference', 'equipment': equipment, 'parameters': {'gain': 0, 'offset': 7}})
+        accepted = client.post('/api/v1/imports', headers=AUTH, json={'sources': [{'root_id': 'science', 'path': ''}], 'storage_mode': 'managed', 'equipment': equipment, 'parameters': {'gain': 0, 'offset': 7}})
     finally:
         routes.run_import_task = process
+    assert accepted.status_code == 202, accepted.text
     task_id = accepted.json()['task_id']
     process(*captured[0])
     current = task(client, task_id)
@@ -331,7 +333,8 @@ def test_mixed_batch_manual_override_and_frozen_equipment_selection(service):
     before = deepcopy(assets[0]['capture_snapshot'])
     edited = client.patch(f"/api/v1/library/assets/{assets[0]['id']}", headers=AUTH, json={'base_revision': 1, 'parameters': {'gain': None}}).json()
     assert edited['capture_snapshot'] == before
-    manual = client.post('/api/v1/imports', headers=AUTH, json={'sources': [{'root_id': 'science', 'path': ''}], 'storage_mode': 'reference', 'classification': {'frame_class': 'masterframe', 'frame_type': None}})
+    manual = client.post('/api/v1/imports', headers=AUTH, json={'sources': [{'root_id': 'science', 'path': ''}], 'storage_mode': 'managed', 'classification': {'frame_class': 'masterframe', 'frame_type': None}})
+    assert manual.status_code == 202, manual.text
     overridden = task(client, manual.json()['task_id'])
     for item in overridden['items']:
         asset = client.get(f"/api/v1/library/assets/{item['asset_id']}", headers=AUTH).json()
@@ -434,7 +437,7 @@ def test_upload_renames_without_second_write_and_recovers_identity_after_rename_
 
     def crash_after_rename(source, destination):
         replace(source, destination)
-        if Path(destination).parent.parent.name == 'objects':
+        if Path(source) == settings.data_dir / 'upload-staging' / task_id / '0.fits':
             raise RuntimeError('interrupted after object rename')
     monkeypatch.setattr(owner_stages, 'read_hash_and_copy', hash_only)
     monkeypatch.setattr(owner_stages.os, 'replace', crash_after_rename)
@@ -752,7 +755,8 @@ def test_resume_recovers_first_subframe_recipe_from_published_thumbnail_after_re
     def no_measurement(*args, **kwargs):
         raise AssertionError('the first published thumbnail owns the measured values')
     monkeypatch.setattr(owner_display, 'calculate_stretch', no_measurement)
-    owner_runner.run_import_task(app.state.database, settings, task_id, app.state.import_workers)
+    assert owner_runner.recover_import_tasks(app.state.database) == 1
+    assert client.post(f'/api/v1/asset-tasks/{task_id}/resume', headers=AUTH, json={}).status_code == 202
     requested_previews(app, settings, task_id)
     assert task(client, task_id)['status'] == 'completed'
     with app.state.database.read_session() as session:

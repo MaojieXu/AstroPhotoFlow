@@ -130,4 +130,4 @@ def test_development_entry_rejects_shared_or_unselected_workspace(workspace):
         cwd=root, text=True, encoding='utf-8', capture_output=True, timeout=15, check=False,
     )
     assert result.returncode == 2
-    assert 'private Feature workspace' in result.stderr
+    assert 'Use an isolated test workspace below .artifacts/workspaces.' in result.stderr

@@ -38,12 +38,13 @@ def client():
         if path.endswith('/equipment-management/delete'):
             return httpx.Response(200, json={'deleted_count': 1, 'detached_material_count': 0})
         if path.startswith('/api/v1/library/assets/'):
-            return httpx.Response(200, json={'id': path.rsplit('/', 1)[1], 'name': 'Sample', 'scope': 'shared', 'owner_project_id': None, 'role': 'raw', 'calibration_level': None, 'classification': {}, 'parameters': {}, 'equipment_snapshot': {}, 'value_sources': {}, 'notes': None, 'status': 'active', 'revision': 8, 'created_at': timestamp, 'view_base': '/library/assets/' + path.rsplit('/', 1)[1], 'storage_mode': 'managed', 'storage_location': 'objects/' + path.rsplit('/', 1)[1] + '/source.fits', 'byte_size': None, 'content_hash': None, 'availability': 'unknown', 'capture_snapshot': None, 'scientific_metadata': None})
+            return httpx.Response(200, json={'id': path.rsplit('/', 1)[1], 'name': 'Sample', 'scope': 'shared', 'owner_project_id': None, 'role': 'raw', 'calibration_status': 'Unknown', 'calibration_level': None, 'classification': {}, 'parameters': {}, 'equipment_snapshot': {}, 'value_sources': {}, 'notes': None, 'status': 'active', 'revision': 8, 'created_at': timestamp, 'view_base': '/library/assets/' + path.rsplit('/', 1)[1], 'storage_mode': 'managed', 'storage_location': 'objects/' + path.rsplit('/', 1)[1] + '/source.fits', 'byte_size': None, 'content_hash': None, 'availability': 'unknown', 'capture_snapshot': None, 'scientific_metadata': None})
         if path.startswith('/api/v1/datasets/') and path.endswith('/members'):
             from astrophotoflow.modules.data.assets.queries import empty_dataset_summary
             facts = empty_dataset_summary()
             return httpx.Response(200, json={'id': path.split('/')[-2], 'name': 'Group', 'notes': None, 'status': 'active', 'revision': 5,
                 'created_at': timestamp, 'updated_at': timestamp, 'calibration': payload.get('calibration', {}), 'member_count': 0,
+                'calibration_status': 'Unknown', 'calibration_counts': {'UnCalibrated': 0, 'Calibrated': 0, 'Unknown': 0},
                 'input_ready': False, 'summary': facts.summary.model_dump(mode='json'), 'exposure_summary': facts.exposure_summary.model_dump(mode='json')})
         if path.endswith('/entries') or path == '/api/v1/asset-tasks':
             return httpx.Response(200, json={'items': [], 'total': 0, 'limit': 10, 'offset': 0})
@@ -112,9 +113,9 @@ def test_sparse_patch_and_fixed_calibration_maps(client):
     api.update_asset(asset, AssetPatch(base_revision=3, notes=None, parameters={'gain': 0}))
     assert body(calls[-1]) == {'base_revision': 3, 'notes': None, 'parameters': {'gain': 0}}
     api.update_dataset_members(group, DatasetMembersCreate(base_revision=4, asset_ids=[member], calibration={'dark': None, 'flat': {'kind': 'asset', 'id': target}}))
-    assert body(calls[-1]) == {'base_revision': 4, 'asset_ids': [member], 'calibration': {'dark': None, 'flat': {'kind': 'asset', 'id': target}}, 'accept_unknown': False}
-    api.import_local(ImportCreate(sources=[{'root_id': 'night', 'path': '2026-10-25'}], storage_mode='reference'))
-    assert body(calls[-1]) == {'sources': [{'root_id': 'night', 'path': '2026-10-25'}], 'storage_mode': 'reference'}
+    assert body(calls[-1]) == {'base_revision': 4, 'asset_ids': [member], 'calibration': {'dark': None, 'flat': {'kind': 'asset', 'id': target}}}
+    api.import_local(ImportCreate(sources=[{'root_id': 'night', 'path': '2026-10-25'}], storage_mode='managed'))
+    assert body(calls[-1]) == {'sources': [{'root_id': 'night', 'path': '2026-10-25'}], 'storage_mode': 'managed'}
 
 def test_optional_query_values_are_omitted_without_dropping_zero(client):
     api, calls = client

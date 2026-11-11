@@ -65,7 +65,7 @@ def test_member_page_loads_only_page_sized_orm_objects(member_library):
     assert loaded.count('Asset') == 5
     assert len(loaded) <= 4 * 5 + 2
 
-@pytest.mark.parametrize('params, total, positions', [({'frame_type': 'light', 'gain_max': 0, 'offset': 1}, 167, [6, 12, 18]), ({'binning': '2'}, 500, [1, 3, 5]), ({'temperature_min': -10, 'temperature_max': -10}, 1, [0])])
+@pytest.mark.parametrize('params, total, positions', [({'frame_type': 'light', 'gain_max': 0, 'offset': 1}, 167, [6, 12, 18]), ({'binning': '2'}, 500, [1, 3, 5]), ({'temperature_min': -9.5, 'temperature_max': -9.5}, 1, [0])])
 def test_member_filters_and_totals_are_applied_before_pagination(member_library, params, total, positions):
     client, _, dataset, _, _ = member_library
     response = client.get(f'/api/v1/datasets/{dataset}/members', params={'limit': 3, **params})
@@ -89,7 +89,7 @@ def test_filter_options_use_sql_projections_without_orm_materialization(member_l
     assert options.frame_types == ['dark', 'light']
     assert options.bin_values == ['1x1', '2x2']
     assert options.numeric_ranges['gain'].model_dump() == {'min': 0.0, 'max': 2.0}
-    assert options.numeric_ranges['sensor_temperature_c'].model_dump() == {'min': -10.0, 'max': -10.0}
+    assert options.numeric_ranges['sensor_temperature_c'].model_dump() == {'min': -9.5, 'max': -9.5}
     response = client.get('/api/v1/library/filter-options')
     assert response.status_code == 200, response.text
     assert response.json() == options.model_dump(mode='json')
@@ -110,7 +110,7 @@ def test_archived_fixed_member_remains_visible_until_explicitly_removed(member_l
         session.execute(update(Asset).where(Asset.id == identity).values(status='archived'))
     response = client.get('/api/v1/library/filter-options')
     assert response.status_code == 200, response.text
-    assert response.json()['numeric_ranges']['sensor_temperature_c'] == {'min': -10.0, 'max': -10.0}
+    assert response.json()['numeric_ranges']['sensor_temperature_c'] == {'min': -9.5, 'max': -9.5}
     with database.write_session() as session:
         session.add(LibraryEntryRemoval(entry_type='asset', entry_id=identity))
     response = client.get('/api/v1/library/filter-options')

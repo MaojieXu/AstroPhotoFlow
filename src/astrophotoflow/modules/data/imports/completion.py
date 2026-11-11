@@ -27,7 +27,8 @@ def publish_dataset(database: Database, task_data: ImportTaskContext, task_id: s
                 return None
             dataset = session.get(Dataset, target_id)
             if dataset is None and task.dataset_base_revision is not None:
-                raise ApiError(409, 'INVALID_REFERENCE', 'The append destination disappeared. Imported originals are retained.')
+                raise ApiError(409, 'INVALID_REFERENCE', 'The append destination disappeared. Imported originals are retained.',
+                               message_key='the_destination_dataset_disappeared_imported_originals_are_retained')
             creating = dataset is None
             if dataset is None:
                 base_members = []

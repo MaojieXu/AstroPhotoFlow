@@ -52,11 +52,15 @@ async def test_core_and_tasks_have_typed_top_level_inputs(service):
     assert len(expected) == 29
     assert expected <= tools.keys()
     tasks = {name for name in tools if name.startswith('data_tasks_')}
-    assert tasks == {f'data_tasks_{name}' for name in ('list', 'get', 'status', 'wait', 'cancel', 'resume', 'retry')}
+    assert tasks == {f'data_tasks_{name}' for name in ('list', 'get', 'status', 'wait', 'cancel', 'resume', 'retry', 'recover_organization')}
     for name in expected | tasks:
         schema = tools[name].input_schema
         assert 'client' not in schema['properties']
-        assert 'body' not in schema['properties']
+        if name == 'data_tasks_recover_organization':
+            assert schema['properties']['body']['type'] == 'object'
+            assert set(schema['properties']['body']['required']) == {'request_id', 'mode'}
+        else:
+            assert 'body' not in schema['properties']
         assert tools[name].output_schema
     assert 'group_id' not in tools['data_imports_entries'].input_schema['properties']
     assert 'data_imports_submit' not in tools
@@ -150,4 +154,7 @@ def test_import_contract_requires_explicit_unique_files_and_correct_destination_
         ExplicitImportRequest.model_validate({**base, 'files': base['files'] * 2})
     with pytest.raises(ValidationError):
         ExplicitImportRequest.model_validate({**base, 'calibration_defaults': {'dark': {'mode': 'disabled'}}})
-    assert ExplicitImportRequest.model_validate({**base, 'destination': {'mode': 'append_dataset', 'dataset_id': UUID(ASSET), 'expected_revision': 2}, 'incoming_calibration': {'flat': {'mode': 'unconfigured'}}}).incoming_calibration.flat.mode == 'unconfigured'
+    append = {**base, 'destination': {'mode': 'append_dataset', 'dataset_id': UUID(ASSET), 'expected_revision': 2}}
+    assert ExplicitImportRequest.model_validate(append).destination.expected_revision == 2
+    with pytest.raises(ValidationError, match='incoming_calibration'):
+        ExplicitImportRequest.model_validate({**append, 'incoming_calibration': {'flat': {'mode': 'unconfigured'}}})

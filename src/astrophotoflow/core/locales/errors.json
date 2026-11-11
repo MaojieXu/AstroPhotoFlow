@@ -2395,6 +2395,26 @@
     "originals_not_ready": {
       "zh": "当前没有可供关联的已就绪原件。",
       "en": "No imported originals are ready to associate."
+    },
+    "read_active_project_before_importing": {
+      "en": "Read the active project and its current revision before importing.",
+      "zh": "请先读取活动项目及其当前修订号，再导入。"
+    },
+    "read_destination_dataset_before_importing": {
+      "en": "Read the destination dataset before importing.",
+      "zh": "请先读取目标数据集，再导入。"
+    },
+    "import_destination_project_changed": {
+      "en": "Import completed. The destination project changed or is unavailable.",
+      "zh": "导入已完成，但目标项目已更改或不可用。"
+    },
+    "finish_import_before_repairing_organization": {
+      "en": "Finish or cancel the import before repairing its organization.",
+      "zh": "请先完成或取消导入，再修复素材组织。"
+    },
+    "select_materials_registered_by_import": {
+      "en": "Select only materials successfully registered by this import task.",
+      "zh": "请仅选择本导入任务成功登记的素材。"
     }
   },
   "codes": {

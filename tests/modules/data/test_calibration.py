@@ -25,7 +25,7 @@ def service(tmp_path):
 def photo(service, frame_type, master=False, *, version_type=None, scope='shared', project_id=None):
     _, database, settings = service
     asset_id, = (str(uuid4()),)
-    path = settings.data_dir / 'objects' / asset_id / 'source.fits'
+    path = settings.data_dir / 'library' / 'objects' / asset_id / 'source.fits'
     path.parent.mkdir(parents=True)
     path.write_bytes(b'synthetic calibration input')
     classification = {'frame_class': 'masterframe' if master else 'subframe', 'frame_type': frame_type if version_type is None else version_type}
@@ -63,20 +63,15 @@ def clean(client, items):
     assert preview.status_code == 200, preview.text
     return (preview.json(), client.post('/api/v1/library/trash/delete', headers=AUTH, json={'items': items, 'preview_fingerprint': preview.json()['preview_fingerprint']}))
 
-def test_explicit_groups_share_versions_and_preserve_mixed_original_and_notes(service):
+def test_groups_enforce_single_membership_and_preserve_original_and_notes(service):
     client, database, _ = service
     light, _ = photo(service, 'light')
     dark, path = photo(service, 'dark')
     original = group(client, 'mixed import', [light, dark])
-    first = group(client, 'cold night calibration', [dark], '-10 C / gain 0')
-    second = group(client, 'another logical scene', [dark])
-    assert first['notes'] == '-10 C / gain 0' and first['revision'] == 1
+    rejected = client.post('/api/v1/datasets', headers=AUTH, json={'name': 'duplicate', 'asset_ids': [dark]})
+    assert rejected.status_code == 409
+    assert rejected.json()['error']['code'] == 'ASSET_DATASET_OWNERSHIP'
     assert [row['asset_id'] for row in current_dataset(client, original)['members']] == [light, dark]
-    assert current_dataset(client, first)['members'][0]['asset_id'] == current_dataset(client, second)['members'][0]['asset_id'] == dark
-    with database.read_session() as session:
-        assert session.scalar(select(func.count()).select_from(Asset)) == 2
-        assert session.scalar(select(func.count()).select_from(Asset)) == 2
-    assert path.read_bytes() == b'synthetic calibration input'
     targets = client.get('/api/v1/calibration/targets', headers=AUTH).json()['items']
     assert targets == []
     light_items = client.get('/api/v1/library/items', headers=AUTH, params={'frame_type': 'light'}).json()['items']
@@ -84,26 +79,34 @@ def test_explicit_groups_share_versions_and_preserve_mixed_original_and_notes(se
     assert mixed['member_count'] == 2
     assert client.get(f"/api/v1/datasets/{mixed['id']}/members", headers=AUTH).json()['total'] == 2
     assert mixed['matching_member_count'] == 1
+    assert publish(client, original, [light]).status_code == 200
+    moved = group(client, 'cold night calibration', [dark], '-10 C / gain 0')
+    assert moved['notes'] == '-10 C / gain 0' and moved['revision'] == 1
+    assert [row['asset_id'] for row in current_dataset(client, moved)['members']] == [dark]
+    with database.read_session() as session:
+        assert session.scalar(select(func.count()).select_from(Asset)) == 2
+    assert path.read_bytes() == b'synthetic calibration input'
 
-def test_target_scope_type_historical_versions_and_sparse_validation(service):
+def test_target_scope_current_type_and_sparse_validation(service):
     client, database, _ = service
     asset_id, _ = photo(service, 'dark', True)
     light, _ = photo(service, 'light')
     consumer = group(client, 'light inputs', [light])
     newer = str(uuid4())
-    with database.write_session() as session:
-        session.flush()
-        set_asset_classification(session.get(Asset, asset_id), {'frame_class': 'masterframe', 'frame_type': 'light'})
     assert publish(client, consumer, [light], calibration={'dark': {'kind': 'asset', 'id': asset_id}}).status_code == 200
     consumer = client.get(f"/api/v1/datasets/{consumer['id']}", headers=AUTH).json()
-    assert publish(client, consumer, [light], calibration={'dark': {'kind': 'asset', 'id': newer}}).status_code == 422
+    with database.write_session() as session:
+        set_asset_classification(session.get(Asset, asset_id), {'frame_class': 'masterframe', 'frame_type': 'light'})
+    assert publish(client, consumer, [light], calibration={'dark': {'kind': 'asset', 'id': asset_id}}).status_code == 422
+    missing = publish(client, consumer, [light], calibration={'dark': {'kind': 'asset', 'id': newer}})
+    assert missing.status_code == 409 and missing.json()['error']['code'] == 'REFERENCE_UNAVAILABLE'
     assert publish(client, consumer, [light], member_calibration_overrides={str(uuid4()): {'dark': None}}).status_code == 422
     assert publish(client, consumer, [light], calibration=None).status_code == 422
     project = client.post('/api/v1/projects', headers=AUTH, json={'name': 'private'}).json()
     private, _ = photo(service, 'dark', True, scope='project', project_id=project['id'])
     assert publish(client, consumer, [light], calibration={'dark': {'kind': 'asset', 'id': private}}).status_code == 422
 
-def test_surviving_default_and_member_bindings_protect_targets_before_unlink(service):
+def test_surviving_dataset_binding_protects_target_before_unlink(service):
     client, _, _ = service
     light, _ = photo(service, 'light')
     target_id, path = photo(service, 'dark', True)
@@ -113,12 +116,13 @@ def test_surviving_default_and_member_bindings_protect_targets_before_unlink(ser
     items = selection(client, [entry])
     preview, deleted = clean(client, items)
     assert any((ref['kind'] == 'calibration' for ref in preview['references']))
-    assert deleted.status_code == 409 and deleted.json()['error']['code'] == 'CALIBRATION_IN_USE'
+    assert deleted.status_code == 409 and deleted.json()['error']['code'] == 'REFERENCES_EXIST'
     assert path.is_file()
     consumer = client.get(f"/api/v1/datasets/{consumer['id']}", headers=AUTH).json()
     assert publish(client, consumer, [light], calibration={}).status_code == 200
-    next_preview, rejected = clean(client, items)
-    assert rejected.status_code == 409 and next_preview['references'] == preview['references']
+    next_preview, removed = clean(client, items)
+    assert next_preview['references'] == []
+    assert removed.status_code == 200 and not path.exists()
 
 @pytest.mark.parametrize('reverse', [False, True])
 def test_selected_consumer_and_target_retention_can_complete_on_retry(service, reverse):
@@ -205,18 +209,18 @@ def test_raw_group_cannot_be_bound_and_remains_independently_removable(service, 
         assert session.get(Dataset, target_group['id']) is None
     assert not target_path.exists()
 
-def test_new_calibration_reference_changes_preview_and_blocks_stale_unlink(service):
+def test_removed_master_cannot_gain_a_calibration_reference(service):
     client, _, _ = service
     light, _ = photo(service, 'light')
     asset_id, path = photo(service, 'dark', True)
     consumer = group(client, 'new external consumer', [light])
     items = selection(client, [{'entry_type': 'asset', 'id': asset_id, 'revision': 1}])
     initial = client.post('/api/v1/library/trash/delete-preview', headers=AUTH, json={'items': items}).json()
-    assert publish(client, consumer, [light], calibration={'dark': {'kind': 'asset', 'id': asset_id}}).status_code == 200
-    current = client.post('/api/v1/library/trash/delete-preview', headers=AUTH, json={'items': items}).json()
-    assert current['preview_fingerprint'] != initial['preview_fingerprint']
-    stale = client.post('/api/v1/library/trash/delete', headers=AUTH, json={'items': items, 'preview_fingerprint': initial['preview_fingerprint']})
-    assert stale.status_code == 409 and path.is_file()
+    rejected = publish(client, consumer, [light], calibration={'dark': {'kind': 'asset', 'id': asset_id}})
+    assert rejected.status_code == 409 and rejected.json()['error']['code'] == 'REFERENCE_UNAVAILABLE'
+    assert current_dataset(client, consumer)['calibration'] == {}
+    deleted = client.post('/api/v1/library/trash/delete', headers=AUTH, json={'items': items, 'preview_fingerprint': initial['preview_fingerprint']})
+    assert deleted.status_code == 200 and not path.exists()
 
 def test_selected_protected_target_retains_shared_managed_path_until_retry(service):
     client, database, settings = service
@@ -228,8 +232,11 @@ def test_selected_protected_target_retains_shared_managed_path_until_retry(servi
     assert publish(client, consumer, [light], calibration={'dark': {'kind': 'asset', 'id': target_id}}).status_code == 200
     consumer = client.get(f"/api/v1/datasets/{consumer['id']}", headers=AUTH).json()
     entries = [{'entry_type': 'dataset', 'id': consumer['id'], 'revision': consumer['revision']}, {'entry_type': 'asset', 'id': target_id, 'revision': 1}]
+    manifest = settings.data_dir / 'library' / consumer['library_directory'] / 'dataset.json'
+    assert manifest.is_file()
     first = clean(client, selection(client, entries))[1]
-    assert first.status_code == 200 and first.json()['deleted_file_count'] == 0
+    assert first.status_code == 200 and first.json()['deleted_file_count'] == 1
+    assert not manifest.exists()
     assert path.read_bytes() == b'synthetic calibration input'
     with database.read_session() as session:
         assert session.get(Dataset, consumer['id']) is None
@@ -282,6 +289,6 @@ def test_complete_publication_checks_consumer_slot_purpose_without_science_requi
     master, _ = photo(service, slot, True)
     consumer = group(client, 'purpose consumer', [consumer_version])
     result = publish(client, consumer, [consumer_version], calibration={slot: {'kind': 'asset', 'id': master}})
-    assert result.status_code == (201 if accepted else 422), result.text
+    assert result.status_code == (200 if accepted else 422), result.text
     if not accepted:
         assert current_dataset(client, consumer)['calibration'] == {}

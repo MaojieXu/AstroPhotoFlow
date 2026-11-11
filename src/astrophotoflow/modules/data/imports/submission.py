@@ -68,5 +68,6 @@ def existing_import(session, request_id, fingerprint):
     if task is None:
         return None
     if task.request_fingerprint != fingerprint:
-        raise ApiError(409, 'IMPORT_REQUEST_CONFLICT', 'This request ID belongs to a different import.')
+        raise ApiError(409, 'IMPORT_REQUEST_CONFLICT', 'This request ID belongs to a different import.',
+                       message_key='this_request_id_belongs_to_a_different_import')
     return ImportAccepted(task_id=UUID(task.id), status='queued')

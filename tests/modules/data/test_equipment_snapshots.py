@@ -60,7 +60,7 @@ def test_direct_delete_detaches_combinations_defaults_and_preserves_existing_mat
     after = checked(client.get('/api/v1/library/assets/' + asset_id, headers=AUTH))
     assert after['equipment_snapshot'] == before['equipment_snapshot']
     assert after['capture_snapshot'] == before['capture_snapshot']
-    assert after['camera_id'] is None
+    assert after['parameters']['camera_id'] is None
     assert (root / 'photo-0.png').read_bytes() == content
 
 def test_direct_delete_rejects_changed_dependency_without_archiving(service):
@@ -160,9 +160,7 @@ def test_accepted_import_keeps_frozen_equipment(service, via, entry, mutation):
     assert asset['equipment_snapshot']['camera_id'] == expected
     assert asset['parameters']['camera_id'] == camera['id']
     assert asset['parameters']['gain'] == asset['parameters']['exposure_seconds'] == 0
-    version = asset
-    assert version['camera_id'] == (None if mutation in {'delete', 'direct_delete'} else camera['id'])
-    assert version['capture_snapshot']['equipment_snapshot']['camera_id'] == expected
+    assert asset['capture_snapshot']['equipment_snapshot']['camera_id'] == expected
     assert (root / 'photo-0.png').read_bytes() == content
     with app.state.database.read_session() as session:
         assert session.get(AssetTask, task_id).import_defaults_snapshot == frozen
@@ -187,7 +185,7 @@ def test_failed_registration_retry_uses_deleted_equipment_snapshot(service, via,
     assert completed['status'] == 'completed', completed
     asset = checked(client.get('/api/v1/library/assets/' + completed['items'][0]['asset_id'], headers=AUTH))
     assert asset['equipment_snapshot']['camera_id']['name'] == 'At acceptance'
-    assert asset['camera_id'] is None
+    assert asset['capture_snapshot']['equipment_snapshot']['camera_id']['id'] == camera['id']
     with app.state.database.read_session() as session:
         assert session.get(AssetTask, task_id).import_defaults_snapshot == session.get(AssetTask, retry['task_id']).import_defaults_snapshot
 
@@ -217,7 +215,7 @@ def test_partial_registration_resumes_after_equipment_deletion(service, monkeypa
     for item in task['items']:
         asset = checked(client.get('/api/v1/library/assets/' + item['asset_id'], headers=AUTH))
         assert asset['equipment_snapshot']['camera_id']['name'] == 'At acceptance'
-        assert asset['camera_id'] is None
+        assert asset['capture_snapshot']['equipment_snapshot']['camera_id']['id'] == camera['id']
 
 def test_material_history_sorting_filter_labels_and_explicit_edit(service):
     client, app, settings, root = service

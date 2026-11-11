@@ -76,9 +76,10 @@ def test_scanned_calibration_check_is_read_only_and_reuses_actual_file_facts(lib
         before = session.scalar(select(func.count()).select_from(Asset))
         result = check_import_calibration(session, settings, ScannedCalibrationCheckRequest.model_validate(request))
         ScannedCalibrationCheckPage.model_validate(result)
-        assert result['state'] == 'conflict'
+        assert result['state'] == 'unknown' and result['conflict_count'] == 0
         assert result['items'][0]['file_id'] == file_id
-        assert any((row['field'] == 'exposure_seconds' and row['code'] == 'METADATA_MISMATCH' for row in result['items'][0]['diagnostics']))
+        assert any(row['field'] == 'exposure_seconds' and row['code'] == 'METADATA_MISMATCH'
+                   and row['severity'] == 'warning' for row in result['items'][0]['diagnostics'])
         request['files'][0]['metadata'] = {'parameters': {'exposure_seconds': 60}}
         unknown = check_import_calibration(session, settings, ScannedCalibrationCheckRequest.model_validate(request))
         assert unknown['state'] == 'unknown' and unknown['conflict_count'] == 0
@@ -126,7 +127,8 @@ def test_scan_precheck_matches_registered_facts_with_nulls_and_cfa_overrides(lib
         diagnostics = lambda result: [(row['code'], row['field'], row['severity'], row.get('source_value'), row.get('target_value')) for row in result['items'][0]['diagnostics']]
         assert diagnostics(registered) == diagnostics(preflight)
         if changes.get('parameters', {}).get('gain', 'not-provided') is None:
-            assert any((row['field'] == 'gain' and row['severity'] == 'unknown' for row in preflight['items'][0]['diagnostics']))
+            assert any(row['field'] == 'gain' and row['code'] == 'METADATA_UNKNOWN'
+                       and row['severity'] == 'warning' for row in preflight['items'][0]['diagnostics'])
         if changes.get('parameters', {}).get('cfa_pattern') == 'RGGB':
             assert any((row['field'] == 'pixel_layout' and row['source_value'] == 'bayer' for row in preflight['items'][0]['diagnostics']))
 
@@ -153,14 +155,14 @@ def test_standalone_binding_updates_current_state_and_request_replay_precedes_re
             update_image_calibration(session, light.id, changed_request)
         assert conflict.value.code == 'REQUEST_CONFLICT'
 
-def test_known_camera_conflict_cannot_be_accepted_as_unknown(library):
+def test_different_camera_is_reported_as_warning(library):
     database, settings = library
     with database.write_session() as session:
         light = image(session, settings)
         dark = image(session, settings, 'dark', master=True, camera=str(uuid4()))
-        with pytest.raises(ApiError) as error:
-            validate_calibration_bindings(session, [light.id], {'dark': target(dark)}, accept_unknown=True)
-        assert error.value.code == 'CALIBRATION_CONFLICT'
+        checked = validate_calibration_bindings(session, [light.id], {'dark': target(dark)}, accept_unknown=True)
+        assert any(issue['field'] == 'camera_id' and issue['code'] == 'METADATA_MISMATCH'
+                   and issue['severity'] == 'warning' for issue in checked['items'][0]['diagnostics'])
 
 def test_unknown_master_history_requires_explicit_acceptance(library):
     database, settings = library
@@ -220,7 +222,7 @@ def test_science_inputs_freeze_actual_calibration_and_group_does_not_inherit_it(
         assert not calibration_references(session, {dark_id}, set())
     assert str(standalone.items[0].effective_calibration['dark'].id) == dark_id
     grouped = resolve_canvas_inputs(database, settings, DatasetInputReference(kind='dataset', dataset_id=UUID(group['dataset_id']), asset_ids=[UUID(light_id)]), run_directory=tmp_path / 'group')
-    assert grouped.items[0].effective_calibration['dark'] is None
+    assert 'dark' not in grouped.items[0].effective_calibration
     with database.read_session() as session:
         assert get_image_calibration(session, light_id)['bindings']['dark'] == {'mode': 'disabled'}
 
@@ -239,15 +241,15 @@ def test_group_calibration_changes_update_current_dataset(library):
         assert edited['revision'] == 2
 
 @pytest.mark.parametrize('field,value', [('offset', 1), ('readout_mode', 'other-mode'), ('exposure_seconds', 120)])
-def test_dark_electronic_and_exposure_mismatches_are_hard_conflicts(library, field, value):
+def test_dark_electronic_and_exposure_mismatches_are_warnings(library, field, value):
     database, settings = library
     with database.write_session() as session:
         light = image(session, settings)
         dark_asset = image(session, settings, 'dark', master=True)
         setattr(dark_asset, field, value)
-        with pytest.raises(ApiError) as error:
-            validate_calibration_bindings(session, [light.id], {'dark': target(dark_asset)}, accept_unknown=True)
-        assert error.value.code == 'CALIBRATION_CONFLICT'
+        checked = validate_calibration_bindings(session, [light.id], {'dark': target(dark_asset)}, accept_unknown=True)
+        assert any(issue['field'] == field and issue['code'] == 'METADATA_MISMATCH'
+                   and issue['severity'] == 'warning' for issue in checked['items'][0]['diagnostics'])
 
 def test_dark_temperature_difference_is_diagnostic_not_an_invented_tolerance(library):
     database, settings = library
@@ -258,19 +260,20 @@ def test_dark_temperature_difference_is_diagnostic_not_an_invented_tolerance(lib
         checked = validate_calibration_bindings(session, [light.id], {'dark': target(dark_asset)}, accept_unknown=True)
         assert any((issue['code'] == 'TEMPERATURE_DIFFERENCE' and issue['severity'] == 'warning' for issue in checked['items'][0]['diagnostics']))
 
-def test_flat_exposure_can_differ_but_selected_accessory_must_not(library):
+def test_flat_accessory_differs_with_warning_and_exposure_is_not_compared(library):
     database, settings = library
     with database.write_session() as session:
         light_asset = image(session, settings, exposure=300)
         flat_asset = image(session, settings, 'flat', master=True, exposure=1)
-        validate_calibration_bindings(session, [light_asset.id], {'flat': target(flat_asset)}, accept_unknown=True)
+        checked = validate_calibration_bindings(session, [light_asset.id], {'flat': target(flat_asset)}, accept_unknown=True)
+        assert all(issue['field'] != 'exposure_seconds' for issue in checked['items'][0]['diagnostics'])
         light_asset.equipment_snapshot = {'optical_system_id': {'effective_focal_length_mm': 1645, 'optical_accessory': {'id': str(uuid4()), 'name': 'first reducer', 'factor': 0.7}}}
         flat_asset.equipment_snapshot = {'optical_system_id': {'effective_focal_length_mm': 1645, 'optical_accessory': {'id': str(uuid4()), 'name': 'different reducer', 'factor': 0.7}}}
-        with pytest.raises(ApiError) as error:
-            validate_calibration_bindings(session, [light_asset.id], {'flat': target(flat_asset)}, accept_unknown=True)
-        assert error.value.code == 'CALIBRATION_CONFLICT'
+        checked = validate_calibration_bindings(session, [light_asset.id], {'flat': target(flat_asset)}, accept_unknown=True)
+        assert any(issue['field'] == 'optical_accessory_id' and issue['code'] == 'OPTICAL_STATE_MISMATCH'
+                   and issue['severity'] == 'warning' for issue in checked['items'][0]['diagnostics'])
 
-def test_known_gain_conflict_is_not_hidden_by_unknown_parameter_mode(library):
+def test_gain_difference_is_reported_with_unknown_parameter_mode(library):
     database, settings = library
     with database.write_session() as session:
         light_asset = image(session, settings)
@@ -278,10 +281,9 @@ def test_known_gain_conflict_is_not_hidden_by_unknown_parameter_mode(library):
         light_asset.parameter_mode = None
         dark_asset.parameter_mode = None
         dark_asset.gain = 99
-        with pytest.raises(ApiError) as error:
-            validate_calibration_bindings(session, [light_asset.id], {'dark': target(dark_asset)}, accept_unknown=True)
-        assert error.value.code == 'CALIBRATION_CONFLICT'
-        assert 'METADATA_MISMATCH' in error.value.fields[0]['message']
+        checked = validate_calibration_bindings(session, [light_asset.id], {'dark': target(dark_asset)}, accept_unknown=True)
+        assert any(issue['field'] == 'gain' and issue['code'] == 'METADATA_MISMATCH'
+                   and issue['severity'] == 'warning' for issue in checked['items'][0]['diagnostics'])
 
 def test_unrelated_default_change_does_not_reject_previously_accepted_unknown_dark(library):
     database, settings = library
