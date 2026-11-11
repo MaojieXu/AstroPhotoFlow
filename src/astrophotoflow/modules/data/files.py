@@ -14,6 +14,10 @@ def managed_data_path(data_dir: Path, relative: str | Path) -> Path:
         raise ApiError(422, 'FILE_SCOPE_INVALID', 'Managed paths must stay inside the data directory.', message_key='managed_paths_must_stay_inside_the_data_directory')
     lexical = root / relative
     path = lexical.resolve()
+    if os.name == 'nt' and path.drive.startswith('\\\\?\\') and not lexical.drive.startswith('\\\\?\\'):
+        extended = '\\\\?\\UNC\\' + str(lexical)[2:] if lexical.drive.startswith('\\\\') else '\\\\?\\' + str(lexical)
+        if path == Path(extended):
+            path = lexical
     if path == root or not path.is_relative_to(root):
         raise ApiError(422, 'FILE_SCOPE_INVALID', 'Managed paths must stay inside the data directory.', message_key='managed_paths_must_stay_inside_the_data_directory')
     for candidate in (lexical, *lexical.parents):
