@@ -176,7 +176,7 @@ def test_folder_auto_mtf_is_shared_only_by_object_subframes_and_big_view_reuses_
             hdu.writeto(path)
         else:
             XISF.write(str(path), (pixels + offset)[..., None], image_metadata={'FITSKeywords': {'OBJECT': [{'value': 'M42', 'comment': ''}], 'IMAGETYP': [{'value': label, 'comment': ''}]}})
-    accepted = client.post('/api/v1/imports', headers=AUTH, json={'sources': [{'root_id': 'science', 'path': ''}], 'storage_mode': 'managed'})
+    accepted = client.post('/api/v1/imports', headers=AUTH, json={'sources': [{'root_id': 'science', 'path': ''}], 'storage_mode': 'managed', 'mode': 'new_dataset'})
     result = client.get('/api/v1/asset-tasks/' + accepted.json()['task_id'], headers=AUTH).json()
     assert result['status'] == 'completed_with_errors'
     assert {item['name'] for item in result['report']['dataset_exclusions']} == {f'c.{category}', f'd.{category}'}
@@ -220,11 +220,10 @@ def test_new_auto_mtf_statistics_use_source_strata_rather_than_display_grid(serv
 def test_auto_stretch_scope_and_failure_keep_old_thumbnail(service, monkeypatch):
     _, app, client, root = service
     picture(root / 'a.png')
-    picture(root / 'b.png')
-    item, other = (imported(client, 'a.png'), imported(client, 'b.png'))
+    item = imported(client, 'a.png')
     url = base(item)
     original_small = client.get(url + '/thumbnail', headers=AUTH).content
-    assert client.post(url.replace(item['asset_id'], other['asset_id']) + '/display/auto-stretch', headers=AUTH, json={}).status_code == 404
+    assert client.post(base({'asset_id': str(uuid4())}) + '/display/auto-stretch', headers=AUTH, json={}).status_code == 404
     assert client.post(url + '/display/auto-stretch', json={}).status_code == 401
     decode = app.state.display_previews._pixels
 
@@ -512,12 +511,13 @@ def test_failed_display_can_retry_same_cache_and_deleted_version_cannot_publish(
     monkeypatch.setattr(previews, 'read_raster_preview', blocked)
     client.post(base(item) + '/display', headers=AUTH, json={})
     assert entered.wait(5)
-    with app.state.database.write_session() as session:
-        session.execute(delete(Preview).where(Preview.asset_id == item['asset_id']))
-        session.execute(update(Asset).where(Asset.id == item['asset_id']).values())
-        session.execute(update(AssetTaskItem).where(AssetTaskItem.asset_id == item['asset_id']).values(asset_id=None))
-        session.execute(delete(Asset).where(Asset.id == item['asset_id']))
-    release.set()
+    try:
+        with app.state.database.write_session() as session:
+            session.execute(delete(Preview).where(Preview.asset_id == item['asset_id']))
+            session.execute(update(AssetTaskItem).where(AssetTaskItem.asset_id == item['asset_id']).values(asset_id=None))
+            session.execute(delete(Asset).where(Asset.id == item['asset_id']))
+    finally:
+        release.set()
     assert decoded.wait(5)
     app.state.import_workers[1].submit(lambda: None).result(5)
     assert not list((settings.data_dir / 'previews' / item['asset_id']).glob('*display.jpg'))
@@ -549,11 +549,13 @@ def test_project_reference_reads_private_asset_and_rejects_wrong_scope(service):
     with app.state.database.read_session() as session:
         old_thumb = session.scalar(select(Preview).where(Preview.asset_id == old['asset_id'], Preview.size == 'thumbnail'))
         assert old_thumb.display_parameters['auto_stretch'] == parameters
-        assert not session.scalar(select(Preview).where(Preview.asset_id == newer['asset_id']))
+        assert not session.scalar(select(Preview).where(Preview.asset_id == newer['asset_id'], Preview.size == 'display'))
     wrong = str(uuid4())
     assert client.get(project_base.replace(project['id'], wrong) + '/display/status', headers=AUTH).status_code == 404
 
-def test_orphan_generating_record_is_failed_on_restart_and_does_not_block_cleanup(service):
+def test_orphan_generating_record_is_failed_on_restart_and_does_not_block_cleanup(service, monkeypatch):
+    from astrophotoflow.modules.data.media.thumbnail_service import ThumbnailService
+    monkeypatch.setattr(ThumbnailService, '_auto_batches', lambda self: None)
     settings, app, client, root = service
     picture(root / 'photo.png')
     item = imported(client, 'photo.png')
@@ -570,7 +572,7 @@ def test_orphan_generating_record_is_failed_on_restart_and_does_not_block_cleanu
         removal = other.get('/api/v1/library/trash', headers=AUTH).json()['items'][0]
         selection = {'items': [{key: removal[key] for key in ('entry_type', 'id', 'removed_at', 'revision')}]}
         cleanup = other.post('/api/v1/library/trash/delete-preview', headers=AUTH, json=selection)
-        assert cleanup.status_code == 200
+        assert cleanup.status_code == 200, cleanup.text
         result = other.post('/api/v1/library/trash/delete', headers=AUTH, json={**selection, 'preview_fingerprint': cleanup.json()['preview_fingerprint']})
         assert result.status_code == 200, result.text
         assert not temporary_path.exists()

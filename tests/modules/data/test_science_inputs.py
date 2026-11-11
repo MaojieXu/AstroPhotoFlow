@@ -13,6 +13,7 @@ from astrophotoflow.core.errors import ApiError
 from astrophotoflow.interfaces.http.app import create_app
 from astrophotoflow.contracts.inputs import ResolveInputsRequest
 from astrophotoflow.contracts.trash import LibraryEntriesRemove
+from astrophotoflow.modules.data.assets.models import Asset
 from astrophotoflow.modules.data.science.outputs import check_output
 from astrophotoflow.modules.data.science.outputs import get_output_registration
 from astrophotoflow.modules.data.science.inputs import observe_reference_inputs
@@ -40,11 +41,17 @@ def _client(tmp_path: Path, root: Path):
     client.__enter__()
     return (settings, client)
 
-def _import(client: TestClient, sources: list[str], storage_mode: str='reference'):
-    response = client.post('/api/v1/imports', headers=AUTH, json={'sources': [{'root_id': 'science', 'path': source} for source in sources], 'storage_mode': storage_mode, 'classification': {'frame_class': 'subframe', 'frame_type': 'light'}, 'parameters': {'gain': 42, 'parameter_mode': 'gain'}})
+def _import(client: TestClient, sources: list[str], *, mode='standalone', legacy_reference=False):
+    response = client.post('/api/v1/imports', headers=AUTH, json={'sources': [{'root_id': 'science', 'path': source} for source in sources], 'storage_mode': 'managed', 'mode': mode, 'classification': {'frame_class': 'subframe', 'frame_type': 'light'}, 'parameters': {'gain': 42, 'parameter_mode': 'gain'}})
     assert response.status_code == 202, response.text
     task = client.get(f"/api/v1/asset-tasks/{response.json()['task_id']}", headers=AUTH).json()
     assert task['status'] == 'completed', task
+    if legacy_reference:
+        with client.app.state.database.write_session() as session:
+            for item in task['items']:
+                asset = session.get(Asset, item['asset_id'])
+                asset.storage_mode = 'reference'
+                asset.storage_location = f"roots/science/{item['source_path']}"
     return task
 
 def test_resolve_fixed_asset_copies_reference_and_preserves_fits_selection(tmp_path):
@@ -52,7 +59,7 @@ def test_resolve_fixed_asset_copies_reference_and_preserves_fits_selection(tmp_p
     content = _write_fits(root / 'one.fits', 1)
     settings, client = _client(tmp_path, root)
     try:
-        task = _import(client, ['one.fits'])
+        task = _import(client, ['one.fits'], legacy_reference=True)
         item = task['items'][0]
         asset = client.get(f"/api/v1/library/assets/{item['asset_id']}", headers=AUTH).json()
         project = client.post('/api/v1/projects', headers=AUTH, json={'name': 'M31'}).json()
@@ -76,23 +83,25 @@ def test_resolve_fixed_asset_copies_reference_and_preserves_fits_selection(tmp_p
     finally:
         client.__exit__(None, None, None)
 
-def test_content_accept_rejects_restored_original_and_observation_reports_missing_managed_file(tmp_path):
+def test_content_observation_reports_restored_original_and_missing_managed_file(tmp_path):
     root = tmp_path / 'science'
     source = root / 'reference.fits'
     original = _write_fits(source, 1)
     settings, client = _client(tmp_path, root)
     try:
-        task = _import(client, ['reference.fits'])
+        task = _import(client, ['reference.fits'], legacy_reference=True)
         item = task['items'][0]
         changed = _write_fits(source, 2)
         observation = client.post(f"/api/v1/library/assets/{item['asset_id']}/content-observation", headers=AUTH).json()
         assert observation['state'] == 'changed'
         source.write_bytes(original)
-        unchanged = client.post(f"/api/v1/library/assets/{item['asset_id']}/content-accept", headers=AUTH, json={'base_revision': observation['base_revision'], 'expected_observed_hash': 'blake3:' + blake3.blake3(original).hexdigest()})
-        assert unchanged.status_code == 422
+        unchanged = client.post(f"/api/v1/library/assets/{item['asset_id']}/content-observation", headers=AUTH).json()
+        assert unchanged['state'] == 'unchanged'
+        assert unchanged['base_revision'] == observation['base_revision']
+        assert unchanged['observed_hash'] == 'blake3:' + blake3.blake3(original).hexdigest()
         managed_source = root / 'managed.fits'
         _write_fits(managed_source, 4)
-        managed_task = _import(client, ['managed.fits'], storage_mode='managed')
+        managed_task = _import(client, ['managed.fits'])
         managed_asset = client.get(f"/api/v1/library/assets/{managed_task['items'][0]['asset_id']}", headers=AUTH).json()
         managed_path = settings.data_dir / managed_asset['storage_location']
         managed_path.unlink()
@@ -110,7 +119,7 @@ def test_fixed_dataset_selection_keeps_member_order_and_original_positions(tmp_p
     _write_fits(root / 'b.fits', 2)
     settings, client = _client(tmp_path, root)
     try:
-        task = _import(client, ['b.fits', 'a.fits'])
+        task = _import(client, ['b.fits', 'a.fits'], mode='new_dataset')
         dataset = client.get(f"/api/v1/datasets/{task['dataset_id']}", headers=AUTH).json()
         version = client.get(f"/api/v1/datasets/{dataset['id']}/members", headers=AUTH).json()
         project = client.post('/api/v1/projects', headers=AUTH, json={'name': 'M31'}).json()
@@ -142,7 +151,7 @@ def test_output_registration_accepts_other_extension_and_removal_scope_is_read_o
         result = get_output_registration(client.app.state.database, settings, task_id)
         assert result.content_status == 'available'
         assert result.metadata_status == 'unsupported'
-        assert result.preview_status == 'unsupported'
+        assert result.preview_status == 'not_requested'
         output_path.unlink()
         assert get_output_registration(client.app.state.database, settings, task_id).asset_id == result.asset_id
         asset = client.get(f'/api/v1/library/assets/{result.asset_id}', headers=AUTH).json()

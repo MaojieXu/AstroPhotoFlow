@@ -27,7 +27,7 @@ def library(tmp_path):
     database = Database(settings.database_path)
     originals = []
     with database.write_session() as session:
-        for position in range(3):
+        for position in range(4):
             asset_id, = (str(uuid4()),)
             relative = f'objects/{asset_id}.fits'
             path = settings.data_dir / relative
@@ -63,8 +63,8 @@ def _preview_ids(database, batch_id):
 def test_group_uses_fixed_first_recipe_and_distinct_contexts(library):
     settings, database, images = library
     first_group = _group(database, 'first', [images[0][1], images[1][1]])
-    second_group = _group(database, 'second', [images[2][1], images[1][1]])
-    targets = [{'kind': 'dataset', 'dataset_id': group[0]} for group in (first_group, second_group)]
+    second_group = _group(database, 'second', [images[2][1], images[3][1]])
+    targets = [{'kind': 'dataset', 'dataset_id': group} for group in (first_group, second_group)]
     requests = [_request(target) for target in targets]
     ids = [create_thumbnail_batch(database, request) for request in requests]
     assert create_thumbnail_batch(database, requests[0]) == ids[0]
@@ -198,7 +198,7 @@ def test_interrupted_work_recovers_and_failed_group_retries(library):
 
 def test_retry_member_recovers_failed_first_without_retrying_other_members(library):
     settings, database, images = library
-    group = _group(database, 'group', [image[1] for image in images])
+    group = _group(database, 'group', [image[1] for image in images[:3]])
     batch = create_thumbnail_batch(database, _request({'kind': 'dataset', 'dataset_id': group}))
     first, second, third = _preview_ids(database, batch)
     images[0][2].unlink()

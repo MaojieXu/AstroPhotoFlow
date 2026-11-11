@@ -237,8 +237,13 @@ def test_apf_mcp_business_domains_protocol(service, tmp_path):
                 assert master['classification'] == {'frame_class': 'masterframe', 'frame_type': 'dark'}
                 targets = await call('data_calibration_search', slot='dark', query={'limit': 1, 'offset': 0})
                 assert targets['items'][0]['target'] == {'kind': 'asset', 'id': master['id']}
-                created = await call('data_datasets_create', request_id=str(uuid4()), name='SDK logical group', members=[{'asset_id': identity} for identity in asset_ids])
-                group = (await call('data_datasets_get', dataset_id=created['result']['dataset_id']))['dataset']
+                duplicate = await _call_operation(session, 'data_datasets_create', {
+                    'request_id': str(uuid4()), 'name': 'SDK duplicate group',
+                    'members': [{'asset_id': identity} for identity in asset_ids],
+                })
+                assert duplicate.is_error
+                assert ErrorEnvelope.model_validate_json(_result_text(duplicate)).error.code == 'ASSET_DATASET_OWNERSHIP'
+                group = (await call('data_datasets_get', dataset_id=task['stages']['publication']['dataset_id']))['dataset']
                 assert (await call('data_datasets_search', query={'text': group['name']}))['total'] == 1
                 bound = await call('data_calibration_update_dataset', request_id=str(uuid4()), dataset_id=group['id'], expected_revision=group['revision'], changes={'dark': {'mode': 'target', 'target': targets['items'][0]['target']}}, accept_unknown=True)
                 group = (await call('data_datasets_get', dataset_id=group['id']))['dataset']
@@ -267,7 +272,7 @@ def test_apf_mcp_business_domains_protocol(service, tmp_path):
                 (night / 'broken.fits').write_bytes(b'invalid FITS')
                 assert (await call('data_imports_roots'))['items'][0]['id'] == 'science'
                 assert (await call('data_imports_browse', root_id='science', path='sdk-night'))['total'] == 2
-                local = await call('data_imports_local', body={'sources': [{'root_id': 'science', 'path': 'sdk-night'}], 'storage_mode': 'reference'})
+                local = await call('data_imports_local', body={'sources': [{'root_id': 'science', 'path': 'sdk-night'}], 'storage_mode': 'managed'})
                 for _ in range(100):
                     local_task = await call('data_tasks_get', task_id=local['task_id'])
                     if local_task['status'] in FINAL_TASK_STATUSES:
@@ -502,8 +507,11 @@ def test_apf_mcp_confirmed_recursive_batch_and_fixed_project_links(service, tmp_
                 assert scan['file_count'] == 2 and 'groups' not in scan
                 before = await call('data_assets_search', {'query': {'limit': 50}})
                 assert before['total'] == baseline['total']
-                for tool_name in ('data_imports_import_dataset', 'data_tasks_wait'):
-                    discovered = await session.call_tool('search_tools', {'query': tool_name})
+                for tool_name, query in (
+                    ('data_imports_import_dataset', 'import dataset scan_id files calibration'),
+                    ('data_tasks_wait', 'wait import task request_id wait_seconds'),
+                ):
+                    discovered = await session.call_tool('search_tools', {'query': query})
                     definitions = json.loads(_result_text(discovered))
                     assert tool_name in {row['name'] for row in definitions}
                     assert len(definitions) <= 10

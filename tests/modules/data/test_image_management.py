@@ -195,10 +195,12 @@ def test_accessory_application_changes_only_requested_selection(db):
 def test_dataset_filters_require_same_member_and_default_members_include_archived(db):
     with db.write_session() as session:
         first = image(session, 'one', gain=0, exposure_seconds=100)
-        second = image(session, 'two', gain=10, exposure_seconds=200, status='archived')
+        second = image(session, 'two', gain=10, exposure_seconds=200)
         record_import_image_metadata(session, first.id, {'target_name': 'M31'})
         record_import_image_metadata(session, second.id, {'target_name': 'M42'})
         group = create_dataset(session, DatasetCreate(name='Mixed', asset_ids=[UUID(first.id), UUID(second.id)]))
+        second.status = 'archived'
+        session.flush()
         assert search_image_datasets(session, DatasetSearch(target_name='M31', gain_min=10)).total == 0
         matched = search_image_datasets(session, DatasetSearch(target_name='M31'))
         assert matched.total == 1 and matched.items[0].member_count == 2 and (matched.items[0].matching_member_count == 1)

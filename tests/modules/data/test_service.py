@@ -235,7 +235,7 @@ def test_dataset_library_removal_freezes_current_members(service):
     settings, client, database = service
     assets = {}
     with database.write_session() as session:
-        for name, gain in (('A.fit', 100), ('B.fit', 10)):
+        for name, gain in (('A.fit', 100), ('B.fit', 10), ('D.fit', 100)):
             asset_id, = (str(uuid4()),)
             asset = _seed_asset(id=asset_id, name=name, scope='shared', role='raw', status='active', revision=1, **classification_columns({'frame_class': 'subframe', 'frame_type': 'light'}), **parameter_columns({'parameter_mode': 'gain', 'gain': gain, 'offset': None}), storage_mode='reference', storage_location=name, availability='available')
             session.add(asset)
@@ -252,10 +252,13 @@ def test_dataset_library_removal_freezes_current_members(service):
         other_dataset = Dataset(id=other_dataset_id, name='Other', status='active', revision=1)
         session.add(other_dataset)
         session.flush()
-        session.add(DatasetMember(id=str(uuid4()), dataset_id=other_dataset_id, asset_id=assets['A.fit'], position=0))
+        session.add(DatasetMember(id=str(uuid4()), dataset_id=other_dataset_id, asset_id=assets['D.fit'], position=0))
     project = client.post('/api/v1/projects', headers=auth(), json={'name': 'Project'}).json()
     with database.write_session() as session:
-        session.add_all((ProjectAssetReference(id=str(uuid4()), project_id=project['id'], asset_id=asset_id) for asset_id in assets.values()))
+        session.add_all(
+            ProjectAssetReference(id=str(uuid4()), project_id=project['id'], asset_id=assets[name])
+            for name in ('A.fit', 'B.fit')
+        )
     before = client.get('/api/v1/library/items', headers=auth()).json()
     assert before['total'] == 3
     remove_group = {'entry_type': 'dataset', 'id': group_id, 'revision': 2}
@@ -338,7 +341,7 @@ def test_trash_group_restore_also_restores_individually_removed_members(service)
         assert session.get(Asset, asset_id).id == asset_id
         assert session.get(Asset, asset_id) is not None
 
-def test_trash_group_delete_uses_snapshot_including_previously_removed_member_only(service):
+def test_trash_group_delete_uses_snapshot_including_previously_removed_member(service):
     _, client, database = service
     asset_a, asset_b, dataset_id, old_id, current_id = (str(uuid4()) for _ in range(5))
     with database.write_session() as session:
@@ -354,18 +357,17 @@ def test_trash_group_delete_uses_snapshot_including_previously_removed_member_on
     assert client.request('DELETE', '/api/v1/library/items', headers=auth(), json={'items': [{'entry_type': 'dataset', 'id': dataset_id, 'revision': 1}]}).status_code == 200
     trash = client.get('/api/v1/library/trash', headers=auth()).json()['items']
     group = next((row for row in trash if row['entry_type'] == 'dataset'))
-    assert group['member_asset_ids'] == [asset_a]
+    assert set(group['member_asset_ids']) == {asset_a, asset_b}
     selection = {'items': [{key: group[key] for key in ('entry_type', 'id', 'removed_at', 'revision')}]}
     preview = client.post('/api/v1/library/trash/delete-preview', headers=auth(), json=selection).json()
-    assert preview['photo_count'] == 1
+    assert preview['photo_count'] == 2
     deleted = client.post('/api/v1/library/trash/delete', headers=auth(), json={**selection, 'preview_fingerprint': preview['preview_fingerprint']})
     assert deleted.status_code == 200, deleted.text
-    assert deleted.json()['deleted_count'] == 1 and deleted.json()['deleted_entry_count'] == 2
+    assert deleted.json()['deleted_count'] == 2 and deleted.json()['deleted_entry_count'] == 3
     with database.read_session() as session:
         assert session.get(Asset, asset_a) is None
         assert session.get(Dataset, dataset_id) is None
-        assert session.get(Asset, asset_b) is not None
-        assert session.get(Asset, asset_b) is not None
+        assert session.get(Asset, asset_b) is None
         assert session.scalar(select(DatasetMember.id).where(DatasetMember.asset_id == asset_b)) is None
 
 def test_trash_permanent_delete_removes_only_managed_files_and_reports_preview(service, monkeypatch):
@@ -522,7 +524,7 @@ def test_trash_recovers_after_progress_write_failure_without_reenabling_restore(
     assert retry.status_code == 200 and retry.json()['deleted_count'] == 1 and (retry.json()['failed'] == [])
     assert retry.json()['missing_file_count'] == 0
 
-def test_trash_delete_cleans_confirmed_project_and_membership_references(service):
+def test_trash_delete_requires_detaching_external_project_and_membership_references(service):
     _, client, database = service
     asset_id, = (str(uuid4()),)
     other_dataset_id, = (str(uuid4()),)
@@ -555,6 +557,22 @@ def test_trash_delete_cleans_confirmed_project_and_membership_references(service
     stale = client.post('/api/v1/library/trash/delete', headers=auth(), json={**selection, 'preview_fingerprint': preview['preview_fingerprint']})
     assert stale.status_code == 409, stale.text
     preview = client.post('/api/v1/library/trash/delete-preview', headers=auth(), json=selection).json()
+    blocked = client.post('/api/v1/library/trash/delete', headers=auth(), json={**selection, 'preview_fingerprint': preview['preview_fingerprint']})
+    assert blocked.status_code == 409 and blocked.json()['error']['code'] == 'REFERENCES_EXIST'
+    references = [
+        (project['id'], 'asset-references', project_asset_id, 1),
+        (project['id'], 'dataset-references', project_dataset_id, 2),
+        (late_project['id'], 'asset-references', late_reference_id, 1),
+    ]
+    for project_id, kind, reference_id, revision in references:
+        detached = client.request('DELETE', f'/api/v1/projects/{project_id}/{kind}/{reference_id}',
+                                  headers=auth(), json={'base_revision': revision})
+        assert detached.status_code == 200, detached.text
+    detached = client.put(f'/api/v1/datasets/{other_dataset_id}/members', headers=auth(),
+                          json={'base_revision': 1, 'asset_ids': []})
+    assert detached.status_code == 200, detached.text
+    preview = client.post('/api/v1/library/trash/delete-preview', headers=auth(), json=selection).json()
+    assert preview['references'] == []
     deleted = client.post('/api/v1/library/trash/delete', headers=auth(), json={**selection, 'preview_fingerprint': preview['preview_fingerprint']})
     assert deleted.status_code == 200, deleted.text
     assert deleted.json()['deleted_count'] == 1 and deleted.json()['deleted_entry_count'] == 2
@@ -934,14 +952,14 @@ def trash_recovery_group(service):
 def trash_selection(row):
     return {'items': [{key: row[key] for key in ('entry_type', 'id', 'removed_at', 'revision', 'source_dataset_id') if key in row}]}
 
-def test_trash_group_restore_ignores_paths_of_restored_and_independently_deleted_photo(trash_recovery_group, monkeypatch):
+def test_trash_group_restore_preserves_child_with_an_external_membership(trash_recovery_group, monkeypatch):
     group = trash_recovery_group
     client, database = (group.client, group.database)
     removed, intact = group.photos
     row = next((row for row in client.get('/api/v1/library/trash', headers=auth()).json()['items'] if row['id'] == group.id))
     group_id = row['id']
     with database.read_session() as session:
-        member = session.scalar(select(DatasetMember).where(DatasetMember.dataset_id == group_id, DatasetMember.asset_id == intact.asset_id))
+        member = session.scalar(select(DatasetMember).where(DatasetMember.dataset_id == group_id, DatasetMember.asset_id == intact.id))
         member_id, member_position = (member.id, member.position)
     intact_bytes = (intact.raw.read_bytes(), intact.thumb.read_bytes())
     selection = trash_selection(row)
@@ -976,22 +994,21 @@ def test_trash_group_restore_ignores_paths_of_restored_and_independently_deleted
     selection = trash_selection(row)
     preview = client.post('/api/v1/library/trash/delete-preview', headers=auth(), json=selection)
     assert preview.status_code == 200 and preview.json()['photo_count'] == 1, preview.text
-    deleted = client.post('/api/v1/library/trash/delete', headers=auth(), json={**selection, 'preview_fingerprint': preview.json()['preview_fingerprint']})
-    assert deleted.status_code == 200, deleted.text
-    assert deleted.json()['deleted_count'] == 1 and deleted.json()['deleted_file_count'] == 2 and (not deleted.json()['failed'])
-    assert not removed.raw.exists() and (not removed.thumb.exists())
+    blocked = client.post('/api/v1/library/trash/delete', headers=auth(), json={**selection, 'preview_fingerprint': preview.json()['preview_fingerprint']})
+    assert blocked.status_code == 409 and blocked.json()['error']['code'] == 'REFERENCES_EXIST'
+    assert removed.raw.exists() and removed.thumb.exists()
+    assert client.post('/api/v1/library/trash/restore', headers=auth(), json=selection).status_code == 200
     row = next((row for row in client.get('/api/v1/library/trash', headers=auth()).json()['items'] if row['id'] == group.id))
     assert row['member_asset_ids'] == [intact.id] and row['cleanup_status'] == 'trash'
     restored = client.post('/api/v1/library/trash/restore', headers=auth(), json=trash_selection(row))
     assert restored.status_code == 200, restored.text
     assert client.get('/api/v1/library/trash', headers=auth()).json()['total'] == 0
     with database.read_session() as session:
-        assert session.get(Asset, removed.id) is None
-        assert session.get(Asset, intact.id).id == intact.asset_id
-        assert session.get(Asset, intact.asset_id).asset_id == intact.id
+        assert session.get(Asset, removed.id) is not None
+        assert session.get(Asset, intact.id) is not None
         assert session.get(Dataset, group.id).id == group_id
         member = session.get(DatasetMember, member_id)
-        assert (member.dataset_id, member.asset_id, member.position) == (group_id, intact.asset_id, member_position)
+        assert (member.dataset_id, member.asset_id, member.position) == (group_id, intact.id, member_position)
     assert (intact.raw.read_bytes(), intact.thumb.read_bytes()) == intact_bytes
 
 def test_trash_partial_group_blocks_damaged_child_but_restores_intact_sibling(trash_recovery_group, monkeypatch):
@@ -1028,7 +1045,7 @@ def test_trash_partial_group_blocks_damaged_child_but_restores_intact_sibling(tr
     assert finished.status_code == 200 and (not finished.json()['failed']), finished.text
     with database.read_session() as session:
         assert session.get(Asset, damaged.id) is None and session.get(Dataset, group.id) is None
-        assert session.get(Asset, intact.id).id == intact.asset_id
+        assert session.get(Asset, intact.id) is not None
     assert intact.raw.exists() and intact.thumb.exists()
 
 @pytest.mark.parametrize('remove_source', [False, True])

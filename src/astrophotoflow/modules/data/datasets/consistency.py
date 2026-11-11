@@ -10,7 +10,13 @@ from astrophotoflow.modules.data.library.layout import CAPTURE_FIELDS, capture_i
 
 
 def capture_diagnostics(session, asset_ids: list[str]) -> dict:
-    assets = {asset.id: asset for asset in session.scalars(select(Asset).where(Asset.id.in_(asset_ids)))}
+    equipment_fields = {'camera', 'optical_system', 'filter'}
+    columns = [getattr(Asset, field + '_id' if field in equipment_fields else field) for field in CAPTURE_FIELDS]
+    rows = session.execute(
+        select(Asset.id, *columns, Asset.value_sources, Asset.equipment_snapshot, Asset.scientific_metadata)
+        .where(Asset.id.in_(asset_ids))
+    )
+    assets = {asset.id: asset for asset in rows}
     profiles = [(identity, capture_identity(assets[identity])) for identity in asset_ids if identity in assets]
     warnings, unknown_counts = [], {}
     for field in CAPTURE_FIELDS:

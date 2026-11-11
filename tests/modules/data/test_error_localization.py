@@ -18,7 +18,7 @@ def test_reference_observation_preserves_specific_error_and_diagnostics(tmp_path
     def fail(path):
         raise ApiError(422, 'SOURCE_UNAVAILABLE', '原始中文错误', fields=fields, message_key='the_asset_file_cannot_be_read_completely')
     monkeypatch.setattr(science_input_service, 'hash_file', fail)
-    inputs = SimpleNamespace(items=[SimpleNamespace(kind='asset_version', preparation='reference', read_path=tmp_path / 'missing.fit')])
+    inputs = SimpleNamespace(items=[SimpleNamespace(kind='asset', preparation='reference', read_path=tmp_path / 'missing.fit')])
     result = science_input_service.observe_reference_inputs(SimpleNamespace(workspace=tmp_path), inputs)[0]
     assert result.state == 'missing' and result.input_index == 0
     assert result.error.message == error_message(locale, '', 'the_asset_file_cannot_be_read_completely')

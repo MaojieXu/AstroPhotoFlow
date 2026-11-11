@@ -84,12 +84,10 @@ def selected_trash(session: Session, body):
             parent = session.get(LibraryEntryRemoval, ('dataset', source_dataset_id))
             if parent is not None and str(item.id) in (parent.member_asset_ids or []):
                 removal = LibraryEntryRemoval(entry_type='asset', entry_id=str(item.id), dataset_id=parent.dataset_id, member_asset_ids=[], pending_paths=[], cleaned_paths=[], cleaned_asset_ids=[], cleanup_status='trash', cleanup_error=None, removed_at=parent.removed_at)
-                removal.source_dataset_id = source_dataset_id
         elif removal is not None and source_dataset_id:
             parent = session.get(LibraryEntryRemoval, ('dataset', source_dataset_id))
             if parent is None or str(item.id) not in (parent.member_asset_ids or []):
                 raise ApiError(409, 'TRASH_STATE_CONFLICT', '照片已不属于该组的待清理范围。', message_key='the_photo_no_longer_belongs_to_this_group_s_cleanup_selection')
-            removal.source_dataset_id = source_dataset_id
         if removal is None or row is None or removal.cleanup_status not in {'trash', 'partial', 'failed'}:
             raise ApiError(409, 'TRASH_STATE_CONFLICT', '只能永久删除仍在垃圾桶中的内容。', message_key='only_content_still_in_trash_can_be_permanently_deleted')
         if (removal.removed_at.replace(tzinfo=UTC) if removal.removed_at.tzinfo is None else removal.removed_at.astimezone(UTC)) != (item.removed_at.replace(tzinfo=UTC) if item.removed_at.tzinfo is None else item.removed_at.astimezone(UTC)) or row.revision != item.revision:
@@ -98,6 +96,7 @@ def selected_trash(session: Session, body):
             raise ApiError(409, 'REVISION_CONFLICT', '照片版本已变化，请重新预览。', message_key='photo_versions_have_changed_preview_them_again')
         if isinstance(row, Dataset) and row.id != (str(item.id) if item.id else None):
             raise ApiError(409, 'REVISION_CONFLICT', '数据集版本已变化，请重新预览。', message_key='datasets_have_changed_preview_them_again')
+        removal.source_dataset_id = source_dataset_id
         records.append((removal, row))
     return records
 
@@ -112,14 +111,21 @@ def trash_scope(session: Session, settings: Settings, records):
     registered_asset_ids = {version.id for version in versions}
     assert_no_preview_jobs(session, registered_asset_ids)
     deleting_dataset_ids = {row.id for removal, row in records if removal.entry_type == 'dataset'}
+    selected_children = {
+        (row.id, removal.source_dataset_id)
+        for removal, row in records
+        if removal.entry_type == 'asset' and removal.source_dataset_id
+    }
+    internal_member_ids = set()
     refs = []
     for ref, project in session.execute(select(ProjectAssetReference, Project).join(Project, Project.id == ProjectAssetReference.project_id).where(ProjectAssetReference.asset_id.in_(registered_asset_ids))).all() if registered_asset_ids else []:
         version = session.get(Asset, ref.asset_id)
         refs.append({'id': UUID(ref.id), 'kind': 'project_asset', 'name': project.name})
     for member, dataset in session.execute(select(DatasetMember, Dataset).join(Dataset, Dataset.id == DatasetMember.dataset_id).where(DatasetMember.asset_id.in_(registered_asset_ids))).all() if registered_asset_ids else []:
-        refs.append({'id': UUID(member.id), 'kind': 'dataset_member', 'name': dataset.name})
-    internal_member_ids = set(session.scalars(select(DatasetMember.id).where(DatasetMember.dataset_id.in_(deleting_dataset_ids))))
-    refs = [ref for ref in refs if ref['kind'] != 'dataset_member' or str(ref['id']) not in internal_member_ids]
+        if dataset.id in deleting_dataset_ids or (member.asset_id, dataset.id) in selected_children:
+            internal_member_ids.add(member.id)
+        else:
+            refs.append({'id': UUID(member.id), 'kind': 'dataset_member', 'name': dataset.name})
     selected_dataset_ids = {removal.dataset_id for removal, _ in records if removal.entry_type == 'dataset' and removal.dataset_id}
     if registered_asset_ids:
         selected_dataset_ids.update(session.scalars(select(DatasetMember.dataset_id).where(DatasetMember.asset_id.in_(registered_asset_ids))).all())
@@ -164,17 +170,18 @@ def trash_scope(session: Session, settings: Settings, records):
             manifest = library_path(settings.data_dir, Path(dataset.library_directory) / 'dataset.json')
             paths[str(manifest)] = manifest
     managed_bytes = sum((path.stat().st_size for path in paths.values() if path.is_file()))
-    return (asset_ids, versions, previews, refs, task_ids, paths, managed_bytes)
+    return (asset_ids, versions, previews, refs, task_ids, paths, managed_bytes, internal_member_ids)
 
 def plan_cleanup(session: Session, settings: Settings, body: LibraryTrashSelection) -> LibraryTrashPreviewOut:
     records = selected_trash(session, body)
-    asset_ids, versions, _previews, refs, tasks, paths, managed_bytes = trash_scope(session, settings, records)
+    asset_ids, versions, _previews, refs, tasks, paths, managed_bytes, internal_member_ids = trash_scope(session, settings, records)
     snapshot = {'items': [(r.entry_type, r.entry_id, r.removed_at.isoformat(), row.revision, cleanup_status(session, r), tuple(sorted(r.pending_paths or [])), tuple(sorted(r.cleaned_paths or [])), tuple(sorted(r.member_asset_ids or [])), tuple(sorted(r.cleaned_asset_ids or []))) for r, row in records], 'assets': sorted(((asset.id, asset.revision) for asset in session.scalars(select(Asset).where(Asset.id.in_(asset_ids))).all())) if asset_ids else [], 'refs': sorted((ref['id'] for ref in refs)), 'tasks': sorted(tasks), 'paths': sorted(((key, path.stat().st_size if path.is_file() else None) for key, path in paths.items()))}
+    snapshot['memberships'] = sorted(internal_member_ids)
     fingerprint = hashlib.sha256(json.dumps(snapshot, sort_keys=True, default=str).encode()).hexdigest()
     return LibraryTrashPreviewOut.model_validate({'items': [trash_item(session, r) for r, _ in records], 'references': refs, 'tasks': tasks, 'photo_count': len(asset_ids), 'managed_file_count': len(paths), 'managed_bytes': managed_bytes, 'preview_fingerprint': fingerprint})
 
 
 def cleanup_originals(session, settings, body):
     records = selected_trash(session, body)
-    identities, _, _, _, _, paths, _ = trash_scope(session, settings, records)
+    identities, _, _, _, _, paths, _, _ = trash_scope(session, settings, records)
     return set(identities), {str(path) for path in paths.values()}

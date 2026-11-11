@@ -196,7 +196,7 @@ def test_large_inspection_summary_does_not_expand_all_members(environment):
     assert not {group['id'] for group in scan['groups']} & {group['id'] for group in page['items']}
 
 @pytest.mark.parametrize('archive', [False, True])
-def test_project_link_retry_preserves_published_members_or_reports_archive_failure(environment, monkeypatch, archive):
+def test_project_link_retry_rejects_a_changed_or_archived_publication(environment, monkeypatch, archive):
     from astrophotoflow.modules.data.imports import batches as import_batches
     source, client, db = environment
     write_fits(source / 'one.fits')
@@ -213,7 +213,7 @@ def test_project_link_retry_preserves_published_members_or_reports_archive_failu
     finalize(db, body['request_id'])
     with db.read_session() as session:
         task = session.get(AssetTask, task_id)
-        dataset_id, published = (task.dataset_id, task.report['dataset_id'])
+        dataset_id = task.dataset_id
     dataset = client.get(f'/api/v1/datasets/{dataset_id}', headers=AUTH).json()
     if archive:
         changed = client.patch(f'/api/v1/datasets/{dataset_id}', headers=AUTH, json={'base_revision': dataset['revision'], 'status': 'archived'})
@@ -226,11 +226,9 @@ def test_project_link_retry_preserves_published_members_or_reports_archive_failu
     status = client.get(f"/api/v1/import-batches/{body['request_id']}", headers=AUTH).json()
     link = status['groups'][0]['project_link']
     assert status['state'] != 'running', status
-    if archive:
-        assert link['state'] == 'failed', status
-    else:
-        assert link['state'] == 'linked', status
-        assert link['dataset_id'] == published
+    assert link['state'] == ('failed' if archive else 'skipped'), status
+    assert link['code'] == ('INVALID_REFERENCE' if archive else 'IMPORT_NOT_READY')
+    assert (client.get(f"/api/v1/projects/{project['id']}/datasets", headers=AUTH).json())['total'] == 0
     with db.read_session() as session:
         assert session.scalar(select(func.count()).select_from(AssetTask)) == 1
 

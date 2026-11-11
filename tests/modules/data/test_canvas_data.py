@@ -188,10 +188,7 @@ def test_inspect_uses_original_dimensions_and_current_parameters_without_reading
     assert assets[0] in value['preview_url']
     listing = client.get('/api/v1/library/items?limit=50&offset=0')
     assert listing.status_code == 200, listing.text
-    thumbnails = [item['thumbnail'] for item in listing.json()['items'] if item['thumbnail']]
-    assert thumbnails
-    assert thumbnails[0]['asset_id'] == assets[0]
-    assert thumbnails[0]['view_base'] == value['view_base']
+    assert all(item['thumbnail'] is None for item in listing.json()['items'])
     assert not (database.path.parent / 'objects/0.fits').exists()
 
 def test_inspect_group_index_selects_within_the_fixed_subset(canvas_library):

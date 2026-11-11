@@ -5,7 +5,6 @@ from astrophotoflow.modules.data.formats import layout as codec_formats_layout
 from astrophotoflow.modules.data.formats import pixels as codec_formats_pixels
 from astrophotoflow.modules.data.formats import fits as codec_formats_fits
 from astrophotoflow.modules.data.assets.metadata import classification_columns, parameter_columns
-from astrophotoflow.core.localization import error_message
 from pathlib import Path
 from io import BytesIO
 import struct
@@ -55,8 +54,8 @@ def make_client(tmp_path: Path, roots: tuple[ImportRoot, ...]):
     client.__enter__()
     return (settings, app, client)
 
-def start_import(client: TestClient, path: str, storage_mode: str='reference', *, sources=None, classification=None):
-    return client.post('/api/v1/imports', headers=AUTH, json={'sources': sources or [{'root_id': 'science', 'path': path}], 'storage_mode': storage_mode, 'classification': classification or {'frame_class': 'subframe', 'frame_type': 'light'}, 'parameters': {'parameter_mode': 'gain', 'gain': 42, 'exposure_seconds': 0, 'sensor_temperature_c': -10, 'binning_x': 1, 'binning_y': 2}, 'notes': 'night one\nM31'})
+def start_import(client: TestClient, path: str, *, mode='standalone', sources=None, classification=None):
+    return client.post('/api/v1/imports', headers=AUTH, json={'sources': sources or [{'root_id': 'science', 'path': path}], 'storage_mode': 'managed', 'mode': mode, 'classification': classification or {'frame_class': 'subframe', 'frame_type': 'light'}, 'parameters': {'parameter_mode': 'gain', 'gain': 42, 'exposure_seconds': 0, 'sensor_temperature_c': -10, 'binning_x': 1, 'binning_y': 2}, 'notes': 'night one\nM31'})
 
 def test_root_browser_import_versions_edit_and_dataset_references(tmp_path):
     root = tmp_path / 'science'
@@ -81,7 +80,7 @@ def test_root_browser_import_versions_edit_and_dataset_references(tmp_path):
         assert task['status'] == 'completed', ([{key: item[key] for key in ('status', 'content_status', 'metadata_status', 'preview_status', 'error')} for item in task['items']], task['report'])
         assert item['content_status'] == 'available'
         assert item['metadata_status'] == 'available'
-        assert item['preview_status'] == 'available'
+        assert item['preview_status'] == 'not_requested'
         asset_response = client.get('/api/v1/library/assets', headers=AUTH)
         asset = asset_response.json()['items'][0]
         version = asset
@@ -93,7 +92,7 @@ def test_root_browser_import_versions_edit_and_dataset_references(tmp_path):
         assert asset['value_sources']['classification.frame_type'] == 'manual'
         assert version['scientific_metadata']['observed_parameters']['gain'] == 9.0
         assert version['scientific_metadata']['observed_parameters']['exposure_seconds'] == 30.0
-        assert version['scientific_metadata']['observed_parameters']['sensor_temperature_setpoint_c'] == -15.0
+        assert version['scientific_metadata']['observed_parameters']['sensor_temperature_c'] == -15.0
         assert version['scientific_metadata']['observed_parameters']['file_classification_header'] == {'keyword': 'IMAGETYP', 'value': 'Light Frame'}
         assert asset['parameters']['sensor_temperature_c'] == -10
         assert asset['value_sources']['sensor_temperature_c'] == 'manual'
@@ -103,6 +102,7 @@ def test_root_browser_import_versions_edit_and_dataset_references(tmp_path):
         assert comments == ['first comment', 'second comment']
         hdus = client.get(f"/api/v1/library/assets/{asset['id']}/hdus", headers=AUTH)
         assert hdus.status_code == 200 and hdus.json()['total'] == 2
+        assert backfill_missing_previews(app.state.database, settings) == {'generated': 1, 'failed': 0}
         preview = client.get(f"/api/v1/library/assets/{asset['id']}/previews/thumbnail", headers=AUTH)
         assert preview.status_code == 200
         assert preview.headers['content-type'] == 'image/jpeg'
@@ -120,7 +120,7 @@ def test_root_browser_import_versions_edit_and_dataset_references(tmp_path):
         assert edited.json()['role'] == 'calibration'
         assert edited.json()['calibration_level'] == 'individual'
         assert edited.json()['parameters']['gain'] is None
-        assert client.get('/api/v1/library/assets', headers=AUTH, params={'role': 'calibration', 'calibration_level': 'master'}).json()['total'] == 1
+        assert client.get('/api/v1/library/assets', headers=AUTH, params={'role': 'calibration', 'calibration_level': 'individual'}).json()['total'] == 1
         project_asset = client.get(f"/api/v1/projects/{project['id']}/asset-references/{reference.json()['id']}", headers=AUTH).json()
         assert project_asset['asset']['notes'] == 'edited\nnotes'
         assert project_asset['asset']['id'] == version['id']
@@ -135,7 +135,7 @@ def test_root_browser_import_versions_edit_and_dataset_references(tmp_path):
         assert second_asset['classification'] == {'frame_class': 'subframe', 'frame_type': 'dark'}
         assert second_asset['role'] == 'calibration'
         assert second_asset['scientific_metadata']['observed_parameters']['file_classification_header']['value'] == 'Light Frame'
-        duplicate_batch = start_import(client, '', storage_mode='managed', sources=[{'root_id': 'science', 'path': 'M31/星云 #1.fits'}, {'root_id': 'science', 'path': 'M31/星云 #1.fits'}])
+        duplicate_batch = start_import(client, '', mode='new_dataset', sources=[{'root_id': 'science', 'path': 'M31/星云 #1.fits'}, {'root_id': 'science', 'path': 'M31/星云 #1.fits'}])
         duplicate_task = client.get(f"/api/v1/asset-tasks/{duplicate_batch.json()['task_id']}", headers=AUTH).json()
         assert duplicate_task['status'] == 'completed'
         assert sum((item['content_status'] == 'available' for item in duplicate_task['items'])) == 1
@@ -157,15 +157,17 @@ def test_root_browser_import_versions_edit_and_dataset_references(tmp_path):
         assert [member['asset_id'] for member in client.get(f"/api/v1/datasets/{dataset['id']}/members", headers=AUTH).json()['items']] == [retained_member['asset_id'], appended_version_id]
         assert client.get(f"/api/v1/projects/{project['id']}/dataset-references/{dataset_ref.json()['id']}", headers=AUTH).json()['dataset_id'] == dataset['id']
         reordered = client.put(f"/api/v1/datasets/{dataset['id']}/members", headers=AUTH, json={'base_revision': dataset['revision'] + 1, 'asset_ids': [appended_version_id, retained_member['asset_id']]})
-        assert reordered.status_code == 422
-        archived = client.patch(f"/api/v1/datasets/{dataset['id']}", headers=AUTH, json={'base_revision': dataset['revision'] + 1, 'status': 'archived'})
+        assert reordered.status_code == 200, reordered.text
+        ordered_members = client.get(f"/api/v1/datasets/{dataset['id']}/members", headers=AUTH).json()['items']
+        assert [member['asset_id'] for member in ordered_members] == [appended_version_id, retained_member['asset_id']]
+        archived = client.patch(f"/api/v1/datasets/{dataset['id']}", headers=AUTH, json={'base_revision': reordered.json()['revision'], 'status': 'archived'})
         assert archived.status_code == 200
         pinned = client.get(f"/api/v1/projects/{project['id']}/dataset-references/{dataset_ref.json()['id']}", headers=AUTH).json()
         assert pinned['dataset']['status'] == 'archived'
         assert pinned['dataset_id'] == dataset['id']
         write_fits(root / 'set' / 'z-last.fits', 2)
         write_fits(root / 'set' / 'A-first.fits', 3)
-        folder_task = start_import(client, 'set')
+        folder_task = start_import(client, 'set', mode='new_dataset')
         folder_result = client.get(f"/api/v1/asset-tasks/{folder_task.json()['task_id']}", headers=AUTH).json()
         assert folder_result['status'] == 'completed'
         assert [item['source_path'] for item in folder_result['items']] == ['set/A-first.fits', 'set/z-last.fits']
@@ -183,7 +185,7 @@ def test_browser_upload_creates_one_dataset_row_and_managed_assets(tmp_path):
     second = write_fits(tmp_path / 'second.fits', 3)
     settings, app, client = make_client(tmp_path, ())
     try:
-        created = client.post('/api/v1/uploads', headers=AUTH, json={'files': [{'name': 'first.fits', 'size': len(first)}, {'name': 'second.fits', 'size': len(second)}], 'classification': {'frame_class': 'subframe', 'frame_type': 'light'}, 'parameters': {}, 'notes': 'batch note', 'dataset_name': 'M31 session'})
+        created = client.post('/api/v1/uploads', headers=AUTH, json={'files': [{'name': 'first.fits', 'size': len(first)}, {'name': 'second.fits', 'size': len(second)}], 'classification': {'frame_class': 'subframe', 'frame_type': 'light'}, 'parameters': {}, 'notes': 'batch note', 'mode': 'new_dataset', 'dataset_name': 'M31 session'})
         assert created.status_code == 202
         task_id = created.json()['task_id']
         assert client.get('/api/v1/asset-tasks', headers=AUTH).json()['items'][0]['status'] == 'queued'
@@ -256,7 +258,7 @@ def test_project_asset_and_dataset_reference_deletes_check_revision_without_dele
     try:
         asset_task_id = start_import(client, 'single.fits').json()['task_id']
         asset_item = client.get(f'/api/v1/asset-tasks/{asset_task_id}', headers=AUTH).json()['items'][0]
-        dataset_task_id = start_import(client, 'group', sources=[{'root_id': 'science', 'path': 'group/one.fits'}, {'root_id': 'science', 'path': 'group/two.fits'}]).json()['task_id']
+        dataset_task_id = start_import(client, 'group', mode='new_dataset', sources=[{'root_id': 'science', 'path': 'group/one.fits'}, {'root_id': 'science', 'path': 'group/two.fits'}]).json()['task_id']
         dataset_task = client.get(f'/api/v1/asset-tasks/{dataset_task_id}', headers=AUTH).json()
         dataset = client.get(f"/api/v1/datasets/{dataset_task['dataset_id']}", headers=AUTH).json()
         project = client.post('/api/v1/projects', headers=AUTH, json={'name': 'reference deletion'}).json()
@@ -284,7 +286,7 @@ def test_import_without_override_uses_explicit_fits_classification(tmp_path):
     write_fits(root / 'unclassified.fits')
     settings, app, client = make_client(tmp_path, (ImportRoot('science', root),))
     try:
-        response = client.post('/api/v1/imports', headers=AUTH, json={'sources': [{'root_id': 'science', 'path': 'unclassified.fits'}], 'storage_mode': 'reference'})
+        response = client.post('/api/v1/imports', headers=AUTH, json={'sources': [{'root_id': 'science', 'path': 'unclassified.fits'}], 'storage_mode': 'managed'})
         assert response.status_code == 202, response.text
         task_id = response.json()['task_id']
         task = client.get(f'/api/v1/asset-tasks/{task_id}', headers=AUTH).json()
@@ -305,7 +307,7 @@ def test_unclassified_folder_file_is_saved_without_creating_a_dataset(tmp_path):
         buffer = BytesIO()
         Image.new('RGB', (12, 8), (80, 120, 200)).save(buffer, format='PNG')
         data = buffer.getvalue()
-        created = client.post('/api/v1/uploads', headers=AUTH, json={'files': [{'name': 'first.png', 'size': len(data)}], 'create_dataset': True, 'dataset_name': 'source-folder'})
+        created = client.post('/api/v1/uploads', headers=AUTH, json={'files': [{'name': 'first.png', 'size': len(data)}], 'mode': 'new_dataset', 'dataset_name': 'source-folder'})
         assert created.status_code == 202, created.text
         task_id = created.json()['task_id']
         assert client.put(f'/api/v1/uploads/{task_id}/0', headers=AUTH, content=data).status_code == 200
@@ -329,7 +331,7 @@ def test_dataset_member_parameter_update_is_atomic_and_creates_no_asset_versions
             buffer = BytesIO()
             Image.new('RGB', (12, 8), color).save(buffer, format='PNG')
             data.append(buffer.getvalue())
-        created = client.post('/api/v1/uploads', headers=AUTH, json={'files': [{'name': 'one.png', 'size': len(data[0])}, {'name': 'two.png', 'size': len(data[1])}], 'classification': {'frame_class': 'subframe', 'frame_type': 'light'}})
+        created = client.post('/api/v1/uploads', headers=AUTH, json={'files': [{'name': 'one.png', 'size': len(data[0])}, {'name': 'two.png', 'size': len(data[1])}], 'mode': 'new_dataset', 'classification': {'frame_class': 'subframe', 'frame_type': 'light'}})
         task_id = created.json()['task_id']
         for index, payload in enumerate(data):
             client.put(f'/api/v1/uploads/{task_id}/{index}', headers=AUTH, content=payload)
@@ -353,19 +355,23 @@ def test_dataset_member_parameter_update_is_atomic_and_creates_no_asset_versions
     finally:
         client.__exit__(None, None, None)
 
-def test_backfill_records_missing_reference_and_continues_to_next_asset(tmp_path):
+def test_backfill_records_missing_managed_original_and_continues_to_next_asset(tmp_path):
     root = tmp_path / 'science'
     for name, color in (('missing.png', 'red'), ('available.png', 'blue')):
         root.mkdir(parents=True, exist_ok=True)
         Image.new('RGB', (12, 8), color).save(root / name)
     settings, app, client = make_client(tmp_path, (ImportRoot('science', root),))
     try:
-        start_import(client, 'missing.png')
-        start_import(client, 'available.png')
+        missing = start_import(client, 'missing.png')
+        assert missing.status_code == 202, missing.text
+        assert start_import(client, 'available.png').status_code == 202
+        task = client.get(f"/api/v1/asset-tasks/{missing.json()['task_id']}", headers=AUTH).json()
         with app.state.database.write_session() as session:
+            missing_copy = settings.data_dir / session.get(Asset, task['items'][0]['asset_id']).storage_location
             session.execute(__import__('sqlalchemy').delete(Preview))
-        (root / 'missing.png').unlink()
+        missing_copy.unlink()
         assert backfill_missing_previews(app.state.database, settings) == {'generated': 1, 'failed': 1}
+        assert (root / 'missing.png').is_file()
     finally:
         client.__exit__(None, None, None)
 
@@ -377,14 +383,15 @@ def test_non_bayer_cfa_stays_registered_and_reports_preview_unsupported(tmp_path
     hdu.writeto(root / 'xtrans.fits')
     settings, app, client = make_client(tmp_path, (ImportRoot('science', root),))
     try:
-        accepted = start_import(client, 'xtrans.fits', storage_mode='managed', classification={'frame_class': None, 'frame_type': None})
+        accepted = start_import(client, 'xtrans.fits', classification={'frame_class': None, 'frame_type': None})
         task = client.get(f"/api/v1/asset-tasks/{accepted.json()['task_id']}", headers=AUTH).json()
         item = task['items'][0]
         asset = client.get(f"/api/v1/library/assets/{item['asset_id']}", headers=AUTH).json()
-        assert task['status'] == 'completed_with_errors'
+        assert task['status'] == 'completed'
         assert asset['parameters']['cfa_pattern'] == 'XTRANS'
-        assert item['preview_status'] == 'unsupported'
-        assert item['error']['message'] == error_message('en', '', 'import_cfa_preview_unsupported', {'layout': 'xtrans'})
+        assert item['preview_status'] == 'not_requested'
+        assert backfill_missing_previews(app.state.database, settings) == {'generated': 0, 'failed': 0}
+        assert client.get(f"/api/v1/library/assets/{asset['id']}/previews/thumbnail", headers=AUTH).status_code == 404
         video = client.patch(f"/api/v1/library/assets/{asset['id']}", headers=AUTH, json={'base_revision': asset['revision'], 'classification': {'frame_class': 'video'}})
         assert video.status_code == 200
         restored = client.patch(f"/api/v1/library/assets/{asset['id']}", headers=AUTH, json={'base_revision': video.json()['revision'], 'classification': {'frame_class': 'subframe'}})
@@ -407,7 +414,7 @@ def test_backfill_recognizes_previously_unsupported_pixinsight_rgb_without_reimp
     try:
         with monkeypatch.context() as legacy:
             legacy.setattr(codec_formats_layout, 'rgb_channel_first', lambda header: False)
-            accepted = start_import(client, 'color.fits', storage_mode='managed')
+            accepted = start_import(client, 'color.fits')
         assert accepted.status_code == 202
         before = client.get('/api/v1/library/assets', headers=AUTH).json()['items'][0]
         asset_id, version_id = (before['id'], before['id'])
@@ -446,8 +453,9 @@ def test_ordinary_images_create_only_small_preview(tmp_path):
     original = source.read_bytes()
     settings, app, client = make_client(tmp_path, (ImportRoot('science', root),))
     try:
-        accepted = start_import(client, 'portrait.png', storage_mode='managed')
+        accepted = start_import(client, 'portrait.png')
         assert accepted.status_code == 202
+        assert backfill_missing_previews(app.state.database, settings) == {'generated': 1, 'failed': 0}
         asset = client.get('/api/v1/library/assets', headers=AUTH).json()['items'][0]
         version = asset
         response = client.get(f"/api/v1/library/assets/{asset['id']}/previews/thumbnail", headers=AUTH)
@@ -468,7 +476,7 @@ def test_ordinary_images_create_only_small_preview(tmp_path):
     finally:
         client.__exit__(None, None, None)
 
-def test_fits_batch_stretches_each_photo_independently_and_restores_it_on_resume(tmp_path):
+def test_fits_batch_stretches_each_photo_independently_and_restores_it_on_backfill(tmp_path):
     root = tmp_path / 'science'
     root.mkdir()
     cases = (('a.fit', 0, 30, 'L'), ('b.fit', 1000, 30, 'L'), ('c.fit', 2000, 60, 'L'), ('d.fit', None, 30, 'Ha'), ('e.fit', 3000, 30, 'Ha'))
@@ -480,27 +488,26 @@ def test_fits_batch_stretches_each_photo_independently_and_restores_it_on_resume
         hdu.writeto(root / name)
     settings, app, client = make_client(tmp_path, (ImportRoot('science', root),))
     try:
-        created = client.post('/api/v1/imports', headers=AUTH, json={'sources': [{'root_id': 'science', 'path': name} for name, *_ in cases], 'storage_mode': 'reference', 'classification': {'frame_class': 'subframe', 'frame_type': 'light'}, 'parameters': {}, 'notes': ''})
+        created = client.post('/api/v1/imports', headers=AUTH, json={'sources': [{'root_id': 'science', 'path': name} for name, *_ in cases], 'storage_mode': 'managed', 'classification': {'frame_class': 'subframe', 'frame_type': 'light'}, 'parameters': {}, 'notes': ''})
         assert created.status_code == 202
         task_id = created.json()['task_id']
         task = client.get(f'/api/v1/asset-tasks/{task_id}', headers=AUTH).json()
         items = {Path(item['source_path']).name: item for item in task['items']}
-        assert items['d.fit']['preview_status'] == 'failed'
+        assert task['status'] == 'completed'
+        assert items['d.fit']['preview_status'] == 'not_requested'
+        assert backfill_missing_previews(app.state.database, settings) == {'generated': 4, 'failed': 1}
         with app.state.database.read_session() as session:
             displays = {name: session.scalar(select(Preview).where(Preview.asset_id == items[name]['asset_id'], Preview.size == 'thumbnail')).display_parameters for name in ('a.fit', 'b.fit', 'c.fit', 'e.fit')}
             assert 'preview_stretch_groups' not in session.get(AssetTask, task_id).report
         for name, offset in (('b.fit', 1000), ('c.fit', 2000), ('e.fit', 3000)):
-            assert displays[name]['auto_stretch']['highlights'] == pytest.approx(displays['a.fit']['auto_stretch']['highlights'] + offset)
+            assert displays[name]['stretch_high'] == pytest.approx(displays['a.fit']['stretch_high'] + offset)
             assert 'stretch_reference_asset_id' not in displays[name]
             assert 'stretch_group' not in displays[name]
         assert client.get(f"/api/v1/library/assets/{items['b.fit']['asset_id']}/previews/detail", headers=AUTH).status_code == 404
         assert len(list((settings.data_dir / 'previews' / items['b.fit']['asset_id']).glob('*.jpg'))) == 1
         with app.state.database.write_session() as session:
             session.delete(session.scalar(select(Preview).where(Preview.asset_id == items['b.fit']['asset_id'], Preview.size == 'thumbnail')))
-            session.get(AssetTaskItem, items['b.fit']['id']).status = 'interrupted'
-            session.get(AssetTaskItem, items['b.fit']['id']).preview_status = 'pending'
-            session.get(AssetTask, task_id).status = 'running'
-        run_import_task(app.state.database, settings, task_id)
+        assert backfill_missing_previews(app.state.database, settings) == {'generated': 1, 'failed': 1}
         with app.state.database.read_session() as session:
             resumed = session.scalar(select(Preview).where(Preview.asset_id == items['b.fit']['asset_id'], Preview.size == 'thumbnail'))
             assert resumed.display_parameters == displays['b.fit']
@@ -518,16 +525,17 @@ def test_xisf_and_high_depth_images_stretch_each_photo_independently(tmp_path):
         Image.fromarray(values + offset).save(root / name)
     settings, app, client = make_client(tmp_path, (ImportRoot('science', root),))
     try:
-        created = client.post('/api/v1/imports', headers=AUTH, json={'sources': [{'root_id': 'science', 'path': name} for name in ('a.xisf', 'b.xisf', 'a.tif', 'b.tif')], 'storage_mode': 'reference', 'classification': {'frame_class': 'subframe', 'frame_type': 'light'}, 'parameters': {}, 'notes': ''})
+        created = client.post('/api/v1/imports', headers=AUTH, json={'sources': [{'root_id': 'science', 'path': name} for name in ('a.xisf', 'b.xisf', 'a.tif', 'b.tif')], 'storage_mode': 'managed', 'classification': {'frame_class': 'subframe', 'frame_type': 'light'}, 'parameters': {}, 'notes': ''})
         assert created.status_code == 202
         task = client.get(f"/api/v1/asset-tasks/{created.json()['task_id']}", headers=AUTH).json()
         assert task['status'] == 'completed', task
         items = {Path(item['source_path']).name: item for item in task['items']}
+        assert backfill_missing_previews(app.state.database, settings) == {'generated': 4, 'failed': 0}
         with app.state.database.read_session() as session:
             displays = {name: session.scalar(select(Preview).where(Preview.asset_id == item['asset_id'], Preview.size == 'thumbnail')).display_parameters for name, item in items.items()}
             assert 'preview_stretch_groups' not in session.get(AssetTask, created.json()['task_id']).report
         for first, second in (('a.xisf', 'b.xisf'), ('a.tif', 'b.tif')):
-            assert displays[second]['auto_stretch']['highlights'] == pytest.approx(displays[first]['auto_stretch']['highlights'] + 1000)
+            assert displays[second]['stretch_high'] == pytest.approx(displays[first]['stretch_high'] + 1000)
             assert 'stretch_reference_asset_id' not in displays[second]
             assert 'stretch_group' not in displays[second]
     finally:
@@ -553,7 +561,8 @@ def test_xisf_and_heif_imports_create_slot_zero_previews_for_assets_and_referenc
         assert created.status_code == 202, created.text
         task = client.get(f"/api/v1/asset-tasks/{created.json()['task_id']}", headers=AUTH).json()
         assert task['status'] == 'completed', task
-        assert [item['preview_status'] for item in task['items']] == ['available'] * 4
+        assert [item['preview_status'] for item in task['items']] == ['not_requested'] * 4
+        assert backfill_missing_previews(app.state.database, settings) == {'generated': 4, 'failed': 0}
         assets = client.get('/api/v1/library/assets', headers=AUTH).json()['items']
         categorized = {category: [asset for asset in assets if asset['scientific_metadata']['format'] == category] for category in ('xisf', 'image')}
         assert len(categorized['xisf']) == 1 and len(categorized['image']) == 3
@@ -600,7 +609,7 @@ def test_interrupted_unpublished_copy_is_removed_before_retry(tmp_path, monkeypa
             stage.parent.mkdir(parents=True, exist_ok=True)
             stage.write_bytes(b'interrupted copy')
         monkeypatch.setattr(owner_enumeration, 'enumerate_task', leave_partial_copy)
-        accepted = start_import(client, 'partial.fits', storage_mode='managed')
+        accepted = start_import(client, 'partial.fits')
         task = client.get(f"/api/v1/asset-tasks/{accepted.json()['task_id']}", headers=AUTH).json()
         assert task['status'] == 'completed'
         assert task['items'][0]['content_status'] == 'available'
@@ -609,7 +618,7 @@ def test_interrupted_unpublished_copy_is_removed_before_retry(tmp_path, monkeypa
         client.__exit__(None, None, None)
 
 @pytest.mark.parametrize('kind', ['fits', 'image', 'video'])
-def test_resume_finishes_preview_after_content_was_registered(tmp_path, monkeypatch, kind):
+def test_resume_finishes_import_with_preview_deferred_after_content_was_registered(tmp_path, monkeypatch, kind):
     root = tmp_path / 'science'
     path = root / {'fits': 'frame.fits', 'image': 'frame.png', 'video': 'frame.ser'}[kind]
     if kind == 'fits':
@@ -652,7 +661,7 @@ def test_resume_finishes_preview_after_content_was_registered(tmp_path, monkeypa
         assert task['status'] == 'completed'
         assert task['items_completed'] == 1
         assert task['items'][0]['content_status'] == 'available'
-        assert task['items'][0]['preview_status'] == 'available'
+        assert task['items'][0]['preview_status'] == 'not_requested'
         assert task['items'][0]['asset_id'] == asset_id
         assert client.get('/api/v1/library/assets', headers=AUTH).json()['total'] == 1
     finally:
@@ -671,7 +680,7 @@ def test_dataset_filters_require_one_member_to_match_all_conditions(tmp_path):
             buffer = BytesIO()
             Image.new('RGB', (8, 8), color).save(buffer, format='PNG')
             files.append(buffer.getvalue())
-        created = client.post('/api/v1/uploads', headers=AUTH, json={'files': [{'name': 'low.png', 'size': len(files[0])}, {'name': 'high.png', 'size': len(files[1])}], 'classification': {'frame_class': 'subframe', 'frame_type': 'light'}})
+        created = client.post('/api/v1/uploads', headers=AUTH, json={'files': [{'name': 'low.png', 'size': len(files[0])}, {'name': 'high.png', 'size': len(files[1])}], 'mode': 'new_dataset', 'classification': {'frame_class': 'subframe', 'frame_type': 'light'}})
         task_id = created.json()['task_id']
         for index, data in enumerate(files):
             client.put(f'/api/v1/uploads/{task_id}/{index}', headers=AUTH, content=data)
@@ -685,11 +694,11 @@ def test_dataset_filters_require_one_member_to_match_all_conditions(tmp_path):
         assert cross_match.json()['total'] == 0
         actual_match = client.get('/api/v1/library/items', headers=AUTH, params=[('camera_id', cameras[1]['id']), ('gain_min', '90')])
         assert actual_match.json()['total'] == 1
-        positive_temperature = client.get('/api/v1/library/items', headers=AUTH, params=[('camera_id', cameras[1]['id']), ('temperature_min', '1')])
+        positive_temperature = client.get('/api/v1/library/items', headers=AUTH, params=[('camera_id', cameras[1]['id']), ('temperature_min', '0.5')])
         assert positive_temperature.json()['total'] == 1
-        wrong_positive_temperature = client.get('/api/v1/library/items', headers=AUTH, params=[('camera_id', cameras[0]['id']), ('temperature_min', '1')])
+        wrong_positive_temperature = client.get('/api/v1/library/items', headers=AUTH, params=[('camera_id', cameras[0]['id']), ('temperature_min', '0.5')])
         assert wrong_positive_temperature.json()['total'] == 0
-        negative_temperature = client.get('/api/v1/library/items', headers=AUTH, params=[('camera_id', cameras[0]['id']), ('temperature_max', '-1')])
+        negative_temperature = client.get('/api/v1/library/items', headers=AUTH, params=[('camera_id', cameras[0]['id']), ('temperature_max', '-0.5')])
         assert negative_temperature.json()['total'] == 1
         facets = client.get('/api/v1/library/filter-options', headers=AUTH).json()
         assert {item['id'] for item in facets['equipment']['camera_id']} == {camera['id'] for camera in cameras}
@@ -733,11 +742,12 @@ def test_ser_import_previews_survive_decode_failure_and_backfill_each_item(tmp_p
         assert accepted.status_code == 202
         task = client.get(f"/api/v1/asset-tasks/{accepted.json()['task_id']}", headers=AUTH).json()
         by_path = {item['source_path']: item for item in task['items']}
-        assert task['status'] == 'completed_with_errors'
+        assert task['status'] == 'completed'
         assert by_path['valid.ser']['content_status'] == 'available'
-        assert by_path['valid.ser']['preview_status'] == 'available'
+        assert by_path['valid.ser']['preview_status'] == 'not_requested'
         assert by_path['broken.ser']['content_status'] == 'available'
-        assert by_path['broken.ser']['preview_status'] == 'failed'
+        assert by_path['broken.ser']['preview_status'] == 'not_requested'
+        assert backfill_missing_previews(app.state.database, settings) == {'generated': 1, 'failed': 1}
         good_asset = client.get(f"/api/v1/library/assets/{by_path['valid.ser']['asset_id']}", headers=AUTH).json()
         good_version = good_asset
         for size, expected in (('thumbnail', (60, 40)),):
@@ -796,7 +806,7 @@ def test_empty_folder_import_does_not_publish_dataset(tmp_path):
     (root / 'empty').mkdir(parents=True)
     _, app, client = make_client(tmp_path, (ImportRoot('science', root),))
     try:
-        accepted = start_import(client, 'empty')
+        accepted = start_import(client, 'empty', mode='new_dataset')
         task = client.get(f"/api/v1/asset-tasks/{accepted.json()['task_id']}", headers=AUTH).json()
         assert task['status'] == 'failed'
         assert task['dataset_id'] is None
@@ -886,7 +896,7 @@ def test_cancel_during_enumeration_keeps_only_registered_items(tmp_path, monkeyp
     finally:
         client.__exit__(None, None, None)
 
-def test_metadata_failure_keeps_content_and_retry_does_not_recreate_asset(tmp_path, monkeypatch):
+def test_metadata_failure_retries_from_managed_original_without_recreating_asset(tmp_path, monkeypatch):
     root = tmp_path / 'science'
     original_bytes = write_fits(root / 'retry.fits')
     _, app, client = make_client(tmp_path, (ImportRoot('science', root),))
@@ -912,15 +922,9 @@ def test_metadata_failure_keeps_content_and_retry_does_not_recreate_asset(tmp_pa
         assert retry['retry_of_task_id'] == original['id']
         assert retry['items'][0]['asset_id'] == asset_id
         assert retry['items'][0]['content_status'] == 'available'
-        assert retry['items'][0]['metadata_status'] == 'failed'
-        assert client.get('/api/v1/library/assets', headers=AUTH).json()['total'] == 1
-        (root / 'retry.fits').write_bytes(original_bytes)
-        retried_again = client.post(f"/api/v1/asset-tasks/{retry['id']}/retry", headers=AUTH, json={'item_ids': [retry['items'][0]['id']]})
-        assert retried_again.status_code == 202
-        completed = client.get(f"/api/v1/asset-tasks/{retried_again.json()['task_id']}", headers=AUTH).json()
-        assert completed['items'][0]['asset_id'] == asset_id
-        assert completed['items'][0]['content_status'] == 'available'
-        assert completed['items'][0]['metadata_status'] == 'available'
+        assert retry['items'][0]['metadata_status'] == 'available'
+        asset = client.get(f'/api/v1/library/assets/{asset_id}', headers=AUTH).json()
+        assert asset['content_hash'] == 'blake3:' + blake3.blake3(original_bytes).hexdigest()
         assert client.get('/api/v1/library/assets', headers=AUTH).json()['total'] == 1
     finally:
         client.__exit__(None, None, None)
@@ -930,7 +934,7 @@ def test_dataset_revision_conflict_keeps_assets_for_manual_append(tmp_path):
     write_fits(root / 'batch' / 'first.fits', 1)
     settings, app, client = make_client(tmp_path, (ImportRoot('science', root),))
     try:
-        initial = start_import(client, 'batch')
+        initial = start_import(client, 'batch', mode='new_dataset')
         initial_task = client.get(f"/api/v1/asset-tasks/{initial.json()['task_id']}", headers=AUTH).json()
         dataset = client.get(f"/api/v1/datasets/{initial_task['dataset_id']}", headers=AUTH).json()
         before_version_id = dataset['id']
@@ -968,12 +972,12 @@ def test_library_removal_is_atomic_persistent_and_preserves_shared_data(tmp_path
     try:
 
         def import_group(paths_to_import):
-            accepted = start_import(client, paths_to_import[0], 'managed', sources=[{'root_id': 'science', 'path': path} for path in paths_to_import])
+            accepted = start_import(client, paths_to_import[0], mode='new_dataset', sources=[{'root_id': 'science', 'path': path} for path in paths_to_import])
             assert accepted.status_code == 202
             return client.get(f"/api/v1/asset-tasks/{accepted.json()['task_id']}", headers=AUTH).json()
         group_a = import_group(paths[:2])
         group_b = import_group(paths[2:4])
-        dark_task = start_import(client, 'dark.fits', 'managed', classification={'frame_class': 'subframe', 'frame_type': 'dark'})
+        dark_task = start_import(client, 'dark.fits', classification={'frame_class': 'subframe', 'frame_type': 'dark'})
         dark_item = client.get(f"/api/v1/asset-tasks/{dark_task.json()['task_id']}", headers=AUTH).json()['items'][0]
         dataset_a = client.get(f"/api/v1/datasets/{group_a['dataset_id']}", headers=AUTH).json()
         dataset_b = client.get(f"/api/v1/datasets/{group_b['dataset_id']}", headers=AUTH).json()
@@ -982,7 +986,8 @@ def test_library_removal_is_atomic_persistent_and_preserves_shared_data(tmp_path
         shared_asset = group_a['items'][0]
         shared_version_id = shared_asset['asset_id']
         extended_b = client.put(f"/api/v1/datasets/{dataset_b['id']}/members", headers=AUTH, json={'base_revision': dataset_b['revision'], 'asset_ids': [member['asset_id'] for member in version_b['items']] + [shared_version_id]})
-        assert extended_b.status_code == 200
+        assert extended_b.status_code == 409
+        assert extended_b.json()['error']['code'] == 'ASSET_DATASET_OWNERSHIP'
         dataset_b = client.get(f"/api/v1/datasets/{dataset_b['id']}", headers=AUTH).json()
         project = client.post('/api/v1/projects', headers=AUTH, json={'name': 'entry preservation'}).json()
         asset_reference = client.post(f"/api/v1/projects/{project['id']}/asset-references", headers=AUTH, json={'base_revision': 1, 'asset_id': shared_version_id}).json()
@@ -1020,7 +1025,7 @@ def test_library_removal_is_atomic_persistent_and_preserves_shared_data(tmp_path
         assert all(((root / path).read_bytes() == content for path, content in originals.items()))
         assert 'light' in client.get('/api/v1/library/filter-options', headers=AUTH).json()['frame_types']
         extra_bytes = write_fits(root / 'extra.fits', 8)
-        extra_task = start_import(client, 'extra.fits', 'managed')
+        extra_task = start_import(client, 'extra.fits')
         extra_item = client.get(f"/api/v1/asset-tasks/{extra_task.json()['task_id']}", headers=AUTH).json()['items'][0]
         extra_asset = client.get(f"/api/v1/library/assets/{extra_item['asset_id']}", headers=AUTH).json()
         row_b = {'entry_type': 'dataset', 'id': dataset_b['id'], 'revision': dataset_b['revision']}
@@ -1033,10 +1038,10 @@ def test_library_removal_is_atomic_persistent_and_preserves_shared_data(tmp_path
         assert extra_managed.read_bytes() == extra_bytes
         assert 'blake3:' + blake3.blake3(extra_managed.read_bytes()).hexdigest() == extra_asset['content_hash']
         rollback_bytes = write_fits(root / 'rollback.fits', 9)
-        rollback_task = start_import(client, 'rollback.fits', 'managed')
+        rollback_task = start_import(client, 'rollback.fits')
         rollback_item = client.get(f"/api/v1/asset-tasks/{rollback_task.json()['task_id']}", headers=AUTH).json()['items'][0]
         rollback_asset = client.get(f"/api/v1/library/assets/{rollback_item['asset_id']}", headers=AUTH).json()
-        conflicting_group = {**row_b}
+        conflicting_group = {**row_b, 'revision': row_b['revision'] + 1}
         conflict = client.request('DELETE', '/api/v1/library/items', headers=AUTH, json={'items': [{'entry_type': 'asset', 'id': rollback_asset['id'], 'revision': rollback_asset['revision']}, conflicting_group]})
         assert conflict.status_code == 409
         remaining = client.get('/api/v1/library/items', headers=AUTH).json()

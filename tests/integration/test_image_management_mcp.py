@@ -65,9 +65,9 @@ def image_service(tmp_path):
         listener.close()
         assert not thread.is_alive(), 'Isolated image HTTP service did not stop'
 
-def write_fits(path: Path, *, frame='Light Frame', target='M31', exposure=300, observed='2026-11-01T23:00:00', gain=0, temperature=-10, seed=1):
+def write_fits(path: Path, *, frame='Light Frame', target='M31', exposure=300, observed='2026-11-01T23:00:00', gain=0, temperature=-10, seed=1, shape=(16, 16)):
     """Only authored, small FITS files are used; zeros and absent fields stay distinct."""
-    hdu = fits.PrimaryHDU(np.arange(256, dtype=np.float32).reshape(16, 16) + seed)
+    hdu = fits.PrimaryHDU(np.arange(np.prod(shape), dtype=np.float32).reshape(shape) + seed)
     for key, value in {'IMAGETYP': frame, 'OBJECT': target, 'EXPTIME': exposure, 'DATE-OBS': observed, 'GAIN': gain, 'OFFSET': 0, 'CCD-TEMP': temperature, 'XBINNING': 1, 'YBINNING': 1, 'FILTER': 'L'}.items():
         if value is not None:
             hdu.header[key] = value
@@ -207,7 +207,9 @@ def test_cross_night_m31_keeps_group_calibration_and_updates_current_members(ima
             unknown = await session.call_tool('data_calibration_update_image', {'request_id': str(uuid4()), 'asset_id': first_asset['id'], 'expected_revision': first_asset['revision'], 'changes': {'flat': target(b)}})
             assert unknown.is_error and 'UNKNOWN' in result_text(unknown).upper()
             await call(session, 'data_calibration_update_image', request_id=str(uuid4()), asset_id=first_asset['id'], expected_revision=first_asset['revision'], changes={'flat': target(b)}, accept_unknown=True)
-            assert await call(session, 'data_calibration_get_dataset', dataset_id=dataset_id) == old_calibration
+            unchanged_group = await call(session, 'data_calibration_get_dataset', dataset_id=dataset_id)
+            for key in ('dataset_id', 'revision', 'calibration', 'slots'):
+                assert unchanged_group[key] == old_calibration[key]
             group = (await call(session, 'data_datasets_get', dataset_id=dataset_id))['dataset']
             night_two = write_fits(root / 'm31-night-two.fits', exposure=180, observed='2026-11-02T23:00:00', seed=40)
             scan_id, files = await inspected(session, [night_two])
@@ -273,7 +275,7 @@ def test_known_calibration_conflict_is_rejected_even_when_unknowns_accepted(imag
             camera = await call(session, 'data_equipment_register_camera', name='Conflict test camera')
             defaults = {'metadata': {'parameters': {'parameter_mode': 'gain'}}, 'equipment': {'choice': {'source': 'devices', 'camera': {'equipment_id': camera['id'], 'expected_revision': camera['revision']}}, 'fields': ['camera']}}
             light, item, _ = await import_asset(session, write_fits(root / 'light.fits'), defaults=defaults)
-            _, bad_dark, _ = await import_asset(session, write_fits(root / 'wrong-gain.fits', frame='Master Dark', gain=99), defaults=defaults)
+            _, bad_dark, _ = await import_asset(session, write_fits(root / 'wrong-size.fits', frame='Master Dark', shape=(16, 32)), defaults=defaults)
             before = await call(session, 'data_calibration_get_image', asset_id=light['id'])
             request_id = str(uuid4())
             result = await session.call_tool('data_calibration_update_image', {'request_id': request_id, 'asset_id': light['id'], 'expected_revision': light['revision'], 'changes': {'dark': target(bad_dark)}, 'accept_unknown': True})

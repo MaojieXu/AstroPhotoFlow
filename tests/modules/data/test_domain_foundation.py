@@ -63,6 +63,7 @@ def test_import_snapshot_freezes_registered_and_inline_components(tmp_path):
 def test_calibration_contract_distinguishes_unconfigured_disabled_and_fixed_master():
     adapter = TypeAdapter(CalibrationBindings)
     version_id = str(uuid4())
-    parsed = adapter.validate_python({'bias': None, 'flat': {'kind': 'asset_version', 'id': version_id}})
-    assert adapter.dump_python(parsed, mode='json') == {'bias': None, 'flat': {'kind': 'asset_version', 'id': version_id}}
+    bindings = {'bias': None, 'flat': {'kind': 'asset', 'id': version_id}, 'dark_flat': {'mode': 'unconfigured'}}
+    parsed = adapter.validate_python(bindings)
+    assert adapter.dump_python(parsed, mode='json') == bindings
     assert 'dark' not in parsed

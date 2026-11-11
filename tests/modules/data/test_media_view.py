@@ -1,5 +1,6 @@
 from astrophotoflow.modules.data.formats import pixels as codec_formats_pixels
 from io import BytesIO
+from math import ceil
 from pathlib import Path
 from threading import Event
 import time
@@ -15,6 +16,7 @@ from astrophotoflow.core.database.schema import database_lock, initialize_databa
 from astrophotoflow.contracts.media import MediaSelection
 from astrophotoflow.interfaces.http.app import create_app
 from astrophotoflow.modules.data.assets.models import Asset
+from astrophotoflow.modules.data.media.import_previews import backfill_missing_previews
 from astrophotoflow.modules.data.media.models import Preview
 from astrophotoflow.modules.data.public import check_output
 from astrophotoflow.modules.data.media.ownership import owned_preview_locations
@@ -97,13 +99,15 @@ def test_legacy_rgb_preview_rebalances_and_resolution_is_display_only(media_serv
     hdu.writeto(path)
     original = path.read_bytes()
     base, item = add(client, 'cast.fit')
+    assert backfill_missing_previews(app.state.database, settings) == {'generated': 1, 'failed': 0}
     with app.state.database.write_session() as session:
         row = session.scalar(select(Preview).where(Preview.asset_id == item['asset_id'], Preview.size == 'thumbnail'))
         row.display_parameters = {'stretch_low': 0.005, 'stretch_high': 0.025}
     state = prepare(client, base, {'preview_max_edge': edge})
     assert state['status'] == 'available'
     overview = np.asarray(Image.open(BytesIO(client.get(native_url(state['overview_url']), headers=AUTH).content)))
-    assert overview.shape[1] == (min(2100, edge) if edge else 2100)
+    step = ceil(2100 / edge) if edge else 1
+    assert overview.shape[:2] == (ceil(320 / step), ceil(2100 / step))
     medians = np.median(overview, axis=(0, 1))
     assert medians.max() - medians.min() <= 2
     preserve = prepare(client, base, {'preview_max_edge': edge, 'display_balance': 'preserve'})

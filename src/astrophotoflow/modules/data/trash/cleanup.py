@@ -94,16 +94,14 @@ def finalize_cleanup(write: Session, result: FileCleanupResult) -> set[str]:
 
 def delete_library_trash(session: Session, database: Database, settings: Settings, body: LibraryTrashDelete) -> LibraryTrashDeleteOut:
     records = selected_trash(session, body)
-    asset_ids, versions, previews, refs, tasks, paths, _managed_bytes = trash_scope(session, settings, records)
+    asset_ids, versions, previews, refs, tasks, paths, _managed_bytes, internal_member_ids = trash_scope(session, settings, records)
     if refs:
         raise ApiError(409, 'REFERENCES_EXIST', 'Detach external references before permanently deleting originals.', [{'path': ref['kind'], 'message': ref['name']} for ref in refs], message_key='library_external_references_block_cleanup')
     if tasks:
         raise ApiError(409, 'IMPORT_ACTIVE', '正在执行或可恢复的导入任务仍占用所选内容，请先取消任务。', message_key='an_active_or_resumable_import_task_still_holds_the_selected_content_cancel_')
-    expected_references = {str(ref['id']) for ref in refs}
+    expected_references = internal_member_ids
     deleting_dataset_ids = {row.id for removal, row in records if removal.entry_type == 'dataset'}
     expected_group_references = {group_id: set(session.scalars(select(ProjectDatasetReference.id).where(ProjectDatasetReference.dataset_id == group_id)).all()) for group_id in deleting_dataset_ids}
-    if deleting_dataset_ids:
-        expected_references.update(session.scalars(select(DatasetMember.id).join(Dataset, Dataset.id == DatasetMember.dataset_id).where(Dataset.id.in_(deleting_dataset_ids))).all())
     expected_tasks = set(tasks)
     asset_states = {asset.id: (asset.revision, asset.id) for asset in session.scalars(select(Asset).where(Asset.id.in_(asset_ids))).all()} if asset_ids else {}
     original_paths = {str(path): path for path in paths.values()}
