@@ -11,7 +11,7 @@ import { useUpdateAsset } from './mutations'
 export function useAssetEditor(workspaceId: MaybeRefOrGetter<string>) {
   const write = useUpdateAsset()
   async function saveField(
-    asset: Pick<AssetOut, 'id' | 'revision'>,
+    asset: Pick<AssetOut, 'id' | 'revision' | 'calibration_status'>,
     field: string,
     value: string | number | null
   ) {
@@ -42,6 +42,7 @@ export function useAssetEditor(workspaceId: MaybeRefOrGetter<string>) {
         base_revision: asset.revision,
         parameters: { [field]: value }
       }
+    else if (field === 'calibration_reason') payload = { base_revision: asset.revision, calibration_status: asset.calibration_status, calibration_reason: value }
     else payload = { base_revision: asset.revision, [field]: value }
     return write.mutateAsync({
       workspaceId: toValue(workspaceId),

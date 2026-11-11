@@ -43,12 +43,9 @@ def uv_version() -> str:
 
 
 def uv_environment(runtime: Path) -> dict[str, str]:
-    python_bin_dir = runtime / "python-bin"
     cache_dir = Path(os.environ.get("UV_CACHE_DIR", runtime / "uv-cache"))
-    python_bin_dir.mkdir(parents=True, exist_ok=True)
     cache_dir.mkdir(parents=True, exist_ok=True)
     environment = os.environ.copy()
-    environment["UV_PYTHON_BIN_DIR"] = str(python_bin_dir)
     environment["UV_PYTHON_INSTALL_REGISTRY"] = "0"
     environment["UV_PYTHON_PREFERENCE"] = "only-managed"
     environment["UV_CACHE_DIR"] = str(cache_dir)
@@ -86,10 +83,18 @@ def probe_python(python: Path, *, timeout: float = 120) -> dict | None:
 
 def install_frontend(workspace: Path, frontend_assets: Path | None = None) -> Path:
     package = paths.package_directory()
-    source = frontend_assets if frontend_assets is not None else package / "web"
-    if not (source / "index.html").is_file():
-        raise WorkbenchError(f"原生网页资源不存在：{source / 'index.html'}")
+    configured = frontend_assets if frontend_assets is not None else package / "web"
+    if not (configured / "index.html").is_file():
+        raise WorkbenchError(f"原生网页资源不存在：{configured / 'index.html'}")
+    source = configured.resolve()
     target = workspace / "web"
+    destination = target.resolve()
+    if source.is_relative_to(destination) or destination.is_relative_to(source):
+        raise WorkbenchError("请选择独立于 workspace 网页目录的构建产物。")
+    if target.is_junction():
+        target.rmdir()
+    elif target.is_symlink():
+        target.unlink()
     source_files = {path.relative_to(source) for path in source.rglob("*") if path.is_file()}
     shutil.copytree(source, target, dirs_exist_ok=True)
     for path in target.rglob("*"):
@@ -172,8 +177,7 @@ def prepare_cpu_runtime(runtime: Path, source_archive: Path, digest: str, *, reu
     if probed is None and env_dir.exists():
         shutil.rmtree(env_dir)
     if not comfy_python.is_file():
-        run_command([uv_executable(), "python", "install", *(["--no-registry"] if os.name == "nt" else []), PYTHON_VERSION], env=uv_env)
-        run_command([uv_executable(), "venv", "--managed-python", "--python", PYTHON_VERSION, str(env_dir)], env=uv_env)
+        run_command([uv_executable(), "venv", "--python", PYTHON_VERSION, str(env_dir)], env=uv_env)
     run_command([uv_executable(), "pip", "install", "--python", str(comfy_python), *(["--no-deps"] if os.name == "nt" else []), "--index-url", constants.TORCH_CPU_INDEX,
           f"torch=={constants.TORCH_CPU}", f"torchvision=={constants.TORCHVISION_CPU}"], env=uv_env)
     requirements = source_archive.with_name("comfyui-0.42.0-windows-py312.lock") if os.name == "nt" else comfyui / "requirements.txt"

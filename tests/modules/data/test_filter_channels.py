@@ -7,7 +7,7 @@ from astrophotoflow.contracts.metadata import AssetParametersPatch
 from astrophotoflow.contracts.setups import EquipmentSetupCreate, EquipmentSetupQuery
 from astrophotoflow.core.config import Settings
 from astrophotoflow.core.database.db import Database
-from astrophotoflow.core.database.schema import upgrade_database
+from astrophotoflow.core.database.schema import initialize_database
 from astrophotoflow.modules.data.equipment.queries import list_setups
 from astrophotoflow.modules.data.equipment.service import create_equipment, update_equipment
 from astrophotoflow.modules.data.equipment.setups import create_setup
@@ -24,7 +24,7 @@ def test_free_text_channel_and_unknown_legacy_snapshot():
 
 def test_selected_filter_channel_is_frozen_without_renaming_the_filter(tmp_path):
     settings = Settings("127.0.0.1", 8190, tmp_path / "data", (), workspace=tmp_path)
-    upgrade_database(settings)
+    initialize_database(settings)
     with closing(Database(settings.database_path)) as database, database.write_session() as session:
         device = create_equipment(session, FilterCreate(kind="filter", name="L-Pro", specs={"channel": "RGB"}))
         setup = create_setup(session, EquipmentSetupCreate(name="Rig", components=[
@@ -44,7 +44,7 @@ def test_selected_filter_channel_is_frozen_without_renaming_the_filter(tmp_path)
 
 def test_filter_sort_uses_channel_then_numeric_bandwidth_for_both_sources(tmp_path):
     settings = Settings("127.0.0.1", 8190, tmp_path / "data", (), workspace=tmp_path)
-    upgrade_database(settings)
+    initialize_database(settings)
     with closing(Database(settings.database_path)) as database, database.write_session() as session:
         for bandwidth in (12, 7, 3):
             body = {"kind": "filter", "name": "Same physical label", "specs": {"channel": "Ha", "bandwidth_nm": bandwidth}}

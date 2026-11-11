@@ -1,24 +1,14 @@
 from __future__ import annotations
-
 from datetime import UTC
 from uuid import UUID
-
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
-
-from astrophotoflow.contracts.trash import (
-    LibraryEntriesRemove,
-    LibraryEntriesRemoveOut,
-    LibraryTrashPage,
-    LibraryTrashRestoreOut,
-    LibraryTrashSelection,
-)
+from astrophotoflow.contracts.trash import LibraryEntriesRemove, LibraryEntriesRemoveOut, LibraryTrashPage, LibraryTrashRestoreOut, LibraryTrashSelection
 from astrophotoflow.core.errors import ApiError, not_found
-from astrophotoflow.modules.data.assets.models import Asset, AssetVersion
+from astrophotoflow.modules.data.assets.models import Asset
 from astrophotoflow.modules.data.datasets.models import Dataset, DatasetMember
 from astrophotoflow.modules.data.trash.models import LibraryEntryRemoval
 from astrophotoflow.modules.data.trash.scope import cleanup_status, trash_item
-
 
 def remove_library_entries(session: Session, body: LibraryEntriesRemove) -> LibraryEntriesRemoveOut:
     removals = set(session.execute(select(LibraryEntryRemoval.entry_type, LibraryEntryRemoval.entry_id)).all())
@@ -37,16 +27,16 @@ def remove_library_entries(session: Session, body: LibraryEntriesRemove) -> Libr
                 raise not_found()
             if record.revision != item.revision:
                 raise ApiError(409, 'REVISION_CONFLICT', 'The selected record changed.', message_key='another_window_changed_the_configuration_read_it_again_before_saving')
-            if record.current_version_id != (str(item.current_version_id) if item.current_version_id else None):
+            if record.id != (str(item.id) if item.id else None):
                 raise ApiError(409, 'REVISION_CONFLICT', '数据集成员版本已变化，请重新读取后删除。', message_key='dataset_member_versions_have_changed_read_them_again_before_deletion')
-        checked.append((item.entry_type, record_id, record.current_version_id if item.entry_type == 'dataset' else None))
+        checked.append((item.entry_type, record_id, record.id if item.entry_type == 'dataset' else None))
     added = 0
-    for entry_type, entry_id, dataset_version_id in checked:
+    for entry_type, entry_id, dataset_id in checked:
         if (entry_type, entry_id) not in removals:
             member_asset_ids = []
-            if entry_type == 'dataset' and dataset_version_id:
-                member_asset_ids = list(session.scalars(select(AssetVersion.asset_id).join(DatasetMember, DatasetMember.asset_version_id == AssetVersion.id).where(DatasetMember.dataset_version_id == dataset_version_id).distinct()).all())
-            session.add(LibraryEntryRemoval(entry_type=entry_type, entry_id=entry_id, dataset_version_id=dataset_version_id, member_asset_ids=member_asset_ids, cleanup_status='trash'))
+            if entry_type == 'dataset' and dataset_id:
+                member_asset_ids = list(session.scalars(select(Asset.id).join(DatasetMember, DatasetMember.asset_id == Asset.id).where(DatasetMember.dataset_id == dataset_id).distinct()).all())
+            session.add(LibraryEntryRemoval(entry_type=entry_type, entry_id=entry_id, dataset_id=dataset_id, member_asset_ids=member_asset_ids, cleanup_status='trash'))
             added += 1
     session.flush()
     return LibraryEntriesRemoveOut.model_validate({'removed_count': added})
@@ -65,7 +55,7 @@ def library_trash(session: Session, limit: int=50, offset: int=0, group_id: UUID
             if asset_removal is not None:
                 items.append(trash_item(session, asset_removal, group_id_text))
             else:
-                virtual = LibraryEntryRemoval(entry_type='asset', entry_id=asset.id, dataset_version_id=group_removal.dataset_version_id, member_asset_ids=[], pending_paths=[], cleaned_paths=[], cleaned_asset_ids=[], cleanup_status='trash', cleanup_error=None, removed_at=group_removal.removed_at)
+                virtual = LibraryEntryRemoval(entry_type='asset', entry_id=asset.id, dataset_id=group_removal.dataset_id, member_asset_ids=[], pending_paths=[], cleaned_paths=[], cleaned_asset_ids=[], cleanup_status='trash', cleanup_error=None, removed_at=group_removal.removed_at)
                 items.append(trash_item(session, virtual, group_id_text))
         return LibraryTrashPage.model_validate({'items': items, 'total': len(asset_ids), 'limit': limit, 'offset': offset})
     total = session.scalar(select(func.count()).select_from(LibraryEntryRemoval)) or 0
@@ -87,10 +77,10 @@ def restore_library_trash(session: Session, body: LibraryTrashSelection) -> Libr
         row = session.get(Asset if item.entry_type == 'asset' else Dataset, removal.entry_id)
         if row is None or row.revision != item.revision or (removal.removed_at.replace(tzinfo=UTC) if removal.removed_at.tzinfo is None else removal.removed_at.astimezone(UTC)) != (item.removed_at.replace(tzinfo=UTC) if item.removed_at.tzinfo is None else item.removed_at.astimezone(UTC)):
             raise ApiError(409, 'REVISION_CONFLICT', '垃圾桶记录已变化，请重新读取。', message_key='trash_records_have_changed_read_them_again')
-        if isinstance(row, Asset) and row.current_version_id != (str(item.current_version_id) if item.current_version_id else None):
+        if isinstance(row, Asset) and row.id != (str(item.id) if item.id else None):
             raise ApiError(409, 'REVISION_CONFLICT', '照片版本已变化，请重新读取。', message_key='photo_versions_have_changed_read_them_again')
-        if isinstance(row, Dataset) and row.current_version_id != (str(item.current_version_id) if item.current_version_id else None):
-            raise ApiError(409, 'REVISION_CONFLICT', '数据集版本已变化，请重新读取。', message_key='dataset_versions_have_changed_read_them_again')
+        if isinstance(row, Dataset) and row.id != (str(item.id) if item.id else None):
+            raise ApiError(409, 'REVISION_CONFLICT', '数据集版本已变化，请重新读取。', message_key='datasets_have_changed_read_them_again')
         if source_dataset_id and item.entry_type == 'asset':
             source_group = session.get(LibraryEntryRemoval, ('dataset', source_dataset_id))
             if source_group is None or removal.entry_id not in (source_group.member_asset_ids or []):

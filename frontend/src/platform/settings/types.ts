@@ -13,6 +13,7 @@ export type BookmarkCustomization = {
 export type PreviewMethod = 'default' | 'none' | 'auto' | 'latent2rgb' | 'taesd'
 
 export type Settings = {
+  'AstroPhotoFlow.ResultThumbnailSize': 512 | 1024 | 2048
   'Comfy.ColorPalette': string
   'Comfy.CustomColorPalettes': ColorPalettes
   'Comfy.Canvas.BackgroundImage'?: string

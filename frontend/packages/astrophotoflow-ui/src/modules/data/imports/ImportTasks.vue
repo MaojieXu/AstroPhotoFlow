@@ -29,7 +29,7 @@ const observed=new Set<string>()
 const completed=new Set<string>()
 const updates=new Map<string,string>()
 const activeStatuses=['queued','running','cancelling','interrupted']
-const activeTasks=computed(()=>tasks.value.filter(task=>activeStatuses.includes(task.status)))
+const activeTasks=computed(()=>tasks.value.filter(task=>(activeStatuses.includes(task.status) || task.report.destination?.project_link.state === 'pending')))
 watch(() => workspace, () => {
   observed.clear()
   completed.clear()
@@ -47,12 +47,20 @@ function notify(task:Task,category:'content'|'preview',kind:ImportNotice['kind']
 }
 function notifyResults(task:Task){
   if(!observed.has(task.id)&&!watchTaskIds.includes(task.id))return
+  if(task.report.destination?.project_link.state === 'pending')return
   const {content,preview}=task.report
-  if(content?.completed){
+  if(content?.completed && (!task.target_dataset_id || !activeStatuses.includes(task.status))){
     const description=uiT('apfUi.originals_ready_value_failed_value_skipped_value', { p0: (content.succeeded), p1: (content.failed), p2: (content.skipped) })
-    const kind=content.failed?(content.succeeded?'warning':'error'):content.metadata_failed?'warning':'success'
+    const excluded = task.report.dataset_exclusions ?? []
+    const publication = task.report.dataset_publish_error
+    const linkFailure=task.report.destination?.project_link.state === 'failed'
+    const kind=publication || excluded.length || linkFailure ? 'warning' : content.failed?(content.succeeded?'warning':'error'):content.metadata_failed?'warning':'success'
     const title=content.failed?(content.succeeded?uiT('apfUi.some_files_failed_to_import'):uiT('apfUi.import_failed')):content.metadata_failed?uiT('apfUi.original_managed_some_metadata_could_not_be_parsed'):content.succeeded?uiT('apfUi.original_management_complete_a515e9'):uiT('apfUi.no_new_originals')
-    notify(task,'content',kind,title,description+(content.metadata_failed?uiT('apfUi.metadata_issues_value', { p0: (content.metadata_failed) }):''))
+    notify(task,'content',kind,title,[description, content.metadata_failed ? uiT('apfUi.metadata_issues_value', { p0: content.metadata_failed }) : '',
+      excluded.length ? uiT('apfUi.import_subframes_only') + ' ' + excluded.map(item => item.name).join('、') : '',
+      linkFailure ? uiT('apfUi.import_project_link_failed') + ' ' + (task.report.destination?.project_link.message ?? '') : '',
+      publication ? uiT('apfUi.dataset_publication_failed') + ' ' + (publication.message ?? publication.code) : ''
+    ].filter(Boolean).join(' '))
   }else if(!content&&!activeStatuses.includes(task.status)&&workspace){
     const key=noticeKey(task,'content')
     if(task.status==='completed'){
@@ -87,12 +95,12 @@ function progressText(task:Task){
 watch(tasks, items => {
     for(const task of items){
       if(activeStatuses.includes(task.status))observed.add(task.id)
-      const state=JSON.stringify([task.report.registration,task.report.content?.succeeded,task.report.content?.failed,task.report.preview?.available,task.report.preview?.failed])
+      const state=JSON.stringify([task.report.registration,task.report.content?.succeeded,task.report.content?.failed,task.report.dataset_exclusions,task.report.preview?.available,task.report.preview?.failed])
       const previous=updates.get(task.id)
       updates.set(task.id,state)
       if((observed.has(task.id)||watchTaskIds.includes(task.id))&&previous!==state)emit('registered',task.id)
       notifyResults(task)
-      if(!activeStatuses.includes(task.status)&&!completed.has(task.id)&&(observed.has(task.id)||watchTaskIds.includes(task.id))){completed.add(task.id);emit('completed',task.id)}
+      if(!activeStatuses.includes(task.status)&&task.report.destination?.project_link.state !== 'pending'&&!completed.has(task.id)&&(observed.has(task.id)||watchTaskIds.includes(task.id))){completed.add(task.id);emit('completed',task.id)}
     }
 }, { immediate: true })
 

@@ -6,7 +6,6 @@ import { datasetApi } from '../api'
 import type { MaybeRefOrGetter, Ref } from 'vue'
 import type { DatasetOut } from '../../../generated/api/types.gen'
 import type { ApiClientError as ApiError } from '../api/client'
-import { ApiClientError } from '../api/client'
 import { uiT } from '../../../core/i18n'
 import type { WorkspaceRecord } from '../workspace/recordTypes'
 import { isDatasetRecord } from '../workspace/recordTypes'
@@ -34,12 +33,11 @@ interface DatasetViewOptions {
   records: Ref<WorkspaceRecord[]>
   libraryActive: MaybeRefOrGetter<boolean>
   dirty: MaybeRefOrGetter<boolean>
-  calibrationDirty: MaybeRefOrGetter<boolean>
   waitForInlineSave: () => Promise<boolean>
   error: Ref<ApiError | undefined>
 }
 
-/** Current library views follow publication; explicitly pinned views remain fixed. */
+/** Dataset views follow the current membership and metadata. */
 export function useDatasetView(options: DatasetViewOptions) {
   const {
     navigation: store,
@@ -52,7 +50,6 @@ export function useDatasetView(options: DatasetViewOptions) {
   } = options
   const isLibraryItemsView = computed(() => toValue(options.libraryActive))
   const dirty = computed(() => toValue(options.dirty))
-  const calibrationDirty = computed(() => toValue(options.calibrationDirty))
   const activeDataset = ref<DatasetViewIdentity>()
   const outerLibraryState = ref<
     LibraryNavigation & {
@@ -70,8 +67,8 @@ export function useDatasetView(options: DatasetViewOptions) {
       'datasets', activeDataset.value?.id, 'current-view'
     ]),
     enabled: computed(() => ready.value && Boolean(toValue(options.workspaceId)) &&
-      activeDataset.value?.followsCurrent === true && !toValue(options.paused) &&
-      !dirty.value && !calibrationDirty.value),
+      Boolean(activeDataset.value) && !toValue(options.paused) &&
+      !dirty.value),
     queryFn: async ({ signal, queryKey }) => {
       const identity = activeDataset.value
       if (!identity) throw new Error('An active current dataset is required')
@@ -88,10 +85,10 @@ export function useDatasetView(options: DatasetViewOptions) {
   })
   watch(currentDataset.data, dataset => {
     const active = activeDataset.value
-    if (!dataset || !active?.followsCurrent || dataset.id !== active.id ||
-      toValue(options.paused) || dirty.value || calibrationDirty.value) return
+    if (!dataset || !active || dataset.id !== active.id ||
+      toValue(options.paused) || dirty.value) return
     const identity = datasetViewFromAcknowledgement(dataset)
-    if (identity) activeDataset.value = identity
+    activeDataset.value = identity
   })
 
   async function openDataset(row: WorkspaceRecord) {
@@ -123,13 +120,6 @@ export function useDatasetView(options: DatasetViewOptions) {
     )
       return
     const identity = datasetViewFromSummary(currentRow)
-    if (!identity) {
-      error.value = new ApiClientError(
-        'Dataset has no fixed version to open',
-        'contract'
-      )
-      return
-    }
     outerLibraryState.value = {
       query: store.query,
       offset: store.offset,
@@ -165,15 +155,6 @@ export function useDatasetView(options: DatasetViewOptions) {
 
   async function closeDataset() {
     if (
-      calibrationDirty.value &&
-      !window.confirm(
-        uiT(
-          'apfUi.the_group_description_or_calibration_bindings_have_unsaved_changes_dis'
-        )
-      )
-    )
-      return
-    if (
       dirty.value &&
       !window.confirm(
         uiT('apfUi.this_form_has_unsaved_changes_discard_them_and_go_back')
@@ -196,15 +177,8 @@ export function useDatasetView(options: DatasetViewOptions) {
   }
 
   async function calibrationUpdated(dataset: DatasetOut) {
-    if (activeDataset.value?.id === dataset.id && activeDataset.value.followsCurrent === true) {
+    if (activeDataset.value?.id === dataset.id) {
       const identity = datasetViewFromAcknowledgement(dataset)
-      if (!identity) {
-        error.value = new ApiClientError(
-          'Acknowledged dataset has no fixed version',
-          'contract'
-        )
-        return
-      }
       activeDataset.value = identity
     }
   }

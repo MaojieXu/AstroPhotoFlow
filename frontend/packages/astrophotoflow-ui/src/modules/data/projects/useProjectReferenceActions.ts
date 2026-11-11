@@ -9,7 +9,6 @@ import {
   isDatasetRecord,
   isProjectAssetReference,
   isProjectDatasetReference,
-  recordVersion,
   recordEntity
 } from '../workspace/recordTypes'
 import type { WorkspaceRecord } from '../workspace/recordTypes'
@@ -80,17 +79,17 @@ export function useProjectReferenceActions(options: ProjectReferenceOptions) {
   }
   async function addSelectedAsset() {
     const target = projectReferenceContext()
-    const versionId =
+    const assetId =
       target && isAssetRecord(target.row)
-        ? recordVersion(target.row)?.id
+        ? recordEntity(target.row).id
         : undefined
-    if (!target || !versionId) return
+    if (!target || !assetId) return
     error.value = undefined
     try {
       await projectReferences.addAsset.mutateAsync({
         workspaceId: target.workspaceId,
         projectId: target.projectId,
-        body: { base_revision: target.revision, asset_version_id: versionId }
+        body: { base_revision: target.revision, asset_id: assetId }
       })
       acknowledgeProjectRevision(target, target.revision + 1)
       if (!currentProjectReference(target)) return
@@ -117,11 +116,11 @@ export function useProjectReferenceActions(options: ProjectReferenceOptions) {
   }
   async function addSelectedDataset() {
     const target = projectReferenceContext()
-    const versionId =
+    const datasetId =
       target && isDatasetRecord(target.row)
-        ? recordVersion(target.row)?.id
+        ? recordEntity(target.row).id
         : undefined
-    if (!target || !versionId) return
+    if (!target || !datasetId) return
     error.value = undefined
     try {
       await projectReferences.addDataset.mutateAsync({
@@ -129,8 +128,7 @@ export function useProjectReferenceActions(options: ProjectReferenceOptions) {
         projectId: target.projectId,
         body: {
           base_revision: target.revision,
-          dataset_id: recordEntity(target.row).id,
-          dataset_version_id: versionId
+          dataset_id: datasetId
         }
       })
       acknowledgeProjectRevision(target, target.revision + 1)

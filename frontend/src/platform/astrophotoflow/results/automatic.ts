@@ -2,6 +2,7 @@ import { onBeforeUnmount, onMounted, shallowReactive, watch } from 'vue'
 import { softwareCallResultSchema } from '@astrophotoflow/ui'
 
 import type { LGraphNode } from '@/lib/litegraph/src/litegraph'
+import { onGraphIntent } from '@/lib/litegraph/src/graphIntents'
 import { useWorkflowStore } from '@/platform/workflow/management/stores/workflowStore'
 import type { ComfyApiWorkflow } from '@/platform/workflow/validation/schemas/workflowSchema'
 import { api } from '@/scripts/api'
@@ -13,7 +14,7 @@ import { getExecutionIdByNode, getNodeByExecutionId } from '@/utils/graphTravers
 
 import { automaticResultPlan } from './plan'
 import type { AutomaticNodePolicy } from './plan'
-import { bundleCapabilities } from '../sidebar/bundleCatalog'
+import { bundleCapabilities, bundleNodeIssue } from '../sidebar/bundleCatalog'
 
 type ResultState = {
   signature: string
@@ -57,6 +58,7 @@ export function useAutomaticResults() {
   let active: { promptId: string; owner: string; signatures: Record<string, string>; completed: Set<string> } | undefined
   let mounted = false
   let reconciling = false
+  let stopGraphIntents: (() => void) | undefined
 
   function policies(prompt: ComfyApiWorkflow): Record<string, AutomaticNodePolicy> {
     return Object.fromEntries(Object.entries(prompt).map(([id, value]) => {
@@ -66,7 +68,7 @@ export function useAutomaticResults() {
       const enabled = node?.properties.apfAutomaticResult !== false
       return [id, { allowed: source || !!capability?.automatic_result_preview && enabled,
         enabled: !!capability?.automatic_result_preview && enabled,
-        available: source || !!capability?.available,
+        available: source || !!capability?.available && !bundleNodeIssue(node),
         identity: capability ? [capability.node.content_token, capability.operation?.content_token, capability.implementation_token, capability.development_source?.fingerprint] : null,
         required: source ? (['science', 'images'].some(name => value.inputs[name] !== undefined) ? [] : ['reference']) : capability?.operation?.inputs.filter(input => input.required).map(input => capability.node.definition.execution.inputs[input.name] ?? input.name) ?? [] }]
     }))
@@ -209,6 +211,15 @@ export function useAutomaticResults() {
   watch(() => [execution.isIdle, queue.count], changed)
   onMounted(() => {
     mounted = true
+    stopGraphIntents = onGraphIntent(event => {
+      if (!app.isGraphReady || event.source === 'load') return
+      const root = app.rootGraph
+      if (event.type === 'set_widget') {
+        if (event.graphId === root.id || [...root.subgraphs.values()].some(graph => graph.id === event.graphId)) changed()
+      } else if ((event.type === 'connect' || event.type === 'disconnect') && event.graph.rootGraph === root) {
+        changed()
+      }
+    })
     api.addEventListener('status', changed)
     api.addEventListener('graphChanged', changed)
     api.addEventListener('execution_start', started)
@@ -220,6 +231,7 @@ export function useAutomaticResults() {
   })
   onBeforeUnmount(() => {
     mounted = false
+    stopGraphIntents?.()
     generation++
     clearTimeout(timer)
     api.removeEventListener('status', changed)

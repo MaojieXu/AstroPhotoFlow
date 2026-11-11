@@ -7,7 +7,7 @@ External agents observe and edit the current native canvas through the platform'
 ## Responsibilities
 
 - List online canvas pages with their workflow, subgraph and `content_token`.
-- On explicit user request, add a fixed asset or dataset set to the exact page, or perform one node addition, parameter change, connection or node deletion.
+- On explicit user request, add an asset or dataset to the exact page, or perform one node addition, parameter change, connection or node deletion.
 - Hand edits over to native undo, drafts and saving, and never execute the whole graph.
 
 ## Inputs and outputs
@@ -25,7 +25,7 @@ External agents observe and edit the current native canvas through the platform'
 
 ## Data references
 
-- A fixed asset or dataset enters the canvas as a fixed-version reference, and display state is not serialised as scientific data.
+- Assets and datasets enter the canvas as asset_id or dataset_id references. Datasets follow current members and calibration, and display state is separate from scientific input.
 - Canvas widgets display data through the native widget lifecycle, and the host keeps the existing canvas and theme.
 - Data references and content markers follow the current page receipt.
 

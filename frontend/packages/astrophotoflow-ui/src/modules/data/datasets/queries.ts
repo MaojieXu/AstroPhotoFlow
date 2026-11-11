@@ -13,7 +13,6 @@ import { libraryQueryKey, readLibraryChanges } from '../library/queries'
 export interface DatasetMembersRequest {
   workspaceId: string
   datasetId: string
-  versionId: string
   query: MemberQuery
   all: boolean
 }
@@ -27,7 +26,7 @@ export function useDatasetMembersQuery(
   const queryKey = computed(() => {
     const current = toValue(request)
     return current
-      ? [...workspaceQueryKey(current.workspaceId), 'datasets', current.datasetId, 'versions', current.versionId, 'members', current.query, current.all] as const
+      ? [...workspaceQueryKey(current.workspaceId), 'datasets', current.datasetId, 'members', current.query, current.all] as const
       : ['dataset-members-idle'] as const
   })
   const connectionReady = useQueryAvailability()
@@ -42,7 +41,7 @@ export function useDatasetMembersQuery(
       const identity = JSON.stringify(activeKey), token = change.revision_token + ':' + change.thumbnail_token
       const previous = client.getQueryData<DatasetMemberSummaryPage>(activeKey)
       if (previous && !client.getQueryState(activeKey)?.isInvalidated && checkpoint?.key === identity && checkpoint.token === token) return previous
-      const read = (offset: number) => libraryApi.memberSummaries(current.datasetId, current.versionId, { ...current.query, offset }, signal)
+      const read = (offset: number) => libraryApi.memberSummaries(current.datasetId, { ...current.query, offset }, signal)
       const page = await readPages(offset => read(offset ?? current.query.offset ?? 0), current.all, signal)
       signal.throwIfAborted()
       checkpoint = { key: identity, token }
@@ -75,7 +74,7 @@ export function useDatasetMembersQuery(
     checkpoint = undefined
     const current=toValue(request)
     if(!current)return
-    await client.invalidateQueries({queryKey:[...workspaceQueryKey(current.workspaceId),'datasets',current.datasetId,'versions',current.versionId,'members'],refetchType:'none'})
+    await client.invalidateQueries({queryKey:[...workspaceQueryKey(current.workspaceId),'datasets',current.datasetId,'members'],refetchType:'none'})
     return query.refetch({cancelRefetch:false})
   }
   return { ...query, refresh, rows, updateRows }

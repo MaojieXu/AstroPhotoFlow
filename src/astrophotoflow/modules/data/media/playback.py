@@ -1,11 +1,8 @@
 from __future__ import annotations
-
 import json
 import subprocess
 from itertools import pairwise
-
 from PIL import Image
-
 from astrophotoflow.contracts.media import MediaSelection
 from astrophotoflow.modules.data.formats import video
 from astrophotoflow.modules.data.formats.ser import ser_info
@@ -24,24 +21,49 @@ def make_proxy(path, folder, cache, parameters, recipe):
         info = ser_info(path)
         source_times = info.times
         fps = 10.0 if source_times is None else 25.0
-        width, height = info.width, info.height
+        width, height = (info.width, info.height)
         factor = min(1, 1920 / max(width, height))
-        width, height = max(2, int(width * factor) // 2 * 2), max(2, int(height * factor) // 2 * 2)
+        width, height = (max(2, int(width * factor) // 2 * 2), max(2, int(height * factor) // 2 * 2))
         command += ["-f", "rawvideo", "-pixel_format", "rgb24", "-video_size", f"{width}x{height}", "-framerate", str(fps), "-i", "pipe:0"]
         source = PixelSource(path, "video", MediaSelection(frame_index=0), parameters, folder, cache.reserve, record=cache.record)
         if source_times is not None:
-            commands = "\n".join(f"{max(0, index / fps - 0.000001):.6f} [enter] setpts@ser_pts expr '{timestamp:.9f}/TB';" for index, timestamp in enumerate(source_times))
+            commands = "\n".join(
+                (
+                    f"{max(0, index / fps - 1e-06):.6f} [enter] setpts@ser_pts expr '{timestamp:.9f}/TB';"
+                    for index, timestamp in enumerate(source_times)
+                )
+            )
             cache.write(timing_path, commands.encode())
     else:
         command += ["-i", str(path)]
     timing = "settb=expr=1/10000000,sendcmd=f=ser-pts.cmd,setpts@ser_pts=PTS," if source_times is not None else ""
-    command += ["-map", "0:v:0", "-an", "-vf", timing + "scale='min(1920,iw)':'min(1920,ih)':force_original_aspect_ratio=decrease:force_divisible_by=2,showinfo",
-        "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p", "-fps_mode", "passthrough", "-movflags", "+faststart", str(part)]
+    command += [
+        "-map",
+        "0:v:0",
+        "-an",
+        "-vf",
+        timing + "scale='min(1920,iw)':'min(1920,ih)':force_original_aspect_ratio=decrease:force_divisible_by=2,showinfo",
+        "-c:v",
+        "libx264",
+        "-preset",
+        "veryfast",
+        "-crf",
+        "20",
+        "-pix_fmt",
+        "yuv420p",
+        "-fps_mode",
+        "passthrough",
+        "-movflags",
+        "+faststart",
+        str(part),
+    ]
     if source_times is not None:
         command[-1:-1] = ["-enc_time_base", "1:10000000", "-video_track_timescale", "10000000"]
     try:
         with log_path.open("wb") as log:
-            process = subprocess.Popen(command, cwd=folder, stdin=subprocess.PIPE if ser else subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=log)
+            process = subprocess.Popen(
+                command, cwd=folder, stdin=subprocess.PIPE if ser else subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=log
+            )
             try:
                 if ser:
                     for index in range(info.count):
@@ -77,9 +99,11 @@ def make_proxy(path, folder, cache, parameters, recipe):
         frames = video.frame_times(log)
         if not frames:
             raise ValueError("视频代理没有可核对的帧时间戳。")
-        if any(current[1] <= previous[1] for previous, current in pairwise(frames)):
+        if any((current[1] <= previous[1] for previous, current in pairwise(frames))):
             raise ValueError("视频帧时间戳不唯一，不能建立可靠的暂停帧映射。")
-        mapping = [{"time": timestamp - frames[0][1], "source_time": None if ser else timestamp, "index": index} for index, timestamp in frames]
+        mapping = [
+            {"time": timestamp - frames[0][1], "source_time": None if ser else timestamp, "index": index} for index, timestamp in frames
+        ]
         cache.write(folder / "frames.json", json.dumps(mapping).encode())
         part.replace(target)
         cache.record(part)
@@ -87,7 +111,7 @@ def make_proxy(path, folder, cache, parameters, recipe):
         note = "播放代理≤1920px；放大读取原件帧。"
         if ser:
             note += " SER无有效时间戳，按10fps预览。" if source_times is None else " SER保留采集帧时间戳及原始帧对应。"
-        return target, note
+        return (target, note)
     finally:
         part.unlink(missing_ok=True)
         log_path.unlink(missing_ok=True)

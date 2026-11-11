@@ -1,3 +1,4 @@
+import { assetFixture } from '../../../fixtures/library-members'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia } from 'pinia'
 import { beforeEach, expect, it, vi } from 'vitest'
@@ -12,9 +13,25 @@ vi.mock('@ui/modules/data/api/index',async()=>{
     mutationApi:fixture.createMutationApiFixture(send),importApi:fixture.createImportApiFixture(get,send),
     datasetApi:fixture.createDatasetApiFixture(get,send),trashApi:fixture.createTrashApiFixture(get,send),assetApi:{get,getBlob,send}}
 })
-const asset=zAssetOut.parse({id:'00000000-0000-4000-8000-000000000001',name:'M31',scope:'shared',owner_project_id:null,
-  role:'raw',calibration_level:null,current_version_id:null,current_version:null,classification:{frame_class:'subframe',frame_type:'light'},
-  parameters:{parameter_mode:'gain',gain:10,offset:0},equipment_snapshot:{},value_sources:{},notes:null,status:'active',revision:4,created_at:'2026-10-28T12:00:00Z'})
+const asset=zAssetOut.parse(assetFixture({
+                              id:'00000000-0000-4000-8000-000000000001',
+                              name:'M31',
+                              scope:'shared',
+                              owner_project_id:null,
+                              role:'raw',
+                              calibration_level:null,
+                              classification:{frame_class:'subframe',frame_type:'light'},
+                              parameters:{parameter_mode:'gain',gain:10,offset:0},
+                              equipment_snapshot:{},
+                              value_sources:{},
+                              notes:null,
+                              status:'active',
+                              revision:4,
+                              created_at:'2026-10-28T12:00:00Z',
+                              availability: 'unknown',
+                              content_hash: null,
+                              byte_size: null
+                            }))
 let current=asset
 beforeEach(()=>{
   current=asset;get.mockReset();send.mockReset();getBlob.mockReset()

@@ -19,7 +19,10 @@ Editable node definitions, update diffs and the derived node catalogue in a work
 
 ## Catalogue and display
 
-- Names and categories come from node declarations and Bundle bilingual display material; switching language changes display labels only.
+- Development and installed Bundles and custom nodes provide English and Chinese display material through the same capability catalogue. The web UI follows the system language for names, categories, ports, parameters, descriptions and help.
+- Custom display overrides are stored in the definition. Omitted fields inherit, explicit empty descriptions or help clear the text, and null is rejected. Names and labels must be nonempty, and category depth and member keys must match the node definition.
+- Custom names, descriptions and categories retain the node text unless overridden. Help inherits from the operation, and ports and parameters inherit Bundle labels through execution bindings. Fixed parameters generate no labels. Conflicting labels in many-to-one bindings use the node field name.
+- The catalogue returns effective translations keyed by node fields and retains node-authored material when the operation is missing. Catalogue events refresh translations and remove withdrawn entries. Failed queries preserve the existing catalogue and report an error.
 - Legacy declarations without a category fall under the software root; a category changes neither node type, ports nor execution binding.
 - Custom node titles already on the canvas are preserved.
 

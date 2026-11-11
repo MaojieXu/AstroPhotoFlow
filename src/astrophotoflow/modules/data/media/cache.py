@@ -11,7 +11,7 @@ DISK_BYTES = 4 * 1024**3
 
 class MediaCache:
     def __init__(self, data_dir, disk_budget=DISK_BYTES, memory_budget=MEMORY_BYTES):
-        self.data_dir, self.disk_budget, self.memory_budget = data_dir.resolve(), disk_budget, memory_budget
+        self.data_dir, self.disk_budget, self.memory_budget = (data_dir.resolve(), disk_budget, memory_budget)
         self.lock = RLock()
         self.active = {}
         self.memory = OrderedDict()
@@ -40,23 +40,23 @@ class MediaCache:
 
     def reconcile(self):
         with self.lock:
-            files, folders = {}, {}
+            files, folders = ({}, {})
             for folder in self.folders():
                 amount = 0
-                for path in folder.rglob('*'):
+                for path in folder.rglob("*"):
                     if path.is_file():
                         files[path] = path.stat().st_size
                         amount += files[path]
                 folders[folder] = (amount, folder.stat().st_mtime_ns)
-            self.disk_files, self.disk_folders = files, folders
+            self.disk_files, self.disk_folders = (files, folders)
             self.reconciled_at = monotonic()
 
     def record(self, path):
         path = path.resolve()
-        relative = path.relative_to(self.data_dir / 'previews')
-        if len(relative.parts) < 4 or relative.parts[1] != 'media':
-            raise ValueError('Display cache must be inside a version media directory.')
-        folder = self.data_dir / 'previews' / Path(*relative.parts[:3])
+        relative = path.relative_to(self.data_dir / "previews")
+        if len(relative.parts) < 4 or relative.parts[1] != "media":
+            raise ValueError("Display cache must be inside a asset media directory.")
+        folder = self.data_dir / "previews" / Path(*relative.parts[:3])
         with self.lock:
             if self.reconciled_at is None:
                 self.reconcile()
@@ -75,7 +75,7 @@ class MediaCache:
                 raise ValueError("当前显示数据超过4GiB缓存预算；原件保留，未发布缩小替代图。")
             if self.reconciled_at is None:
                 self.reconcile()
-            total = sum(amount for amount, _ in self.disk_folders.values())
+            total = sum((amount for amount, _ in self.disk_folders.values()))
             for folder, (amount, _) in sorted(self.disk_folders.items(), key=lambda item: item[1][1]):
                 if total + size <= self.disk_budget:
                     break
@@ -111,9 +111,9 @@ class MediaCache:
 
     def write(self, path, content):
         path = path.resolve()
-        relative = path.relative_to(self.data_dir / 'previews')
-        if len(relative.parts) < 4 or relative.parts[1] != 'media':
-            raise ValueError('Display cache must be inside a version media directory.')
+        relative = path.relative_to(self.data_dir / "previews")
+        if len(relative.parts) < 4 or relative.parts[1] != "media":
+            raise ValueError("Display cache must be inside a asset media directory.")
         with self.lock:
             if self.reconciled_at is None:
                 self.reconcile()
@@ -125,7 +125,7 @@ class MediaCache:
 
 
 def media_locations(preview, settings):
-    if not preview.storage_path or Path(preview.storage_path).name != 'manifest.json':
+    if not preview.storage_path or Path(preview.storage_path).name != "manifest.json":
         return []
     manifest = (settings.data_dir / preview.storage_path).resolve()
     manifest.relative_to((settings.data_dir / "previews").resolve())

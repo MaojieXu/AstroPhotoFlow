@@ -1,6 +1,10 @@
 {
   "measure": "non_whitespace_chars",
   "files": {
+    ".agents/skills/astrophotoflow-backend/references/backend-map.md": 6000,
+    ".agents/skills/astrophotoflow-backend/references/integration.md": 5000,
+    ".agents/skills/astrophotoflow-frontend/references/architecture-map.md": 8000,
+    ".agents/skills/astrophotoflow-frontend/references/component-router.md": 8000,
     "README.md": {"zh": 3000, "en": 7000},
     "CONTRIBUTING.md": {"zh": 4000, "en": 9000},
     "docs/README.md": {"zh": 1200, "en": 2800},
@@ -10,6 +14,7 @@
     "docs/subsystems/import-pipeline.md": {"zh": 3200, "en": 7000},
     "docs/subsystems/library.md": {"zh": 4200, "en": 9000},
     "docs/subsystems/previews.md": {"zh": 2400, "en": 5200},
+    "docs/scratch/2026-11-08-local-workbench-brand.md": {"zh": 1200, "en": 2600},
     "docs/subsystems/software.md": {"zh": 3200, "en": 7000},
     "docs/subsystems/nodes.md": {"zh": 2800, "en": 6200},
     "docs/subsystems/canvas-agent.md": {"zh": 3600, "en": 7800},

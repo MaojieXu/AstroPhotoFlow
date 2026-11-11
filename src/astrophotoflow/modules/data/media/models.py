@@ -1,20 +1,17 @@
 from datetime import datetime
-
 from sqlalchemy import JSON, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
-
 from astrophotoflow.core.database.base import Base
 
 
 class Preview(Base):
     __tablename__ = "preview"
     __table_args__ = (
-        UniqueConstraint("asset_version_id", "hdu_index", "size", "algorithm_version", name="uq_preview_identity"),
-        Index("ix_preview_version", "asset_version_id"),
+        UniqueConstraint("asset_id", "hdu_index", "size", "algorithm_version", name="uq_preview_identity"),
+        Index("ix_preview_asset", "asset_id"),
     )
-
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    asset_version_id: Mapped[str] = mapped_column(ForeignKey("asset_version.id", ondelete="CASCADE"), nullable=False)
+    asset_id: Mapped[str] = mapped_column(ForeignKey("asset.id", ondelete="CASCADE"), nullable=False)
     hdu_index: Mapped[int] = mapped_column(Integer, nullable=False)
     size: Mapped[str] = mapped_column(String(16), nullable=False)
     width: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -31,7 +28,6 @@ class Preview(Base):
 class ThumbnailBatch(Base):
     __tablename__ = "thumbnail_batch"
     __table_args__ = (Index("ix_thumbnail_batch_created", "created_at"),)
-
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
     target: Mapped[dict] = mapped_column(JSON, nullable=False)
@@ -44,10 +40,9 @@ class ThumbnailBatchItem(Base):
         UniqueConstraint("batch_id", "position", name="uq_thumbnail_batch_position"),
         Index("ix_thumbnail_batch_item_preview", "preview_id"),
     )
-
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     batch_id: Mapped[str] = mapped_column(ForeignKey("thumbnail_batch.id", ondelete="CASCADE"), nullable=False)
     preview_id: Mapped[str | None] = mapped_column(ForeignKey("preview.id", ondelete="SET NULL"))
-    asset_version_id: Mapped[str | None] = mapped_column(ForeignKey("asset_version.id", ondelete="SET NULL"))
-    dataset_version_id: Mapped[str | None] = mapped_column(ForeignKey("dataset_version.id", ondelete="SET NULL"))
+    asset_id: Mapped[str | None] = mapped_column(ForeignKey("asset.id", ondelete="SET NULL"))
+    dataset_id: Mapped[str | None] = mapped_column(ForeignKey("dataset.id", ondelete="SET NULL"))
     position: Mapped[int] = mapped_column(Integer, nullable=False)

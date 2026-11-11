@@ -1,5 +1,9 @@
 {
   "messages": {
+    "dataset_member_requires_subframe": {
+      "en": "Dataset members must be subframes.",
+      "zh": "数据集成员必须是子帧。"
+    },
     "configuration_is_being_saved_read_it_again_before_submitting": {
       "en": "Configuration is being saved. Read it again before submitting.",
       "zh": "配置正在保存，请重新读取后再提交。"
@@ -114,11 +118,11 @@
     },
     "image_group_versions_still_reference_the_selected_calibration_target_remove": {
       "en": "Image group versions still reference the selected calibration target. Remove those groups before retrying cleanup.",
-      "zh": "仍有图像组版本使用所选校准目标；请先移除引用组，再重试清理校准目标。"
+      "zh": "仍有数据集使用所选校准目标；请先移除引用组，再重试清理校准目标。"
     },
     "p0_must_reference_a_fixed_calibration_dataset_version_or_a_master_calibrati": {
-      "en": "{p0} must reference a fixed calibration dataset version or a master calibration asset version with the same frame use.",
-      "zh": "{p0} 必须引用同用途的固定校准数据集版本或 Master 校准资产版本。"
+      "en": "{p0} must reference a fixed calibration dataset or a master calibration asset with the same frame use.",
+      "zh": "{p0} 必须引用同用途的固定校准数据集或 Master 校准资产版本。"
     },
     "the_original_for_p0_is_not_ready_or_has_changed_and_cannot_be_added_to_the_": {
       "en": "The original for {p0} is not ready or has changed and cannot be added to the canvas.",
@@ -133,12 +137,12 @@
       "zh": "文件与科学图像需要通过各自类型的输入端口加入。"
     },
     "the_selected_member_does_not_belong_to_the_fixed_image_group_version": {
-      "en": "The selected member does not belong to the fixed image group version.",
-      "zh": "所选成员不属于固定图像组版本。"
+      "en": "The selected member does not belong to the fixed dataset.",
+      "zh": "所选成员不属于固定数据集。"
     },
     "referenced_members_do_not_match_the_fixed_image_group_version": {
-      "en": "Referenced members do not match the fixed image group version.",
-      "zh": "引用成员与固定图像组版本不匹配。"
+      "en": "Referenced members do not match the fixed dataset.",
+      "zh": "引用成员与固定数据集不匹配。"
     },
     "the_image_index_is_outside_the_reference_selection": {
       "en": "The image index is outside the reference selection.",
@@ -171,10 +175,6 @@
     "new_members_must_follow_the_retained_members": {
       "en": "New members must follow the retained members.",
       "zh": "新成员必须追加到保留成员之后。"
-    },
-    "member_calibration_overrides_must_belong_to_the_full_member_list_in_this_re": {
-      "en": "Member calibration overrides must belong to the full member list in this request.",
-      "zh": "成员校准覆盖必须属于本次完整成员列表。"
     },
     "dataset_membership_has_changed_read_it_again_before_saving": {
       "en": "Dataset membership has changed. Read it again before saving.",
@@ -417,23 +417,23 @@
       "zh": "大图预览仍在生成，请完成后重新预览清理范围。"
     },
     "the_dataset_version_does_not_belong_to_the_specified_dataset": {
-      "en": "The dataset version does not belong to the specified dataset.",
-      "zh": "数据集版本不属于指定的数据集。"
+      "en": "The dataset does not belong to the specified dataset.",
+      "zh": "数据集不属于指定的数据集。"
     },
     "archived_datasets_cannot_be_added_to_projects": {
       "en": "Archived datasets cannot be added to projects.",
       "zh": "已归档数据集不能新建项目引用。"
     },
     "the_project_already_references_this_dataset_version": {
-      "en": "The project already references this dataset version.",
-      "zh": "项目已引用该数据集版本。"
+      "en": "The project already references this dataset.",
+      "zh": "项目已引用该数据集。"
     },
     "archived_assets_cannot_be_added_to_projects": {
       "en": "Archived assets cannot be added to projects.",
       "zh": "已归档资产不能新建项目引用。"
     },
     "the_project_already_references_this_asset_version": {
-      "en": "The project already references this asset version.",
+      "en": "The project already references this asset.",
       "zh": "项目已引用该资产版本。"
     },
     "the_asset_file_changed_while_it_was_being_read_check_it_again": {
@@ -441,12 +441,12 @@
       "zh": "素材文件在读取期间发生变化，请重新检查。"
     },
     "the_fixed_asset_version_is_missing_or_unavailable": {
-      "en": "The fixed asset version is missing or unavailable.",
-      "zh": "固定素材版本不存在或当前不可用。"
+      "en": "The asset is missing or unavailable.",
+      "zh": "素材不存在或当前不可用。"
     },
     "the_project_does_not_reference_this_fixed_asset_version": {
-      "en": "The project does not reference this fixed asset version.",
-      "zh": "项目未固定此素材版本。"
+      "en": "The project does not reference this asset.",
+      "zh": "项目未固定此素材。"
     },
     "the_fixed_asset_group_version_is_missing_or_unavailable": {
       "en": "The fixed asset group version is missing or unavailable.",
@@ -457,28 +457,28 @@
       "zh": "项目未固定此素材组版本。"
     },
     "content_registration_is_incomplete_for_this_fixed_asset_version": {
-      "en": "Content registration is incomplete for this fixed asset version.",
-      "zh": "固定素材版本尚未完成内容登记。"
+      "en": "Content registration is incomplete for this asset.",
+      "zh": "素材尚未完成内容登记。"
     },
-    "the_fixed_asset_content_differs_from_the_registered_version_check_and_confi": {
-      "en": "The fixed asset content differs from the registered version. Check and confirm the content change first.",
-      "zh": "固定素材内容与已登记版本不同；请先检查并确认内容变化。"
+    "asset_original_changed_reimport": {
+      "en": "The file differs from the registered original. Restore it or import the changed file as a new asset.",
+      "zh": "文件内容与登记原件不同。请恢复原件，或将修改后的文件作为新素材导入。"
     },
     "insufficient_space_to_fix_the_scientific_inputs_for_this_run": {
       "en": "Insufficient space to fix the scientific inputs for this run.",
       "zh": "空间不足，无法固定本次科学输入。"
     },
     "the_current_asset_version_has_no_accepted_file_size": {
-      "en": "The current asset version has no accepted file size.",
-      "zh": "素材当前版本尚无已接受的文件大小。"
+      "en": "The current asset has no accepted file size.",
+      "zh": "素材尚无已接受的文件大小。"
     },
     "content_change_confirmation_is_not_supported_for_this_file_format": {
       "en": "Content-change confirmation is not supported for this file format.",
       "zh": "当前文件格式不支持内容变化确认。"
     },
     "the_file_content_matches_the_current_asset_version_no_new_content_needs_to_": {
-      "en": "The file content matches the current asset version. No new content needs to be accepted.",
-      "zh": "文件内容与当前素材版本一致，无需接纳新内容。"
+      "en": "The file content matches the current asset. No new content needs to be accepted.",
+      "zh": "文件内容与当前素材一致，无需接纳新内容。"
     },
     "the_file_changed_again_after_confirmation_check_it_again": {
       "en": "The file changed again after confirmation. Check it again.",
@@ -545,24 +545,24 @@
       "zh": "可用空间不足，无法固定本次科学输入。"
     },
     "the_current_asset_version_has_no_accepted_complete_content_record": {
-      "en": "The current asset version has no accepted complete content record.",
-      "zh": "素材当前版本尚无已接受的完整内容记录。"
+      "en": "The current asset has no accepted complete content record.",
+      "zh": "素材尚无已接受的完整内容记录。"
     },
     "the_asset_version_has_changed_check_it_again": {
-      "en": "The asset version has changed. Check it again.",
-      "zh": "素材版本已变化，请重新检查。"
+      "en": "The asset has changed. Check it again.",
+      "zh": "素材已变化，请重新检查。"
     },
     "the_current_asset_version_has_changed_read_and_check_it_again": {
-      "en": "The current asset version has changed. Read and check it again.",
-      "zh": "素材当前版本已变化，请重新读取并检查。"
+      "en": "The current asset has changed. Read and check it again.",
+      "zh": "素材已变化，请重新读取并检查。"
     },
     "there_is_no_pending_content_change_to_confirm_for_this_asset": {
       "en": "There is no pending content change to confirm for this asset.",
       "zh": "当前素材没有待确认的内容变化。"
     },
     "the_current_asset_version_cannot_be_used_to_accept_new_content": {
-      "en": "The current asset version cannot be used to accept new content.",
-      "zh": "素材当前版本不可用于内容接纳。"
+      "en": "The current asset cannot be used to accept new content.",
+      "zh": "素材不可用于内容接纳。"
     },
     "the_output_file_is_outside_this_run_directory_or_cannot_be_read": {
       "en": "The output file is outside this run directory or cannot be read.",
@@ -681,8 +681,8 @@
       "zh": "准备线性预览时原件发生变化。"
     },
     "other_image_group_versions_still_reference_the_selected_calibration_target_": {
-      "en": "Other image group versions still reference the selected calibration target. Remove those groups first.",
-      "zh": "仍有其他图像组版本使用所选校准目标，请先移除引用组。"
+      "en": "Other datasets still reference the selected calibration target. Remove those groups first.",
+      "zh": "仍有其他数据集使用所选校准目标，请先移除引用组。"
     },
     "an_active_or_resumable_import_task_still_holds_the_selected_content_cancel_": {
       "en": "An active or resumable import task still holds the selected content. Cancel the task first.",
@@ -702,7 +702,7 @@
     },
     "dataset_versions_have_changed_read_them_again": {
       "en": "Dataset versions have changed. Read them again.",
-      "zh": "数据集版本已变化，请重新读取。"
+      "zh": "数据集已变化，请重新读取。"
     },
     "only_content_still_in_trash_can_be_permanently_deleted": {
       "en": "Only content still in Trash can be permanently deleted.",
@@ -718,7 +718,7 @@
     },
     "dataset_versions_have_changed_preview_them_again": {
       "en": "Dataset versions have changed. Preview them again.",
-      "zh": "数据集版本已变化，请重新预览。"
+      "zh": "数据集已变化，请重新预览。"
     },
     "the_cleanup_scope_has_changed_preview_it_again": {
       "en": "The cleanup scope has changed. Preview it again.",
@@ -745,8 +745,8 @@
       "zh": "预览文件路径不在服务数据目录中，已阻止清理。"
     },
     "the_current_asset_version_has_changed_read_it_again_before_previewing_remov": {
-      "en": "The current asset version has changed. Read it again before previewing removal.",
-      "zh": "素材当前版本已变化，请重新读取后预览移除范围。"
+      "en": "The current asset has changed. Read it again before previewing removal.",
+      "zh": "素材已变化，请重新读取后预览移除范围。"
     },
     "asset_group_member_versions_have_changed_read_them_again_before_previewing_": {
       "en": "Asset group member versions have changed. Read them again before previewing removal.",
@@ -2023,6 +2023,378 @@
     "bundle_preview_maintenance": {
       "en": "The software package is undergoing maintenance.",
       "zh": "软件包正在维护。"
+    },
+    "accepts_one_value_in_image_queries": {
+      "en": "{key} accepts one value in image queries.",
+      "zh": "{key} 在图像查询中只接受一个值。"
+    },
+    "the_image_changed_read_its_current_revision_before_saving": {
+      "en": "The image changed; read its current revision before saving.",
+      "zh": "图像已更改，请先读取当前修订版本再保存。"
+    },
+    "the_selected_equipment_changed_review_the_current_revision": {
+      "en": "The selected equipment changed; review the current revision.",
+      "zh": "所选设备已更改，请查看当前修订版本。"
+    },
+    "image_capture_metadata_can_only_be_fixed_during_initial_registration": {
+      "en": "Image capture metadata can only be fixed during its initial registration.",
+      "zh": "图像拍摄元数据只能在初次登记时固定。"
+    },
+    "the_image_changed_read_its_current_revision_before_saving_provenance": {
+      "en": "The image changed; read its current revision before saving provenance.",
+      "zh": "图像已更改，请先读取当前修订版本再保存来源信息。"
+    },
+    "the_image_changed_while_saving_provenance": {
+      "en": "The image changed while saving provenance.",
+      "zh": "保存来源信息时图像已更改。"
+    },
+    "the_calibration_target_is_structurally_invalid": {
+      "en": "The calibration target is structurally invalid.",
+      "zh": "校准目标结构无效。"
+    },
+    "known_scientific_conflicts_prevent_this_calibration_assignment": {
+      "en": "Known scientific conflicts prevent this calibration assignment.",
+      "zh": "已知科学冲突导致无法进行此校准分配。"
+    },
+    "unknown_scientific_metadata_requires_accept_unknown": {
+      "en": "Unknown scientific metadata requires accept_unknown=true.",
+      "zh": "存在未知科学元数据，需要 accept_unknown=true。"
+    },
+    "unknown_calibration_slot": {
+      "en": "Unknown calibration slot.",
+      "zh": "未知的校准槽位。"
+    },
+    "an_explicit_calibration_choice_is_required": {
+      "en": "An explicit calibration choice is required.",
+      "zh": "必须提供明确的校准选择。"
+    },
+    "select_unique_members_belonging_to_the_fixed_dataset_version": {
+      "en": "Select unique members belonging to the fixed dataset.",
+      "zh": "请选择属于该固定数据集的唯一成员。"
+    },
+    "the_request_id_was_already_used_with_different_content": {
+      "en": "The request_id was already used with different content.",
+      "zh": "该 request_id 已用于不同的内容。"
+    },
+    "the_image_or_calibration_configuration_changed_read_it_again": {
+      "en": "The image or calibration configuration changed; read it again.",
+      "zh": "图像或校准配置已更改，请重新读取。"
+    },
+    "the_dataset_changed_read_its_revision_and_current_version_again": {
+      "en": "The dataset changed; read its revision and current version again.",
+      "zh": "数据集已更改，请重新读取其修订版本和当前版本。"
+    },
+    "dataset_members_must_be_unique": {
+      "en": "Dataset members must be unique.",
+      "zh": "数据集成员必须唯一。"
+    },
+    "remove_current_unique_members_and_add_only_new_unique_members": {
+      "en": "Remove current unique members and add only new unique members.",
+      "zh": "请移除当前唯一成员，并且只添加新的唯一成员。"
+    },
+    "inspection_entries_must_be_files_excluded_or_issues": {
+      "en": "Inspection entries must be files, excluded or issues.",
+      "zh": "检查条目必须是 files、excluded 或 issues。"
+    },
+    "selected_file_is_not_part_of_this_inspection": {
+      "en": "Selected file is not part of this inspection.",
+      "zh": "所选文件不属于本次检查。"
+    },
+    "an_inspected_source_changed_inspect_it_again_before_importing": {
+      "en": "An inspected source changed; inspect it again before importing.",
+      "zh": "已检查的来源已更改，请在导入前重新检查。"
+    },
+    "this_request_id_belongs_to_a_different_import": {
+      "en": "This request_id belongs to a different import.",
+      "zh": "该 request_id 属于另一个导入。"
+    },
+    "the_destination_dataset_must_exist_and_be_active": {
+      "en": "The destination dataset must exist and be active.",
+      "zh": "目标数据集必须存在且处于活动状态。"
+    },
+    "read_the_destination_dataset_again_before_appending": {
+      "en": "Read the destination dataset again before appending.",
+      "zh": "追加前请重新读取目标数据集。"
+    },
+    "combined_per_file_metadata_is_invalid": {
+      "en": "Combined per-file metadata is invalid.",
+      "zh": "合并后的单文件元数据无效。"
+    },
+    "a_new_image_needs_a_telescope_application_with_its_optical_accessory": {
+      "en": "A new image needs an explicit telescope application together with its optical accessory.",
+      "zh": "新图像需要同时提供明确的望远镜应用及其光学配件。"
+    },
+    "reference_imports_require_a_file_inside_exactly_one_import_root": {
+      "en": "Reference imports require a file inside exactly one configured import root.",
+      "zh": "引用导入要求文件位于且仅位于一个已配置的导入根目录内。"
+    },
+    "imported_originals_are_retained_reconcile_the_dataset_before_publication": {
+      "en": "Imported originals are retained; reconcile the dataset before publication.",
+      "zh": "已导入的原始文件已保留；发布前请先核对数据集。"
+    },
+    "the_destination_dataset_disappeared_imported_originals_are_retained": {
+      "en": "The destination dataset disappeared; imported originals are retained.",
+      "zh": "目标数据集已消失；已导入的原始文件已保留。"
+    },
+    "publication_task_id_does_not_match_the_requested_import_task": {
+      "en": "Publication task_id does not match the requested import task.",
+      "zh": "发布 task_id 与请求的导入任务不匹配。"
+    },
+    "publication_request_id_has_different_content": {
+      "en": "Publication request_id has different content.",
+      "zh": "发布 request_id 的内容不同。"
+    },
+    "wait_for_import_originals_before_retrying_publication": {
+      "en": "Wait for import originals before retrying publication.",
+      "zh": "重试发布前请等待导入原始文件完成。"
+    },
+    "inspection_directory_is_outside_the_workspace_data_directory": {
+      "en": "Inspection directory is outside the workspace data directory.",
+      "zh": "检查目录位于工作区数据目录之外。"
+    },
+    "inspection_manifest_resolves_outside_the_inspection_directory": {
+      "en": "Inspection manifest resolves outside the inspection directory.",
+      "zh": "检查清单解析到检查目录之外。"
+    },
+    "thumbnail_request_id_already_has_different_content": {
+      "en": "Thumbnail request ID already has different content.",
+      "zh": "缩略图请求 ID 已有不同的内容。"
+    },
+    "thumbnail_items_must_be_unique": {
+      "en": "Thumbnail items must be unique.",
+      "zh": "缩略图条目必须唯一。"
+    },
+    "selected_items_are_missing_or_not_failed": {
+      "en": "Selected items are missing or not failed.",
+      "zh": "所选条目不存在或不是失败状态。"
+    },
+    "the_fixed_first_member_thumbnail_is_missing_generate_a_new_batch": {
+      "en": "The fixed first-member thumbnail is missing; generate a new batch for this dataset.",
+      "zh": "固定首成员缩略图缺失；请为此数据集生成新批次。"
+    },
+    "select_unique_members_belonging_to_the_fixed_dataset": {
+      "en": "Select unique assets belonging to the current dataset.",
+      "zh": "请选择属于当前数据集且不重复的素材。"
+    },
+    "the_dataset_does_not_belong_to_the_specified_dataset": {
+      "en": "The selected dataset is unavailable.",
+      "zh": "所选数据集不可用。"
+    },
+    "the_project_already_references_this_dataset": {
+      "en": "The project already references this dataset.",
+      "zh": "项目已引用此数据集。"
+    },
+    "the_project_already_references_this_asset": {
+      "en": "The project already references this asset.",
+      "zh": "项目已引用此素材。"
+    },
+    "content_registration_is_incomplete_for_this_fixed_asset": {
+      "en": "Original content registration is incomplete.",
+      "zh": "原件内容尚未完成登记。"
+    },
+    "datasets_have_changed_preview_them_again": {
+      "en": "The datasets have changed. Preview the cleanup again.",
+      "zh": "数据集已变化，请重新预览清理范围。"
+    },
+    "the_current_asset_has_changed_read_it_again_before_previewing_remov": {
+      "en": "The asset has changed. Read it again before previewing removal.",
+      "zh": "素材已变化，请重新读取后预览移除范围。"
+    },
+    "datasets_have_changed_read_them_again": {
+      "en": "The datasets have changed. Read them again.",
+      "zh": "数据集已变化，请重新读取。"
+    },
+    "files_and_scientific_images_require_their_respective_input_ports": {
+      "en": "Files and scientific images require their respective input ports.",
+      "zh": "文件与科学图像需要使用各自对应的输入端口。"
+    },
+    "selected_members_do_not_belong_to_the_dataset": {
+      "en": "Selected members do not belong to the dataset.",
+      "zh": "所选成员不属于该数据集。"
+    },
+    "image_index_is_outside_the_selected_members": {
+      "en": "Image index is outside the selected members.",
+      "zh": "图像索引超出所选成员范围。"
+    },
+    "a_single_asset_contains_one_item": {
+      "en": "A single asset contains one item.",
+      "zh": "独立素材只有一个成员。"
+    },
+    "the_registered_original_is_not_ready": {
+      "en": "The registered original is not ready.",
+      "zh": "登记原件尚未就绪。"
+    },
+    "the_asset_changed_read_it_again": {
+      "en": "The asset changed; read it again.",
+      "zh": "素材已变化，请重新读取。"
+    },
+    "the_image_changed_read_it_again": {
+      "en": "The image changed; read it again.",
+      "zh": "图像已变化，请重新读取。"
+    },
+    "a_calibration_reason_requires_a_calibration_status": {
+      "en": "A calibration reason requires a calibration status.",
+      "zh": "填写校准依据时需要同时指定校准状态。"
+    },
+    "dataset_members_must_remain_subframes_remove_this_asset_from_its_datasets_before_changing_its_class": {
+      "en": "Dataset members must remain subframes. Remove this asset from its datasets before changing its class.",
+      "zh": "数据集成员必须保持子帧形态。修改形态前请先从数据集中移除该素材。"
+    },
+    "the_dataset_changed_read_it_again": {
+      "en": "The dataset changed; read it again.",
+      "zh": "数据集已变化，请重新读取。"
+    },
+    "dataset_members_must_remain_subframes": {
+      "en": "Dataset members must remain subframes.",
+      "zh": "数据集成员必须保持子帧形态。"
+    },
+    "the_asset_is_missing_or_its_original_is_not_ready": {
+      "en": "The asset is missing or its original is not ready.",
+      "zh": "素材缺失或登记原件尚未就绪。"
+    },
+    "the_dataset_selection_is_empty": {
+      "en": "The dataset selection is empty.",
+      "zh": "数据集选择为空。"
+    },
+    "insufficient_space_to_fix_scientific_inputs": {
+      "en": "Insufficient space to fix scientific inputs.",
+      "zh": "可用空间不足，无法固定本次科学输入。"
+    },
+    "selected_assets_no_longer_belong_to_the_dataset": {
+      "en": "Selected assets no longer belong to the dataset.",
+      "zh": "所选素材已不属于该数据集。"
+    },
+    "the_dataset_manifest_location_changed_preview_cleanup_again": {
+      "en": "The dataset manifest location changed; preview cleanup again.",
+      "zh": "数据集说明文件的位置已变化，请重新预检清理范围。"
+    },
+    "the_managed_directory_is_already_occupied": {
+      "en": "The managed directory is already occupied.",
+      "zh": "托管目录已被占用。"
+    },
+    "the_managed_filename_is_already_occupied": {
+      "en": "The managed filename is already occupied.",
+      "zh": "托管文件名已被占用。"
+    },
+    "library_paths_must_stay_inside_the_managed_library": {
+      "en": "Library paths must stay inside the managed library.",
+      "zh": "素材路径必须位于托管素材库内。"
+    },
+    "the_managed_path_exceeds_the_supported_windows_path_length": {
+      "en": "The managed path exceeds the supported Windows path length.",
+      "zh": "托管路径超过当前 Windows 支持的路径长度。"
+    },
+    "managed_library_paths_cannot_traverse_symbolic_links_or_junctions": {
+      "en": "Managed library paths cannot traverse symbolic links or junctions.",
+      "zh": "托管素材路径不能经过符号链接或目录联接点。"
+    },
+    "the_dataset_changed_read_its_current_revision": {
+      "en": "The dataset changed; read its current revision.",
+      "zh": "数据集已变化，请读取当前 revision。"
+    },
+    "the_registered_directory_is_currently_unavailable": {
+      "en": "The registered directory is currently unavailable.",
+      "zh": "登记目录当前不可访问。"
+    },
+    "opening_a_local_directory_requires_windows": {
+      "en": "Opening a local directory requires Windows.",
+      "zh": "打开本机目录需要 Windows。"
+    },
+    "read_the_current_revision_before_organizing_directories": {
+      "en": "Read the current revision before organizing directories.",
+      "zh": "整理目录前请重新读取当前 revision。"
+    },
+    "the_duplicate_no_longer_shares_the_registered_original_identity": {
+      "en": "The duplicate no longer shares the registered original identity.",
+      "zh": "待清理副本已不再与登记原件共享文件身份。"
+    },
+    "the_original_changed_before_duplicate_cleanup": {
+      "en": "The original changed before duplicate cleanup.",
+      "zh": "原件在清理副本前发生变化。"
+    },
+    "managed_originals_must_belong_to_the_library": {
+      "en": "Managed originals must belong to the library.",
+      "zh": "托管原件必须位于素材库内。"
+    },
+    "the_old_manifest_belongs_to_another_dataset": {
+      "en": "The old manifest belongs to another dataset.",
+      "zh": "旧说明文件属于另一个数据集。"
+    },
+    "the_layout_changed_read_a_fresh_organization_plan": {
+      "en": "The layout changed; read a fresh organization plan.",
+      "zh": "目录位置已变化，请重新预检整理范围。"
+    },
+    "a_destination_file_is_already_present": {
+      "en": "A destination file is already present.",
+      "zh": "目标文件已存在。"
+    },
+    "the_original_is_not_ready_for_movement": {
+      "en": "The original is not ready for movement.",
+      "zh": "原件尚未就绪，无法移动。"
+    },
+    "the_original_bytes_changed_restore_them_before_organizing": {
+      "en": "The original bytes changed; restore them before organizing.",
+      "zh": "原件内容已变化，请恢复登记内容后再整理目录。"
+    },
+    "the_original_changed_after_preflight": {
+      "en": "The original changed after preflight.",
+      "zh": "原件在预检后发生变化。"
+    },
+    "a_preview_started_reading_this_original_after_preflight": {
+      "en": "A preview started reading this original after preflight.",
+      "zh": "预览在预检后开始读取该原件。"
+    },
+    "an_import_owns_this_original_after_preflight": {
+      "en": "An import owns this original after preflight.",
+      "zh": "导入任务在预检后占用了该原件。"
+    },
+    "original_bytes_changed_after_preflight": {
+      "en": "Original bytes changed after preflight.",
+      "zh": "原件内容在预检后发生变化。"
+    },
+    "another_directory_organization_owns_the_selected_originals": {
+      "en": "Another directory organization owns the selected originals.",
+      "zh": "另一项目录整理正在使用所选原件。"
+    },
+    "dataset_members_must_share_capture_parameters_submit_separate_member_lists_for_differing_groups": {
+      "en": "Dataset members must share capture parameters. Submit separate member lists for differing groups.",
+      "zh": "数据集成员的拍摄参数必须一致。请为不同参数的素材分别提交成员清单。"
+    },
+    "library_organization_busy": {
+      "en": "Selected originals are busy. {details}",
+      "zh": "所选原件正在使用中。{details}"
+    },
+    "managed_paths_must_stay_inside_the_data_directory": {
+      "en": "Managed paths must stay inside the data directory.",
+      "zh": "托管路径必须位于数据目录内。"
+    },
+    "reference_unavailable": {
+      "en": "The selected object is archived, in trash or missing. Read its current state.",
+      "zh": "所选对象已归档、进入回收站或不存在，请重新读取。"
+    },
+    "asset_dataset_ownership": {
+      "en": "The material already belongs to another dataset. Remove its membership first.",
+      "zh": "素材已属于其他数据集，请先解除所属关系。"
+    },
+    "calibration_dependency_conflict": {
+      "en": "The classification change would invalidate existing calibration. Adjust the listed consumers and slots first.",
+      "zh": "分类修改会使现有校准关系失效，请先调整列出的消费者与槽位。"
+    },
+    "originals_in_use": {
+      "en": "Originals are in use by processing or export. Wait for completion and preview cleanup again.",
+      "zh": "原件仍被处理或导出占用，请等待任务结束后重新预检。"
+    },
+    "library_external_references_block_cleanup": {
+      "en": "Detach the listed external references before permanently cleaning originals.",
+      "zh": "请先解除列出的外部引用，再永久清理原件。"
+    },
+    "dataset_not_ready": {
+      "zh": "原件已保留，请先修复数据集分组再关联项目。",
+      "en": "Originals are retained. Repair dataset organization before associating a project."
+    },
+    "originals_not_ready": {
+      "zh": "当前没有可供关联的已就绪原件。",
+      "en": "No imported originals are ready to associate."
     }
   },
   "codes": {
@@ -2092,6 +2464,12 @@
     "INTERNAL_ERROR": "internal_error",
     "METHOD_NOT_ALLOWED": "method_not_allowed",
     "WORKBENCH_RESTART_FAILED": "restart_failed",
-    "WORKBENCH_CONTROL_BUSY": "control_busy"
+    "WORKBENCH_CONTROL_BUSY": "control_busy",
+    "REFERENCE_UNAVAILABLE": "reference_unavailable",
+    "ASSET_DATASET_OWNERSHIP": "asset_dataset_ownership",
+    "CALIBRATION_DEPENDENCY_CONFLICT": "calibration_dependency_conflict",
+    "ORIGINALS_IN_USE": "originals_in_use",
+    "DATASET_NOT_READY": "dataset_not_ready",
+    "ORIGINALS_NOT_READY": "originals_not_ready"
   }
 }

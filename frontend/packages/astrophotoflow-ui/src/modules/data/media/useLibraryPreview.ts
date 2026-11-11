@@ -2,9 +2,9 @@ import { onScopeDispose, shallowRef } from 'vue'
 import { ApiClientError } from '../../../core/api/errors'
 import { uiT } from '../../../core/i18n'
 import type { MediaViewerRequest } from '../api/media'
-import { fixedMemberAt, readMemberPage } from '../datasets/members'
-import { fixedAssetPreview, fixedDatasetReference, materialPreviewBase, resolveMaterialRecord } from '../library/materialRecords'
-import type { FixedPreviewMember } from '../library/materialRecords'
+import { datasetMemberAt, readMemberPage } from '../datasets/members'
+import { assetPreview, datasetReference, materialPreviewBase, resolveMaterialRecord } from '../library/materialRecords'
+import type { PreviewMember } from '../library/materialRecords'
 import type { PreviewPhoto } from './previewTypes'
 
 export interface LibraryPreviewOptions {
@@ -34,8 +34,8 @@ export function useLibraryPreview(options: LibraryPreviewOptions) {
     try {
       const record = resolveMaterialRecord(value)
       if (!record || !await options.waitForEdits() || current !== pending || current.signal.aborted) return
-      const group = fixedDatasetReference(record)
-      let first: FixedPreviewMember | undefined
+      const group = datasetReference(record)
+      let first: PreviewMember | undefined
       if (options.nativeViewer() && group) {
         const page = await readMemberPage(group, {limit:1,offset:0,sort_by:'position',order:'asc'}, current.signal)
         if (current !== pending || current.signal.aborted || !page.total) return
@@ -48,13 +48,13 @@ export function useLibraryPreview(options: LibraryPreviewOptions) {
         media.value = {index:0,total:page.total,member:async(index,signal)=>{
           const scoped = AbortSignal.any([current.signal,signal])
           scoped.throwIfAborted()
-          const member = index === 0 ? initial : await fixedMemberAt(group,index,scoped)
+          const member = index === 0 ? initial : await datasetMemberAt(group,index,scoped)
           scoped.throwIfAborted()
-          return {title:member.asset.name,basePath:materialPreviewBase(record,member),selection:{dataset_version_id:group.versionId}}
+          return {title:member.asset.name,basePath:materialPreviewBase(record,member.asset),selection:{dataset_id:group.id}}
         }}
         return
       }
-      first = group ? await fixedMemberAt(group,0,current.signal) : fixedAssetPreview(record)
+      first = group ? (await datasetMemberAt(group,0,current.signal)).asset : assetPreview(record)
       if (current !== pending || current.signal.aborted || !first) return
       active?.abort()
       active = current
@@ -64,12 +64,12 @@ export function useLibraryPreview(options: LibraryPreviewOptions) {
         const member = first
         media.value = {index:0,total:1,member:async(_index,signal)=>{
           AbortSignal.any([current.signal,signal]).throwIfAborted()
-          return {title:member.asset.name,basePath:materialPreviewBase(record,member),
-            selection:'member_position' in record && 'dataset_version_id' in record ? {dataset_version_id:record.dataset_version_id}:undefined}
+          return {title:member.name,basePath:materialPreviewBase(record,member),
+            selection:'member_position' in record && 'dataset_id' in record ? {dataset_id:record.dataset_id}:undefined}
         }}
       } else {
         media.value = undefined
-        photo.value = {assetId:first.asset.id,versionId:first.version.id,title:first.asset.name,basePath:materialPreviewBase(record,first)}
+        photo.value = {assetId:first.id,title:first.name,basePath:materialPreviewBase(record,first)}
       }
     } catch (cause) {
       if (current === pending && !current.signal.aborted) options.onError(cause)

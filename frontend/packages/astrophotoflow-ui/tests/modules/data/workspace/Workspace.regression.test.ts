@@ -1,3 +1,5 @@
+import { datasetFixture } from '../../../fixtures/library-summary'
+import { assetFixture } from '../../../fixtures/library-members'
 import { zCameraSnapshot } from '@ui/generated/api/zod.gen'
 import { libraryAsset as assetSummary, libraryDataset as datasetSummary, metadataForMembers, exposureForMembers } from '../../../fixtures/library-summary'
 import { flushPromises, mount } from '@vue/test-utils'
@@ -27,13 +29,26 @@ const project = {
   name: 'M31', target_name: null, notes: null, status: 'active', revision: 1, created_at: '2026-10-22T20:00:00Z', updated_at: '2026-10-22T20:00:00Z'
 }
 const idAt = (index: number) => '00000000-0000-4000-8000-' + String(index).padStart(12, '0')
-const libraryAsset = {
-  id:idAt(500),name:'M31.fit',scope:'shared',owner_project_id:null,role:'raw',calibration_level:null,current_version_id:null,
-  classification:{frame_class:'subframe',frame_type:'light'},
-  parameters:{camera_id:null,optical_system_id:null,filter_id:null,parameter_mode:'standard',iso:null,gain:null,offset:null,
+const libraryAsset = assetFixture({
+                       id:idAt(500),
+                       name:'M31.fit',
+                       scope:'shared',
+                       owner_project_id:null,
+                       role:'raw',
+                       calibration_level:null,
+                       classification:{frame_class:'subframe',frame_type:'light'},
+                       parameters:{camera_id:null,optical_system_id:null,filter_id:null,parameter_mode:'standard',iso:null,gain:null,offset:null,
     exposure_seconds:null,integration_seconds:null,sensor_temperature_c:null,binning_x:null,binning_y:null,cfa_pattern:null},
-  equipment_snapshot:{},value_sources:{},notes:null,status:'active',revision:1,created_at:'2026-10-22T20:00:00Z',current_version:null
-}
+                       equipment_snapshot:{},
+                       value_sources:{},
+                       notes:null,
+                       status:'active',
+                       revision:1,
+                       created_at:'2026-10-22T20:00:00Z',
+                       availability: 'unknown',
+                       content_hash: null,
+                       byte_size: null
+                     })
 
 const camera = {
   id:idAt(2500),kind:'camera',name:'Camera Alpha',model:'Alpha 1',notes:null,
@@ -87,10 +102,21 @@ describe('first-stage regression fixes', () => {
   it('keeps the newly selected project revision after an older reference removal completes',async()=>{
     const firstProject={...project,name:'Project A',revision:4}
     const secondProject={...project,id:idAt(1700),name:'Project B',revision:17}
-    const version={view_base: `/astrophotoflow/api/v1/library/assets/${libraryAsset.id}/versions/${idAt(1701)}/previews`, id:idAt(1701),asset_id:libraryAsset.id,version_number:1,storage_mode:'reference',storage_location:'test/member.fit',byte_size:1,content_hash:null,
-      availability:'available',camera_id:null,optical_system_id:null,filter_id:null,frame_type:'light',calibration_level:null,capture_snapshot:null,scientific_metadata:null,created_at:createdAt}
-    const asset={...libraryAsset,current_version_id:version.id,current_version:version}
-    const reference={view_base: `/astrophotoflow/api/v1/projects/${firstProject.id}/asset-references/${idAt(1702)}/previews`, id:idAt(1702),project_id:firstProject.id,asset_version_id:version.id,added_at:createdAt,asset,version}
+    const version={
+                    view_base: `/astrophotoflow/api/v1/library/assets/${libraryAsset.id}/previews`,
+                    id: libraryAsset.id,
+                    storage_mode:'reference',
+                    storage_location:'test/member.fit',
+                    byte_size:1,
+                    content_hash:null,
+                    availability:'available',
+                    calibration_level:null,
+                    capture_snapshot:null,
+                    scientific_metadata:null,
+                    created_at:createdAt
+                  }
+    const asset={...libraryAsset, ...version}
+    const reference={view_base: `/astrophotoflow/api/v1/projects/${firstProject.id}/asset-references/${idAt(1702)}/previews`, id:idAt(1702), project_id:firstProject.id, asset_id:version.id, added_at:createdAt, asset: assetFixture({...(asset), ...(version), id: (asset).id})}
     let finish!: (value:unknown)=>void
     get.mockImplementation(async(path:string)=>{
       if(path.endsWith('/capabilities'))return capabilities
@@ -135,15 +161,29 @@ describe('first-stage regression fixes', () => {
   })
 
   it('uses the pinned equipment snapshot when viewing a project asset reference',async()=>{
-    const version={view_base: `/astrophotoflow/api/v1/library/assets/${libraryAsset.id}/versions/${idAt(520)}/previews`, id:idAt(520),asset_id:libraryAsset.id,version_number:1,storage_mode:'managed',storage_location:'objects/source.png',
-      byte_size:1,content_hash:null,availability:'available',camera_id:camera.id,optical_system_id:null,filter_id:null,
-      frame_type:'light',calibration_level:null,capture_snapshot:{equipment_snapshot:{camera_id:zCameraSnapshot.strip().parse({...camera,name:'Pinned camera name'})}},scientific_metadata:{},created_at:createdAt}
-    const asset={...libraryAsset,current_version_id:version.id,current_version:version,
-      parameters:{...libraryAsset.parameters,camera_id:camera.id},equipment_snapshot:{camera_id:zCameraSnapshot.strip().parse({...camera,name:'Edited material name'})}}
+    const version={
+                    view_base: `/astrophotoflow/api/v1/library/assets/${libraryAsset.id}/previews`,
+                    id: libraryAsset.id,
+                    storage_mode:'managed',
+                    storage_location:'objects/source.png',
+                    byte_size:1,
+                    content_hash:null,
+                    availability:'available',
+                    calibration_level:null,
+                    capture_snapshot:{equipment_snapshot:{camera_id:zCameraSnapshot.strip().parse({...camera,name:'Pinned camera name'})}},
+                    scientific_metadata:{},
+                    created_at:createdAt
+                  }
+    const asset={
+                  ...libraryAsset,
+                  ...version,
+                  parameters:{...libraryAsset.parameters,camera_id:camera.id},
+                  equipment_snapshot:{camera_id:zCameraSnapshot.strip().parse({...camera,name:'Edited material name'})}
+                }
     get.mockImplementation(async(path:string)=>{
       if(path.endsWith('/capabilities'))return capabilities
       if(url(path).pathname.endsWith('/projects'))return page([project])
-      if(url(path).pathname.endsWith('/assets'))return page([{view_base: `/astrophotoflow/api/v1/projects/${project.id}/asset-references/${idAt(521)}/previews`, id:idAt(521),project_id:project.id,asset_version_id:version.id,added_at:createdAt,asset,version}])
+      if(url(path).pathname.endsWith('/assets'))return page([{view_base: `/astrophotoflow/api/v1/projects/${project.id}/asset-references/${idAt(521)}/previews`, id:idAt(521), project_id:project.id, asset_id:version.id, added_at:createdAt, asset: assetFixture({...(asset), ...(version), id: (asset).id})}])
       if(url(path).pathname.endsWith('/equipment'))return page([{...camera,name:'Current registry name'}])
       return emptyPage
     })
@@ -221,8 +261,8 @@ describe('first-stage regression fixes', () => {
   })
 
   it('opens a lazy display preview when its thumbnail is clicked',async()=>{
-    const version={view_base: `/astrophotoflow/api/v1/library/assets/${libraryAsset.id}/versions/${idAt(502)}/previews`, id:idAt(502),asset_id:libraryAsset.id,version_number:1,availability:'available',storage_mode:'reference',metadata_status:'ready',preview_status:'ready',created_at:createdAt}
-    const asset={...libraryAsset,current_version:version,current_version_id:version.id}
+    const version={view_base: `/astrophotoflow/api/v1/library/assets/${libraryAsset.id}/previews`, id: libraryAsset.id, availability:'available', storage_mode:'reference', created_at:createdAt, content_hash: 'blake3:' + 'a'.repeat(64), byte_size: 10}
+    const asset={...libraryAsset, ...version}
     get.mockImplementation(async(path:string)=>path.endsWith('/capabilities')?capabilities:path.includes('/library/items')?page([assetSummary(asset)]):emptyPage)
     getBlob.mockResolvedValue(new Blob(['thumb'],{type:'image/jpeg'}))
     Object.defineProperty(URL,'createObjectURL',{configurable:true,value:vi.fn(()=>'blob:thumb')})
@@ -233,17 +273,24 @@ describe('first-stage regression fixes', () => {
     expect(thumb.element.tagName).toBe('BUTTON')
     expect(thumb.get('img').attributes('src')).toBe('blob:thumb')
     const requests=getBlob.mock.calls.length
-    send.mockResolvedValue({asset_version_id:version.id,size:'display',status:'available',width:240,height:160,error:null,
-      stretch:{algorithm:'auto-mtf-1',input_offset:0,white_balance:[1],shadows:0,highlights:255,midtones:.2}})
+    send.mockResolvedValue({
+                             asset_id:version.id,
+                             size:'display',
+                             status:'available',
+                             width:240,
+                             height:160,
+                             error:null,
+                             stretch:{algorithm:'auto-mtf-1',input_offset:0,white_balance:[1],shadows:0,highlights:255,midtones:.2}
+                           })
     await thumb.trigger('click')
     await flushPromises()
     expect(getBlob).toHaveBeenCalledTimes(requests+2)
     expect(wrapper.find('[role="dialog"]').exists()).toBe(true)
-    expect(send.mock.calls[0][0]).toContain('/versions/'+version.id+'/previews/display')
-    wrapper.getComponent(PhotoPreviewDialog).vm.$emit('updated',{assetId:asset.id,versionId:version.id,title:asset.name})
+    expect(send.mock.calls[0][0]).toContain('/library/assets/'+asset.id+'/previews/display')
+    wrapper.getComponent(PhotoPreviewDialog).vm.$emit('updated',{assetId:asset.id,title:asset.name})
     await flushPromises()
     expect(getBlob).toHaveBeenCalledTimes(requests+3)
-    expect(getBlob).toHaveBeenLastCalledWith('/astrophotoflow/api/v1/library/assets/'+asset.id+'/versions/'+version.id+'/previews/thumbnail', expect.any(AbortSignal))
+    expect(getBlob).toHaveBeenLastCalledWith('/astrophotoflow/api/v1/library/assets/'+asset.id+'/previews/thumbnail', expect.any(AbortSignal))
     await wrapper.get('button[aria-label="关闭大图预览"]').trigger('click')
     await flushPromises()
   })
@@ -381,14 +428,30 @@ describe('first-stage regression fixes', () => {
     const datasetId=idAt(700),versionId=idAt(701)
     const members=[1,2].map((bin,index)=>{
       const assetId=idAt(710+index),assetVersionId=idAt(720+index)
-      const version={view_base: `/astrophotoflow/api/v1/library/assets/${assetId}/versions/${assetVersionId}/previews`, id:assetVersionId,asset_id:assetId,version_number:1,storage_mode:'reference',storage_location:'roots/science/'+index+'.fits',
-        byte_size:1,content_hash:null,availability:'available',camera_id:null,optical_system_id:null,filter_id:null,frame_type:'light',calibration_level:null,capture_snapshot:null,scientific_metadata:null,created_at:createdAt}
-      const asset={...libraryAsset,id:assetId,name:'Member '+index+'.fits',current_version_id:assetVersionId,
-        parameters:{...libraryAsset.parameters,binning_x:bin,binning_y:bin},current_version:version}
-      return {id:idAt(730+index),dataset_version_id:versionId,asset_version_id:assetVersionId,position:index,relative_path:null,asset,version}
+      const version={
+                      view_base: `/astrophotoflow/api/v1/library/assets/${assetId}/previews`,
+                      id: assetId,
+                      storage_mode:'reference',
+                      storage_location:'roots/science/'+index+'.fits',
+                      byte_size:1,
+                      content_hash:null,
+                      availability:'available',
+                      calibration_level:null,
+                      capture_snapshot:null,
+                      scientific_metadata:null,
+                      created_at:createdAt
+                    }
+      const asset={
+                    ...libraryAsset,
+                    ...version,
+                    id:assetId,
+                    name:'Member '+index+'.fits',
+                    parameters:{...libraryAsset.parameters,binning_x:bin,binning_y:bin}
+                  }
+      return {id:idAt(730+index), dataset_id:versionId, asset_id:assetVersionId, position:index, relative_path:null, asset: assetFixture({...(asset), ...(version), id: (asset).id})}
     })
-    const dataset={id:datasetId,name:'M31 set',notes:null,status:'active',revision:1,current_version_id:versionId,member_count:2,created_at:createdAt,updated_at:createdAt}
-    const version={id:versionId,dataset_id:datasetId,version_number:1,created_at:createdAt,members}
+    const dataset=datasetFixture({id:datasetId, name:'M31 set', notes:null, status:'active', revision:1, member_count:2, created_at:createdAt, updated_at:createdAt})
+    const version={id: datasetId, created_at:createdAt, members}
     const filterOptions={frame_classes:['subframe'],frame_types:['light'],roles:['raw'],parameter_modes:['standard'],bin_values:['1x1','2x2'],
       equipment:{camera_id:[],optical_system_id:[],filter_id:[]},numeric_ranges:{}}
     get.mockImplementation(async(path:string)=>{
@@ -398,7 +461,7 @@ describe('first-stage regression fixes', () => {
       if(path.endsWith('/library/filter-options'))return filterOptions
       return emptyPage
     })
-    send.mockResolvedValue({dataset_id:datasetId,revision:1,version_id:versionId,assets:members.map(member=>member.asset)})
+    send.mockResolvedValue({dataset_id:datasetId, revision:1, assets:members.map(member=>member.asset)})
     wrapper=mount(App,{global:{plugins:[pinia]}})
     await flushPromises()
     expect(wrapper.get('.apf-table-scroll').classes()).toContain('simple')
@@ -507,14 +570,25 @@ describe('first-stage regression fixes', () => {
 
   it('releases a dataset inline failure after cancelling its draft',async()=>{
     const versionId=idAt(700)
-    const datasetVersion={id:versionId,dataset_id:idAt(701),version_number:1,created_at:createdAt,members:[]}
-    const dataset={id:idAt(701),name:'Group',notes:null,status:'active',revision:1,current_version_id:versionId,
-      member_count:0,current_version_number:1,summary:metadataForMembers([]),exposure_summary:exposureForMembers([]),input_ready:false,created_at:createdAt,updated_at:createdAt}
+    const datasetVersion={id: idAt(701), created_at:createdAt, members:[]}
+    const dataset=datasetFixture({
+                    id:idAt(701),
+                    name:'Group',
+                    notes:null,
+                    status:'active',
+                    revision:1,
+                    member_count:0,
+                    summary:metadataForMembers([]),
+                    exposure_summary:exposureForMembers([]),
+                    input_ready:false,
+                    created_at:createdAt,
+                    updated_at:createdAt
+                  })
     get.mockImplementation(async(path:string)=>{
       if(path.endsWith('/capabilities'))return capabilities
       if(path.includes('/library/items'))return page([datasetSummary(dataset,datasetVersion,datasetVersion.members.length)])
       if(path.endsWith('/datasets/'+dataset.id))return dataset
-      if(url(path).pathname.endsWith('/versions/'+versionId+'/members'))return page(datasetVersion.members)
+      if(url(path).pathname.endsWith('/datasets/'+dataset.id+'/members'))return page(datasetVersion.members)
       return emptyPage
     })
     send.mockRejectedValue(new Error('revision conflict'))
@@ -539,15 +613,26 @@ describe('first-stage regression fixes', () => {
   it('refreshes the parent library row after a successful dataset field save',async()=>{
     const datasetId=idAt(720)
     const versionId=idAt(721)
-    const version={id:versionId,dataset_id:datasetId,version_number:1,created_at:createdAt,members:[]}
-    let dataset={id:datasetId,name:'Old name',notes:null,status:'active',revision:1,current_version_id:versionId,
-      member_count:0,current_version_number:1,summary:metadataForMembers([]),exposure_summary:exposureForMembers([]),input_ready:false,created_at:createdAt,updated_at:createdAt}
+    const version={id: datasetId, created_at:createdAt, members:[]}
+    let dataset=datasetFixture({
+                  id:datasetId,
+                  name:'Old name',
+                  notes:null,
+                  status:'active',
+                  revision:1,
+                  member_count:0,
+                  summary:metadataForMembers([]),
+                  exposure_summary:exposureForMembers([]),
+                  input_ready:false,
+                  created_at:createdAt,
+                  updated_at:createdAt
+                })
     const item=()=>(datasetSummary(dataset,version,version.members.length))
     get.mockImplementation(async(path:string)=>{
       if(path.endsWith('/capabilities'))return capabilities
       if(path.includes('/library/items'))return page([item()])
       if(path.endsWith('/datasets/'+datasetId))return dataset
-      if(url(path).pathname.endsWith('/versions/'+versionId+'/members'))return page(version.members)
+      if(url(path).pathname.endsWith('/datasets/'+dataset.id+'/members'))return page(version.members)
       return emptyPage
     })
     send.mockImplementation(async()=>{
@@ -568,9 +653,20 @@ describe('first-stage regression fixes', () => {
   it('uses the saved dataset revision for batch removal after automatic summary refresh',async()=>{
     const datasetId=idAt(722)
     const versionId=idAt(723)
-    const version={id:versionId,dataset_id:datasetId,version_number:1,created_at:createdAt,members:[]}
-    let dataset={id:datasetId,name:'Old name',notes:null,status:'active',revision:1,current_version_id:versionId,
-      member_count:0,current_version_number:1,summary:metadataForMembers([]),exposure_summary:exposureForMembers([]),input_ready:false,created_at:createdAt,updated_at:createdAt}
+    const version={id: datasetId, created_at:createdAt, members:[]}
+    let dataset=datasetFixture({
+                  id:datasetId,
+                  name:'Old name',
+                  notes:null,
+                  status:'active',
+                  revision:1,
+                  member_count:0,
+                  summary:metadataForMembers([]),
+                  exposure_summary:exposureForMembers([]),
+                  input_ready:false,
+                  created_at:createdAt,
+                  updated_at:createdAt
+                })
     let removed=false
     const item=()=>(datasetSummary(dataset,version,version.members.length))
     get.mockImplementation(async(path:string)=>{
@@ -587,7 +683,7 @@ describe('first-stage regression fixes', () => {
       }
       expect(path).toBe('/astrophotoflow/api/v1/library/items')
       expect(method).toBe('DELETE')
-      expect(body.items).toEqual([{entry_type:'dataset',id:datasetId,revision:2,current_version_id:versionId}])
+      expect(body.items).toEqual([{entry_type:'dataset', id:datasetId, revision:2}])
       removed=true
       return {removed_count:1}
     })
@@ -614,9 +710,20 @@ describe('first-stage regression fixes', () => {
   it('keeps a renamed dataset selected when a later external revision makes removal stale',async()=>{
     const datasetId=idAt(724)
     const versionId=idAt(725)
-    const version={id:versionId,dataset_id:datasetId,version_number:1,created_at:createdAt,members:[]}
-    let dataset={id:datasetId,name:'Old name',notes:null,status:'active',revision:1,current_version_id:versionId,
-      member_count:0,current_version_number:1,summary:metadataForMembers([]),exposure_summary:exposureForMembers([]),input_ready:false,created_at:createdAt,updated_at:createdAt}
+    const version={id: datasetId, created_at:createdAt, members:[]}
+    let dataset=datasetFixture({
+                  id:datasetId,
+                  name:'Old name',
+                  notes:null,
+                  status:'active',
+                  revision:1,
+                  member_count:0,
+                  summary:metadataForMembers([]),
+                  exposure_summary:exposureForMembers([]),
+                  input_ready:false,
+                  created_at:createdAt,
+                  updated_at:createdAt
+                })
     const item=()=>(datasetSummary(dataset,version,version.members.length))
     get.mockImplementation(async(path:string)=>{
       if(path.endsWith('/capabilities'))return capabilities
@@ -628,7 +735,7 @@ describe('first-stage regression fixes', () => {
         dataset={...dataset,name:'New name',revision:2}
         return dataset
       }
-      expect(body.items).toEqual([{entry_type:'dataset',id:datasetId,revision:2,current_version_id:versionId}])
+      expect(body.items).toEqual([{entry_type:'dataset', id:datasetId, revision:2}])
       dataset={...dataset,revision:3}
       throw new ApiClientError('记录已变化，请重新读取。','service',409,'REVISION_CONFLICT')
     })
@@ -788,19 +895,45 @@ describe('first-stage regression fixes', () => {
     const versionId = idAt(501)
     const datasetId = idAt(503)
     const datasetVersionId = idAt(504)
-    const version = {view_base: `/astrophotoflow/api/v1/library/assets/${libraryAsset.id}/versions/${versionId}/previews`,
-      id:versionId,asset_id:libraryAsset.id,version_number:1,storage_mode:'reference',storage_location:'raw/M31.fit',
-      byte_size:100,content_hash:null,availability:'available',camera_id:null,optical_system_id:null,filter_id:null,
-      frame_type:'light',calibration_level:null,capture_snapshot:null,scientific_metadata:null,created_at:createdAt
-    }
-    const addableAsset = {...libraryAsset,current_version_id:versionId,current_version:version}
-    const datasetVersion = {id:datasetVersionId,dataset_id:datasetId,version_number:1,created_at:createdAt,members:[]}
-    const dataset = {id:datasetId,name:'Project dataset',notes:null,status:'active',revision:1,current_version_id:datasetVersionId,
-      member_count:0,current_version_number:1,summary:metadataForMembers([]),exposure_summary:exposureForMembers([]),input_ready:false,created_at:createdAt,updated_at:createdAt}
+    const version = {
+                      view_base: `/astrophotoflow/api/v1/library/assets/${libraryAsset.id}/previews`,
+                      id: libraryAsset.id,
+                      storage_mode:'reference',
+                      storage_location:'raw/M31.fit',
+                      byte_size:100,
+                      content_hash:null,
+                      availability:'available',
+                      calibration_level:null,
+                      capture_snapshot:null,
+                      scientific_metadata:null,
+                      created_at:createdAt
+                    }
+    const addableAsset = {...libraryAsset, ...version}
+    const datasetVersion = {id: datasetId, created_at:createdAt, members:[]}
+    const dataset = datasetFixture({
+                      id:datasetId,
+                      name:'Project dataset',
+                      notes:null,
+                      status:'active',
+                      revision:1,
+                      member_count:0,
+                      summary:metadataForMembers([]),
+                      exposure_summary:exposureForMembers([]),
+                      input_ready:false,
+                      created_at:createdAt,
+                      updated_at:createdAt
+                    })
     Object.assign(dataset, {summary: metadataForMembers([]), input_ready: false})
-    const assetReference = {view_base: `/astrophotoflow/api/v1/projects/${project.id}/asset-references/${idAt(502)}/previews`, id:idAt(502),project_id:project.id,asset_version_id:versionId,added_at:createdAt,asset:addableAsset,version}
-    const datasetReference = {id:idAt(505),project_id:project.id,dataset_id:datasetId,dataset_version_id:datasetVersionId,
-      base_revision:4,added_at:createdAt,dataset,version:{id:datasetVersionId,dataset_id:datasetId,version_number:1,created_at:createdAt,exposure_summary:exposureForMembers([])}}
+    const assetReference = {view_base: `/astrophotoflow/api/v1/projects/${project.id}/asset-references/${idAt(502)}/previews`, id:idAt(502), project_id:project.id, asset_id:versionId, added_at:createdAt, asset: assetFixture({...(addableAsset), ...(version), id: (addableAsset).id})}
+    const datasetReference = {
+                               id:idAt(505),
+                               project_id:project.id,
+                               dataset_id:datasetId,
+                               base_revision:4,
+                               added_at:createdAt,
+                               dataset,
+                               version:{id: datasetId, created_at:createdAt, exposure_summary:exposureForMembers([])}
+                             }
     let currentProject=project
     let assetReferenced=false
     let datasetReferenced=false
@@ -868,7 +1001,7 @@ describe('first-stage regression fixes', () => {
     await flushPromises()
     await wrapper.get('.apf-record').trigger('click')
     await flushPromises()
-    await wrapper.findAll('.apf-details button').find(button=>button.text()==='查看项目图像组')!.trigger('click')
+    await wrapper.findAll('.apf-details button').find(button=>button.text()==='子帧数据集')!.trigger('click')
     await flushPromises()
     await wrapper.findAll('.apf-toolbar button').find(button=>button.text()==='添加图像组')!.trigger('click')
     await flushPromises()
@@ -882,9 +1015,9 @@ describe('first-stage regression fixes', () => {
     await flushPromises()
 
     expect(send.mock.calls[0][3]).toMatchObject({base_revision:1,name:'M42'})
-    expect(send.mock.calls[1][3]).toMatchObject({base_revision:2,asset_version_id:versionId})
+    expect(send.mock.calls[1][3]).toMatchObject({base_revision:2, asset_id:versionId})
     expect(send.mock.calls[2][3]).toMatchObject({base_revision:3})
-    expect(send.mock.calls[3][3]).toMatchObject({base_revision:4,dataset_id:datasetId,dataset_version_id:datasetVersionId})
+    expect(send.mock.calls[3][3]).toMatchObject({base_revision:4, dataset_id:datasetId})
     expect(send.mock.calls[4][3]).toMatchObject({base_revision:5})
   })
 
@@ -906,7 +1039,7 @@ describe('first-stage regression fixes', () => {
     send.mockImplementation(async (path: string, _schema: unknown, method: string, body: Record<string, any>) => {
       expect(path).toBe('/astrophotoflow/api/v1/library/items')
       expect(method).toBe('DELETE')
-      expect(body.items).toEqual([{entry_type:'asset',id:libraryAsset.id,revision:1,current_version_id:null}])
+      expect(body.items).toEqual([{entry_type:'asset', id:libraryAsset.id, revision:1}])
       removed = true
       return {removed_count:1}
     })
@@ -1058,7 +1191,7 @@ describe('first-stage regression fixes', () => {
   })
 
   it('reads current-page trash records and restores their original identity', async()=>{
-    const item={entry_type:'asset',id:idAt(550),name:'Trash A.fit',removed_at:createdAt,revision:2,current_version_id:idAt(551),cleanup_status:'trash',cleanup_error:null,photo_count:1,member_asset_ids:[],groups:[],source_dataset_id:null}
+    const item={entry_type:'asset', id:idAt(550), name:'Trash A.fit', removed_at:createdAt, revision:2, cleanup_status:'trash', cleanup_error:null, photo_count:1, member_asset_ids:[], groups:[], source_dataset_id:null}
     let restored=false
     get.mockImplementation(async(path:string)=>{
       if(path.endsWith('/capabilities'))return capabilities
@@ -1067,7 +1200,7 @@ describe('first-stage regression fixes', () => {
     })
     send.mockImplementation(async(path:string,_schema:unknown,method:string,body:Record<string,any>)=>{
       expect(method).toBe('POST')
-      if(path.endsWith('/restore')){expect(body.items).toEqual([{entry_type:'asset',id:item.id,removed_at:createdAt,revision:2,current_version_id:item.current_version_id,source_dataset_id:null}]);restored=true;return {restored_count:1}}
+      if(path.endsWith('/restore')){expect(body.items).toEqual([{entry_type:'asset', id:item.id, removed_at:createdAt, revision:2, source_dataset_id:null}]);restored=true;return {restored_count:1}}
       throw new Error('unexpected request')
     })
     wrapper=mount(App,{global:{plugins:[pinia]}})
@@ -1084,8 +1217,19 @@ describe('first-stage regression fixes', () => {
   })
 
   it('clears trash selection across pages and prevents restoring partial cleanups',async()=>{
-    const items=Array.from({length:21},(_,index)=>({entry_type:'asset',id:idAt(570+index),name:`Trash ${index}.fit`,removed_at:createdAt,
-      revision:1,current_version_id:null,cleanup_status:index===20?'partial':'trash',cleanup_error:index===20?'locked':null,photo_count:1,member_asset_ids:[],groups:[],source_dataset_id:null}))
+    const items=Array.from({length:21},(_,index)=>({
+                                                     entry_type:'asset',
+                                                     id:idAt(570+index),
+                                                     name:`Trash ${index}.fit`,
+                                                     removed_at:createdAt,
+                                                     revision:1,
+                                                     cleanup_status:index===20?'partial':'trash',
+                                                     cleanup_error:index===20?'locked':null,
+                                                     photo_count:1,
+                                                     member_asset_ids:[],
+                                                     groups:[],
+                                                     source_dataset_id:null
+                                                   }))
     get.mockImplementation(async(path:string)=>{
       if(path.endsWith('/capabilities'))return capabilities
       if(path.includes('/library/trash')){
@@ -1110,7 +1254,7 @@ describe('first-stage regression fixes', () => {
   })
 
   it('refreshes the parent library after restoring an asset',async()=>{
-    const item={entry_type:'asset',id:idAt(560),name:'Trash B.fit',removed_at:createdAt,revision:1,current_version_id:null,cleanup_status:'trash',cleanup_error:null,photo_count:1,member_asset_ids:[],groups:[],source_dataset_id:null}
+    const item={entry_type:'asset', id:idAt(560), name:'Trash B.fit', removed_at:createdAt, revision:1, cleanup_status:'trash', cleanup_error:null, photo_count:1, member_asset_ids:[], groups:[], source_dataset_id:null}
     let restored=false
     let libraryReads=0
     get.mockImplementation(async(path:string)=>{
@@ -1136,8 +1280,8 @@ describe('first-stage regression fixes', () => {
   })
 
   it('shows group trash as a parent with individually removed members',async()=>{
-    const group={entry_type:'dataset',id:idAt(570),name:'Light frames',removed_at:createdAt,revision:2,current_version_id:idAt(572),cleanup_status:'trash',cleanup_error:null,photo_count:1,member_asset_ids:[idAt(571)],groups:[],source_dataset_id:null}
-    const member={entry_type:'asset',id:idAt(571),name:'A.fit',removed_at:createdAt,revision:2,current_version_id:idAt(573),cleanup_status:'trash',cleanup_error:null,photo_count:1,member_asset_ids:[],groups:[{id:group.id,name:group.name,in_trash:true}],source_dataset_id:null}
+    const group={entry_type:'dataset', id:idAt(570), name:'Light frames', removed_at:createdAt, revision:2, cleanup_status:'trash', cleanup_error:null, photo_count:1, member_asset_ids:[idAt(571)], groups:[], source_dataset_id:null}
+    const member={entry_type:'asset', id:idAt(571), name:'A.fit', removed_at:createdAt, revision:2, cleanup_status:'trash', cleanup_error:null, photo_count:1, member_asset_ids:[], groups:[{id:group.id,name:group.name,in_trash:true}], source_dataset_id:null}
     get.mockImplementation(async(path:string)=>{
       if(path.endsWith('/capabilities'))return capabilities
       if(path.includes('/library/trash'))return page([member,group])
@@ -1156,8 +1300,8 @@ describe('first-stage regression fixes', () => {
   })
 
   it('loads and restores an implicit trash group member with its parent identity',async()=>{
-    const group={entry_type:'dataset',id:idAt(590),name:'All lights',removed_at:createdAt,revision:1,current_version_id:idAt(591),cleanup_status:'trash',cleanup_error:null,photo_count:1,member_asset_ids:[idAt(592)],groups:[],source_dataset_id:null}
-    const child={entry_type:'asset',id:idAt(592),name:'Implicit.fit',removed_at:createdAt,revision:2,current_version_id:idAt(593),cleanup_status:'trash',cleanup_error:null,photo_count:1,member_asset_ids:[],groups:[],source_dataset_id:group.id}
+    const group={entry_type:'dataset', id:idAt(590), name:'All lights', removed_at:createdAt, revision:1, cleanup_status:'trash', cleanup_error:null, photo_count:1, member_asset_ids:[idAt(592)], groups:[], source_dataset_id:null}
+    const child={entry_type:'asset', id:idAt(592), name:'Implicit.fit', removed_at:createdAt, revision:2, cleanup_status:'trash', cleanup_error:null, photo_count:1, member_asset_ids:[], groups:[], source_dataset_id:group.id}
     get.mockImplementation(async(path:string)=>{
       if(path.endsWith('/capabilities'))return capabilities
       if(path.includes('/library/trash'))return url(path).searchParams.has('group_id')?page([child]):page([group])
@@ -1165,7 +1309,7 @@ describe('first-stage regression fixes', () => {
     })
     send.mockImplementation(async(path:string,_schema:unknown,method:string,body:Record<string,any>)=>{
       expect(path).toContain('/restore');expect(method).toBe('POST')
-      expect(body.items).toEqual([{entry_type:'asset',id:child.id,removed_at:createdAt,revision:2,current_version_id:child.current_version_id,source_dataset_id:group.id}])
+      expect(body.items).toEqual([{entry_type:'asset', id:child.id, removed_at:createdAt, revision:2, source_dataset_id:group.id}])
       return {restored_count:1}
     })
     wrapper=mount(App,{global:{plugins:[pinia]}})
@@ -1182,7 +1326,7 @@ describe('first-stage regression fixes', () => {
   })
 
   it('does not delete when the final permanent-delete confirmation is cancelled',async()=>{
-    const item={entry_type:'asset',id:idAt(580),name:'Cancel.fit',removed_at:createdAt,revision:1,current_version_id:null,cleanup_status:'trash',cleanup_error:null,photo_count:1,member_asset_ids:[],groups:[],source_dataset_id:null}
+    const item={entry_type:'asset', id:idAt(580), name:'Cancel.fit', removed_at:createdAt, revision:1, cleanup_status:'trash', cleanup_error:null, photo_count:1, member_asset_ids:[], groups:[], source_dataset_id:null}
     get.mockImplementation(async(path:string)=>{
       if(path.endsWith('/capabilities'))return capabilities
       if(path.includes('/library/trash'))return page([item])

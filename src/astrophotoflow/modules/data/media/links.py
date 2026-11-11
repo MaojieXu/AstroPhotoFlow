@@ -1,7 +1,8 @@
-"""Data-owned relative media references shared by HTTP response projections."""
+"""Data-owned relative media references."""
 
-def asset_media_base(asset_id: str, version_id: str) -> str:
-    return f"/astrophotoflow/api/v1/library/assets/{asset_id}/versions/{version_id}/previews"
+
+def asset_media_base(asset_id: str) -> str:
+    return f"/astrophotoflow/api/v1/library/assets/{asset_id}/previews"
 
 
 def project_asset_media_base(project_id: str, reference_id: str) -> str:

@@ -79,13 +79,11 @@ export function useCanvasPathImport(
       const prepared =
         task.items_total === 1 &&
         item?.content_status === 'available' &&
-        item.asset_id &&
-        item.asset_version_id
+        item.asset_id
           ? await canvas.prepare(
               {
                 entry_type: 'asset',
-                id: item.asset_id,
-                version_id: item.asset_version_id
+                id: item.asset_id
               },
               signal
             )

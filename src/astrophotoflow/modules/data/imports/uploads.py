@@ -1,20 +1,12 @@
 from __future__ import annotations
-
 import shutil
 from collections.abc import AsyncIterable
 from datetime import UTC, datetime
 from pathlib import Path
 from uuid import UUID, uuid4
-
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-
-from astrophotoflow.contracts.imports import (
-    ImportAccepted,
-    ImportTaskStateOut,
-    UploadImportCreate,
-    UploadReceipt,
-)
+from astrophotoflow.contracts.imports import ImportAccepted, ImportTaskStateOut, UploadImportCreate, UploadReceipt
 from astrophotoflow.core.config import Settings
 from astrophotoflow.core.database.db import Database
 from astrophotoflow.core.errors import ApiError, not_found
@@ -23,8 +15,14 @@ from astrophotoflow.modules.data.equipment.references import validate_import_equ
 from astrophotoflow.modules.data.equipment.snapshots import capture_defaults_snapshot
 from astrophotoflow.modules.data.imports.models import AssetTask, AssetTaskItem
 
-
 def create_upload(session: Session, settings: Settings, body: UploadImportCreate) -> ImportAccepted:
+    from .submission import existing_import, import_fingerprint
+    fingerprint = import_fingerprint(body)
+    previous = existing_import(session, body.request_id, fingerprint)
+    if previous is not None:
+        return previous
+    from .project_links import import_destination
+    destination, context = import_destination(session, body)
     validate_import_equipment(session, body.parameters.model_dump(mode='json'))
     defaults_snapshot = capture_defaults_snapshot(session, body.parameters, body.equipment).model_dump(mode='json', exclude_unset=True)
     task_id = str(uuid4())
@@ -39,8 +37,8 @@ def create_upload(session: Session, settings: Settings, body: UploadImportCreate
         files.append({'name': file.name, 'size': file.size, 'received': 0, 'stored_name': stored_name})
         sources.append({'root_id': '__upload__', 'path': stored_name, 'kind': 'file', 'enumeration_completed': True, 'error': None})
         session.add(AssetTaskItem(id=str(uuid4()), task_id=task_id, root_item_id=str(uuid4()), retry_of_item_id=None, root_id='__upload__', source_path=stored_name, source_identity=f'upload:{task_id}:{position}', position=position, status='queued', content_status='pending', metadata_status='pending', preview_status='pending', error=None, created_at=now, updated_at=now))
-    create_dataset = body.create_dataset or len(body.files) > 1
-    task = AssetTask(id=task_id, status='queued', sources=sources, storage_mode='managed', classification=body.classification.model_dump(mode='json', exclude_unset=True), parameters=body.parameters.model_dump(mode='json', exclude_unset=True), import_defaults_snapshot=defaults_snapshot, notes=body.notes, dataset_name=body.dataset_name or body.files[0].name if create_dataset else None, target_dataset_id=str(uuid4()) if create_dataset else None, dataset_base_revision=None, dataset_id=None, enumeration_completed=True, retry_of_task_id=None, report={'upload_manifest': True, 'upload_files': files}, error=None, created_at=now, updated_at=now)
+    create_dataset = body.mode != 'standalone'
+    task = AssetTask(request_id=str(body.request_id) if body.request_id else None, request_fingerprint=fingerprint, id=task_id, status='queued', sources=sources, storage_mode='managed', classification=body.classification.model_dump(mode='json', exclude_unset=True), parameters=body.parameters.model_dump(mode='json', exclude_unset=True), import_defaults_snapshot=defaults_snapshot, notes=body.notes, dataset_name=body.dataset_name or body.files[0].name if create_dataset else None, target_dataset_id=destination.id if destination else str(uuid4()) if create_dataset else None, dataset_base_revision=destination.revision if destination else None, dataset_id=None, enumeration_completed=True, retry_of_task_id=None, report={'destination': context, 'calibration_status': body.calibration_status, 'calibration_reason': body.calibration_reason, 'upload_manifest': True, 'upload_files': files}, error=None, created_at=now, updated_at=now)
     session.add(task)
     session.flush()
     return ImportAccepted.model_validate({'task_id': UUID(task_id), 'status': 'queued'})
@@ -88,7 +86,7 @@ def start_upload_import(session: Session, task_id: UUID) -> ImportAccepted:
     task = session.get(AssetTask, str(task_id))
     if task is None or not (task.report or {}).get('upload_manifest'):
         raise not_found()
-    if any(file['received'] != file['size'] for file in task.report['upload_files']):
+    if any((file['received'] != file['size'] for file in task.report['upload_files'])):
         raise ApiError(409, 'UPLOAD_INCOMPLETE', '所有文件上传完成后才能开始导入。', message_key='all_file_uploads_must_finish_before_import_can_start')
     if task.status != 'queued':
         raise ApiError(409, 'TASK_STATE_CONFLICT', '该上传批次已开始处理。', message_key='processing_has_already_started_for_this_upload_batch')

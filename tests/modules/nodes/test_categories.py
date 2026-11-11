@@ -15,6 +15,11 @@ def test_legacy_node_category_preserves_identity_and_content_token():
     node = NodeDefinition.model_validate(raw)
     content = node.model_dump(mode='json')
     content.pop('category')
+    content.pop('localizations')
+    for parameter in content['parameters']:
+        parameter.pop('unit')
+        if parameter['editor'] is None:
+            parameter.pop('editor')
     expected = hashlib.sha256(json.dumps(content, sort_keys=True, separators=(',', ':'), ensure_ascii=False).encode()).hexdigest()
     assert node.category == []
     assert definition_content_token(node) == expected

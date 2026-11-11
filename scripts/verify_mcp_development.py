@@ -14,10 +14,12 @@ from tempfile import TemporaryDirectory
 from textwrap import dedent
 
 import psutil
-from dev_prepare import ROOT, environment
 from fastmcp import Client
 from fastmcp.client.transports import StdioTransport
 from fastmcp.exceptions import ClientError
+from httpx2 import ReadError
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
 def probe_source(revision: int) -> str:
@@ -89,7 +91,7 @@ async def wait_snapshot(url: str, revision: int, process: subprocess.Popen, log:
             result = await snapshot(url)
             if result["probe"]["revision"] == revision:
                 return result
-        except (OSError, TimeoutError, RuntimeError, ClientError) as exc:
+        except (OSError, TimeoutError, RuntimeError, ClientError, ReadError) as exc:
             # Only isolated, read-only observations are retried while the worker starts.
             failure = repr(exc)
         await asyncio.sleep(0.25)
@@ -118,10 +120,10 @@ async def verify(workspace: Path, report: Path) -> dict:
     workspace = workspace.resolve(strict=True)
     private = (ROOT / ".artifacts/workspaces").resolve()
     if not workspace.is_relative_to(private) or workspace == private or workspace.name in {"dev", "default"}:
-        raise ValueError("An explicit private Feature workspace in this checkout is required")
+        raise ValueError("An explicit isolated test workspace below .artifacts/workspaces is required")
     config = (workspace / "config.toml").resolve(strict=True)
     report.mkdir(parents=True, exist_ok=True)
-    env = environment(workspace)
+    env = {**os.environ, "ASTROPHOTOFLOW_CONFIG": str(config)}
     stdio = []
     for _ in range(2):
         stdio.append(await read_once(StdioTransport(

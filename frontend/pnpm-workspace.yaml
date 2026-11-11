@@ -3,6 +3,7 @@ packages:
   - packages/**
   - tools/**
 
+nodeLinker: hoisted
 nodeOptions: '${NODE_OPTIONS:- } --no-experimental-webstorage --max-old-space-size=8192'
 
 ignoreWorkspaceRootCheck: true

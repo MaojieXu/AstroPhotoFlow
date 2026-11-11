@@ -9,20 +9,19 @@ from pathlib import Path
 from time import perf_counter
 from uuid import uuid4
 
-from sqlalchemy import event, insert, update
+from sqlalchemy import event, insert
 
 from astrophotoflow.contracts.assets import LibraryQuery
 from astrophotoflow.core.config import Settings
 from astrophotoflow.core.database.db import Database
-from astrophotoflow.core.database.schema import upgrade_database
-from astrophotoflow.modules.data.assets.models import Asset, AssetVersion
-from astrophotoflow.modules.data.datasets.models import Dataset, DatasetMember, DatasetVersion
+from astrophotoflow.core.database.schema import initialize_database
+from astrophotoflow.modules.data.assets.models import Asset
+from astrophotoflow.modules.data.datasets.models import Dataset, DatasetMember
 from astrophotoflow.modules.data.library.queries import search_library
 
 
 def seed(database: Database, count: int):
     assets = [str(uuid4()) for _ in range(count)]
-    versions = [str(uuid4()) for _ in range(count)]
     created = datetime(2026, 1, 1, tzinfo=UTC)
     with database.write_session() as session:
         for start in range(0, count, 5000):
@@ -30,21 +29,19 @@ def seed(database: Database, count: int):
             session.execute(insert(Asset), [{"id": assets[i], "name": f"frame-{i:06d}", "scope": "shared", "role": "raw",
                 "frame_class": "subframe", "frame_type": "light", "parameter_mode": "gain", "gain": i % 50, "offset": 0,
                 "exposure_seconds": i % 501, "binning_x": 1, "binning_y": 1, "cfa_pattern": "MONO",
-                "sensor_temperature_c": -10 + (i % 5) * 0.1, "created_at": created + timedelta(seconds=i)} for i in indexes])
-            session.execute(insert(AssetVersion), [{"id": versions[i], "asset_id": assets[i], "version_number": 1,
-                "storage_mode": "managed", "storage_location": f"synthetic/{i}.fits", "availability": "available",
-                "content_hash": "b3:" + "a" * 64, "byte_size": 100, "scientific_metadata": {"format": "fits"}} for i in indexes])
-            session.execute(update(Asset), [{"id": assets[i], "current_version_id": versions[i]} for i in indexes])
+                "sensor_temperature_c": -10 + (i % 5) * 0.1, "created_at": created + timedelta(seconds=i),
+                "storage_mode": "managed", "storage_location": f"objects/{assets[i]}/source.fits",
+                "availability": "available", "content_hash": "blake3:" + "a" * 64, "byte_size": 100,
+                "capture_snapshot": {"classification": {"frame_class": "subframe", "frame_type": "light"}},
+                "scientific_metadata": {"format": "fits"}} for i in indexes])
         grouped = count * 3 // 4
         groups = [(0, count // 2)] + [(i, min(i + 50, grouped)) for i in range(count // 2, grouped, 50)]
         for index, (start, stop) in enumerate(groups):
-            identity, fixed = str(uuid4()), str(uuid4())
+            identity = str(uuid4())
             session.execute(insert(Dataset), [{"id": identity, "name": f"large-{count}" if index == 0 else f"set-{index:06d}"}])
-            session.execute(insert(DatasetVersion), [{"id": fixed, "dataset_id": identity, "version_number": 1}])
-            session.execute(update(Dataset).where(Dataset.id == identity).values(current_version_id=fixed))
             for offset in range(start, stop, 5000):
-                session.execute(insert(DatasetMember), [{"id": str(uuid4()), "dataset_version_id": fixed,
-                    "asset_version_id": versions[i], "position": i - start} for i in range(offset, min(offset + 5000, stop))])
+                session.execute(insert(DatasetMember), [{"id": str(uuid4()), "dataset_id": identity,
+                    "asset_id": assets[i], "position": i - start} for i in range(offset, min(offset + 5000, stop))])
     return {"assets": count, "large_group_members": count // 2, "groups": len(groups), "standalone": count - grouped}
 
 
@@ -90,7 +87,7 @@ def main():
         fixture = output / str(size)
         fixture.mkdir()
         settings = Settings("127.0.0.1", 8190, fixture, (), workspace=fixture)
-        upgrade_database(settings)
+        initialize_database(settings)
         database = Database(settings.database_path)
         try:
             start = perf_counter()

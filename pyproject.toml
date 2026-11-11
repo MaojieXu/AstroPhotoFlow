@@ -46,6 +46,9 @@ apf-service = "astrophotoflow.interfaces.http.cli:main"
 bugs = "https://github.com/MaojieXu/AstroPhotoFlow/issues"
 homepage = "https://github.com/MaojieXu/AstroPhotoFlow"
 
+[tool.uv]
+python-preference = "only-managed"
+
 [tool.pytest.ini_options]
 minversion = "8.0"
 addopts = "--import-mode=importlib --confcutdir=tests --basetemp=.artifacts/pytest"

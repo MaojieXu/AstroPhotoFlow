@@ -17,8 +17,9 @@
 
 ## 门禁与 CI
 
-- `docs` job 在 ubuntu 上运行 `pnpm check:docs` 与 `pytest tests/docs`。
-- `product` job 在 ubuntu 与 windows matrix 上构建前端、发现浏览器用例、运行 Python 与前端测试、构建并验证发行物。
+- `docs` job 在 Ubuntu 上运行文档门禁与 `pytest tests/docs`。
+- `product` job 在 Ubuntu 和 Windows 上按项目锁文件安装依赖、构建前端、发现浏览器用例、运行 Python 与前端测试，并构建和验证发行物。
+- `product` job 的 Python 测试包含语言覆盖守卫：网页 `en`/`zh` 目录键集一致，平台错误全部经消息目录渲染。
 - `checks` job 汇总前两者，状态名 `all checks passed`，供分支保护引用。
 
 ## 回执写法
@@ -33,8 +34,21 @@
 - 浏览器测试只在本机自选的 workspace 上运行：`APF_WEB_URL` 必须是回环地址，并与 `APF_TEST_WORKSPACE` 指向同一 workspace；`dev` 与 `default` 共享 workspace 被拒绝。
 - CI 只执行 `pnpm test:browser --list` 发现用例，不启动服务。
 - 默认配置运行原生网页、布局与工作台设置用例；`pnpm test:browser:modernization` 与 `pnpm test:browser:native` 是独立配置，按改动范围选择。
-- 报告写入 `.artifacts/reports/browser/`；并行或分 worktree 运行时用 `APF_BROWSER_REPORT` 指定该目录下的独立子目录。
+- 报告写入 `.artifacts/reports/browser/`。并行浏览器测试用 `APF_BROWSER_REPORT` 分配独立子目录，并行 pytest 用 `--basetemp=.artifacts/pytest-<task>` 分配独立临时目录。
 - worker 为 1、失败不自动重试；失败保留 trace 与截图，原生队列与重启场景未显式启用时记为 skip，不记为通过。
+
+## 真实素材
+
+`tests/real_data/` 使用五个原始素材目录，显式分组清单在 `tests/fixtures/real-data-catalog.json`。清单包含 30 组子帧与 10 个独立 Master，共 514 个文件。用例检查全部头部、代表样本导入、当前成员、共享校准、接口一致性、可读目录、JSON 同步及状态传播。
+
+素材根目录通过 `--real-data-root` 指定。省略时相关用例说明跳过原因，显式指定后缺失目录或基线差异按失败报告。源文件只读，副本、数据库和故障注入使用 pytest 临时目录。完整复制单独要求 `--run-full-import`。
+
+```powershell
+uv run --locked --no-sync pytest tests/real_data --real-data-root "E:/AstroPhotoFlow/Erellaz" -m "not full_import"
+uv run --locked --no-sync pytest tests/real_data --real-data-root "E:/AstroPhotoFlow/Erellaz" --run-full-import -m full_import
+```
+
+标记使用 `real_data`、`full_import`、`plan_a`。回执写入 `.artifacts/reports/real-data/`，保存来源、任务 ID、阶段、错误与通过／失败／跳过数量。状态传播用受控成功回执验证，真实软件处理另记实际执行情况。
 
 ## 验证边界
 

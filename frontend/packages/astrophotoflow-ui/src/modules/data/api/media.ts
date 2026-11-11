@@ -24,6 +24,8 @@ export type MediaViewerRequest = {
   index: number
   total: number
   member: (index: number, signal: AbortSignal) => Promise<MediaMember>
+  fixedDisplay?: boolean
+  focus?: readonly [number, number]
 }
 
 export function createMediaClient(fetchApi: FetchApi) {

@@ -4,9 +4,10 @@ import asyncio
 import logging
 import os
 from collections.abc import Awaitable, Callable
+from dataclasses import replace
 from pathlib import Path
 
-from watchfiles import DefaultFilter, awatch
+from watchfiles import Change, DefaultFilter, awatch
 
 from astrophotoflow.contracts.development import BundleWatchPath
 from astrophotoflow.modules.software.public import bundle_watch_paths, refresh_bundle_sources
@@ -15,14 +16,18 @@ logger = logging.getLogger(__name__)
 
 
 def watch_interests(workspace: Path) -> set[BundleWatchPath]:
-    return bundle_watch_paths(workspace) | {BundleWatchPath(workspace / 'nodes', directory=True)}
+    paths = bundle_watch_paths(workspace) | {BundleWatchPath(workspace / 'nodes', directory=True)}
+    return {replace(interest, path=interest.path.resolve()) for interest in paths}
 
 
 def watch_targets(interests: set[BundleWatchPath]) -> set[tuple[Path, bool]]:
     targets = set()
-    for interest in interests:
-        path = interest.path if interest.directory else interest.path.parent
-        recursive = interest.directory and interest.recursive
+    candidates = {
+        (interest.path if interest.directory else interest.path.parent,
+         interest.directory and (interest.recursive or interest.watch_subtree))
+        for interest in interests
+    }
+    for path, recursive in candidates:
         while not path.is_dir():
             if path.parent == path:
                 raise ValueError('No accessible parent for Bundle watch.')
@@ -37,7 +42,7 @@ def relevant_change(path: Path, interests: set[BundleWatchPath]) -> bool:
     if path.suffix in {'.part', '.pending', '.pyc'} or '__pycache__' in path.parts:
         return False
     for interest in interests:
-        root = interest.path.resolve()
+        root = interest.path
         if path == root or root.is_relative_to(path):
             return True
         if interest.directory and (path.parent == root or interest.recursive and path.is_relative_to(root)):
@@ -68,7 +73,11 @@ async def watch_workspace(
 
     def accept(change, raw):
         path = Path(raw).resolve()
-        return relevant_change(path, interests) and ('.git' in path.parts or default_filter(change, raw))
+        return (
+            relevant_change(path, interests)
+            and (change != Change.modified or not path.is_dir())
+            and ('.git' in path.parts or default_filter(change, raw))
+        )
 
     async def monitor(paths: list[Path], recursive: bool, ready: asyncio.Event):
         try:
@@ -112,6 +121,8 @@ async def watch_workspace(
             if current != previous:
                 await reload()
                 previous = current
+                # A save can land while the new catalogue is being registered.
+                notify()
     finally:
         for task in [*active, *pending]:
             task.cancel()

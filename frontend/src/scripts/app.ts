@@ -144,6 +144,7 @@ import { parseJsonWithNonFinite } from '@/utils/jsonUtil'
 import { getCnrIdFromProperties } from '@/platform/nodeReplacement/cnrIdUtil'
 import { useMissingNodesErrorStore } from '@/platform/nodeReplacement/missingNodesErrorStore'
 import { rescanAndSurfaceMissingNodes } from '@/platform/nodeReplacement/missingNodeScan'
+import { bundlePromptIssue } from '@/platform/astrophotoflow/sidebar/bundleCatalog'
 import {
   refreshMissingModelPipeline,
   runMissingModelPipeline
@@ -1904,6 +1905,12 @@ export class ComfyApp implements IComfyApp {
             p.workflow.extra = { ...p.workflow.extra }
             delete p.workflow.extra.apfAutomaticResult
           }
+          const bundleIssue = bundlePromptIssue(this.rootGraph, p.output, queueNodeIds)
+          if (bundleIssue) {
+            useToast().error(t(bundleIssue))
+            queueResultOverride = false
+            break
+          }
           let workflowContext: WorkflowExecutionContext | undefined
           if (executionContext) {
             workflowContext = toWorkflowExecutionContext(executionContext, {
@@ -2665,10 +2672,14 @@ export class ComfyApp implements IComfyApp {
   /**
    * Reload node definitions and refresh combo lists on all nodes.
    */
-  async reloadNodeDefs() {
+  async reloadNodeDefs({ refreshWidgets = true } = {}) {
     const defs = await this.getNodeDefs()
     for (const nodeId in defs) {
       await this.registerNodeDef(nodeId, defs[nodeId])
+    }
+    if (!refreshWidgets) {
+      if (this.vueAppReady) this.updateVueAppNodeDefs(defs)
+      return
     }
     // Refresh combo widgets in all nodes including those in subgraphs
     const nodeOutputStore = useNodeOutputStore()

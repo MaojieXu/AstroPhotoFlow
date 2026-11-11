@@ -10,7 +10,7 @@ const { get, send } = vi.hoisted(() => ({ get: vi.fn(), send: vi.fn() }))
 vi.mock('@ui/modules/data/api/index', async () => ({ libraryApi: (await import('../../../fixtures/library-api')).createLibraryApiFixture(get), catalogApi: (await import('../../../fixtures/library-api')).createCatalogApiFixture(get), mutationApi: (await import('../../../fixtures/library-api')).createMutationApiFixture(send), trashApi: (await import('../../../fixtures/library-api')).createTrashApiFixture(get,send), importApi: (await import('../../../fixtures/library-api')).createImportApiFixture(get,send), datasetApi: (await import('../../../fixtures/library-api')).createDatasetApiFixture(get,send), assetApi: { get, send } }))
 const id = (n: number) => '00000000-0000-4000-8000-' + String(n).padStart(12, '0')
 const item = (entry_type: string, n: number, name: string) => ({ entry_type, id: id(n), name,
-  removed_at: '2026-10-24T12:00:00Z', revision: 1, current_version_id: null, cleanup_status: 'trash',
+  removed_at: '2026-10-24T12:00:00Z', revision: 1, cleanup_status: 'trash',
   cleanup_error: null, photo_count: 1, member_asset_ids: [], groups: [], source_dataset_id: null })
 const page = (items: unknown[], total = items.length, offset = 0) => ({ items, total, limit: 20, offset })
 beforeEach(() => { get.mockReset(); send.mockReset() })

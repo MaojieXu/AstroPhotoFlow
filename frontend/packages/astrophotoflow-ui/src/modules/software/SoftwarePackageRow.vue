@@ -203,7 +203,7 @@ async function confirmAction() {
           tabindex="0"
         />
         <span class="min-w-0 flex-1 truncate font-medium">{{ software.name }}</span>
-        <span class="text-xs text-muted-foreground">{{ translate('apfSoftware.bundleLabel') }} {{ software.bundle_version ?? translate(installed ? 'apfSoftware.versionUnknown' : 'apfSoftware.notInstalled') }} · {{ translate('apfSoftware.programVersion') }} {{ software.installed_version ?? translate(installed ? 'apfSoftware.versionUnknown' : 'apfSoftware.notInstalled') }}</span>
+        <span v-if="software.available_versions.length" class="text-xs text-muted-foreground">{{ translate('apfSoftware.bundleLabel') }} {{ software.bundle_version ?? translate(installed ? 'apfSoftware.versionUnknown' : 'apfSoftware.notInstalled') }} · {{ translate('apfSoftware.programVersion') }} {{ software.installed_version ?? translate(installed ? 'apfSoftware.versionUnknown' : 'apfSoftware.notInstalled') }}</span>
         <div v-if="software.development_source" data-testid="development-source" class="basis-full text-xs break-all text-muted-foreground">
           <strong>{{ translate('apfSoftware.developmentSource') }}</strong>
           · {{ translate('apfSoftware.developmentState.' + software.development_source.state) }}
@@ -213,7 +213,7 @@ async function confirmAction() {
           <div>{{ translate('apfSoftware.developmentFingerprint') }} {{ software.development_source.fingerprint }}</div>
           <div v-if="software.development_source.error" role="alert">{{ software.development_source.error }}</div>
         </div>
-        <div class="flex min-w-0 basis-full items-center gap-2">
+        <div v-if="software.available_versions.length" class="flex min-w-0 basis-full items-center gap-2">
           <component
             :is="controls.select" v-if="controls?.select" :model-value="selectedValue" :options="versionOptions"
             :label="translate('apfSoftware.bundleVersion')" :disabled="busy" size="md" class="min-w-0 flex-1"
@@ -226,6 +226,7 @@ async function confirmAction() {
         </div>
         <component
           :is="controls?.button ?? 'button'"
+          v-if="software.available_versions.length"
           type="button" size="sm" variant="primary" class="h-8 shrink-0"
           :disabled="busy || software.operation_state === 'unknown' || !canInstallSelection"
           :data-testid="installed ? 'request-update' : 'request-install'" @click="requestAction(installed ? 'update' : 'install')"

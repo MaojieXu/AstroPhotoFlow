@@ -26,14 +26,13 @@ def test_version_requirements_handle_ranges_and_exact_pins():
     assert not doctor._satisfies((9, 10, 0), "11.13.1")
 
 
-def test_pinned_tools_reads_root_package(tmp_path, monkeypatch):
+def test_pinned_tools_reads_root_package(tmp_path):
     repo = tmp_path / "repo"
     (repo / "src/astrophotoflow").mkdir(parents=True)
     (repo / "package.json").write_text(
         json.dumps({"packageManager": "pnpm@11.13.1", "engines": {"node": ">=26.8.2 <27"}}), encoding="utf-8"
     )
-    monkeypatch.setattr(doctor.paths, "package_directory", lambda: repo / "src/astrophotoflow")
-    assert doctor._pinned_tools() == {"node": ">=26.8.2 <27", "pnpm": "11.13.1"}
+    assert doctor._pinned_tools(repo) == {"node": ">=26.8.2 <27", "pnpm": "11.13.1"}
 
 
 def test_workspace_checks_report_recorded_ports(tmp_path, monkeypatch):

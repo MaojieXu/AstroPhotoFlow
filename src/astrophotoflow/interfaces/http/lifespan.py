@@ -17,8 +17,10 @@ from astrophotoflow.modules.data.public import (
     DisplayPreviews,
     MediaViews,
     ThumbnailService,
+    configure_library,
     import_workers,
     recover_import_tasks,
+    recover_library_organization,
 )
 
 
@@ -28,6 +30,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     async with AsyncExitStack() as stack:
         database = app.state.database = Database(settings.database_path)
         stack.callback(database.close)
+        configure_library(database, settings)
+        recover_library_organization(database, settings)
         interrupted = recover_import_tasks(database, locale=workspace_locale(settings.workspace))
         if interrupted:
             logging.getLogger(__name__).info("interrupted_tasks: %s", interrupted)

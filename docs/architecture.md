@@ -10,7 +10,7 @@
 | --- | --- | --- |
 | `contracts` | 跨模块公共类型、枚举与校验；只依赖标准库与 Pydantic | `src/astrophotoflow/contracts` |
 | `core` | 配置、认证、数据库连接与迁移、workspace 生命周期与本机进程控制 | `src/astrophotoflow/core` |
-| `data` | SQLite 中的素材身份、集合固定版本、设备快照、校准关系、用户选择结果与回收站；科学文件独立存放 | `src/astrophotoflow/modules/data` |
+| `data` | SQLite 中的素材身份、数据集当前有序成员、设备快照、校准关系、用户选择结果与回收站；科学文件独立存放 | `src/astrophotoflow/modules/data` |
 | `software` | 固定软件包与 Bundle、安装与就绪状态、实际调用与停止观察 | `src/astrophotoflow/modules/software` |
 | `nodes` | workspace JSON 中的可编辑节点定义、更新差异与派生目录 | `src/astrophotoflow/modules/nodes` |
 | `interfaces` | HTTP、CLI、MCP、原生桥接与跨模块用例装配 | `src/astrophotoflow/interfaces` |

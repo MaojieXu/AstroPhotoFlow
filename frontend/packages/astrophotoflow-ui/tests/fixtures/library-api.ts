@@ -3,7 +3,6 @@ import type { ServiceHealth } from '../../src/generated/api/types.gen'
 import { createDisplayPreviewClient } from '../../src/modules/data/api/display'
 import { zDisplayPreviewState } from '../../src/generated/api/zod.gen'
 import { createDatasetClient } from '../../src/modules/data/api/datasets'
-import { zDatasetVersionOut } from '../../src/generated/api/zod.gen'
 import { createAssetClient } from '../../src/modules/data/api/assets'
 import { zAssetContentObservation } from '../../src/generated/api/zod.gen'
 import { zLocalSelectionOut } from '../../src/generated/api/zod.gen'
@@ -69,9 +68,9 @@ export function createLibraryApiFixture(
     const body = zDatasetMemberPage.parse(await get(path.replace('/member-summaries?', '/members?'), schema, signal))
     const datasetId = /\/datasets\/([^/]+)\//.exec(path)![1]
     return { ...body, items: body.items.map(member => ({
-      ...libraryAsset({ ...member.asset, current_version: member.version, current_version_id: member.version.id }),
-      dataset_id: datasetId, dataset_version_id: member.dataset_version_id, member_position: member.position,
-      thumbnail_status: null, calibration_projection: member.calibration_projection
+      ...libraryAsset(member.asset),
+      dataset_id: datasetId, member_position: member.position,
+      thumbnail_status: null
     })) }
   }, createLibraryClient)
 }
@@ -173,7 +172,7 @@ function mutationFixture<T>(
     try {
       const body =
         typeof init?.body === 'string' ? JSON.parse(init.body) : undefined
-      const schema = path.endsWith('/display/auto-stretch')?zDisplayPreviewState:path.endsWith('/versions')?zDatasetVersionOut:path.endsWith('/datasets')?zDatasetOut:path.endsWith('/content-observation') ? zAssetContentObservation : path.endsWith('/imports/select-local')
+      const schema = path.endsWith('/display/auto-stretch')?zDisplayPreviewState:path.endsWith('/datasets')?zDatasetOut:path.endsWith('/content-observation') ? zAssetContentObservation : path.endsWith('/imports/select-local')
         ? zLocalSelectionOut
         : path.endsWith('/imports') || path.endsWith('/retry')
           ? zImportAccepted

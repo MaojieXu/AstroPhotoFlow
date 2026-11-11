@@ -69,7 +69,7 @@ function latestListQuery() {
 }
 
 describe('equipment setup table', () => {
-  it('shows five columns, resolves both component sources, and keeps optional columns empty', async () => {
+  it('keeps equipment columns separate from the selected row action', async () => {
     devices = ['camera', 'telescope', 'filter'].map((kind, index) => equipmentSchema.parse({
       id: id(index + 1), kind, name: ['Camera with a long full name', 'Telescope', 'Filter'][index],
       model: null, notes: null, specs: kind === 'filter' ? { channel: 'Ha', bandwidth_nm: 7 } : {}, status: 'active',
@@ -82,7 +82,8 @@ describe('equipment setup table', () => {
     ]), setup(101)]
     const { mounted } = await open()
     const table = mounted.get('table[aria-label="设备组合列表"]')
-    expect(table.findAll('th').map(item => item.text())).toEqual(['名称', '相机', '望远镜', '赤道仪', '滤镜'])
+    expect(table.findAll('th').slice(0, -1).map(item => item.text())).toEqual(['名称', '相机', '望远镜', '赤道仪', '滤镜'])
+    expect(table.get('th.apf-setup-action-cell').attributes('aria-label')).toBe('组合操作')
     expect(table.find('input[type="checkbox"]').exists()).toBe(false)
     const first = table.findAll('tbody tr')[0]
     expect(first.text()).toContain('Camera with a long full name')
@@ -95,16 +96,20 @@ describe('equipment setup table', () => {
     expect(mounted.find('button[aria-label="设备组合说明"]').exists()).toBe(false)
     expect(table.find('i.pi-info-circle').exists()).toBe(false)
     expect(mounted.find('section[aria-label="组合拍摄预设"]').exists()).toBe(false)
-    expect(table.findAll('tbody tr')[1].findAll('td').slice(1).map(item => item.text())).toEqual(['—', '—', '—', '—'])
+    const second = table.findAll('tbody tr')[1]
+    expect(second.findAll('td').slice(1, -1).map(item => item.text())).toEqual(['—', '—', '—', '—'])
+    expect(first.find('.apf-setup-action-cell button').exists()).toBe(false)
     await first.trigger('click')
     await flushPromises()
-    const actions=mounted.get('[role="group"][aria-label="组合操作"]')
-    expect(actions.findAll('button').map(button=>button.text())).toEqual(['编辑设备组合'])
+    const edit = first.get('.apf-setup-action-cell button')
+    expect(edit.text()).toBe('编辑设备组合')
+    expect(second.find('.apf-setup-action-cell button').exists()).toBe(false)
     expect(mounted.findAll('button').filter(button=>button.text()==='编辑设备组合')).toHaveLength(1)
     expect(mounted.find('section[aria-label="设备组合详情"]').exists()).toBe(false)
     const more=mounted.get('details')
     expect(more.findAll('button').map(button=>button.text())).toEqual(['刷新','批量管理','删除组合'])
-    await click(mounted,'编辑设备组合')
+    await edit.trigger('click')
+    await flushPromises()
     expect(mounted.find('form[aria-label="设备组合表单"]').exists()).toBe(true)
     expect(mounted.get('#setup-name').element).toHaveProperty('value','Rig 100')
     expect(mounted.get('select[aria-label="选择滤镜"]').element).toHaveProperty('value',id(3))
@@ -185,7 +190,7 @@ describe('equipment setup table', () => {
     await flushPromises()
     const sort = mounted.get('table[aria-label="设备组合列表"]').findAll('th button')[1]
     expect(sort.attributes('disabled')).toBeDefined()
-    expect(mounted.get('[role="group"][aria-label="组合操作"]').findAll('button').every(button=>button.attributes('disabled')!==undefined)).toBe(true)
+    expect(mounted.get('.apf-setup-action-cell button').attributes('disabled')).toBeDefined()
     finish({ ...setup(100), revision: 2 })
     await flushPromises()
     expect(sort.attributes('disabled')).toBeUndefined()
@@ -195,6 +200,7 @@ describe('equipment setup table', () => {
     const { mounted } = await open()
     await click(mounted, '批量管理')
     await mounted.get('input[aria-label="选择 Rig 100"]').setValue(true)
+    expect(mounted.find('.apf-setup-action-cell').exists()).toBe(false)
     expect(mounted.find('section[aria-label="组合拍摄预设"]').exists()).toBe(false)
     expect(mounted.text()).toContain('删除所选（1）')
     await click(mounted, '完成')

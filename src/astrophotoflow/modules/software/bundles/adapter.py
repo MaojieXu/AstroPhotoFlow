@@ -14,11 +14,15 @@ from .catalog import metadata
 from .loader import load_adapter
 
 
+def _adapter(workspace, package_id, root, manifest):
+    commit = development.identity(workspace, package_id)['commit'] or ''
+    return load_adapter(root, manifest.adapter, commit + ':' + development.content_fingerprint(root))
+
+
 def adapter_plan(workspace: Path, package_id: str, operation_id: str, sources, parameters, directory, **options):
     root = development.source_root(workspace, package_id)
     manifest, _, _ = metadata(workspace, package_id)
-    lock = development.identity(workspace, package_id)
-    adapter = load_adapter(root, manifest.adapter, lock['commit'] + ':' + development.content_fingerprint(root))
+    adapter = _adapter(workspace, package_id, root, manifest)
     plan = NamedProcessPlan.model_validate(adapter.build_plan(operation_id, sources, parameters, directory, **options))
     paths = [plan.temporary_directory]
     for output in plan.outputs.values():
@@ -36,8 +40,7 @@ def adapter_plan(workspace: Path, package_id: str, operation_id: str, sources, p
 def collect_result(workspace: Path, package_id: str, operation_id: str, plan, directory: Path, log_path: Path):
     root = development.source_root(workspace, package_id)
     manifest, _, _ = metadata(workspace, package_id)
-    lock = development.identity(workspace, package_id)
-    adapter = load_adapter(root, manifest.adapter, lock['commit'] + ':' + development.content_fingerprint(root))
+    adapter = _adapter(workspace, package_id, root, manifest)
     adapter.parse_result(operation_id, directory, plan, log_path)
     outputs, supporting = {}, {}
 
@@ -66,14 +69,12 @@ def collect_result(workspace: Path, package_id: str, operation_id: str, plan, di
 def progress_reader(workspace: Path, package_id: str):
     root = development.source_root(workspace, package_id)
     manifest = BundleManifest.model_validate_json((root / 'bundle.json').read_text(encoding='utf-8'))
-    lock = development.identity(workspace, package_id)
-    adapter = load_adapter(root, manifest.adapter, lock['commit'] + ':' + development.content_fingerprint(root))
+    adapter = _adapter(workspace, package_id, root, manifest)
     return lambda text: BundleProgress.model_validate(adapter.parse_progress(text))
 
 
 def failure_reason(workspace: Path, package_id: str, log_path: Path):
     root = development.source_root(workspace, package_id)
     manifest, _, _ = metadata(workspace, package_id)
-    lock = development.identity(workspace, package_id)
-    adapter = load_adapter(root, manifest.adapter, lock['commit'] + ':' + development.content_fingerprint(root))
+    adapter = _adapter(workspace, package_id, root, manifest)
     return str(adapter.parse_failure(log_path))

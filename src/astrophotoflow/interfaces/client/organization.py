@@ -1,6 +1,7 @@
 from pydantic import TypeAdapter
 
 from astrophotoflow.contracts.equipment import EquipmentCreate, EquipmentOut, EquipmentPage, EquipmentPatch, EquipmentQuery
+from astrophotoflow.contracts.metadata import FrameClass
 from astrophotoflow.contracts.projects import (
     ProjectAssetReferenceOut,
     ProjectAssetReferencePage,
@@ -40,8 +41,8 @@ class OrganizationOperations:
     def update_project(self, project_id: str, body: ProjectPatch) -> ProjectOut:
         return self.request("PATCH", f"/projects/{project_id}", json=body, adapter=TypeAdapter(ProjectOut))
 
-    def list_project_assets(self, project_id: str, limit: int = 50, offset: int = 0) -> ProjectAssetReferencePage:
-        return self.request("GET", f"/projects/{project_id}/assets", params={"limit": limit, "offset": offset}, adapter=TypeAdapter(ProjectAssetReferencePage))
+    def list_project_assets(self, project_id: str, limit: int = 50, offset: int = 0, frame_class: FrameClass | None = None) -> ProjectAssetReferencePage:
+        return self.request("GET", f"/projects/{project_id}/assets", params={"limit": limit, "offset": offset, **({"frame_class": frame_class} if frame_class else {})}, adapter=TypeAdapter(ProjectAssetReferencePage))
 
     def get_project_asset(self, project_id: str, reference_id: str) -> ProjectAssetReferenceOut:
         return self.request("GET", f"/projects/{project_id}/asset-references/{reference_id}", adapter=TypeAdapter(ProjectAssetReferenceOut))

@@ -2,15 +2,12 @@
 import json
 from copy import deepcopy
 from uuid import UUID
-
 from sqlalchemy import select
-
 from astrophotoflow.core.errors import ApiError
 from astrophotoflow.modules.data.imports.models import AssetTask
 
-
 def compact_completed_imports(database, settings, *, remove_unused_inspections=False, task_ids=None, inspection_ids=None):
-    reclaimed, compacted, scans = 0, [], set()
+    reclaimed, compacted, scans = (0, [], set())
     with database.write_session() as session:
         tasks = session.scalars(select(AssetTask)).all()
         by_id = {task.id: task for task in tasks}
@@ -43,21 +40,18 @@ def compact_completed_imports(database, settings, *, remove_unused_inspections=F
             if plan:
                 published = set(plan.get('publication', {}).get('published_file_ids', []))
                 if set(plan.get('files', {})).issubset(published):
-                    plan = {key: value for key, value in plan.items() if key in {
-                        'request_id', 'scan_id', 'destination', 'storage_mode', 'accept_unknown', 'root_task_id',
-                        'publication', 'publication_requests', 'files'}}
+                    plan = {key: value for key, value in plan.items() if key in {'request_id', 'scan_id', 'destination', 'storage_mode', 'accept_unknown', 'root_task_id', 'publication', 'publication_requests', 'files'}}
                     plan['files'] = {identity: {} for identity in plan.get('files', {})}
                     task.image_import_plan = plan
             task.report = {**(task.report or {}), 'history_compacted': True}
             after = len(json.dumps([task.sources, task.image_import_plan, task.import_defaults_snapshot], ensure_ascii=False).encode())
             reclaimed += max(0, before - after)
             compacted.append(task.id)
-        protected_scans = {(task.image_import_plan or {}).get('scan_id') for task in tasks
-                           if task.status != 'completed' or task.id in protected}
+        protected_scans = {(task.image_import_plan or {}).get('scan_id') for task in tasks if task.status != 'completed' or task.id in protected}
     directory = (settings.data_dir / 'import-inspections').resolve()
     if not directory.is_relative_to(settings.data_dir.resolve()):
-        raise ApiError(409, 'INVALID_STORAGE_PATH', 'Inspection directory is outside the workspace data directory.')
-    if remove_unused_inspections and all(task.status == 'completed' for task in tasks):
+        raise ApiError(409, 'INVALID_STORAGE_PATH', 'Inspection directory is outside the workspace data directory.', message_key='inspection_directory_is_outside_the_workspace_data_directory')
+    if remove_unused_inspections and all((task.status == 'completed' for task in tasks)):
         for path in directory.glob('*.json'):
             try:
                 scans.add(str(UUID(path.stem)))
@@ -70,8 +64,7 @@ def compact_completed_imports(database, settings, *, remove_unused_inspections=F
         path = directory / (identity + '.json')
         if path.exists():
             if not path.resolve().is_relative_to(directory):
-                raise ApiError(409, 'INVALID_STORAGE_PATH', 'Inspection manifest resolves outside the inspection directory.')
+                raise ApiError(409, 'INVALID_STORAGE_PATH', 'Inspection manifest resolves outside the inspection directory.', message_key='inspection_manifest_resolves_outside_the_inspection_directory')
             path.unlink()
             removed.append(identity)
-    return {'task_ids': compacted, 'payload_bytes_removed': reclaimed, 'removed_scan_ids': removed,
-            'retained_request_receipts': len(tasks)}
+    return {'task_ids': compacted, 'payload_bytes_removed': reclaimed, 'removed_scan_ids': removed, 'retained_request_receipts': len(tasks)}

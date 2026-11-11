@@ -322,8 +322,8 @@ def test_confirmed_install_reloads_native_nodes_without_scheduling_restart(tmp_p
 
     client_class = httpx.AsyncClient
     monkeypatch.setattr(httpx, 'AsyncClient', lambda **kwargs: client_class(transport=httpx.MockTransport(native), **kwargs))
-    from astrophotoflow.core.database.schema import upgrade_database
-    upgrade_database(settings)
+    from astrophotoflow.core.database.schema import initialize_database
+    initialize_database(settings)
     app = create_app(settings, TOKEN)
 
     async def scenario():

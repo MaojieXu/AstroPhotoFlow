@@ -26,13 +26,18 @@ Open the actual web address `start` returns; when a port is occupied one is chos
 
 - In the asset library choose import, then pick local files or one folder; a folder contributes only files supported at the current level, with no authorization root to configure first.
 - Registration and originals becoming ready are shown separately from background previews; partial failures keep their reason and can be inspected and retried individually.
+- Declare calibration status and its evidence during import. For a new dataset, explicitly select members with matching capture conditions and submit separate groups for different filters or parameters.
 - Import notifications cover only the current submission or session; there is no history page or notification center.
 
-## Asset library and fixed collections
+## Asset library and datasets
 
 - The asset library offers a compact list and a detail mode; click an asset name and then choose a canvas drop point, or drag the whole row onto the canvas.
-- Click a thumbnail to view an asset; a fixed collection can switch members while keeping the image, name and parameters.
-- The calibration column shows the final Master name, with version, source and diagnostics available on demand.
+- Click a thumbnail to view an asset; a dataset can switch members while keeping the image, name and parameters.
+- The calibration column shows the final Master name, with source and diagnostics available on demand.
+- Asset and dataset details provide File locations and organization. Open the registered directory, rebuild the dataset `dataset.json`, or preview and execute organization while reading per-file completion, activity and failure receipts. Query the same request ID after an uncertain response.
+- The list filters the three calibration statuses, and datasets display their counts. Asset details edit the current declaration and show separately retained actual calibration and processing evidence.
+
+Project details create a dataset from registered subframes and attach it to the project atomically. Dataset file details move members up or down and remove members at the current revision while retaining originals.
 
 ## Canvas editing
 

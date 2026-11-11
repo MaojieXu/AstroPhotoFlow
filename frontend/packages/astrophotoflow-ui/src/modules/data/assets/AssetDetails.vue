@@ -25,7 +25,13 @@ const equipmentFields = computed(() => [
 </script>
 <template>
   <div class="apf-detail-fields">
+    <p v-if="asset.in_trash" role="status">{{ $t('apfUi.object_in_trash') }}</p>
+    <p v-if="asset.dataset_id">{{ $t('apfUi.material_dataset_owner', {name:asset.dataset_name || asset.dataset_id}) }}</p>
     <label>{{ $t('apfUi.name') }}<InlineField :value="title" :save="bindings.name" @cancelled="emit('cancel-field','name',recordId)" /></label>
+    <label>{{ $t('apfUi.calibration_status') }}<InlineField :value="asset.calibration_status" :display="displayLabel(asset.calibration_status)" kind="select" :choices="['UnCalibrated','Calibrated','Unknown'].map(value => ({value,label:displayLabel(value)}))" :save="bindings.calibration_status" @cancelled="emit('cancel-field','calibration_status',recordId)" /></label>
+    <label>{{ $t('apfUi.calibration_reason') }}<InlineField :value="typeof asset.calibration_evidence?.reason === 'string' ? asset.calibration_evidence.reason : ''" kind="textarea" :save="bindings.calibration_reason" @cancelled="emit('cancel-field','calibration_reason',recordId)" /></label>
+    <details><summary>{{ $t('apfUi.calibration_reason') }}</summary><pre class="whitespace-pre-wrap break-all">{{ JSON.stringify(asset.calibration_evidence, null, 2) }}</pre></details>
+    <details v-if="asset.scientific_metadata?.processing_calibration"><summary>{{ $t('apfUi.executed_calibration_facts') }}</summary><pre class="whitespace-pre-wrap break-all">{{ JSON.stringify(asset.scientific_metadata.processing_calibration, null, 2) }}</pre></details>
     <label>{{ $t('apfUi.asset_form') }}<InlineField :value="asset.classification.frame_class??''" :display="displayLabel(asset.classification.frame_class)" kind="select" :choices="[{value:'',label:$t('apfUi.not_specified')},...frameClasses.map(value=>({value,label:displayLabel(value)}))]" :save="bindings.frame_class" @cancelled="emit('cancel-field','frame_class',recordId)" /></label>
     <label v-if="asset.classification.frame_class!=='video'">{{ $t('apfUi.frame_use') }}<InlineField :value="asset.classification.frame_type??''" :display="displayLabel(asset.classification.frame_type)" kind="select" :choices="[{value:'',label:$t('apfUi.not_specified')},...frameTypes.map(value=>({value,label:displayLabel(value)}))]" :save="bindings.frame_type" @cancelled="emit('cancel-field','frame_type',recordId)" /></label>
     <label>ISO／Gain<ParameterModeField :value="{parameter_mode:asset.parameters.parameter_mode,iso:asset.parameters.iso,gain:asset.parameters.gain,offset:asset.parameters.offset}" :display="parameterSummary(asset.parameters)" unset-mode="standard" :save="bindings.parameters" @cancelled="emit('cancel-field','parameter_mode',recordId)" /></label>

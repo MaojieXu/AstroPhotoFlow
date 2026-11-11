@@ -8,18 +8,15 @@ import * as z from 'zod';
 export const zAppendDatasetDestination = z.object({
     mode: z.literal('append_dataset'),
     dataset_id: z.uuid(),
-    expected_revision: z.int().gte(1),
-    base_version_id: z.uuid()
+    expected_revision: z.int().gte(1)
 }).strict();
 
 /**
  * AssetCalibrationConsumer
  */
 export const zAssetCalibrationConsumer = z.object({
-    kind: z.literal('asset_version'),
-    asset_id: z.uuid(),
-    asset_version_id: z.uuid(),
-    binding_version_id: z.uuid().nullish()
+    kind: z.literal('asset'),
+    asset_id: z.uuid()
 }).strict();
 
 /**
@@ -38,15 +35,6 @@ export const zAssetClassification = z.object({
         'flat',
         'dark_flat'
     ]).nullish()
-}).strict();
-
-/**
- * AssetContentAccept
- */
-export const zAssetContentAccept = z.object({
-    base_version_id: z.uuid(),
-    base_revision: z.int().gte(1),
-    expected_observed_hash: z.string().regex(/^blake3:[0-9a-f]{64}$/)
 }).strict();
 
 /**
@@ -118,6 +106,12 @@ export const zAssetParametersPatch = z.object({
  */
 export const zAssetPatch = z.object({
     base_revision: z.int().gte(1),
+    calibration_status: z.enum([
+        'UnCalibrated',
+        'Calibrated',
+        'Unknown'
+    ]).optional(),
+    calibration_reason: z.string().min(1).nullish(),
     name: z.string().nullish(),
     notes: z.string().nullish(),
     classification: zAssetClassification.nullish(),
@@ -197,13 +191,6 @@ export const zCalibrationDisabled = z.object({
 }).strict();
 
 /**
- * CalibrationInherit
- */
-export const zCalibrationInherit = z.object({
-    mode: z.literal('inherit')
-}).strict();
-
-/**
  * CalibrationSearch
  */
 export const zCalibrationSearch = z.object({
@@ -217,7 +204,7 @@ export const zCalibrationSearch = z.object({
  * CalibrationTarget
  */
 export const zCalibrationTarget = z.object({
-    kind: z.literal('asset_version'),
+    kind: z.literal('asset'),
     id: z.uuid()
 }).strict();
 
@@ -233,11 +220,11 @@ export const zCalibrationFixedTarget = z.object({
  * CalibrationTargetDetail
  */
 export const zCalibrationTargetDetail = z.object({
+    in_trash: z.boolean().optional().default(false),
     target: zCalibrationTarget,
     asset_id: z.uuid().nullish(),
     dataset_id: z.uuid().nullish(),
     name: z.string(),
-    version_number: z.int(),
     target_kind: z.literal('master'),
     master_required: z.literal(false)
 }).strict();
@@ -254,7 +241,6 @@ export const zCalibrationTargetOption = z.object({
         'flat',
         'dark_flat'
     ]),
-    version_number: z.int(),
     member_count: z.int()
 }).strict();
 
@@ -280,25 +266,21 @@ export const zCalibrationUnconfigured = z.object({
  */
 export const zCalibrationPatch = z.object({
     bias: z.discriminatedUnion('mode', [
-        zCalibrationInherit,
         zCalibrationUnconfigured,
         zCalibrationDisabled,
         zCalibrationFixedTarget
     ]).optional(),
     dark: z.discriminatedUnion('mode', [
-        zCalibrationInherit,
         zCalibrationUnconfigured,
         zCalibrationDisabled,
         zCalibrationFixedTarget
     ]).optional(),
     flat: z.discriminatedUnion('mode', [
-        zCalibrationInherit,
         zCalibrationUnconfigured,
         zCalibrationDisabled,
         zCalibrationFixedTarget
     ]).optional(),
     dark_flat: z.discriminatedUnion('mode', [
-        zCalibrationInherit,
         zCalibrationUnconfigured,
         zCalibrationDisabled,
         zCalibrationFixedTarget
@@ -306,20 +288,22 @@ export const zCalibrationPatch = z.object({
 }).strict();
 
 /**
+ * CalibrationCheckProposal
+ */
+export const zCalibrationCheckProposal = z.object({
+    changes: zCalibrationPatch.optional()
+}).strict();
+
+/**
  * CalibrationSlotDetail
  */
 export const zCalibrationSlotDetail = z.object({
     choice: z.discriminatedUnion('mode', [
-        zCalibrationInherit,
         zCalibrationUnconfigured,
         zCalibrationDisabled,
         zCalibrationFixedTarget
     ]),
-    source: z.enum([
-        'standalone',
-        'dataset_default',
-        'member_override'
-    ]),
+    source: z.enum(['standalone', 'dataset']),
     status: z.enum([
         'unconfigured',
         'disabled',
@@ -328,46 +312,6 @@ export const zCalibrationSlotDetail = z.object({
     ]),
     target_detail: zCalibrationTargetDetail.nullish(),
     check_state: z.literal('not_checked').optional().default('not_checked')
-}).strict();
-
-/**
- * CalibrationCombination
- */
-export const zCalibrationCombination = z.object({
-    key: z.string(),
-    member_count: z.int().gte(1),
-    effective: z.object({
-        bias: z.discriminatedUnion('mode', [
-            zCalibrationInherit,
-            zCalibrationUnconfigured,
-            zCalibrationDisabled,
-            zCalibrationFixedTarget
-        ]).optional(),
-        dark: z.discriminatedUnion('mode', [
-            zCalibrationInherit,
-            zCalibrationUnconfigured,
-            zCalibrationDisabled,
-            zCalibrationFixedTarget
-        ]).optional(),
-        flat: z.discriminatedUnion('mode', [
-            zCalibrationInherit,
-            zCalibrationUnconfigured,
-            zCalibrationDisabled,
-            zCalibrationFixedTarget
-        ]).optional(),
-        dark_flat: z.discriminatedUnion('mode', [
-            zCalibrationInherit,
-            zCalibrationUnconfigured,
-            zCalibrationDisabled,
-            zCalibrationFixedTarget
-        ]).optional()
-    }).strict(),
-    slots: z.object({
-        bias: zCalibrationSlotDetail.optional(),
-        dark: zCalibrationSlotDetail.optional(),
-        flat: zCalibrationSlotDetail.optional(),
-        dark_flat: zCalibrationSlotDetail.optional()
-    }).strict()
 }).strict();
 
 /**
@@ -389,6 +333,7 @@ export const zCameraSnapshotSpecs = z.object({
         'XTRANS',
         'QUAD_BAYER'
     ]).nullish(),
+    default_parameter_mode: z.enum(['iso', 'gain']).nullish(),
     sensor_mode: z.enum(['mono', 'color']).nullish()
 }).strict();
 
@@ -422,7 +367,8 @@ export const zCameraSpecs = z.object({
         'GBRG',
         'XTRANS',
         'QUAD_BAYER'
-    ]).nullish()
+    ]).nullish(),
+    default_parameter_mode: z.enum(['iso', 'gain']).nullish()
 }).strict();
 
 /**
@@ -488,8 +434,7 @@ export const zCanvasConnect = z.object({
 export const zCanvasDataRequest = z.object({
     entry_type: z.enum(['asset', 'dataset']),
     id: z.uuid(),
-    version_id: z.uuid(),
-    member_indexes: z.array(z.int()).nullish()
+    asset_ids: z.array(z.uuid()).min(1).nullish()
 }).strict();
 
 /**
@@ -527,10 +472,9 @@ export const zCanvasInspect = z.object({
  */
 export const zCanvasInspectOut = z.object({
     title: z.string(),
-    total: z.int(),
+    member_count: z.int(),
     member_index: z.int(),
     asset_id: z.uuid(),
-    asset_version_id: z.uuid(),
     view_base: z.string(),
     name: z.string(),
     availability: z.enum([
@@ -571,6 +515,47 @@ export const zCanvasPageOut = z.object({
 }).strict();
 
 /**
+ * CaptureEquipmentIdentity
+ */
+export const zCaptureEquipmentIdentity = z.object({
+    id: z.string().nullish(),
+    name: z.string().nullish(),
+    optical_accessory_id: z.string().nullish(),
+    effective_focal_length_mm: z.number().nullish()
+}).strict();
+
+/**
+ * CaptureDifferenceMember
+ */
+export const zCaptureDifferenceMember = z.object({
+    asset_id: z.uuid(),
+    value: z.union([
+        z.string(),
+        z.number(),
+        z.int(),
+        zCaptureEquipmentIdentity
+    ]).nullable()
+}).strict();
+
+/**
+ * CaptureWarning
+ */
+export const zCaptureWarning = z.object({
+    code: z.string(),
+    field: z.string(),
+    severity: z.literal('warning'),
+    members: z.array(zCaptureDifferenceMember)
+}).strict();
+
+/**
+ * CaptureDiagnostics
+ */
+export const zCaptureDiagnostics = z.object({
+    warnings: z.array(zCaptureWarning).optional(),
+    unknown_counts: z.record(z.string(), z.int()).optional()
+}).strict();
+
+/**
  * DataNodeIdentity
  */
 export const zDataNodeIdentity = z.object({
@@ -587,17 +572,31 @@ export const zDataNodeMember = z.object({
     selection: z.record(z.string(), z.unknown()),
     format: z.string(),
     metadata: z.record(z.string(), z.unknown()).nullable(),
-    byte_size: z.int()
+    byte_size: z.int(),
+    content_hash: z.string().nullish(),
+    position_token: z.string().nullish()
 }).strict();
 
 /**
  * DatasetCalibrationConsumer
  */
 export const zDatasetCalibrationConsumer = z.object({
-    kind: z.literal('dataset_version'),
+    kind: z.literal('dataset'),
     dataset_id: z.uuid(),
-    dataset_version_id: z.uuid(),
-    member_asset_version_ids: z.array(z.uuid()).min(1).nullish()
+    member_asset_ids: z.array(z.uuid()).min(1).nullish()
+}).strict();
+
+/**
+ * CalibrationCheckRequest
+ */
+export const zCalibrationCheckRequest = z.object({
+    consumer: z.discriminatedUnion('kind', [
+        zAssetCalibrationConsumer,
+        zDatasetCalibrationConsumer
+    ]),
+    proposal: zCalibrationCheckProposal.nullish(),
+    limit: z.int().gte(1).lte(200).optional().default(50),
+    offset: z.int().gte(0).optional().default(0)
 }).strict();
 
 /**
@@ -623,7 +622,6 @@ export const zCalibrationSearchRequest = z.object({
 export const zDatasetCalibrationUpdate = z.object({
     request_id: z.uuid(),
     expected_revision: z.int().gte(1),
-    base_version_id: z.uuid(),
     changes: zCalibrationPatch,
     accept_unknown: z.boolean().optional().default(false)
 }).strict();
@@ -643,124 +641,24 @@ export const zDatasetChanges = z.object({
 export const zDatasetCreate = z.object({
     name: z.string(),
     notes: z.string().nullish(),
-    asset_version_ids: z.array(z.uuid())
+    asset_ids: z.array(z.uuid())
 }).strict();
 
 /**
- * DatasetMemberCalibrationOut
+ * DatasetImportExclusion
  */
-export const zDatasetMemberCalibrationOut = z.object({
+export const zDatasetImportExclusion = z.object({
     asset_id: z.uuid(),
-    asset_name: z.string(),
-    asset_version_number: z.int(),
-    frame_type: z.string().nullable(),
-    asset_version_id: z.uuid(),
-    overrides: z.object({
-        bias: z.discriminatedUnion('mode', [
-            zCalibrationInherit,
-            zCalibrationUnconfigured,
-            zCalibrationDisabled,
-            zCalibrationFixedTarget
-        ]).optional(),
-        dark: z.discriminatedUnion('mode', [
-            zCalibrationInherit,
-            zCalibrationUnconfigured,
-            zCalibrationDisabled,
-            zCalibrationFixedTarget
-        ]).optional(),
-        flat: z.discriminatedUnion('mode', [
-            zCalibrationInherit,
-            zCalibrationUnconfigured,
-            zCalibrationDisabled,
-            zCalibrationFixedTarget
-        ]).optional(),
-        dark_flat: z.discriminatedUnion('mode', [
-            zCalibrationInherit,
-            zCalibrationUnconfigured,
-            zCalibrationDisabled,
-            zCalibrationFixedTarget
-        ]).optional()
-    }).strict(),
-    effective: z.object({
-        bias: z.discriminatedUnion('mode', [
-            zCalibrationInherit,
-            zCalibrationUnconfigured,
-            zCalibrationDisabled,
-            zCalibrationFixedTarget
-        ]).optional(),
-        dark: z.discriminatedUnion('mode', [
-            zCalibrationInherit,
-            zCalibrationUnconfigured,
-            zCalibrationDisabled,
-            zCalibrationFixedTarget
-        ]).optional(),
-        flat: z.discriminatedUnion('mode', [
-            zCalibrationInherit,
-            zCalibrationUnconfigured,
-            zCalibrationDisabled,
-            zCalibrationFixedTarget
-        ]).optional(),
-        dark_flat: z.discriminatedUnion('mode', [
-            zCalibrationInherit,
-            zCalibrationUnconfigured,
-            zCalibrationDisabled,
-            zCalibrationFixedTarget
-        ]).optional()
-    }).strict(),
-    slots: z.object({
-        bias: zCalibrationSlotDetail.optional(),
-        dark: zCalibrationSlotDetail.optional(),
-        flat: zCalibrationSlotDetail.optional(),
-        dark_flat: zCalibrationSlotDetail.optional()
-    }).strict()
-}).strict();
-
-/**
- * DatasetCalibrationPage
- */
-export const zDatasetCalibrationPage = z.object({
-    total: z.int().gte(0),
-    limit: z.int().gte(1),
-    offset: z.int().gte(0),
-    dataset_id: z.uuid(),
-    dataset_version_id: z.uuid(),
-    revision: z.int().gte(1),
-    defaults: z.object({
-        bias: z.discriminatedUnion('mode', [
-            zCalibrationInherit,
-            zCalibrationUnconfigured,
-            zCalibrationDisabled,
-            zCalibrationFixedTarget
-        ]).optional(),
-        dark: z.discriminatedUnion('mode', [
-            zCalibrationInherit,
-            zCalibrationUnconfigured,
-            zCalibrationDisabled,
-            zCalibrationFixedTarget
-        ]).optional(),
-        flat: z.discriminatedUnion('mode', [
-            zCalibrationInherit,
-            zCalibrationUnconfigured,
-            zCalibrationDisabled,
-            zCalibrationFixedTarget
-        ]).optional(),
-        dark_flat: z.discriminatedUnion('mode', [
-            zCalibrationInherit,
-            zCalibrationUnconfigured,
-            zCalibrationDisabled,
-            zCalibrationFixedTarget
-        ]).optional()
-    }).strict(),
-    items: z.array(zDatasetMemberCalibrationOut),
-    combinations: z.array(zCalibrationCombination)
+    name: z.string(),
+    code: z.string(),
+    message: z.string()
 }).strict();
 
 /**
  * DatasetMemberInput
  */
 export const zDatasetMemberInput = z.object({
-    asset_version_id: z.uuid(),
-    calibration: zCalibrationPatch.optional()
+    asset_id: z.uuid()
 }).strict();
 
 /**
@@ -776,7 +674,6 @@ export const zDatasetMemberRevision = z.object({
  */
 export const zDatasetMemberParametersUpdate = z.object({
     base_revision: z.int().gte(1),
-    base_version_id: z.uuid(),
     members: z.array(zDatasetMemberRevision),
     parameters: zAssetParametersPatch.nullish(),
     classification: zAssetClassification.nullish()
@@ -787,8 +684,8 @@ export const zDatasetMemberParametersUpdate = z.object({
  */
 export const zDatasetMembersCreate = z.object({
     base_revision: z.int().gte(1),
-    asset_version_ids: z.array(z.uuid()),
-    calibration_defaults: z.object({
+    asset_ids: z.array(z.uuid()),
+    calibration: z.object({
         bias: z.union([
             zCalibrationTarget,
             zCalibrationUnconfigured
@@ -806,24 +703,7 @@ export const zDatasetMembersCreate = z.object({
             zCalibrationUnconfigured
         ]).nullish()
     }).strict().nullish(),
-    member_calibration_overrides: z.record(z.string(), z.object({
-        bias: z.union([
-            zCalibrationTarget,
-            zCalibrationUnconfigured
-        ]).nullish(),
-        dark: z.union([
-            zCalibrationTarget,
-            zCalibrationUnconfigured
-        ]).nullish(),
-        flat: z.union([
-            zCalibrationTarget,
-            zCalibrationUnconfigured
-        ]).nullish(),
-        dark_flat: z.union([
-            zCalibrationTarget,
-            zCalibrationUnconfigured
-        ]).nullish()
-    }).strict()).nullish()
+    accept_unknown: z.boolean().optional().default(false)
 }).strict();
 
 /**
@@ -929,7 +809,6 @@ export const zErrorDetail = z.object({
  */
 export const zAssetContentObservation = z.object({
     asset_id: z.uuid(),
-    base_version_id: z.uuid(),
     base_revision: z.int().gte(1),
     storage_mode: z.enum(['reference', 'managed']),
     stored_hash: z.string(),
@@ -1006,45 +885,6 @@ export const zExposureSummary = z.object({
     unknown_count: z.int().gte(0),
     total_seconds: z.number().gte(0).nullable(),
     complete: z.boolean()
-}).strict();
-
-/**
- * DatasetVersionSummary
- */
-export const zDatasetVersionSummary = z.object({
-    id: z.uuid(),
-    dataset_id: z.uuid(),
-    version_number: z.int(),
-    created_at: z.iso.datetime({ offset: true }),
-    calibration_defaults: z.object({
-        bias: z.union([
-            zCalibrationTarget,
-            zCalibrationUnconfigured
-        ]).nullish(),
-        dark: z.union([
-            zCalibrationTarget,
-            zCalibrationUnconfigured
-        ]).nullish(),
-        flat: z.union([
-            zCalibrationTarget,
-            zCalibrationUnconfigured
-        ]).nullish(),
-        dark_flat: z.union([
-            zCalibrationTarget,
-            zCalibrationUnconfigured
-        ]).nullish()
-    }).strict().optional(),
-    exposure_summary: zExposureSummary
-}).strict();
-
-/**
- * DatasetVersionPage
- */
-export const zDatasetVersionPage = z.object({
-    total: z.int().gte(0),
-    limit: z.int().gte(1),
-    offset: z.int().gte(0),
-    items: z.array(zDatasetVersionSummary)
 }).strict();
 
 /**
@@ -1147,7 +987,7 @@ export const zFilterSnapshot = z.object({
  */
 export const zFitsHduOut = z.object({
     id: z.uuid(),
-    asset_version_id: z.uuid(),
+    asset_id: z.uuid(),
     hdu_index: z.int(),
     name: z.string().nullable(),
     hdu_type: z.string(),
@@ -1183,7 +1023,7 @@ export const zFitsHduPage = z.object({
  * FitsHeaderOut
  */
 export const zFitsHeaderOut = z.object({
-    asset_version_id: z.uuid(),
+    asset_id: z.uuid(),
     hdu_index: z.int(),
     cards: z.array(z.record(z.string(), z.unknown()))
 }).strict();
@@ -1192,19 +1032,17 @@ export const zFitsHeaderOut = z.object({
  * FixedAssetSource
  */
 export const zFixedAssetSource = z.object({
-    kind: z.literal('asset_version'),
-    asset_id: z.uuid(),
-    asset_version_id: z.uuid()
+    kind: z.literal('asset'),
+    asset_id: z.uuid()
 }).strict();
 
 /**
  * FixedDatasetSource
  */
 export const zFixedDatasetSource = z.object({
-    kind: z.literal('dataset_version'),
+    kind: z.literal('dataset'),
     dataset_id: z.uuid(),
-    dataset_version_id: z.uuid(),
-    member_asset_version_ids: z.array(z.uuid()).min(1).nullish()
+    member_asset_ids: z.array(z.uuid()).min(1).nullish()
 }).strict();
 
 /**
@@ -1218,47 +1056,18 @@ export const zFrozenEquipmentSelection = z.object({
 }).strict();
 
 /**
- * ImageCalibrationOut
+ * Histogram
  */
-export const zImageCalibrationOut = z.object({
-    asset_id: z.uuid(),
-    asset_version_id: z.uuid(),
-    asset_revision: z.int().gte(1),
-    binding_version_id: z.uuid().nullable(),
-    version_number: z.int().nullable(),
-    bindings: z.object({
-        bias: z.discriminatedUnion('mode', [
-            zCalibrationInherit,
-            zCalibrationUnconfigured,
-            zCalibrationDisabled,
-            zCalibrationFixedTarget
-        ]).optional(),
-        dark: z.discriminatedUnion('mode', [
-            zCalibrationInherit,
-            zCalibrationUnconfigured,
-            zCalibrationDisabled,
-            zCalibrationFixedTarget
-        ]).optional(),
-        flat: z.discriminatedUnion('mode', [
-            zCalibrationInherit,
-            zCalibrationUnconfigured,
-            zCalibrationDisabled,
-            zCalibrationFixedTarget
-        ]).optional(),
-        dark_flat: z.discriminatedUnion('mode', [
-            zCalibrationInherit,
-            zCalibrationUnconfigured,
-            zCalibrationDisabled,
-            zCalibrationFixedTarget
-        ]).optional()
-    }).strict(),
-    slots: z.object({
-        bias: zCalibrationSlotDetail.optional(),
-        dark: zCalibrationSlotDetail.optional(),
-        flat: zCalibrationSlotDetail.optional(),
-        dark_flat: zCalibrationSlotDetail.optional()
-    }).strict(),
-    message: z.string()
+export const zHistogram = z.object({
+    channel: z.enum([
+        'composite',
+        'red',
+        'green',
+        'blue'
+    ]),
+    edges: z.array(z.number()).min(2),
+    counts: z.array(z.int()).min(1),
+    intensity_unit: z.string()
 }).strict();
 
 /**
@@ -1267,7 +1076,6 @@ export const zImageCalibrationOut = z.object({
 export const zImageCalibrationUpdate = z.object({
     request_id: z.uuid(),
     expected_revision: z.int().gte(1),
-    base_binding_version_id: z.uuid().nullable(),
     changes: zCalibrationPatch,
     accept_unknown: z.boolean().optional().default(false)
 }).strict();
@@ -1307,10 +1115,12 @@ export const zImageCaptureParameters = z.object({
  * ImageDatasetCreate
  */
 export const zImageDatasetCreate = z.object({
+    project_id: z.uuid().nullish(),
+    project_base_revision: z.int().gte(1).nullish(),
     request_id: z.uuid(),
     name: z.string(),
     members: z.array(zDatasetMemberInput).min(1),
-    calibration_defaults: zCalibrationPatch.optional(),
+    calibration: zCalibrationPatch.optional(),
     notes: z.string().nullish(),
     accept_unknown: z.boolean().optional().default(false)
 }).strict();
@@ -1321,7 +1131,6 @@ export const zImageDatasetCreate = z.object({
 export const zImageDatasetEditMembers = z.object({
     request_id: z.uuid(),
     expected_revision: z.int().gte(1),
-    base_version_id: z.uuid(),
     add: z.array(zDatasetMemberInput).min(1).optional(),
     remove: z.array(z.uuid()).min(1).optional(),
     accept_unknown: z.boolean().optional().default(false)
@@ -1408,58 +1217,63 @@ export const zImportPreviewProgress = z.object({
 }).strict();
 
 /**
+ * ImportProjectLink
+ */
+export const zImportProjectLink = z.object({
+    state: z.enum([
+        'not_requested',
+        'pending',
+        'linked',
+        'failed'
+    ]),
+    code: z.string().nullish(),
+    message: z.string().nullish(),
+    fields: z.array(z.record(z.string(), z.string())).optional(),
+    reference_ids: z.array(z.string()).optional(),
+    project_revision: z.int().nullish()
+}).strict();
+
+/**
+ * ImportDestinationReport
+ */
+export const zImportDestinationReport = z.object({
+    mode: z.enum([
+        'standalone',
+        'new_dataset',
+        'append_dataset'
+    ]),
+    project_id: z.string().nullish(),
+    project_base_revision: z.int().nullish(),
+    project_name: z.string().nullish(),
+    project_link: zImportProjectLink
+}).strict();
+
+/**
+ * ImportRecovery
+ */
+export const zImportRecovery = z.object({
+    accept_unknown: z.boolean().optional().default(false),
+    request_id: z.uuid(),
+    mode: z.enum([
+        'new_dataset',
+        'append_dataset',
+        'link_project'
+    ]),
+    asset_ids: z.array(z.uuid()).optional(),
+    name: z.string().nullish(),
+    dataset_id: z.uuid().nullish(),
+    expected_revision: z.int().gte(1).nullish(),
+    project_id: z.uuid().nullish(),
+    project_base_revision: z.int().gte(1).nullish()
+}).strict();
+
+/**
  * ImportRegistrationProgress
  */
 export const zImportRegistrationProgress = z.object({
     total: z.int().gte(0),
     registered: z.int().gte(0),
     completed: z.boolean()
-}).strict();
-
-/**
- * ImportProgressSummary
- */
-export const zImportProgressSummary = z.object({
-    registration: zImportRegistrationProgress.nullish(),
-    content: zImportContentProgress.nullish(),
-    preview: zImportPreviewProgress.nullish()
-}).strict();
-
-/**
- * AssetTaskSummary
- */
-export const zAssetTaskSummary = z.object({
-    id: z.uuid(),
-    status: z.enum([
-        'queued',
-        'running',
-        'cancelling',
-        'completed',
-        'completed_with_errors',
-        'failed',
-        'cancelled',
-        'interrupted'
-    ]),
-    dataset_name: z.string().nullable(),
-    target_dataset_id: z.uuid().nullable(),
-    dataset_id: z.uuid().nullable(),
-    enumeration_completed: z.boolean(),
-    report: zImportProgressSummary,
-    error: z.record(z.string(), z.unknown()).nullable(),
-    created_at: z.iso.datetime({ offset: true }),
-    updated_at: z.iso.datetime({ offset: true }),
-    items_total: z.int().gte(0),
-    items_completed: z.int().gte(0)
-}).strict();
-
-/**
- * AssetTaskPage
- */
-export const zAssetTaskPage = z.object({
-    total: z.int().gte(0),
-    limit: z.int().gte(1),
-    offset: z.int().gte(0),
-    items: z.array(zAssetTaskSummary)
 }).strict();
 
 /**
@@ -1603,28 +1417,6 @@ export const zJsonValue = z.union([
 ]).nullable();
 
 /**
- * AnalysisResult
- */
-export const zAnalysisResult = z.object({
-    kind: z.enum([
-        'metrics',
-        'table',
-        'series',
-        'text',
-        'json'
-    ]),
-    title: z.string(),
-    source: z.string(),
-    unit: z.string().nullable(),
-    columns: z.array(z.string()),
-    rows: z.array(z.array(zJsonValue)),
-    values: z.record(z.string(), zJsonValue),
-    text: z.string().nullable(),
-    sample: z.string().nullable(),
-    member_index: z.int().gte(0).nullable()
-}).strict();
-
-/**
  * CalibrationCandidate
  */
 export const zCalibrationCandidate = z.object({
@@ -1636,7 +1428,6 @@ export const zCalibrationCandidate = z.object({
         'flat',
         'dark_flat'
     ]),
-    version_number: z.int(),
     member_count: z.int().gte(0),
     target_kind: z.literal('master'),
     check: z.record(z.string(), zJsonValue).nullish()
@@ -1656,7 +1447,7 @@ export const zCalibrationCandidatePage = z.object({
  * CalibrationCheckItem
  */
 export const zCalibrationCheckItem = z.object({
-    asset_version_id: z.uuid(),
+    asset_id: z.uuid(),
     slot: z.enum([
         'bias',
         'dark',
@@ -1666,6 +1457,7 @@ export const zCalibrationCheckItem = z.object({
     target: zCalibrationTarget,
     state: z.enum([
         'compatible',
+        'warning',
         'unknown',
         'conflict'
     ]),
@@ -1673,8 +1465,7 @@ export const zCalibrationCheckItem = z.object({
     diagnostics: z.array(z.record(z.string(), zJsonValue)),
     binding_source: z.enum([
         'standalone',
-        'dataset_default',
-        'member_override',
+        'dataset',
         'proposal',
         'dependency'
     ]).optional().default('proposal'),
@@ -1702,14 +1493,38 @@ export const zCalibrationCheckPage = z.object({
     offset: z.int().gte(0),
     state: z.enum([
         'compatible',
+        'warning',
         'unknown',
         'conflict'
     ]),
     checked_bindings: z.int().gte(0),
     conflict_count: z.int().gte(0),
     unknown_count: z.int().gte(0),
+    warning_count: z.int().gte(0).optional().default(0),
     master_required_count: z.int().gte(0),
     items: z.array(zCalibrationCheckItem)
+}).strict();
+
+/**
+ * CalibrationEffect
+ *
+ * Declared behavior for successful science outputs of one operation.
+ */
+export const zCalibrationEffect = z.object({
+    behavior: z.enum([
+        'unknown',
+        'preserve',
+        'calibrate'
+    ]).optional().default('unknown'),
+    input: z.string().nullish(),
+    outputs: z.array(z.string()).optional(),
+    masters: z.object({
+        bias: z.string().optional(),
+        dark: z.string().optional(),
+        flat: z.string().optional(),
+        dark_flat: z.string().optional()
+    }).strict().optional(),
+    parameter_calibrations: z.record(z.string(), zJsonValue).optional()
 }).strict();
 
 /**
@@ -1775,11 +1590,95 @@ export const zCanvasGraphRequest = z.object({
 }).strict();
 
 /**
+ * DatasetCalibrationOut
+ */
+export const zDatasetCalibrationOut = z.object({
+    diagnostics: z.array(z.record(z.string(), zJsonValue)).optional(),
+    dataset_id: z.uuid(),
+    revision: z.int().gte(1),
+    calibration: z.object({
+        bias: z.discriminatedUnion('mode', [
+            zCalibrationUnconfigured,
+            zCalibrationDisabled,
+            zCalibrationFixedTarget
+        ]).optional(),
+        dark: z.discriminatedUnion('mode', [
+            zCalibrationUnconfigured,
+            zCalibrationDisabled,
+            zCalibrationFixedTarget
+        ]).optional(),
+        flat: z.discriminatedUnion('mode', [
+            zCalibrationUnconfigured,
+            zCalibrationDisabled,
+            zCalibrationFixedTarget
+        ]).optional(),
+        dark_flat: z.discriminatedUnion('mode', [
+            zCalibrationUnconfigured,
+            zCalibrationDisabled,
+            zCalibrationFixedTarget
+        ]).optional()
+    }).strict(),
+    slots: z.object({
+        bias: zCalibrationSlotDetail.optional(),
+        dark: zCalibrationSlotDetail.optional(),
+        flat: zCalibrationSlotDetail.optional(),
+        dark_flat: zCalibrationSlotDetail.optional()
+    }).strict()
+}).strict();
+
+/**
+ * DatasetPublicationError
+ */
+export const zDatasetPublicationError = z.object({
+    code: z.string(),
+    message: z.string().nullish(),
+    fields: z.array(z.record(z.string(), z.string())).optional()
+});
+
+/**
  * FixedParameterBinding
  */
 export const zFixedParameterBinding = z.object({
     kind: z.literal('fixed'),
     value: zJsonValue
+}).strict();
+
+/**
+ * ImageCalibrationOut
+ */
+export const zImageCalibrationOut = z.object({
+    diagnostics: z.array(z.record(z.string(), zJsonValue)).optional(),
+    asset_id: z.uuid(),
+    asset_revision: z.int().gte(1),
+    bindings: z.object({
+        bias: z.discriminatedUnion('mode', [
+            zCalibrationUnconfigured,
+            zCalibrationDisabled,
+            zCalibrationFixedTarget
+        ]).optional(),
+        dark: z.discriminatedUnion('mode', [
+            zCalibrationUnconfigured,
+            zCalibrationDisabled,
+            zCalibrationFixedTarget
+        ]).optional(),
+        flat: z.discriminatedUnion('mode', [
+            zCalibrationUnconfigured,
+            zCalibrationDisabled,
+            zCalibrationFixedTarget
+        ]).optional(),
+        dark_flat: z.discriminatedUnion('mode', [
+            zCalibrationUnconfigured,
+            zCalibrationDisabled,
+            zCalibrationFixedTarget
+        ]).optional()
+    }).strict(),
+    slots: z.object({
+        bias: zCalibrationSlotDetail.optional(),
+        dark: zCalibrationSlotDetail.optional(),
+        flat: zCalibrationSlotDetail.optional(),
+        dark_flat: zCalibrationSlotDetail.optional()
+    }).strict(),
+    message: z.string()
 }).strict();
 
 /**
@@ -1789,7 +1688,7 @@ export const zImageHeaderPage = z.object({
     total: z.int().gte(0),
     limit: z.int().gte(1),
     offset: z.int().gte(0),
-    asset_version_id: z.uuid(),
+    asset_id: z.uuid(),
     hdu_index: z.int().gte(0),
     cards: z.array(z.record(z.string(), zJsonValue))
 }).strict();
@@ -1798,10 +1697,15 @@ export const zImageHeaderPage = z.object({
  * ImageImportItem
  */
 export const zImageImportItem = z.object({
+    calibration_status: z.enum([
+        'UnCalibrated',
+        'Calibrated',
+        'Unknown'
+    ]),
+    calibration_evidence: z.record(z.string(), zJsonValue).optional(),
     file_id: z.uuid().nullable(),
     task_item_id: z.uuid(),
     asset_id: z.uuid().nullable(),
-    asset_version_id: z.uuid().nullable(),
     status: z.string(),
     originals: z.string(),
     metadata: z.string(),
@@ -1813,7 +1717,7 @@ export const zImageImportItem = z.object({
         'not_ready',
         'pending'
     ]),
-    calibration_status: z.enum([
+    calibration_binding_status: z.enum([
         'saved',
         'pending',
         'blocked',
@@ -1858,9 +1762,9 @@ export const zImagePublicationStage = z.object({
         'conflict'
     ]),
     dataset_id: z.uuid().nullish(),
-    dataset_version_id: z.uuid().nullish(),
     dataset_revision: z.int().nullish(),
     binding: z.record(z.string(), zJsonValue).nullish(),
+    bindings: z.array(z.record(z.string(), zJsonValue)).optional(),
     errors: z.array(z.record(z.string(), zJsonValue)).nullish(),
     calibration: z.record(z.string(), zJsonValue).nullish(),
     published_file_ids: z.array(z.uuid()).nullish()
@@ -1882,6 +1786,8 @@ export const zImageImportStages = z.object({
  * ImageImportReceipt
  */
 export const zImageImportReceipt = z.object({
+    organization_recovery: z.record(z.string(), zJsonValue).nullish(),
+    destination: zImportDestinationReport.nullish(),
     request_id: z.uuid(),
     task_id: z.uuid(),
     status: z.enum([
@@ -1909,12 +1815,64 @@ export const zImageImportReceipt = z.object({
 }).strict();
 
 /**
- * ImportReport
+ * ImportProgressSummary
  */
-export const zImportReport = z.object({
+export const zImportProgressSummary = z.object({
+    destination: zImportDestinationReport.nullish(),
+    dataset_publish_error: zDatasetPublicationError.nullish(),
+    dataset_exclusions: z.array(zDatasetImportExclusion).optional(),
     registration: zImportRegistrationProgress.nullish(),
     content: zImportContentProgress.nullish(),
     preview: zImportPreviewProgress.nullish()
+}).strict();
+
+/**
+ * AssetTaskSummary
+ */
+export const zAssetTaskSummary = z.object({
+    id: z.uuid(),
+    status: z.enum([
+        'queued',
+        'running',
+        'cancelling',
+        'completed',
+        'completed_with_errors',
+        'failed',
+        'cancelled',
+        'interrupted'
+    ]),
+    dataset_name: z.string().nullable(),
+    target_dataset_id: z.uuid().nullable(),
+    dataset_id: z.uuid().nullable(),
+    enumeration_completed: z.boolean(),
+    report: zImportProgressSummary,
+    error: z.record(z.string(), z.unknown()).nullable(),
+    created_at: z.iso.datetime({ offset: true }),
+    updated_at: z.iso.datetime({ offset: true }),
+    items_total: z.int().gte(0),
+    items_completed: z.int().gte(0)
+}).strict();
+
+/**
+ * AssetTaskPage
+ */
+export const zAssetTaskPage = z.object({
+    total: z.int().gte(0),
+    limit: z.int().gte(1),
+    offset: z.int().gte(0),
+    items: z.array(zAssetTaskSummary)
+}).strict();
+
+/**
+ * ImportReport
+ */
+export const zImportReport = z.object({
+    destination: zImportDestinationReport.nullish(),
+    dataset_publish_error: zDatasetPublicationError.nullish(),
+    registration: zImportRegistrationProgress.nullish(),
+    content: zImportContentProgress.nullish(),
+    preview: zImportPreviewProgress.nullish(),
+    dataset_exclusions: z.array(zDatasetImportExclusion).optional()
 });
 
 /**
@@ -1964,7 +1922,6 @@ export const zLibraryCalibrationTarget = z.object({
     target: zCalibrationTarget,
     asset_id: z.uuid(),
     name: z.string(),
-    version_number: z.int(),
     target_kind: z.literal('master').optional().default('master'),
     master_required: z.literal(false).optional().default(false)
 }).strict();
@@ -1978,18 +1935,12 @@ export const zLibraryCalibrationSlot = z.object({
         zLibraryCalibrationDisabled,
         zLibraryCalibrationFixedTarget
     ]).nullable(),
-    source: z.enum([
-        'standalone',
-        'dataset_default',
-        'member_override',
-        'mixed'
-    ]),
+    source: z.enum(['standalone', 'dataset']),
     status: z.enum([
         'unconfigured',
         'disabled',
         'target',
-        'not_applicable',
-        'mixed'
+        'not_applicable'
     ]),
     target_detail: zLibraryCalibrationTarget.nullish(),
     check_state: z.literal('not_checked').optional().default('not_checked')
@@ -2004,8 +1955,7 @@ export const zLibraryCalibrationProjection = z.object({
         dark: zLibraryCalibrationSlot.optional(),
         flat: zLibraryCalibrationSlot.optional(),
         dark_flat: zLibraryCalibrationSlot.optional()
-    }).strict(),
-    binding_version_id: z.uuid().nullish()
+    }).strict()
 }).strict();
 
 /**
@@ -2014,6 +1964,13 @@ export const zLibraryCalibrationProjection = z.object({
 export const zLibraryChangeState = z.object({
     revision_token: z.string(),
     thumbnail_token: z.string()
+}).strict();
+
+/**
+ * LibraryDirectoryOpened
+ */
+export const zLibraryDirectoryOpened = z.object({
+    directory: z.string()
 }).strict();
 
 /**
@@ -2029,8 +1986,7 @@ export const zLibraryEntriesRemoveOut = z.object({
 export const zLibraryEntryRemove = z.object({
     entry_type: z.enum(['asset', 'dataset']),
     id: z.uuid(),
-    revision: z.int().gte(1),
-    current_version_id: z.uuid().nullable()
+    revision: z.int().gte(1)
 }).strict();
 
 /**
@@ -2049,11 +2005,121 @@ export const zLibraryEquipmentLabel = z.object({
 }).strict();
 
 /**
+ * LibraryFileLocation
+ */
+export const zLibraryFileLocation = z.object({
+    calibration_status: z.enum([
+        'UnCalibrated',
+        'Calibrated',
+        'Unknown'
+    ]),
+    calibration_evidence: z.record(z.string(), zJsonValue).optional(),
+    asset_id: z.uuid(),
+    storage_mode: z.enum(['managed', 'reference']),
+    availability: z.enum([
+        'unknown',
+        'available',
+        'changed',
+        'missing'
+    ]),
+    path: z.string(),
+    library_relative_path: z.string().nullable(),
+    processing_calibration: z.record(z.string(), zJsonValue).nullish(),
+    processing_provenance: z.record(z.string(), zJsonValue).nullish()
+}).strict();
+
+/**
+ * LibraryFileMove
+ */
+export const zLibraryFileMove = z.object({
+    asset_id: z.uuid(),
+    revision: z.int(),
+    content_hash: z.string().nullable(),
+    byte_size: z.int().nullable(),
+    source: z.string(),
+    destination: z.string(),
+    state: z.enum([
+        'pending',
+        'completed',
+        'failed',
+        'cleanup_pending'
+    ]).optional().default('pending'),
+    error: z.string().nullish()
+}).strict();
+
+/**
+ * LibraryLocationOut
+ */
+export const zLibraryLocationOut = z.object({
+    entry_type: z.enum(['asset', 'dataset']),
+    id: z.uuid(),
+    revision: z.int(),
+    directory: z.string().nullable(),
+    files: z.array(zLibraryFileLocation),
+    manifest_path: z.string().nullable(),
+    manifest_status: z.enum([
+        'pending',
+        'ready',
+        'failed'
+    ]).nullable(),
+    manifest_error: z.string().nullable()
+}).strict();
+
+/**
+ * LibraryOrganizeExecute
+ */
+export const zLibraryOrganizeExecute = z.object({
+    base_revision: z.int().gte(1),
+    entry_type: z.enum(['asset', 'dataset']),
+    id: z.uuid(),
+    request_id: z.uuid(),
+    plan_token: z.string()
+}).strict();
+
+/**
+ * LibraryOrganizePlan
+ */
+export const zLibraryOrganizePlan = z.object({
+    entry_type: z.enum(['asset', 'dataset']),
+    id: z.uuid(),
+    base_revision: z.int(),
+    source_directory: z.string().nullable(),
+    destination_directory: z.string(),
+    moves: z.array(zLibraryFileMove),
+    blockers: z.array(z.string()),
+    token: z.string()
+}).strict();
+
+/**
+ * LibraryOrganizeReceipt
+ */
+export const zLibraryOrganizeReceipt = z.object({
+    request_id: z.uuid(),
+    operation: z.literal('organize_library').optional().default('organize_library'),
+    state: z.enum([
+        'running',
+        'completed',
+        'partial',
+        'interrupted'
+    ]),
+    plan: zLibraryOrganizePlan,
+    error: z.string().nullish()
+}).strict();
+
+/**
+ * LibraryOrganizeRequest
+ */
+export const zLibraryOrganizeRequest = z.object({
+    base_revision: z.int().gte(1),
+    entry_type: z.enum(['asset', 'dataset']),
+    id: z.uuid()
+}).strict();
+
+/**
  * LibraryThumbnailReference
  */
 export const zLibraryThumbnailReference = z.object({
     asset_id: z.uuid(),
-    asset_version_id: z.uuid(),
     view_base: z.string(),
     hdu_index: z.int().gte(0)
 }).strict();
@@ -2096,7 +2162,6 @@ export const zLibraryTrashItemOut = z.object({
     name: z.string(),
     removed_at: z.iso.datetime({ offset: true }),
     revision: z.int(),
-    current_version_id: z.uuid().nullable(),
     cleanup_status: z.enum([
         'trash',
         'partial',
@@ -2130,14 +2195,14 @@ export const zLibraryTrashReferenceOut = z.object({
         'dataset_member',
         'calibration'
     ]),
-    name: z.string(),
-    version: z.int()
+    name: z.string()
 }).strict();
 
 /**
  * LibraryTrashPreviewOut
  */
 export const zLibraryTrashPreviewOut = z.object({
+    blockers: z.array(z.string()).optional(),
     items: z.array(zLibraryTrashItemOut),
     references: z.array(zLibraryTrashReferenceOut),
     tasks: z.array(z.string()),
@@ -2162,7 +2227,6 @@ export const zLibraryTrashSelectionItem = z.object({
     id: z.uuid(),
     removed_at: z.iso.datetime({ offset: true }),
     revision: z.int().gte(1),
-    current_version_id: z.uuid().nullable(),
     source_dataset_id: z.uuid().nullish()
 }).strict();
 
@@ -2357,6 +2421,16 @@ export const zLibraryMetadataSummary = z.object({
  * DatasetMemberSummary
  */
 export const zDatasetMemberSummary = z.object({
+    calibration_status: z.enum([
+        'UnCalibrated',
+        'Calibrated',
+        'Unknown'
+    ]),
+    calibration_counts: z.object({
+        UnCalibrated: z.int().optional(),
+        Calibrated: z.int().optional(),
+        Unknown: z.int().optional()
+    }).strict(),
     entry_type: z.literal('asset'),
     id: z.uuid(),
     name: z.string(),
@@ -2364,8 +2438,6 @@ export const zDatasetMemberSummary = z.object({
     status: z.enum(['active', 'archived']),
     revision: z.int(),
     created_at: z.iso.datetime({ offset: true }),
-    version_id: z.uuid().nullable(),
-    version_number: z.int().nullable(),
     member_count: z.literal(1),
     matching_member_count: z.literal(1),
     input_ready: z.boolean(),
@@ -2376,7 +2448,6 @@ export const zDatasetMemberSummary = z.object({
     import_issue: z.string().nullable(),
     view_base: z.string().nullable(),
     dataset_id: z.uuid(),
-    dataset_version_id: z.uuid(),
     member_position: z.int().gte(0),
     thumbnail_status: z.enum([
         'queued',
@@ -2398,66 +2469,19 @@ export const zDatasetMemberSummaryPage = z.object({
 }).strict();
 
 /**
- * DatasetOut
- */
-export const zDatasetOut = z.object({
-    summary: zLibraryMetadataSummary,
-    exposure_summary: zExposureSummary,
-    input_ready: z.boolean(),
-    id: z.uuid(),
-    name: z.string(),
-    notes: z.string().nullable(),
-    status: z.enum(['active', 'archived']),
-    revision: z.int(),
-    current_version_id: z.uuid().nullable(),
-    current_version_number: z.int().nullable(),
-    member_count: z.int(),
-    created_at: z.iso.datetime({ offset: true }),
-    updated_at: z.iso.datetime({ offset: true })
-}).strict();
-
-/**
- * DatasetImageDetail
- */
-export const zDatasetImageDetail = z.object({
-    dataset: zDatasetOut,
-    version: zDatasetVersionSummary.nullable()
-}).strict();
-
-/**
- * DatasetImageSummary
- */
-export const zDatasetImageSummary = z.object({
-    dataset: zDatasetOut,
-    member_count: z.int().gte(0),
-    matching_member_count: z.int().gte(0),
-    version_id: z.uuid().nullable()
-}).strict();
-
-/**
- * DatasetImagePage
- */
-export const zDatasetImagePage = z.object({
-    total: z.int().gte(0),
-    limit: z.int().gte(1),
-    offset: z.int().gte(0),
-    items: z.array(zDatasetImageSummary)
-}).strict();
-
-/**
- * DatasetPage
- */
-export const zDatasetPage = z.object({
-    total: z.int().gte(0),
-    limit: z.int().gte(1),
-    offset: z.int().gte(0),
-    items: z.array(zDatasetOut)
-}).strict();
-
-/**
  * LibraryAssetSummary
  */
 export const zLibraryAssetSummary = z.object({
+    calibration_status: z.enum([
+        'UnCalibrated',
+        'Calibrated',
+        'Unknown'
+    ]),
+    calibration_counts: z.object({
+        UnCalibrated: z.int().optional(),
+        Calibrated: z.int().optional(),
+        Unknown: z.int().optional()
+    }).strict(),
     entry_type: z.literal('asset'),
     id: z.uuid(),
     name: z.string(),
@@ -2465,8 +2489,6 @@ export const zLibraryAssetSummary = z.object({
     status: z.enum(['active', 'archived']),
     revision: z.int(),
     created_at: z.iso.datetime({ offset: true }),
-    version_id: z.uuid().nullable(),
-    version_number: z.int().nullable(),
     member_count: z.literal(1),
     matching_member_count: z.literal(1),
     input_ready: z.boolean(),
@@ -2482,6 +2504,16 @@ export const zLibraryAssetSummary = z.object({
  * LibraryDatasetSummary
  */
 export const zLibraryDatasetSummary = z.object({
+    calibration_status: z.enum([
+        'UnCalibrated',
+        'Calibrated',
+        'Unknown'
+    ]),
+    calibration_counts: z.object({
+        UnCalibrated: z.int().optional(),
+        Calibrated: z.int().optional(),
+        Unknown: z.int().optional()
+    }).strict(),
     entry_type: z.literal('dataset'),
     id: z.uuid(),
     name: z.string(),
@@ -2489,8 +2521,6 @@ export const zLibraryDatasetSummary = z.object({
     status: z.enum(['active', 'archived']),
     revision: z.int(),
     created_at: z.iso.datetime({ offset: true }),
-    version_id: z.uuid().nullable(),
-    version_number: z.int().nullable(),
     member_count: z.int().gte(0),
     matching_member_count: z.int().gte(0),
     input_ready: z.boolean(),
@@ -2641,6 +2671,13 @@ export const zManagementTrashSelection = z.object({
 }).strict();
 
 /**
+ * ManifestRebuildRequest
+ */
+export const zManifestRebuildRequest = z.object({
+    base_revision: z.int().gte(1)
+}).strict();
+
+/**
  * MediaArray
  */
 export const zMediaArray = z.object({
@@ -2661,10 +2698,45 @@ export const zMediaHdu = z.object({
 }).strict();
 
 /**
+ * MediaPosition
+ */
+export const zMediaPosition = z.object({
+    member_index: z.int().gte(0),
+    frame_index: z.int().gte(0).nullish()
+}).strict();
+
+/**
+ * AnalysisResult
+ */
+export const zAnalysisResult = z.object({
+    kind: z.enum([
+        'metrics',
+        'table',
+        'series',
+        'histogram',
+        'text',
+        'json'
+    ]),
+    title: z.string(),
+    source: z.string(),
+    unit: z.string().nullable(),
+    columns: z.array(z.string()),
+    rows: z.array(z.array(zJsonValue)),
+    values: z.record(z.string(), zJsonValue),
+    text: z.string().nullable(),
+    sample: z.string().nullable(),
+    member_index: z.int().gte(0).nullable(),
+    output: z.string().nullish(),
+    frame_index: z.int().gte(0).nullish(),
+    row_positions: z.array(zMediaPosition).nullish(),
+    histogram: zHistogram.nullish()
+}).strict();
+
+/**
  * MediaSelection
  */
 export const zMediaSelection = z.object({
-    dataset_version_id: z.uuid().nullish(),
+    dataset_id: z.uuid().nullish(),
     prefetch: z.boolean().optional().default(false),
     consumer_id: z.string().max(64).nullish(),
     generation: z.int().gte(0).optional().default(0),
@@ -2684,7 +2756,13 @@ export const zMediaSelection = z.object({
         z.literal(512),
         z.literal(1024),
         z.literal(2048)
-    ]).nullish().default(1024)
+    ]).nullish().default(1024),
+    channel: z.enum([
+        'composite',
+        'red',
+        'green',
+        'blue'
+    ]).optional().default('composite')
 }).strict();
 
 /**
@@ -2699,46 +2777,6 @@ export const zExportRequest = z.object({
     name: z.string().nullish(),
     settings: zExportSettings.optional(),
     selections: z.record(z.string(), zMediaSelection).optional()
-}).strict();
-
-/**
- * MemberCalibrationChange
- */
-export const zMemberCalibrationChange = z.object({
-    asset_version_id: z.uuid(),
-    changes: zCalibrationPatch
-}).strict();
-
-/**
- * CalibrationCheckProposal
- */
-export const zCalibrationCheckProposal = z.object({
-    changes: zCalibrationPatch.optional(),
-    member_changes: z.array(zMemberCalibrationChange).min(1).optional()
-}).strict();
-
-/**
- * CalibrationCheckRequest
- */
-export const zCalibrationCheckRequest = z.object({
-    consumer: z.discriminatedUnion('kind', [
-        zAssetCalibrationConsumer,
-        zDatasetCalibrationConsumer
-    ]),
-    proposal: zCalibrationCheckProposal.nullish(),
-    limit: z.int().gte(1).lte(200).optional().default(50),
-    offset: z.int().gte(0).optional().default(0)
-}).strict();
-
-/**
- * DatasetMemberCalibrationUpdate
- */
-export const zDatasetMemberCalibrationUpdate = z.object({
-    request_id: z.uuid(),
-    expected_revision: z.int().gte(1),
-    base_version_id: z.uuid(),
-    members: z.array(zMemberCalibrationChange).min(1),
-    accept_unknown: z.boolean().optional().default(false)
 }).strict();
 
 /**
@@ -2816,6 +2854,27 @@ export const zNewDatasetDestination = z.object({
 }).strict();
 
 /**
+ * NodeDisplayLabel
+ */
+export const zNodeDisplayLabel = z.object({
+    label: z.string().optional(),
+    description: z.string().optional()
+}).strict();
+
+/**
+ * NodeLocalization
+ */
+export const zNodeLocalization = z.object({
+    name: z.string().optional(),
+    description: z.string().optional(),
+    help: z.string().optional(),
+    category: z.array(z.string()).optional(),
+    inputs: z.record(z.string(), zNodeDisplayLabel).optional(),
+    outputs: z.record(z.string(), zNodeDisplayLabel).optional(),
+    parameters: z.record(z.string(), zNodeDisplayLabel).optional()
+}).strict();
+
+/**
  * NodeParameterBinding
  */
 export const zNodeParameterBinding = z.object({
@@ -2889,7 +2948,6 @@ export const zOutputRegistration = z.object({
         'interrupted'
     ]),
     asset_id: z.uuid().nullable(),
-    asset_version_id: z.uuid().nullable(),
     content_status: z.enum([
         'pending',
         'available',
@@ -2905,7 +2963,8 @@ export const zOutputRegistration = z.object({
         'pending',
         'available',
         'unsupported',
-        'failed'
+        'failed',
+        'not_requested'
     ]),
     error: zErrorDetail.nullable()
 }).strict();
@@ -2957,6 +3016,19 @@ export const zExportReceipt = z.object({
 }).strict();
 
 /**
+ * ParameterEditor
+ */
+export const zParameterEditor = z.object({
+    kind: z.enum([
+        'points',
+        'region',
+        'line',
+        'curve'
+    ]),
+    input: z.string().nullish()
+}).strict();
+
+/**
  * ParameterDefinition
  */
 export const zParameterDefinition = z.object({
@@ -2974,7 +3046,22 @@ export const zParameterDefinition = z.object({
     step: z.number().nullish(),
     choices: z.array(zJsonValue).nullish(),
     advanced: z.boolean().optional().default(false),
-    nullable: z.boolean().optional().default(false)
+    nullable: z.boolean().optional().default(false),
+    unit: z.string().nullish(),
+    editor: zParameterEditor.nullish()
+}).strict();
+
+/**
+ * PixelSelection
+ */
+export const zPixelSelection = z.object({
+    member_index: z.int().gte(0),
+    frame_index: z.int().gte(0).nullish(),
+    source_token: z.string().min(1),
+    hdu_index: z.int().gte(0).nullish(),
+    width: z.int().gt(0),
+    height: z.int().gt(0),
+    points: z.array(z.tuple([z.number(), z.number()])).min(1)
 }).strict();
 
 /**
@@ -2989,7 +3076,7 @@ export const zPreviewIssue = z.object({
  * DisplayPreviewState
  */
 export const zDisplayPreviewState = z.object({
-    asset_version_id: z.uuid(),
+    asset_id: z.uuid(),
     size: z.literal('display').optional().default('display'),
     status: z.enum([
         'not_ready',
@@ -3036,7 +3123,13 @@ export const zMediaState = z.object({
     duration: z.number().nullable(),
     note: z.string().nullable(),
     display_recipe: z.record(z.string(), z.unknown()).nullable(),
-    error: zPreviewIssue.nullable()
+    error: zPreviewIssue.nullable(),
+    channels: z.array(z.enum([
+        'composite',
+        'red',
+        'green',
+        'blue'
+    ])).optional()
 }).strict();
 
 /**
@@ -3063,35 +3156,7 @@ export const zProjectCreate = z.object({
  */
 export const zProjectDatasetReferenceCreate = z.object({
     base_revision: z.int().gte(1),
-    dataset_id: z.uuid(),
-    dataset_version_id: z.uuid()
-}).strict();
-
-/**
- * ProjectDatasetReferenceOut
- */
-export const zProjectDatasetReferenceOut = z.object({
-    summary: zLibraryMetadataSummary,
-    input_ready: z.boolean(),
-    member_count: z.int(),
-    id: z.uuid(),
-    project_id: z.uuid(),
-    dataset_id: z.uuid(),
-    dataset_version_id: z.uuid(),
-    base_revision: z.int(),
-    added_at: z.iso.datetime({ offset: true }),
-    dataset: zDatasetOut,
-    version: zDatasetVersionSummary
-}).strict();
-
-/**
- * ProjectDatasetReferencePage
- */
-export const zProjectDatasetReferencePage = z.object({
-    total: z.int().gte(0),
-    limit: z.int().gte(1),
-    offset: z.int().gte(0),
-    items: z.array(zProjectDatasetReferenceOut)
+    dataset_id: z.uuid()
 }).strict();
 
 /**
@@ -3134,7 +3199,7 @@ export const zProjectPatch = z.object({
  */
 export const zProjectReferenceCreate = z.object({
     base_revision: z.int().gte(1),
-    asset_version_id: z.uuid()
+    asset_id: z.uuid()
 }).strict();
 
 /**
@@ -3157,8 +3222,131 @@ export const zProjectReferenceDeleteResult = z.object({
  */
 export const zPublicationRetryBody = z.object({
     request_id: z.uuid(),
-    expected_revision: z.int().gte(1),
-    base_version_id: z.uuid()
+    expected_revision: z.int().gte(1)
+}).strict();
+
+/**
+ * ReferencingProject
+ */
+export const zReferencingProject = z.object({
+    id: z.uuid(),
+    name: z.string()
+}).strict();
+
+/**
+ * DatasetOut
+ */
+export const zDatasetOut = z.object({
+    calibration_status: z.enum([
+        'UnCalibrated',
+        'Calibrated',
+        'Unknown'
+    ]),
+    calibration_counts: z.object({
+        UnCalibrated: z.int().optional(),
+        Calibrated: z.int().optional(),
+        Unknown: z.int().optional()
+    }).strict(),
+    in_trash: z.boolean().optional().default(false),
+    capture_diagnostics: zCaptureDiagnostics.optional(),
+    referencing_projects: z.array(zReferencingProject).optional(),
+    summary: zLibraryMetadataSummary,
+    exposure_summary: zExposureSummary,
+    input_ready: z.boolean(),
+    id: z.uuid(),
+    name: z.string(),
+    notes: z.string().nullable(),
+    status: z.enum(['active', 'archived']),
+    revision: z.int(),
+    member_count: z.int(),
+    library_directory: z.string().nullish(),
+    manifest_status: z.enum([
+        'pending',
+        'ready',
+        'failed'
+    ]).optional().default('pending'),
+    manifest_error: z.string().nullish(),
+    created_at: z.iso.datetime({ offset: true }),
+    calibration: z.object({
+        bias: z.union([
+            zCalibrationTarget,
+            zCalibrationUnconfigured
+        ]).nullish(),
+        dark: z.union([
+            zCalibrationTarget,
+            zCalibrationUnconfigured
+        ]).nullish(),
+        flat: z.union([
+            zCalibrationTarget,
+            zCalibrationUnconfigured
+        ]).nullish(),
+        dark_flat: z.union([
+            zCalibrationTarget,
+            zCalibrationUnconfigured
+        ]).nullish()
+    }).strict().optional(),
+    updated_at: z.iso.datetime({ offset: true })
+}).strict();
+
+/**
+ * DatasetImageDetail
+ */
+export const zDatasetImageDetail = z.object({
+    dataset: zDatasetOut
+}).strict();
+
+/**
+ * DatasetImageSummary
+ */
+export const zDatasetImageSummary = z.object({
+    dataset: zDatasetOut,
+    member_count: z.int().gte(0),
+    matching_member_count: z.int().gte(0)
+}).strict();
+
+/**
+ * DatasetImagePage
+ */
+export const zDatasetImagePage = z.object({
+    total: z.int().gte(0),
+    limit: z.int().gte(1),
+    offset: z.int().gte(0),
+    items: z.array(zDatasetImageSummary)
+}).strict();
+
+/**
+ * DatasetPage
+ */
+export const zDatasetPage = z.object({
+    total: z.int().gte(0),
+    limit: z.int().gte(1),
+    offset: z.int().gte(0),
+    items: z.array(zDatasetOut)
+}).strict();
+
+/**
+ * ProjectDatasetReferenceOut
+ */
+export const zProjectDatasetReferenceOut = z.object({
+    summary: zLibraryMetadataSummary,
+    input_ready: z.boolean(),
+    member_count: z.int(),
+    id: z.uuid(),
+    project_id: z.uuid(),
+    dataset_id: z.uuid(),
+    base_revision: z.int(),
+    added_at: z.iso.datetime({ offset: true }),
+    dataset: zDatasetOut
+}).strict();
+
+/**
+ * ProjectDatasetReferencePage
+ */
+export const zProjectDatasetReferencePage = z.object({
+    total: z.int().gte(0),
+    limit: z.int().gte(1),
+    offset: z.int().gte(0),
+    items: z.array(zProjectDatasetReferenceOut)
 }).strict();
 
 /**
@@ -3211,7 +3399,13 @@ export const zRunOutputMember = z.object({
         'other'
     ]),
     view_base: z.string(),
-    file_url: z.string()
+    file_url: z.string(),
+    width: z.int().nullish(),
+    height: z.int().nullish(),
+    frame_count: z.int().nullish(),
+    hdu_index: z.int().nullish(),
+    content_hash: z.string().nullish(),
+    position_token: z.string().nullish()
 }).strict();
 
 /**
@@ -3220,7 +3414,16 @@ export const zRunOutputMember = z.object({
 export const zRunOutputPort = z.object({
     name: z.string(),
     type: z.string(),
-    members: z.array(zRunOutputMember)
+    members: z.array(zRunOutputMember),
+    data_kind: z.enum([
+        'image',
+        'sequence',
+        'video',
+        'analysis',
+        'file'
+    ]).nullish(),
+    role: z.string().nullish(),
+    operation_output: z.string().nullish()
 }).strict();
 
 /**
@@ -3228,7 +3431,7 @@ export const zRunOutputPort = z.object({
  */
 export const zScannedCalibrationCheckItem = z.object({
     file_id: z.uuid(),
-    dependency_asset_version_id: z.uuid().nullish(),
+    dependency_asset_id: z.uuid().nullish(),
     slot: z.enum([
         'bias',
         'dark',
@@ -3238,6 +3441,7 @@ export const zScannedCalibrationCheckItem = z.object({
     target: zCalibrationTarget,
     state: z.enum([
         'compatible',
+        'warning',
         'unknown',
         'conflict'
     ]),
@@ -3253,8 +3457,10 @@ export const zScannedCalibrationCheckPage = z.object({
     total: z.int().gte(0),
     limit: z.int().gte(1),
     offset: z.int().gte(0),
+    warning_count: z.int().gte(0).optional().default(0),
     state: z.enum([
         'compatible',
+        'warning',
         'unknown',
         'conflict'
     ]),
@@ -3278,18 +3484,8 @@ export const zScienceSelection = z.object({
  * AssetInputReference
  */
 export const zAssetInputReference = z.object({
-    kind: z.literal('asset_version'),
-    asset_version_id: z.uuid(),
-    binding_version_id: z.uuid().nullish(),
-    selection: zScienceSelection
-}).strict();
-
-/**
- * DatasetInputMember
- */
-export const zDatasetInputMember = z.object({
-    member_index: z.int().gte(0),
-    asset_version_id: z.uuid(),
+    kind: z.literal('asset'),
+    asset_id: z.uuid(),
     selection: zScienceSelection
 }).strict();
 
@@ -3297,9 +3493,10 @@ export const zDatasetInputMember = z.object({
  * DatasetInputReference
  */
 export const zDatasetInputReference = z.object({
-    kind: z.literal('dataset_version'),
-    dataset_version_id: z.uuid(),
-    members: z.array(zDatasetInputMember).min(1)
+    kind: z.literal('dataset'),
+    dataset_id: z.uuid(),
+    asset_ids: z.array(z.uuid()).min(1).nullish(),
+    selection: zScienceSelection.optional()
 }).strict();
 
 /**
@@ -3423,6 +3620,12 @@ export const zImageChanges = z.object({
     classification: zAssetClassification.optional(),
     parameters: zImageCaptureParameters.optional(),
     times: zImageTimes.optional(),
+    calibration_status: z.enum([
+        'UnCalibrated',
+        'Calibrated',
+        'Unknown'
+    ]).optional(),
+    calibration_reason: z.string().min(1).optional(),
     name: z.string().optional(),
     notes: z.string().nullish(),
     status: z.enum(['active', 'archived']).optional()
@@ -3507,9 +3710,7 @@ export const zMasterSourceTimeRange = z.object({
  */
 export const zMasterProvenanceOut = z.object({
     asset_id: z.uuid(),
-    asset_version_id: z.uuid(),
     asset_revision: z.int().gte(1),
-    provenance_version_id: z.uuid().nullable(),
     revision: z.int().gte(0),
     source_kind: z.literal('user_declared'),
     declaration: zMasterProvenanceChanges,
@@ -3582,6 +3783,12 @@ export const zEquipmentApplication = z.object({
  * ConfirmedFile
  */
 export const zConfirmedFile = z.object({
+    calibration_status: z.enum([
+        'UnCalibrated',
+        'Calibrated',
+        'Unknown'
+    ]).optional().default('Unknown'),
+    calibration_reason: z.string().min(1).nullish(),
     file_id: z.uuid(),
     name: z.string().optional(),
     metadata: zImageMetadata.optional(),
@@ -3633,8 +3840,24 @@ export const zImportBatchSubmit = z.object({
  * ImportCreate
  */
 export const zImportCreate = z.object({
+    calibration_status: z.enum([
+        'UnCalibrated',
+        'Calibrated',
+        'Unknown'
+    ]).optional().default('Unknown'),
+    calibration_reason: z.string().min(1).nullish(),
+    request_id: z.uuid().nullish(),
+    mode: z.enum([
+        'standalone',
+        'new_dataset',
+        'append_dataset'
+    ]).optional().default('standalone'),
+    target_dataset_id: z.uuid().nullish(),
+    dataset_base_revision: z.int().gte(1).nullish(),
+    project_id: z.uuid().nullish(),
+    project_base_revision: z.int().gte(1).nullish(),
     sources: z.array(zImportSource).min(1),
-    storage_mode: z.enum(['reference', 'managed']),
+    storage_mode: z.literal('managed'),
     classification: zAssetClassification.optional(),
     parameters: zAssetParameters.optional(),
     notes: z.string().nullish(),
@@ -3646,21 +3869,15 @@ export const zImportCreate = z.object({
  * ImportDefaults
  */
 export const zImportDefaults = z.object({
+    calibration_status: z.enum([
+        'UnCalibrated',
+        'Calibrated',
+        'Unknown'
+    ]).optional().default('Unknown'),
+    calibration_reason: z.string().min(1).nullish(),
     metadata: zImageMetadata.optional(),
     equipment: zEquipmentApplication.optional(),
     notes: z.string().nullish()
-}).strict();
-
-/**
- * ScannedCalibrationCheckRequest
- */
-export const zScannedCalibrationCheckRequest = z.object({
-    scan_id: z.uuid(),
-    files: z.array(zConfirmedFile).min(1),
-    defaults: zImportDefaults.nullish(),
-    calibration_defaults: zCalibrationPatch.nullish(),
-    limit: z.int().gte(1).lte(200).optional().default(50),
-    offset: z.int().gte(0).optional().default(0)
 }).strict();
 
 /**
@@ -3689,7 +3906,11 @@ export const zNodeDefinition = z.object({
     inputs: z.array(zNodePort),
     outputs: z.array(zNodePort),
     parameters: z.array(zParameterDefinition),
-    execution: zSoftwareBinding
+    execution: zSoftwareBinding,
+    localizations: z.object({
+        en: zNodeLocalization.optional(),
+        zh: zNodeLocalization.optional()
+    }).strict().optional()
 }).strict();
 
 /**
@@ -3751,6 +3972,8 @@ export const zSoftwareInputDefinition = z.object({
     data_kind: z.enum([
         'image',
         'sequence',
+        'video',
+        'analysis',
         'file'
     ]).optional().default('image'),
     colour_layout: z.enum(['planar', 'interleaved']).nullish()
@@ -3819,7 +4042,12 @@ export const zSoftwareCallResult = z.object({
     ports: z.array(zRunOutputPort),
     preview_error: z.string().nullable(),
     observation: zSoftwareObservation.nullable(),
-    error: zErrorDetail.nullable()
+    error: zErrorDetail.nullable(),
+    input_token: z.string().nullish(),
+    editor_values: z.record(z.string(), z.union([
+        zPixelSelection,
+        z.array(z.tuple([z.number(), z.number()]))
+    ])).optional()
 }).strict();
 
 /**
@@ -3839,13 +4067,22 @@ export const zSoftwareOutputDefinition = z.object({
     ])),
     cardinality: z.enum(['one', 'many']),
     required: z.boolean().optional().default(true),
-    colour_layout: z.enum(['planar', 'interleaved']).nullish()
+    colour_layout: z.enum(['planar', 'interleaved']).nullish(),
+    data_kind: z.enum([
+        'image',
+        'sequence',
+        'video',
+        'analysis',
+        'file'
+    ]).nullish(),
+    role: z.string().nullish()
 }).strict();
 
 /**
  * SoftwareOperation
  */
 export const zSoftwareOperation = z.object({
+    calibration_effect: zCalibrationEffect.optional(),
     package_id: z.string(),
     version: z.string(),
     operation_id: z.string(),
@@ -4073,6 +4310,8 @@ export const zStandaloneDestination = z.object({
  * ExplicitImportRequest
  */
 export const zExplicitImportRequest = z.object({
+    project_id: z.uuid().nullish(),
+    project_base_revision: z.int().gte(1).nullish(),
     request_id: z.uuid(),
     scan_id: z.uuid(),
     files: z.array(zConfirmedFile).min(1),
@@ -4082,16 +4321,34 @@ export const zExplicitImportRequest = z.object({
         zAppendDatasetDestination
     ]),
     defaults: zImportDefaults.optional(),
-    calibration_defaults: zCalibrationPatch.optional(),
-    incoming_calibration: zCalibrationPatch.optional(),
-    storage_mode: z.enum(['managed', 'reference']).optional().default('managed'),
+    calibration: zCalibrationPatch.optional(),
+    storage_mode: z.literal('managed').optional().default('managed'),
     accept_unknown: z.boolean().optional().default(false)
+}).strict();
+
+/**
+ * ScannedCalibrationCheckRequest
+ */
+export const zScannedCalibrationCheckRequest = z.object({
+    scan_id: z.uuid(),
+    files: z.array(zConfirmedFile).min(1),
+    defaults: zImportDefaults.nullish(),
+    calibration: zCalibrationPatch.nullish(),
+    destination: z.discriminatedUnion('mode', [
+        zStandaloneDestination,
+        zNewDatasetDestination,
+        zAppendDatasetDestination
+    ]).nullish(),
+    limit: z.int().gte(1).lte(200).optional().default(50),
+    offset: z.int().gte(0).optional().default(0)
 }).strict();
 
 /**
  * TaskItemOut
  */
 export const zTaskItemOut = z.object({
+    dataset_id: z.uuid().nullish(),
+    dataset_name: z.string().nullish(),
     id: z.uuid(),
     task_id: z.uuid(),
     root_item_id: z.uuid(),
@@ -4104,7 +4361,6 @@ export const zTaskItemOut = z.object({
     metadata_status: z.string(),
     preview_status: z.string(),
     asset_id: z.uuid().nullable(),
-    asset_version_id: z.uuid().nullable(),
     error: z.record(z.string(), z.unknown()).nullable(),
     created_at: z.iso.datetime({ offset: true }),
     updated_at: z.iso.datetime({ offset: true })
@@ -4249,13 +4505,190 @@ export const zImportDefaultsSnapshot = z.object({
  * ImportProvenance
  */
 export const zImportProvenance = z.object({
+    calibration_status: z.enum([
+        'UnCalibrated',
+        'Calibrated',
+        'Unknown'
+    ]).optional().default('Unknown'),
+    calibration_evidence: z.record(z.string(), zJsonValue).optional(),
     value_sources: z.record(z.string(), z.enum([
         'manual',
         'file',
+        'equipment',
         'unknown'
     ])).optional(),
     observed_parameters: z.record(z.string(), zJsonValue).optional(),
     defaults_snapshot: zImportDefaultsSnapshot.optional()
+}).strict();
+
+/**
+ * CaptureSnapshot
+ */
+export const zCaptureSnapshot = z.object({
+    image_metadata: z.record(z.string(), zJsonValue).nullish(),
+    parameters: zAssetParametersPatch.optional(),
+    classification: zAssetClassification.optional(),
+    equipment_snapshot: zEquipmentSnapshots.optional(),
+    import_provenance: zImportProvenance.nullish()
+}).strict();
+
+/**
+ * AssetOut
+ */
+export const zAssetOut = z.object({
+    calibration_status: z.enum([
+        'UnCalibrated',
+        'Calibrated',
+        'Unknown'
+    ]),
+    calibration_evidence: z.record(z.string(), zJsonValue).optional(),
+    in_trash: z.boolean().optional().default(false),
+    dataset_id: z.uuid().nullish(),
+    dataset_name: z.string().nullish(),
+    id: z.uuid(),
+    name: z.string(),
+    scope: z.enum(['shared', 'project']),
+    owner_project_id: z.uuid().nullable(),
+    role: z.enum([
+        'raw',
+        'calibration',
+        'intermediate',
+        'final'
+    ]),
+    calibration_level: z.enum(['individual', 'master']).nullable(),
+    classification: zAssetClassification,
+    parameters: zAssetParametersPatch,
+    equipment_snapshot: zEquipmentSnapshots,
+    value_sources: z.record(z.string(), z.enum([
+        'manual',
+        'file',
+        'equipment',
+        'unknown'
+    ])),
+    notes: z.string().nullable(),
+    status: z.enum(['active', 'archived']),
+    revision: z.int(),
+    view_base: z.string(),
+    storage_mode: z.enum(['reference', 'managed']),
+    storage_location: z.string(),
+    byte_size: z.int().nullable(),
+    content_hash: z.string().nullable(),
+    availability: z.enum([
+        'unknown',
+        'available',
+        'changed',
+        'missing'
+    ]),
+    capture_snapshot: zCaptureSnapshot.nullable(),
+    scientific_metadata: z.record(z.string(), zJsonValue).nullable(),
+    created_at: z.iso.datetime({ offset: true })
+}).strict();
+
+/**
+ * AssetPage
+ */
+export const zAssetPage = z.object({
+    total: z.int().gte(0),
+    limit: z.int().gte(1),
+    offset: z.int().gte(0),
+    items: z.array(zAssetOut)
+}).strict();
+
+/**
+ * DatasetMemberOut
+ */
+export const zDatasetMemberOut = z.object({
+    id: z.uuid(),
+    dataset_id: z.uuid(),
+    asset_id: z.uuid(),
+    position: z.int(),
+    relative_path: z.string().nullable(),
+    asset: zAssetOut
+}).strict();
+
+/**
+ * DatasetImageMember
+ */
+export const zDatasetImageMember = z.object({
+    member: zDatasetMemberOut,
+    metadata: zImageMetadata
+}).strict();
+
+/**
+ * DatasetImageMemberPage
+ */
+export const zDatasetImageMemberPage = z.object({
+    total: z.int().gte(0),
+    limit: z.int().gte(1),
+    offset: z.int().gte(0),
+    items: z.array(zDatasetImageMember)
+}).strict();
+
+/**
+ * DatasetMemberPage
+ */
+export const zDatasetMemberPage = z.object({
+    total: z.int().gte(0),
+    limit: z.int().gte(1),
+    offset: z.int().gte(0),
+    items: z.array(zDatasetMemberOut)
+}).strict();
+
+/**
+ * DatasetMemberParametersUpdateOut
+ */
+export const zDatasetMemberParametersUpdateOut = z.object({
+    dataset_id: z.uuid(),
+    revision: z.int(),
+    assets: z.array(zAssetOut)
+}).strict();
+
+/**
+ * ImageDetail
+ */
+export const zImageDetail = z.object({
+    asset: zAssetOut,
+    metadata: zImageMetadata,
+    equipment_context: zImportDefaultsSnapshot.nullish()
+}).strict();
+
+/**
+ * ImageBatchResult
+ */
+export const zImageBatchResult = z.object({
+    items: z.array(zImageDetail)
+}).strict();
+
+/**
+ * ImagePage
+ */
+export const zImagePage = z.object({
+    total: z.int().gte(0),
+    limit: z.int().gte(1),
+    offset: z.int().gte(0),
+    items: z.array(zImageDetail)
+}).strict();
+
+/**
+ * ProjectAssetReferenceOut
+ */
+export const zProjectAssetReferenceOut = z.object({
+    id: z.uuid(),
+    project_id: z.uuid(),
+    asset_id: z.uuid(),
+    view_base: z.string(),
+    added_at: z.iso.datetime({ offset: true }),
+    asset: zAssetOut
+}).strict();
+
+/**
+ * ProjectAssetReferencePage
+ */
+export const zProjectAssetReferencePage = z.object({
+    total: z.int().gte(0),
+    limit: z.int().gte(1),
+    offset: z.int().gte(0),
+    items: z.array(zProjectAssetReferenceOut)
 }).strict();
 
 /**
@@ -4401,8 +4834,7 @@ export const zTelescopePatch = z.object({
  */
 export const zThumbnailAssetTarget = z.object({
     kind: z.literal('asset'),
-    asset_id: z.uuid(),
-    asset_version_id: z.uuid()
+    asset_id: z.uuid()
 }).strict();
 
 /**
@@ -4410,8 +4842,8 @@ export const zThumbnailAssetTarget = z.object({
  */
 export const zThumbnailBatchItemOut = z.object({
     id: z.uuid(),
-    asset_version_id: z.uuid().nullable(),
-    dataset_version_id: z.uuid().nullable(),
+    asset_id: z.uuid().nullable(),
+    dataset_id: z.uuid().nullable(),
     position: z.int(),
     status: z.enum([
         'queued',
@@ -4429,16 +4861,15 @@ export const zThumbnailBatchItemOut = z.object({
  */
 export const zThumbnailDatasetTarget = z.object({
     kind: z.literal('dataset'),
-    dataset_id: z.uuid(),
-    dataset_version_id: z.uuid()
+    dataset_id: z.uuid()
 }).strict();
 
 /**
  * ThumbnailGroupFailure
  */
 export const zThumbnailGroupFailure = z.object({
-    dataset_version_id: z.uuid(),
-    reference_asset_version_id: z.uuid(),
+    dataset_id: z.uuid(),
+    reference_asset_id: z.uuid(),
     code: z.literal('FIRST_FRAME_UNAVAILABLE'),
     error: z.string()
 }).strict();
@@ -4510,12 +4941,27 @@ export const zUploadFile = z.object({
  * UploadImportCreate
  */
 export const zUploadImportCreate = z.object({
+    calibration_status: z.enum([
+        'UnCalibrated',
+        'Calibrated',
+        'Unknown'
+    ]).optional().default('Unknown'),
+    calibration_reason: z.string().min(1).nullish(),
+    request_id: z.uuid().nullish(),
+    mode: z.enum([
+        'standalone',
+        'new_dataset',
+        'append_dataset'
+    ]).optional().default('standalone'),
+    target_dataset_id: z.uuid().nullish(),
+    dataset_base_revision: z.int().gte(1).nullish(),
+    project_id: z.uuid().nullish(),
+    project_base_revision: z.int().gte(1).nullish(),
     files: z.array(zUploadFile).min(1),
     classification: zAssetClassification.optional(),
     parameters: zAssetParameters.optional(),
     notes: z.string().nullish(),
     dataset_name: z.string().nullish(),
-    create_dataset: z.boolean().optional().default(false),
     equipment: zEquipmentApplication.nullish()
 }).strict();
 
@@ -4524,252 +4970,6 @@ export const zUploadImportCreate = z.object({
  */
 export const zUploadReceipt = z.object({
     received: z.int().gte(0)
-}).strict();
-
-/**
- * VersionCaptureSnapshot
- */
-export const zVersionCaptureSnapshot = z.object({
-    image_metadata: z.record(z.string(), zJsonValue).nullish(),
-    parameters: zAssetParametersPatch.optional(),
-    classification: zAssetClassification.optional(),
-    equipment_snapshot: zEquipmentSnapshots.optional(),
-    import_provenance: zImportProvenance.nullish()
-}).strict();
-
-/**
- * AssetVersionOut
- */
-export const zAssetVersionOut = z.object({
-    id: z.uuid(),
-    asset_id: z.uuid(),
-    view_base: z.string(),
-    version_number: z.int(),
-    storage_mode: z.enum(['reference', 'managed']),
-    storage_location: z.string(),
-    byte_size: z.int().nullable(),
-    content_hash: z.string().nullable(),
-    availability: z.enum([
-        'unknown',
-        'available',
-        'changed',
-        'missing'
-    ]),
-    camera_id: z.uuid().nullable(),
-    optical_system_id: z.uuid().nullable(),
-    filter_id: z.uuid().nullable(),
-    frame_type: z.enum([
-        'light',
-        'bias',
-        'dark',
-        'flat',
-        'dark_flat'
-    ]).nullable(),
-    calibration_level: z.enum(['individual', 'master']).nullable(),
-    capture_snapshot: zVersionCaptureSnapshot.nullable(),
-    scientific_metadata: z.record(z.string(), zJsonValue).nullable(),
-    created_at: z.iso.datetime({ offset: true })
-}).strict();
-
-/**
- * AssetOut
- */
-export const zAssetOut = z.object({
-    id: z.uuid(),
-    name: z.string(),
-    scope: z.enum(['shared', 'project']),
-    owner_project_id: z.uuid().nullable(),
-    role: z.enum([
-        'raw',
-        'calibration',
-        'intermediate',
-        'final'
-    ]),
-    calibration_level: z.enum(['individual', 'master']).nullable(),
-    current_version_id: z.uuid().nullable(),
-    classification: zAssetClassification,
-    parameters: zAssetParametersPatch,
-    equipment_snapshot: zEquipmentSnapshots,
-    value_sources: z.record(z.string(), z.enum([
-        'manual',
-        'file',
-        'unknown'
-    ])),
-    notes: z.string().nullable(),
-    status: z.enum(['active', 'archived']),
-    revision: z.int(),
-    created_at: z.iso.datetime({ offset: true }),
-    current_version: zAssetVersionOut.nullable()
-}).strict();
-
-/**
- * AssetPage
- */
-export const zAssetPage = z.object({
-    total: z.int().gte(0),
-    limit: z.int().gte(1),
-    offset: z.int().gte(0),
-    items: z.array(zAssetOut)
-}).strict();
-
-/**
- * AssetVersionPage
- */
-export const zAssetVersionPage = z.object({
-    total: z.int().gte(0),
-    limit: z.int().gte(1),
-    offset: z.int().gte(0),
-    items: z.array(zAssetVersionOut)
-}).strict();
-
-/**
- * DatasetMemberOut
- */
-export const zDatasetMemberOut = z.object({
-    id: z.uuid(),
-    dataset_version_id: z.uuid(),
-    asset_version_id: z.uuid(),
-    position: z.int(),
-    relative_path: z.string().nullable(),
-    calibration_overrides: z.object({
-        bias: z.union([
-            zCalibrationTarget,
-            zCalibrationUnconfigured
-        ]).nullish(),
-        dark: z.union([
-            zCalibrationTarget,
-            zCalibrationUnconfigured
-        ]).nullish(),
-        flat: z.union([
-            zCalibrationTarget,
-            zCalibrationUnconfigured
-        ]).nullish(),
-        dark_flat: z.union([
-            zCalibrationTarget,
-            zCalibrationUnconfigured
-        ]).nullish()
-    }).strict().optional(),
-    calibration_projection: zLibraryCalibrationProjection.nullish(),
-    asset: zAssetOut,
-    version: zAssetVersionOut
-}).strict();
-
-/**
- * DatasetImageMember
- */
-export const zDatasetImageMember = z.object({
-    member: zDatasetMemberOut,
-    metadata: zImageMetadata
-}).strict();
-
-/**
- * DatasetImageMemberPage
- */
-export const zDatasetImageMemberPage = z.object({
-    total: z.int().gte(0),
-    limit: z.int().gte(1),
-    offset: z.int().gte(0),
-    items: z.array(zDatasetImageMember)
-}).strict();
-
-/**
- * DatasetMemberPage
- */
-export const zDatasetMemberPage = z.object({
-    total: z.int().gte(0),
-    limit: z.int().gte(1),
-    offset: z.int().gte(0),
-    items: z.array(zDatasetMemberOut)
-}).strict();
-
-/**
- * DatasetMemberParametersUpdateOut
- */
-export const zDatasetMemberParametersUpdateOut = z.object({
-    dataset_id: z.uuid(),
-    revision: z.int(),
-    version_id: z.uuid(),
-    assets: z.array(zAssetOut)
-}).strict();
-
-/**
- * DatasetVersionOut
- */
-export const zDatasetVersionOut = z.object({
-    id: z.uuid(),
-    dataset_id: z.uuid(),
-    version_number: z.int(),
-    created_at: z.iso.datetime({ offset: true }),
-    calibration_defaults: z.object({
-        bias: z.union([
-            zCalibrationTarget,
-            zCalibrationUnconfigured
-        ]).nullish(),
-        dark: z.union([
-            zCalibrationTarget,
-            zCalibrationUnconfigured
-        ]).nullish(),
-        flat: z.union([
-            zCalibrationTarget,
-            zCalibrationUnconfigured
-        ]).nullish(),
-        dark_flat: z.union([
-            zCalibrationTarget,
-            zCalibrationUnconfigured
-        ]).nullish()
-    }).strict().optional(),
-    members: z.array(zDatasetMemberOut),
-    exposure_summary: zExposureSummary
-}).strict();
-
-/**
- * ImageDetail
- */
-export const zImageDetail = z.object({
-    asset: zAssetOut,
-    metadata: zImageMetadata,
-    equipment_context: zImportDefaultsSnapshot.nullish(),
-    version: zAssetVersionOut.nullish()
-}).strict();
-
-/**
- * ImageBatchResult
- */
-export const zImageBatchResult = z.object({
-    items: z.array(zImageDetail)
-}).strict();
-
-/**
- * ImagePage
- */
-export const zImagePage = z.object({
-    total: z.int().gte(0),
-    limit: z.int().gte(1),
-    offset: z.int().gte(0),
-    items: z.array(zImageDetail)
-}).strict();
-
-/**
- * ProjectAssetReferenceOut
- */
-export const zProjectAssetReferenceOut = z.object({
-    id: z.uuid(),
-    project_id: z.uuid(),
-    asset_version_id: z.uuid(),
-    view_base: z.string(),
-    added_at: z.iso.datetime({ offset: true }),
-    asset: zAssetOut,
-    version: zAssetVersionOut
-}).strict();
-
-/**
- * ProjectAssetReferencePage
- */
-export const zProjectAssetReferencePage = z.object({
-    total: z.int().gte(0),
-    limit: z.int().gte(1),
-    offset: z.int().gte(0),
-    items: z.array(zProjectAssetReferenceOut)
 }).strict();
 
 /**
@@ -4929,6 +5129,11 @@ export const zRemoveLibraryEntriesApiV1LibraryItemsDeleteBody = zLibraryEntriesR
 export const zRemoveLibraryEntriesApiV1LibraryItemsDeleteResponse = zLibraryEntriesRemoveOut;
 
 export const zSearchLibraryQuery = z.object({
+    calibration_status: z.array(z.enum([
+        'UnCalibrated',
+        'Calibrated',
+        'Unknown'
+    ])).optional(),
     role: z.array(z.enum([
         'raw',
         'calibration',
@@ -5002,6 +5207,11 @@ export const zSearchLibraryResponse = zLibraryItemPage;
 export const zGetLibraryFilterOptionsResponse = zLibraryFilterOptions;
 
 export const zListLibraryAssetsQuery = z.object({
+    calibration_status: z.enum([
+        'UnCalibrated',
+        'Calibrated',
+        'Unknown'
+    ]).nullish(),
     text: z.string().nullish(),
     status: z.enum([
         'active',
@@ -5075,6 +5285,60 @@ export const zListLibraryAssetsResponse = z.union([
     zImagePage,
     zAssetPage
 ]);
+
+export const zGetLibraryLocationPath = z.object({
+    entry_type: z.enum(['asset', 'dataset']),
+    entry_id: z.uuid()
+});
+
+/**
+ * Successful Response
+ */
+export const zGetLibraryLocationResponse = zLibraryLocationOut;
+
+export const zRebuildDatasetManifestBody = zManifestRebuildRequest;
+
+export const zRebuildDatasetManifestPath = z.object({
+    dataset_id: z.uuid()
+});
+
+/**
+ * Successful Response
+ */
+export const zRebuildDatasetManifestResponse = zLibraryLocationOut;
+
+export const zOpenLibraryDirectoryPath = z.object({
+    entry_type: z.enum(['asset', 'dataset']),
+    entry_id: z.uuid()
+});
+
+/**
+ * Successful Response
+ */
+export const zOpenLibraryDirectoryResponse = zLibraryDirectoryOpened;
+
+export const zPlanLibraryOrganizationBody = zLibraryOrganizeRequest;
+
+/**
+ * Successful Response
+ */
+export const zPlanLibraryOrganizationResponse = zLibraryOrganizePlan;
+
+export const zOrganizeLibraryBody = zLibraryOrganizeExecute;
+
+/**
+ * Successful Response
+ */
+export const zOrganizeLibraryResponse = zLibraryOrganizeReceipt;
+
+export const zGetLibraryOrganizationPath = z.object({
+    request_id: z.uuid()
+});
+
+/**
+ * Successful Response
+ */
+export const zGetLibraryOrganizationResponse = zLibraryOrganizeReceipt;
 
 export const zCanvasDataApiV1LibraryCanvasDataPostBody = zCanvasDataRequest;
 
@@ -5334,10 +5598,6 @@ export const zGetImageDetailPath = z.object({
     asset_id: z.uuid()
 });
 
-export const zGetImageDetailQuery = z.object({
-    version_id: z.uuid().nullish()
-});
-
 /**
  * Successful Response
  */
@@ -5358,12 +5618,7 @@ export const zApplyImageEquipmentBody = zImageEquipmentApply;
 export const zApplyImageEquipmentResponse = zImageBatchResult;
 
 export const zGetMasterProvenancePath = z.object({
-    asset_id: z.uuid(),
-    version_id: z.uuid()
-});
-
-export const zGetMasterProvenanceQuery = z.object({
-    provenance_version_id: z.uuid().nullish()
+    asset_id: z.uuid()
 });
 
 /**
@@ -5374,8 +5629,7 @@ export const zGetMasterProvenanceResponse = zMasterProvenanceOut;
 export const zUpdateMasterProvenanceBody = zMasterProvenanceUpdate;
 
 export const zUpdateMasterProvenancePath = z.object({
-    asset_id: z.uuid(),
-    version_id: z.uuid()
+    asset_id: z.uuid()
 });
 
 /**
@@ -5385,10 +5639,6 @@ export const zUpdateMasterProvenanceResponse = zMasterProvenanceOut;
 
 export const zGetImageDatasetDetailPath = z.object({
     dataset_id: z.uuid()
-});
-
-export const zGetImageDatasetDetailQuery = z.object({
-    version_id: z.uuid().nullish()
 });
 
 /**
@@ -5429,12 +5679,7 @@ export const zCheckImportCalibrationBody = zScannedCalibrationCheckRequest;
 export const zCheckImportCalibrationResponse = zScannedCalibrationCheckPage;
 
 export const zGetImageCalibrationPath = z.object({
-    asset_id: z.uuid(),
-    asset_version_id: z.uuid()
-});
-
-export const zGetImageCalibrationQuery = z.object({
-    binding_version_id: z.uuid().nullish()
+    asset_id: z.uuid()
 });
 
 /**
@@ -5445,8 +5690,7 @@ export const zGetImageCalibrationResponse = zImageCalibrationOut;
 export const zUpdateImageCalibrationBody = zImageCalibrationUpdate;
 
 export const zUpdateImageCalibrationPath = z.object({
-    asset_id: z.uuid(),
-    asset_version_id: z.uuid()
+    asset_id: z.uuid()
 });
 
 /**
@@ -5455,43 +5699,24 @@ export const zUpdateImageCalibrationPath = z.object({
 export const zUpdateImageCalibrationResponse = zImageOperationOut;
 
 export const zGetDatasetCalibrationPath = z.object({
-    dataset_id: z.uuid(),
-    version_id: z.uuid()
-});
-
-export const zGetDatasetCalibrationQuery = z.object({
-    member_asset_version_ids: z.array(z.uuid()).nullish(),
-    limit: z.int().gte(1).lte(200).optional().default(50),
-    offset: z.int().gte(0).optional().default(0),
-    combination_key: z.string().nullish()
-});
-
-/**
- * Successful Response
- */
-export const zGetDatasetCalibrationResponse = zDatasetCalibrationPage;
-
-export const zUpdateDatasetCalibrationDefaultsBody = zDatasetCalibrationUpdate;
-
-export const zUpdateDatasetCalibrationDefaultsPath = z.object({
     dataset_id: z.uuid()
 });
 
 /**
  * Successful Response
  */
-export const zUpdateDatasetCalibrationDefaultsResponse = zImageOperationOut;
+export const zGetDatasetCalibrationResponse = zDatasetCalibrationOut;
 
-export const zUpdateDatasetCalibrationMembersBody = zDatasetMemberCalibrationUpdate;
+export const zUpdateDatasetCalibrationBody = zDatasetCalibrationUpdate;
 
-export const zUpdateDatasetCalibrationMembersPath = z.object({
+export const zUpdateDatasetCalibrationPath = z.object({
     dataset_id: z.uuid()
 });
 
 /**
  * Successful Response
  */
-export const zUpdateDatasetCalibrationMembersResponse = zImageOperationOut;
+export const zUpdateDatasetCalibrationResponse = zImageOperationOut;
 
 export const zGetCalibrationOperationPath = z.object({
     request_id: z.uuid()
@@ -5509,8 +5734,7 @@ export const zCancelMediaConsumerApiV1ProjectsProjectIdAssetReferencesReferenceI
 });
 
 export const zCancelMediaConsumerApiV1ProjectsProjectIdAssetReferencesReferenceIdPreviewsViewerConsumerConsumerIdDeleteQuery = z.object({
-    asset_id: z.uuid().nullish(),
-    version_id: z.uuid().nullish()
+    asset_id: z.uuid().nullish()
 });
 
 /**
@@ -5518,13 +5742,12 @@ export const zCancelMediaConsumerApiV1ProjectsProjectIdAssetReferencesReferenceI
  */
 export const zCancelMediaConsumerApiV1ProjectsProjectIdAssetReferencesReferenceIdPreviewsViewerConsumerConsumerIdDeleteResponse = z.void();
 
-export const zCancelMediaConsumerApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsViewerConsumerConsumerIdDeletePath = z.object({
+export const zCancelMediaConsumerApiV1LibraryAssetsAssetIdPreviewsViewerConsumerConsumerIdDeletePath = z.object({
     consumer_id: z.uuid(),
-    asset_id: z.uuid().nullable(),
-    version_id: z.uuid().nullable()
+    asset_id: z.uuid().nullable()
 });
 
-export const zCancelMediaConsumerApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsViewerConsumerConsumerIdDeleteQuery = z.object({
+export const zCancelMediaConsumerApiV1LibraryAssetsAssetIdPreviewsViewerConsumerConsumerIdDeleteQuery = z.object({
     project_id: z.uuid().nullish(),
     reference_id: z.uuid().nullish()
 });
@@ -5532,7 +5755,7 @@ export const zCancelMediaConsumerApiV1LibraryAssetsAssetIdVersionsVersionIdPrevi
 /**
  * Successful Response
  */
-export const zCancelMediaConsumerApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsViewerConsumerConsumerIdDeleteResponse = z.void();
+export const zCancelMediaConsumerApiV1LibraryAssetsAssetIdPreviewsViewerConsumerConsumerIdDeleteResponse = z.void();
 
 export const zPrepareMediaApiV1ProjectsProjectIdAssetReferencesReferenceIdPreviewsViewerPostBody = zMediaSelection;
 
@@ -5542,8 +5765,7 @@ export const zPrepareMediaApiV1ProjectsProjectIdAssetReferencesReferenceIdPrevie
 });
 
 export const zPrepareMediaApiV1ProjectsProjectIdAssetReferencesReferenceIdPreviewsViewerPostQuery = z.object({
-    asset_id: z.uuid().nullish(),
-    version_id: z.uuid().nullish()
+    asset_id: z.uuid().nullish()
 });
 
 /**
@@ -5551,14 +5773,13 @@ export const zPrepareMediaApiV1ProjectsProjectIdAssetReferencesReferenceIdPrevie
  */
 export const zPrepareMediaApiV1ProjectsProjectIdAssetReferencesReferenceIdPreviewsViewerPostResponse = zMediaState;
 
-export const zPrepareMediaApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsViewerPostBody = zMediaSelection;
+export const zPrepareMediaApiV1LibraryAssetsAssetIdPreviewsViewerPostBody = zMediaSelection;
 
-export const zPrepareMediaApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsViewerPostPath = z.object({
-    asset_id: z.uuid().nullable(),
-    version_id: z.uuid().nullable()
+export const zPrepareMediaApiV1LibraryAssetsAssetIdPreviewsViewerPostPath = z.object({
+    asset_id: z.uuid().nullable()
 });
 
-export const zPrepareMediaApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsViewerPostQuery = z.object({
+export const zPrepareMediaApiV1LibraryAssetsAssetIdPreviewsViewerPostQuery = z.object({
     project_id: z.uuid().nullish(),
     reference_id: z.uuid().nullish()
 });
@@ -5566,7 +5787,7 @@ export const zPrepareMediaApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsView
 /**
  * Successful Response
  */
-export const zPrepareMediaApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsViewerPostResponse = zMediaState;
+export const zPrepareMediaApiV1LibraryAssetsAssetIdPreviewsViewerPostResponse = zMediaState;
 
 export const zMediaStatusApiV1ProjectsProjectIdAssetReferencesReferenceIdPreviewsViewerKeyStatusGetPath = z.object({
     key: z.string(),
@@ -5575,8 +5796,7 @@ export const zMediaStatusApiV1ProjectsProjectIdAssetReferencesReferenceIdPreview
 });
 
 export const zMediaStatusApiV1ProjectsProjectIdAssetReferencesReferenceIdPreviewsViewerKeyStatusGetQuery = z.object({
-    asset_id: z.uuid().nullish(),
-    version_id: z.uuid().nullish()
+    asset_id: z.uuid().nullish()
 });
 
 /**
@@ -5584,13 +5804,12 @@ export const zMediaStatusApiV1ProjectsProjectIdAssetReferencesReferenceIdPreview
  */
 export const zMediaStatusApiV1ProjectsProjectIdAssetReferencesReferenceIdPreviewsViewerKeyStatusGetResponse = zMediaState;
 
-export const zMediaStatusApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsViewerKeyStatusGetPath = z.object({
+export const zMediaStatusApiV1LibraryAssetsAssetIdPreviewsViewerKeyStatusGetPath = z.object({
     key: z.string(),
-    asset_id: z.uuid().nullable(),
-    version_id: z.uuid().nullable()
+    asset_id: z.uuid().nullable()
 });
 
-export const zMediaStatusApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsViewerKeyStatusGetQuery = z.object({
+export const zMediaStatusApiV1LibraryAssetsAssetIdPreviewsViewerKeyStatusGetQuery = z.object({
     project_id: z.uuid().nullish(),
     reference_id: z.uuid().nullish()
 });
@@ -5598,7 +5817,7 @@ export const zMediaStatusApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsViewe
 /**
  * Successful Response
  */
-export const zMediaStatusApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsViewerKeyStatusGetResponse = zMediaState;
+export const zMediaStatusApiV1LibraryAssetsAssetIdPreviewsViewerKeyStatusGetResponse = zMediaState;
 
 export const zMediaTileApiV1ProjectsProjectIdAssetReferencesReferenceIdPreviewsViewerKeyTilesLevelXyGetPath = z.object({
     key: z.string(),
@@ -5610,8 +5829,7 @@ export const zMediaTileApiV1ProjectsProjectIdAssetReferencesReferenceIdPreviewsV
 });
 
 export const zMediaTileApiV1ProjectsProjectIdAssetReferencesReferenceIdPreviewsViewerKeyTilesLevelXyGetQuery = z.object({
-    asset_id: z.uuid().nullish(),
-    version_id: z.uuid().nullish()
+    asset_id: z.uuid().nullish()
 });
 
 /**
@@ -5619,16 +5837,15 @@ export const zMediaTileApiV1ProjectsProjectIdAssetReferencesReferenceIdPreviewsV
  */
 export const zMediaTileApiV1ProjectsProjectIdAssetReferencesReferenceIdPreviewsViewerKeyTilesLevelXyGetResponse = z.instanceof(Blob);
 
-export const zMediaTileApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsViewerKeyTilesLevelXyGetPath = z.object({
+export const zMediaTileApiV1LibraryAssetsAssetIdPreviewsViewerKeyTilesLevelXyGetPath = z.object({
     key: z.string(),
     level: z.int(),
     x: z.int(),
     y: z.int(),
-    asset_id: z.uuid().nullable(),
-    version_id: z.uuid().nullable()
+    asset_id: z.uuid().nullable()
 });
 
-export const zMediaTileApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsViewerKeyTilesLevelXyGetQuery = z.object({
+export const zMediaTileApiV1LibraryAssetsAssetIdPreviewsViewerKeyTilesLevelXyGetQuery = z.object({
     project_id: z.uuid().nullish(),
     reference_id: z.uuid().nullish()
 });
@@ -5636,7 +5853,7 @@ export const zMediaTileApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsViewerK
 /**
  * Successful Response
  */
-export const zMediaTileApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsViewerKeyTilesLevelXyGetResponse = z.instanceof(Blob);
+export const zMediaTileApiV1LibraryAssetsAssetIdPreviewsViewerKeyTilesLevelXyGetResponse = z.instanceof(Blob);
 
 export const zMediaFileApiV1ProjectsProjectIdAssetReferencesReferenceIdPreviewsViewerKeyFileGetPath = z.object({
     key: z.string(),
@@ -5646,8 +5863,7 @@ export const zMediaFileApiV1ProjectsProjectIdAssetReferencesReferenceIdPreviewsV
 });
 
 export const zMediaFileApiV1ProjectsProjectIdAssetReferencesReferenceIdPreviewsViewerKeyFileGetQuery = z.object({
-    asset_id: z.uuid().nullish(),
-    version_id: z.uuid().nullish()
+    asset_id: z.uuid().nullish()
 });
 
 /**
@@ -5655,14 +5871,13 @@ export const zMediaFileApiV1ProjectsProjectIdAssetReferencesReferenceIdPreviewsV
  */
 export const zMediaFileApiV1ProjectsProjectIdAssetReferencesReferenceIdPreviewsViewerKeyFileGetResponse = z.instanceof(Blob);
 
-export const zMediaFileApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsViewerKeyFileGetPath = z.object({
+export const zMediaFileApiV1LibraryAssetsAssetIdPreviewsViewerKeyFileGetPath = z.object({
     key: z.string(),
     file: z.string(),
-    asset_id: z.uuid().nullable(),
-    version_id: z.uuid().nullable()
+    asset_id: z.uuid().nullable()
 });
 
-export const zMediaFileApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsViewerKeyFileGetQuery = z.object({
+export const zMediaFileApiV1LibraryAssetsAssetIdPreviewsViewerKeyFileGetQuery = z.object({
     project_id: z.uuid().nullish(),
     reference_id: z.uuid().nullish()
 });
@@ -5670,7 +5885,7 @@ export const zMediaFileApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsViewerK
 /**
  * Successful Response
  */
-export const zMediaFileApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsViewerKeyFileGetResponse = z.instanceof(Blob);
+export const zMediaFileApiV1LibraryAssetsAssetIdPreviewsViewerKeyFileGetResponse = z.instanceof(Blob);
 
 export const zCreateThumbnailBatchApiV1ThumbnailBatchesPostBody = zThumbnailBatchCreate;
 
@@ -5704,46 +5919,42 @@ export const zRetryThumbnailBatchApiV1ThumbnailBatchesRequestIdRetryPostPath = z
  */
 export const zRetryThumbnailBatchApiV1ThumbnailBatchesRequestIdRetryPostResponse = zThumbnailBatchOut;
 
-export const zGetDatasetMemberThumbnailApiV1DatasetsVersionsMembersThumbnailGetPath = z.object({
+export const zGetDatasetMemberThumbnailApiV1DatasetsMembersThumbnailGetPath = z.object({
     dataset_id: z.uuid(),
-    dataset_version_id: z.uuid(),
-    asset_version_id: z.uuid()
+    asset_id: z.uuid()
 });
 
 /**
  * Successful Response
  */
-export const zGetDatasetMemberThumbnailApiV1DatasetsVersionsMembersThumbnailGetResponse = z.instanceof(Blob);
+export const zGetDatasetMemberThumbnailApiV1DatasetsMembersThumbnailGetResponse = z.instanceof(Blob);
 
-export const zRequestDisplayApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsDisplayPostPath = z.object({
-    asset_id: z.uuid(),
-    version_id: z.uuid()
+export const zRequestDisplayApiV1LibraryAssetsAssetIdPreviewsDisplayPostPath = z.object({
+    asset_id: z.uuid()
 });
 
 /**
  * Successful Response
  */
-export const zRequestDisplayApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsDisplayPostResponse = zDisplayPreviewState;
+export const zRequestDisplayApiV1LibraryAssetsAssetIdPreviewsDisplayPostResponse = zDisplayPreviewState;
 
-export const zDisplayStatusApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsDisplayStatusGetPath = z.object({
-    asset_id: z.uuid(),
-    version_id: z.uuid()
+export const zDisplayStatusApiV1LibraryAssetsAssetIdPreviewsDisplayStatusGetPath = z.object({
+    asset_id: z.uuid()
 });
 
 /**
  * Successful Response
  */
-export const zDisplayStatusApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsDisplayStatusGetResponse = zDisplayPreviewState;
+export const zDisplayStatusApiV1LibraryAssetsAssetIdPreviewsDisplayStatusGetResponse = zDisplayPreviewState;
 
-export const zAutoStretchApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsDisplayAutoStretchPostPath = z.object({
-    asset_id: z.uuid(),
-    version_id: z.uuid()
+export const zAutoStretchApiV1LibraryAssetsAssetIdPreviewsDisplayAutoStretchPostPath = z.object({
+    asset_id: z.uuid()
 });
 
 /**
  * Successful Response
  */
-export const zAutoStretchApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsDisplayAutoStretchPostResponse = zDisplayPreviewState;
+export const zAutoStretchApiV1LibraryAssetsAssetIdPreviewsDisplayAutoStretchPostResponse = zDisplayPreviewState;
 
 export const zRequestProjectDisplayApiV1ProjectsProjectIdAssetReferencesReferenceIdPreviewsDisplayPostPath = z.object({
     project_id: z.uuid(),
@@ -5890,17 +6101,6 @@ export const zObserveContentApiV1LibraryAssetsAssetIdContentObservationPostPath 
  * Successful Response
  */
 export const zObserveContentApiV1LibraryAssetsAssetIdContentObservationPostResponse = zAssetContentObservation;
-
-export const zAcceptContentApiV1LibraryAssetsAssetIdContentAcceptPostBody = zAssetContentAccept;
-
-export const zAcceptContentApiV1LibraryAssetsAssetIdContentAcceptPostPath = z.object({
-    asset_id: z.uuid()
-});
-
-/**
- * Successful Response
- */
-export const zAcceptContentApiV1LibraryAssetsAssetIdContentAcceptPostResponse = zAssetOut;
 
 /**
  * Successful Response
@@ -6079,7 +6279,8 @@ export const zGetImageImportRequestPath = z.object({
  */
 export const zGetImageImportRequestResponse = z.union([
     zImageImportReceipt,
-    zBatchOut
+    zBatchOut,
+    zAssetTaskOut
 ]);
 
 export const zWaitImageImportRequestBody = zImageWaitBody;
@@ -6095,7 +6296,8 @@ export const zWaitImageImportRequestPath = z.object({
  */
 export const zWaitImageImportRequestResponse = z.union([
     zImageImportReceipt,
-    zBatchOut
+    zBatchOut,
+    zAssetTaskOut
 ]);
 
 export const zCreateUploadApiV1UploadsPostBody = zUploadImportCreate;
@@ -6235,6 +6437,17 @@ export const zImportRootEntriesApiV1ImportRootsRootIdEntriesGetQuery = z.object(
  */
 export const zImportRootEntriesApiV1ImportRootsRootIdEntriesGetResponse = zImportRootEntryPage;
 
+export const zRecoverImportOrganizationBody = zImportRecovery;
+
+export const zRecoverImportOrganizationPath = z.object({
+    task_id: z.uuid()
+});
+
+/**
+ * Successful Response
+ */
+export const zRecoverImportOrganizationResponse = zImageOperationOut;
+
 export const zGetAssetApiV1LibraryAssetsAssetIdGetPath = z.object({
     asset_id: z.uuid()
 });
@@ -6266,36 +6479,11 @@ export const zPatchAssetApiV1LibraryAssetsAssetIdPatchResponse = z.union([
     zImageDetail
 ]);
 
-export const zListAssetVersionsApiV1LibraryAssetsAssetIdVersionsGetPath = z.object({
+export const zListAssetHdusApiV1LibraryAssetsAssetIdHdusGetPath = z.object({
     asset_id: z.uuid()
 });
 
-export const zListAssetVersionsApiV1LibraryAssetsAssetIdVersionsGetQuery = z.object({
-    limit: z.int().gte(1).lte(200).optional().default(50),
-    offset: z.int().gte(0).optional().default(0)
-});
-
-/**
- * Successful Response
- */
-export const zListAssetVersionsApiV1LibraryAssetsAssetIdVersionsGetResponse = zAssetVersionPage;
-
-export const zGetAssetVersionApiV1LibraryAssetsAssetIdVersionsVersionIdGetPath = z.object({
-    asset_id: z.uuid(),
-    version_id: z.uuid()
-});
-
-/**
- * Successful Response
- */
-export const zGetAssetVersionApiV1LibraryAssetsAssetIdVersionsVersionIdGetResponse = zAssetVersionOut;
-
-export const zListVersionHdusApiV1LibraryAssetsAssetIdVersionsVersionIdHdusGetPath = z.object({
-    asset_id: z.uuid(),
-    version_id: z.uuid()
-});
-
-export const zListVersionHdusApiV1LibraryAssetsAssetIdVersionsVersionIdHdusGetQuery = z.object({
+export const zListAssetHdusApiV1LibraryAssetsAssetIdHdusGetQuery = z.object({
     limit: z.int().gte(1).lte(200).optional().default(200),
     offset: z.int().gte(0).optional().default(0)
 });
@@ -6303,15 +6491,14 @@ export const zListVersionHdusApiV1LibraryAssetsAssetIdVersionsVersionIdHdusGetQu
 /**
  * Successful Response
  */
-export const zListVersionHdusApiV1LibraryAssetsAssetIdVersionsVersionIdHdusGetResponse = zFitsHduPage;
+export const zListAssetHdusApiV1LibraryAssetsAssetIdHdusGetResponse = zFitsHduPage;
 
-export const zGetVersionHeaderApiV1LibraryAssetsAssetIdVersionsVersionIdHdusHduIndexHeaderGetPath = z.object({
+export const zGetAssetHeaderApiV1LibraryAssetsAssetIdHdusHduIndexHeaderGetPath = z.object({
     asset_id: z.uuid(),
-    version_id: z.uuid(),
     hdu_index: z.int()
 });
 
-export const zGetVersionHeaderApiV1LibraryAssetsAssetIdVersionsVersionIdHdusHduIndexHeaderGetQuery = z.object({
+export const zGetAssetHeaderApiV1LibraryAssetsAssetIdHdusHduIndexHeaderGetQuery = z.object({
     keywords: z.array(z.string()).nullish(),
     limit: z.int().gte(1).lte(200).optional().default(100),
     offset: z.int().gte(0).optional().default(0),
@@ -6319,25 +6506,24 @@ export const zGetVersionHeaderApiV1LibraryAssetsAssetIdVersionsVersionIdHdusHduI
 });
 
 /**
- * Response Get Version Header Api V1 Library Assets  Asset Id  Versions  Version Id  Hdus  Hdu Index  Header Get
+ * Response Get Asset Header Api V1 Library Assets  Asset Id  Hdus  Hdu Index  Header Get
  *
  * Successful Response
  */
-export const zGetVersionHeaderApiV1LibraryAssetsAssetIdVersionsVersionIdHdusHduIndexHeaderGetResponse = z.union([
+export const zGetAssetHeaderApiV1LibraryAssetsAssetIdHdusHduIndexHeaderGetResponse = z.union([
     zImageHeaderPage,
     zFitsHeaderOut
 ]);
 
-export const zGetVersionPreviewApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsSizeGetPath = z.object({
+export const zGetAssetPreviewApiV1LibraryAssetsAssetIdPreviewsSizeGetPath = z.object({
     asset_id: z.uuid(),
-    version_id: z.uuid(),
     size: z.string()
 });
 
 /**
  * Successful Response
  */
-export const zGetVersionPreviewApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsSizeGetResponse = z.instanceof(Blob);
+export const zGetAssetPreviewApiV1LibraryAssetsAssetIdPreviewsSizeGetResponse = z.instanceof(Blob);
 
 export const zListProjectsApiV1ProjectsGetQuery = z.object({
     limit: z.int().gte(1).lte(200).optional().default(50),
@@ -6411,7 +6597,12 @@ export const zListProjectAssetsApiV1ProjectsProjectIdAssetsGetQuery = z.object({
     calibration_level: z.enum(['individual', 'master']).nullish(),
     camera_id: z.uuid().nullish(),
     optical_system_id: z.uuid().nullish(),
-    filter_id: z.uuid().nullish()
+    filter_id: z.uuid().nullish(),
+    frame_class: z.enum([
+        'subframe',
+        'masterframe',
+        'video'
+    ]).nullish()
 });
 
 /**
@@ -6515,13 +6706,12 @@ export const zAddProjectAssetReferenceApiV1ProjectsProjectIdAssetReferencesPostP
  */
 export const zAddProjectAssetReferenceApiV1ProjectsProjectIdAssetReferencesPostResponse = zProjectAssetReferenceOut;
 
-export const zListProjectReferenceHdusApiV1ProjectsProjectIdAssetReferencesReferenceIdVersionsVersionIdHdusGetPath = z.object({
+export const zListProjectReferenceHdusApiV1ProjectsProjectIdAssetReferencesReferenceIdHdusGetPath = z.object({
     project_id: z.uuid(),
-    reference_id: z.uuid(),
-    version_id: z.uuid()
+    reference_id: z.uuid()
 });
 
-export const zListProjectReferenceHdusApiV1ProjectsProjectIdAssetReferencesReferenceIdVersionsVersionIdHdusGetQuery = z.object({
+export const zListProjectReferenceHdusApiV1ProjectsProjectIdAssetReferencesReferenceIdHdusGetQuery = z.object({
     limit: z.int().gte(1).lte(200).optional().default(200),
     offset: z.int().gte(0).optional().default(0)
 });
@@ -6529,19 +6719,18 @@ export const zListProjectReferenceHdusApiV1ProjectsProjectIdAssetReferencesRefer
 /**
  * Successful Response
  */
-export const zListProjectReferenceHdusApiV1ProjectsProjectIdAssetReferencesReferenceIdVersionsVersionIdHdusGetResponse = zFitsHduPage;
+export const zListProjectReferenceHdusApiV1ProjectsProjectIdAssetReferencesReferenceIdHdusGetResponse = zFitsHduPage;
 
-export const zGetProjectReferenceHeaderApiV1ProjectsProjectIdAssetReferencesReferenceIdVersionsVersionIdHdusHduIndexHeaderGetPath = z.object({
+export const zGetProjectReferenceHeaderApiV1ProjectsProjectIdAssetReferencesReferenceIdHdusHduIndexHeaderGetPath = z.object({
     project_id: z.uuid(),
     reference_id: z.uuid(),
-    version_id: z.uuid(),
     hdu_index: z.int()
 });
 
 /**
  * Successful Response
  */
-export const zGetProjectReferenceHeaderApiV1ProjectsProjectIdAssetReferencesReferenceIdVersionsVersionIdHdusHduIndexHeaderGetResponse = zFitsHeaderOut;
+export const zGetProjectReferenceHeaderApiV1ProjectsProjectIdAssetReferencesReferenceIdHdusHduIndexHeaderGetResponse = zFitsHeaderOut;
 
 export const zGetProjectReferencePreviewApiV1ProjectsProjectIdAssetReferencesReferenceIdPreviewsSizeGetPath = z.object({
     project_id: z.uuid(),
@@ -6701,11 +6890,15 @@ export const zPatchSetupApiV1EquipmentSetupsSetupIdPatchPath = z.object({
 export const zPatchSetupApiV1EquipmentSetupsSetupIdPatchResponse = zEquipmentSetupOut;
 
 export const zListDatasetMemberSummariesPath = z.object({
-    dataset_id: z.uuid(),
-    version_id: z.uuid()
+    dataset_id: z.uuid()
 });
 
 export const zListDatasetMemberSummariesQuery = z.object({
+    calibration_status: z.array(z.enum([
+        'UnCalibrated',
+        'Calibrated',
+        'Unknown'
+    ])).optional(),
     role: z.array(z.enum([
         'raw',
         'calibration',
@@ -6777,6 +6970,11 @@ export const zListDatasetMemberSummariesQuery = z.object({
 export const zListDatasetMemberSummariesResponse = zDatasetMemberSummaryPage;
 
 export const zListDatasetsApiV1DatasetsGetQuery = z.object({
+    calibration_status: z.enum([
+        'UnCalibrated',
+        'Calibrated',
+        'Unknown'
+    ]).nullish(),
     text: z.string().nullish(),
     status: z.enum([
         'active',
@@ -6893,41 +7091,6 @@ export const zPatchDatasetApiV1DatasetsDatasetIdPatchResponse = z.union([
     zDatasetImageDetail
 ]);
 
-export const zListDatasetVersionsApiV1DatasetsDatasetIdVersionsGetPath = z.object({
-    dataset_id: z.uuid()
-});
-
-export const zListDatasetVersionsApiV1DatasetsDatasetIdVersionsGetQuery = z.object({
-    limit: z.int().gte(1).lte(200).optional().default(50),
-    offset: z.int().gte(0).optional().default(0)
-});
-
-/**
- * Successful Response
- */
-export const zListDatasetVersionsApiV1DatasetsDatasetIdVersionsGetResponse = zDatasetVersionPage;
-
-export const zCreateDatasetVersionApiV1DatasetsDatasetIdVersionsPostBody = zDatasetMembersCreate;
-
-export const zCreateDatasetVersionApiV1DatasetsDatasetIdVersionsPostPath = z.object({
-    dataset_id: z.uuid()
-});
-
-/**
- * Successful Response
- */
-export const zCreateDatasetVersionApiV1DatasetsDatasetIdVersionsPostResponse = zDatasetVersionOut;
-
-export const zGetDatasetVersionApiV1DatasetsDatasetIdVersionsVersionIdGetPath = z.object({
-    dataset_id: z.uuid(),
-    version_id: z.uuid()
-});
-
-/**
- * Successful Response
- */
-export const zGetDatasetVersionApiV1DatasetsDatasetIdVersionsVersionIdGetResponse = zDatasetVersionOut;
-
 export const zUpdateDatasetMemberParametersApiV1DatasetsDatasetIdMemberParametersPatchBody = zDatasetMemberParametersUpdate;
 
 export const zUpdateDatasetMemberParametersApiV1DatasetsDatasetIdMemberParametersPatchPath = z.object({
@@ -6940,11 +7103,15 @@ export const zUpdateDatasetMemberParametersApiV1DatasetsDatasetIdMemberParameter
 export const zUpdateDatasetMemberParametersApiV1DatasetsDatasetIdMemberParametersPatchResponse = zDatasetMemberParametersUpdateOut;
 
 export const zListDatasetMembersPath = z.object({
-    dataset_id: z.uuid(),
-    version_id: z.uuid()
+    dataset_id: z.uuid()
 });
 
 export const zListDatasetMembersQuery = z.object({
+    calibration_status: z.array(z.enum([
+        'UnCalibrated',
+        'Calibrated',
+        'Unknown'
+    ])).optional(),
     text: z.string().nullish(),
     status: z.enum([
         'active',
@@ -7038,6 +7205,17 @@ export const zListDatasetMembersResponse = z.union([
     zDatasetImageMemberPage,
     zDatasetMemberPage
 ]);
+
+export const zReplaceDatasetMembersBody = zDatasetMembersCreate;
+
+export const zReplaceDatasetMembersPath = z.object({
+    dataset_id: z.uuid()
+});
+
+/**
+ * Successful Response
+ */
+export const zReplaceDatasetMembersResponse = zDatasetOut;
 
 export const zListCalibrationTargetsApiV1CalibrationTargetsGetQuery = z.object({
     limit: z.int().gte(1).lte(200).optional().default(50),

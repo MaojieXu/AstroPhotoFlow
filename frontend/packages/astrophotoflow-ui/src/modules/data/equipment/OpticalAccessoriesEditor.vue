@@ -2,6 +2,7 @@
 import { uiT } from '../../../core/i18n'
 import type { TelescopeSpecs } from '../../../generated/api/types.gen'
 import LibraryButton from '../components/LibraryButton.vue'
+import LibraryInfo from '../components/LibraryInfo.vue'
 import LibraryInput from '../components/LibraryInput.vue'
 
 type Accessories = NonNullable<TelescopeSpecs['optical_accessories']>
@@ -25,10 +26,17 @@ function update(index: number, field: 'name' | 'factor', value: string | number 
 <template>
   <section class="apf-device-section apf-optical-accessories" :aria-label="$t('apfUi.telescope_accessories')">
     <div class="apf-accessory-heading">
-      <h3>{{ $t('apfUi.telescope_accessories') }}</h3>
+      <div class="flex items-center gap-1">
+        <h3>{{ $t('apfUi.telescope_accessories') }}</h3>
+        <LibraryInfo
+          :label="$t('apfUi.telescope_accessories')"
+          :text="accessories.length
+            ? $t('apfUi.optical_accessory_factor_help')
+            : $t('apfUi.no_optical_accessories') + '\n' + $t('apfUi.optical_accessory_factor_help')"
+        />
+      </div>
       <LibraryButton type="button" @click="add">{{ $t('apfUi.add_optical_accessory') }}</LibraryButton>
     </div>
-    <p v-if="!accessories.length">{{ $t('apfUi.no_optical_accessories') }}</p>
     <div v-if="accessories.length" class="apf-accessory-columns" aria-hidden="true">
       <span>{{ $t('apfUi.accessory_name') }}</span><span>{{ $t('apfUi.accessory_factor') }}</span><span />
     </div>
@@ -40,6 +48,5 @@ function update(index: number, field: 'name' | 'factor', value: string | number 
       </span>
       <LibraryButton type="button" class="apf-accessory-remove" :aria-label="$t('apfUi.remove')+' '+item.name" :tooltip="$t('apfUi.remove')" @click="accessories=accessories.filter((_,position)=>position!==index)"><i class="icon-[lucide--x] size-4" aria-hidden="true" /></LibraryButton>
     </div>
-    <p class="apf-device-help">{{ $t('apfUi.optical_accessory_factor_help') }}</p>
   </section>
 </template>

@@ -550,6 +550,12 @@ export const useLitegraphService = () => {
     node.category = nodeDef.category
     node.skip_list = true
     node.title = nodeDef.display_name || nodeDef.name
+    if (nodeDef.name.startsWith('APF_')) {
+      Object.defineProperty(node, 'title', {
+        configurable: true,
+        get: () => nodeDef.display_name || nodeDef.name
+      })
+    }
   }
 
   async function registerNodeDef(nodeId: string, nodeDefV1: ComfyNodeDefV1) {
@@ -657,6 +663,12 @@ export const useLitegraphService = () => {
     // because `registerNodeType` will overwrite the assignments.
     node.category = nodeDef.category
     node.title = nodeDef.display_name || nodeDef.name
+    if (nodeDef.name.startsWith('APF_')) {
+      Object.defineProperty(node, 'title', {
+        configurable: true,
+        get: () => nodeDef.display_name || nodeDef.name
+      })
+    }
 
     // Set skip_list for dev-only nodes based on current DevMode setting
     // This ensures nodes registered after initial load respect the current setting

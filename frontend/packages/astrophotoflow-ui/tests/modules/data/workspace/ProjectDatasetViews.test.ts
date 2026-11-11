@@ -26,14 +26,14 @@ describe('project and dataset views without a Workspace provider', () => {
     } finally { wrapper.unmount() }
   })
 
-  it('keeps the reference, dataset and fixed version identities distinct for preview and member access', async () => {
-    const row: DatasetReferenceRow = { recordId: id(2), datasetId: id(3), versionId: id(4), title: 'Fixed group',
+  it('keeps project reference and dataset identities distinct for preview and member access', async () => {
+    const row: DatasetReferenceRow = { recordId: id(2), datasetId: id(3), title: 'Dataset',
       projectFixed: true, classification: 'mixed', count: 52, memberCount: 52, camera: 'Camera', parameters: 'Gain 0',
       exposure: '60 s', temperature: '-10 °C', opticalSystem: 'Telescope', filter: 'Ha', storage: 'Managed', status: 'Active', notes: '—' }
     const wrapper = mount(DatasetReferenceTable, { props: { workspaceId:'/test-workspace', rows: [row], selectedId: row.recordId },
       global: { stubs: { FixedDatasetMembers: true } } })
     try {
-      expect(wrapper.getComponent(FixedDatasetMembers).props()).toMatchObject({ datasetId: id(3), versionId: id(4), count: 52 })
+      expect(wrapper.getComponent(FixedDatasetMembers).props()).toMatchObject({ datasetId: id(3), count: 52 })
       await wrapper.get('.apf-thumb').trigger('click')
       expect(wrapper.emitted('preview')).toEqual([[id(2)]])
       expect(wrapper.emitted('select')).toBeUndefined()

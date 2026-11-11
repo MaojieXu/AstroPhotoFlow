@@ -31,10 +31,10 @@ it('serializes repeated filters and numeric zero through the generated query con
   expect(url.searchParams.get('q')).toBe('M 31')
 })
 
-it('rejects invalid fixed-member identities before transport', async () => {
+it('rejects invalid dataset identities before transport', async () => {
   const fetch = vi.fn()
   await expect(
-    createLibraryClient(fetch).members('invalid', 'invalid', {
+    createLibraryClient(fetch).members('invalid', {
       limit: 1,
       offset: 0
     })

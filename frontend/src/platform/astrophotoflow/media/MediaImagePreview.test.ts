@@ -20,7 +20,7 @@ vi.mock('vue-i18n', async (original) => ({
 beforeEach(() => {
   client.release.mockResolvedValue(undefined)
   client.image.mockResolvedValue(new Blob(['preview']))
-  client.prepare.mockImplementation(async (base: string) =>
+  client.prepare.mockImplementation(async (base: string, selection: unknown) =>
     mediaStateSchema.parse({
       key: base,
       status: 'available',
@@ -30,7 +30,7 @@ beforeEach(() => {
       height: 4,
       max_level: 3,
       tile_size: 512,
-      selection: {},
+      selection,
       arrays: [],
       hdus: [],
       needs_selection: false,
@@ -62,7 +62,7 @@ it('uses the shared display consumer and opens with the actual display settings'
     expect.objectContaining({
       frame_index: 0,
       preview_max_edge: 1024,
-      display_balance: null,
+      display_balance: 'preserve',
       consumer_id: expect.any(String)
     }),
     expect.any(AbortSignal)
@@ -70,12 +70,26 @@ it('uses the shared display consumer and opens with the actual display settings'
   await fireEvent.click(
     screen.getByRole('button', { name: 'astrophotoflow.media.open' })
   )
-  expect(view.emitted().open?.[0]).toEqual([
-    { preview_max_edge: 1024, display_balance: null }
-  ])
+  expect(view.emitted().open?.[0]).toEqual([expect.objectContaining({
+    frame_index: 0, preview_max_edge: 1024, display_balance: 'preserve'
+  })])
   view.unmount()
   expect(client.release).toHaveBeenCalledTimes(1)
   expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:preview')
+})
+
+it('retries a failed overview without preparing the media or running software again', async () => {
+  client.image.mockRejectedValueOnce(new Error('Overview unavailable'))
+  render(MediaImagePreview, {
+    props: { base: '/checked/retry-overview', title: 'Recovered preview' },
+    global: { plugins: [PlatformQueryPlugin] }
+  })
+  await screen.findByText('Overview unavailable')
+  const preparations = client.prepare.mock.calls.length
+  await fireEvent.click(screen.getByRole('button', { name: 'astrophotoflow.retryPreview' }))
+  await screen.findByAltText('Recovered preview')
+  expect(client.prepare).toHaveBeenCalledTimes(preparations)
+  expect(screen.queryByText('Overview unavailable')).not.toBeInTheDocument()
 })
 it('aborts the old overview on a changed checked result and ignores its late pixels', async () => {
   let finish!: (value: Blob) => void

@@ -4,7 +4,7 @@ import { readPreviewImage } from '../../../core/api/images'
 import { zDisplayPreviewState } from '../../../generated/api/zod.gen'
 import type { DisplayPreviewState } from '../../../generated/api/types.gen'
 
-/** Preview bases may identify a fixed project reference or a library version. */
+/** Preview bases identify a project reference or a library asset. */
 export function createDisplayPreviewClient(fetchApi: FetchApi) {
   const client = createPlatformClient({
     fetchApi,

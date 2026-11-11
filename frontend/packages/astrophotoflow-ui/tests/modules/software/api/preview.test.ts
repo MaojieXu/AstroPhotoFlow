@@ -4,8 +4,8 @@ import type { BundlePreviewRequest } from '@ui/modules/software/api/preview'
 
 const body: BundlePreviewRequest = {
   reference: {
-    kind: 'asset_version',
-    asset_version_id: '00000000-0000-4000-8000-000000000001',
+    kind: 'asset',
+    asset_id: '00000000-0000-4000-8000-000000000001',
     selection: { kind: 'whole_file' }
   },
   consumer_id: '00000000-0000-4000-8000-000000000002',

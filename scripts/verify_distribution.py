@@ -151,7 +151,7 @@ from importlib.resources import files
 from pathlib import Path
 import sys
 import astrophotoflow
-from astrophotoflow.core.database.schema import SCHEMA_REVISION, upgrade_database, current_revision
+from astrophotoflow.core.database.schema import SCHEMA_REVISION, initialize_database, current_revision
 from astrophotoflow.core.config import Settings
 from astrophotoflow.modules.software.public import get_command_catalog
 import astrophotoflow.comfyui
@@ -177,9 +177,11 @@ from astrophotoflow.modules.data.persistence import schema_metadata
 metadata = schema_metadata()
 assert 'capture_profile' not in metadata.tables
 assert 'project_capture_profile' not in metadata.tables
-assert 'capture_profile_id' not in metadata.tables['asset_version'].c
+assert 'capture_profile_id' not in metadata.tables['asset'].c
+assert 'asset_version' not in metadata.tables
+assert 'dataset_version' not in metadata.tables
 """
-            script += "\ndata = Path('database'); data.mkdir(exist_ok=True)\nsettings = Settings('127.0.0.1', 8190, data.resolve(), ('http://127.0.0.1:8188',), workspace=Path.cwd())\nupgrade_database(settings)\nassert current_revision(settings.database_path) == SCHEMA_REVISION\n"
+            script += "\ndata = Path('database'); data.mkdir(exist_ok=True)\nsettings = Settings('127.0.0.1', 8190, data.resolve(), ('http://127.0.0.1:8188',), workspace=Path.cwd())\ninitialize_database(settings)\nassert current_revision(settings.database_path) == SCHEMA_REVISION\n"
             run([str(python), "-c", script], cwd=work, env=env)
 
         smoke()

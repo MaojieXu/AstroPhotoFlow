@@ -27,6 +27,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   sort: [field: 'name' | EquipmentColumn]
   select: [setupId: string]
+  edit: [setupId: string]
   'toggle-row': [setupId: string]
   'toggle-page': [selected: boolean]
   'retry-equipment': []
@@ -72,6 +73,7 @@ const unresolvedEquipment = computed(() => (!props.equipmentReady || props.equip
           <th v-for="column in columns" :key="column.key" :class="{'apf-setup-name-cell':column.key==='name'}" :aria-sort="sort.by===column.key?(sort.order==='asc'?'ascending':'descending'):undefined">
             <LibraryButton type="button" variant="textonly" class="apf-sort-button" :disabled="blocked||loading" @click="emit('sort', column.key)">{{column.label}}<span v-if="sort.by===column.key" aria-hidden="true">{{sort.order==='asc'?' ▲':' ▼'}}</span></LibraryButton>
           </th>
+          <th v-if="!selectMode" scope="col" class="apf-setup-action-cell" :aria-label="$t('apfUi.setup_actions')"></th>
         </tr>
       </thead>
       <tbody v-if="!loading">
@@ -85,6 +87,19 @@ const unresolvedEquipment = computed(() => (!props.equipmentReady || props.equip
               <span>{{row.names[column.key][0]}}{{row.names[column.key].length>1?$t('apfUi.and_others')+row.names[column.key].length+$t('apfUi.items'):''}}</span>
             </span>
             <span v-else>—</span>
+          </td>
+          <td v-if="!selectMode" class="apf-setup-action-cell">
+            <LibraryButton
+              v-if="selectedId === row.setup.id"
+              class="apf-setup-edit"
+              variant="textonly"
+              :tooltip="$t('apfUi.edit_equipment_setup')"
+              :disabled="blocked"
+              @click.stop="emit('edit', row.setup.id)"
+            >
+              <i class="pi pi-pencil" aria-hidden="true" />
+              <span class="sr-only">{{ $t('apfUi.edit_equipment_setup') }}</span>
+            </LibraryButton>
           </td>
         </tr>
       </tbody>

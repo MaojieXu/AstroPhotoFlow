@@ -22,11 +22,11 @@ def build_server() -> FastMCP:
 
     @mcp.tool(
         name="remove",
-        description="Move selected library entries to reversible trash using their current revisions and version IDs.\n使用当前 revision 和版本 ID 将所选素材库条目移入可恢复的回收站。\n关键词: 回收站 清理 删除 恢复 确认 移除 删除",
+        description="Move selected library entries to reversible trash using their current revisions.\n使用当前 revision 将所选素材库条目移入可恢复的回收站。\n关键词: 回收站 清理 删除 恢复 确认 移除 删除",
     )
     @service_errors
     def remove_library_items(body: LibraryEntriesRemove, *, client: AssetClient = Depends(service_client)) -> LibraryEntriesRemoveOut:
-        """Move selected library entries to reversible trash using their current revisions and version IDs."""
+        """Move selected library entries to reversible trash using their current revisions."""
         return client.remove_library_items(body)
 
     @mcp.tool(

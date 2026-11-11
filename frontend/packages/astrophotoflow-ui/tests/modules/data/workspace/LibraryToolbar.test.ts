@@ -1,3 +1,4 @@
+import { assetFixture } from '../../../fixtures/library-members'
 import { libraryAsset, libraryDataset } from '../../../fixtures/library-summary'
 import { flushPromises, mount } from '@vue/test-utils'
 import type { VueWrapper } from '@vue/test-utils'
@@ -11,12 +12,25 @@ import { useWorkspaceStore } from '@ui/modules/data/workspace/store'
 const { get, send } = vi.hoisted(() => ({ get: vi.fn(), send: vi.fn() }))
 vi.mock('@ui/modules/data/api/index', async () => ({ libraryApi: (await import('../../../fixtures/library-api')).createLibraryApiFixture(get), catalogApi: (await import('../../../fixtures/library-api')).createCatalogApiFixture(get), mutationApi: (await import('../../../fixtures/library-api')).createMutationApiFixture(send), trashApi: (await import('../../../fixtures/library-api')).createTrashApiFixture(get,send), importApi: (await import('../../../fixtures/library-api')).createImportApiFixture(get,send), datasetApi: (await import('../../../fixtures/library-api')).createDatasetApiFixture(get,send), assetApi: { get, send } }))
 const timestamp = '2026-10-28T12:00:00Z'
-const asset = assetSchema.parse({
-  id: '00000000-0000-4000-8000-000000000001', name: 'M31.fit', scope: 'shared', owner_project_id: null,
-  role: 'raw', calibration_level: null, current_version_id: null, classification: { frame_class: 'subframe', frame_type: 'light' },
-  parameters: {}, equipment_snapshot: {}, value_sources: {}, notes: null, status: 'active', revision: 1,
-  created_at: timestamp, current_version: null
-})
+const asset = assetSchema.parse(assetFixture({
+                                  id: '00000000-0000-4000-8000-000000000001',
+                                  name: 'M31.fit',
+                                  scope: 'shared',
+                                  owner_project_id: null,
+                                  role: 'raw',
+                                  calibration_level: null,
+                                  classification: { frame_class: 'subframe', frame_type: 'light' },
+                                  parameters: {},
+                                  equipment_snapshot: {},
+                                  value_sources: {},
+                                  notes: null,
+                                  status: 'active',
+                                  revision: 1,
+                                  created_at: timestamp,
+                                  availability: 'unknown',
+                                  content_hash: null,
+                                  byte_size: null
+                                }))
 const capabilities = {
   stage: 'ingestion', shared_library_read: true, project_assets_read: true, project_management: true,
   equipment_management: true, asset_import: true, asset_reference_write: false, asset_preview: false,

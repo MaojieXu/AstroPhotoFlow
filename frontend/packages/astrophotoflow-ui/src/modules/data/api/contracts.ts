@@ -10,12 +10,10 @@ import {
   zAssetContentObservation,
   zAssetOut,
   zAssetParameters,
-  zAssetVersionOut,
   zCalibrationTarget,
   zCalibrationTargetOption,
   zDatasetMemberOut,
   zDatasetMemberParametersUpdateOut,
-  zDatasetVersionOut,
   zEquipmentPage,
   zEquipmentSetupOut,
   zFitsHduOut,
@@ -64,7 +62,6 @@ export const equipmentSetupSchema = zEquipmentSetupOut
 export type EquipmentSetup = z.infer<typeof equipmentSetupSchema>
 export type SetupComponent = z.infer<typeof setupComponentSchema>
 
-export const assetVersionSchema = zAssetVersionOut
 
 export const assetSchema = zAssetOut
 
@@ -104,7 +101,7 @@ export const datasetSchema = zDatasetOut
 export const calibrationTargetSchema = zCalibrationTarget
 
 export const calibrationBindingsSchema =
-  zDatasetVersionOut.shape.calibration_defaults.unwrap()
+  zDatasetOut.shape.calibration.unwrap()
 export const calibrationTargetOptionSchema = zCalibrationTargetOption
 
 export type CalibrationTarget = z.infer<typeof calibrationTargetSchema>
@@ -115,7 +112,6 @@ export type CalibrationTargetOption = z.infer<
 >
 export const datasetMemberSchema = zDatasetMemberOut
 
-export const datasetVersionSchema = zDatasetVersionOut
 
 export const libraryItemSchema = zLibraryItemPage.shape.items.element
 export const libraryFilterOptionsSchema = zLibraryFilterOptions

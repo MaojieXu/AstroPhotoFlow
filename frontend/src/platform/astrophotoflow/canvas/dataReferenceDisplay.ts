@@ -32,8 +32,7 @@ export function attachDataReferenceDisplay(node: LGraphNode) {
     options: {
       serialize: false,
       surfaces: { canvas: 'shown', vueNode: 'shown', panel: 'never' },
-      getMinHeight: () => node.comfyClass === 'APF_FILE_REFERENCE' ? 240 : 560,
-      getMaxHeight: () => node.comfyClass === 'APF_FILE_REFERENCE' ? 240 : 560
+      getMinHeight: () => 80
     }
   })
   widget.serialize = false

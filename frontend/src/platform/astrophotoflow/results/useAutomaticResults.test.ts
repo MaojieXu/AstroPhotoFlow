@@ -5,6 +5,7 @@ import { defineComponent, reactive } from 'vue'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { LGraph, LGraphNode } from '@/lib/litegraph/src/litegraph'
+import { emitGraphIntent } from '@/lib/litegraph/src/graphIntents'
 import type { ComfyApiWorkflow, ComfyWorkflowJSON } from '@/platform/workflow/validation/schemas/workflowSchema'
 import { api } from '@/scripts/api'
 import type { ComfyApp, QueuePromptOptions } from '@/types/comfy'
@@ -55,6 +56,20 @@ function setup() {
 afterEach(() => { automaticResultStates.clear(); bundleCapabilities.clear(); vi.useRealTimers(); vi.restoreAllMocks() })
 
 describe('automatic native result scheduling', () => {
+  it('requeues an active graph on native widget writes without a legacy change event', async () => {
+    const view = setup()
+    await vi.advanceTimersByTimeAsync(500)
+    await vi.waitFor(() => expect(view.queuePrompt).toHaveBeenCalledTimes(1))
+    api.dispatchCustomEvent('execution_success', { prompt_id: 'automatic-prompt', timestamp: 0 })
+    await vi.advanceTimersByTimeAsync(600)
+    expect(view.queuePrompt).toHaveBeenCalledTimes(1)
+    const node = view.graph.nodes[1]!
+    view.prompt[view.id].inputs.strength = 0.7
+    emitGraphIntent({ type: 'set_widget', graphId: view.graph.id, nodeId: node.id, name: 'strength', value: .7, previous: 0 })
+    await vi.advanceTimersByTimeAsync(500)
+    await vi.waitFor(() => expect(view.queuePrompt).toHaveBeenCalledTimes(2))
+    view.unmount()
+  })
   it('queues both branch leaves once with their shared upstream in one prompt', async () => {
     const view = setup()
     const leaves: string[] = []

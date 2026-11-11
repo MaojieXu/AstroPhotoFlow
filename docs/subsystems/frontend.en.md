@@ -13,10 +13,25 @@ The native ComfyUI web page hosts the interface, and platform UI is split into a
 ## Native bridge
 
 - `frontend/src/platform/astrophotoflow` installs the query plugin, injects the translation function and wires business controls into the sidebar and canvas; it keeps the persistent canvas, sidebar order and unsaved-edit protection.
-- A fixed data reference uses one native undo transaction; a run receipt is checked against the actual Data and source wires; exports write copies only.
+- A data reference uses one native undo transaction; a run receipt is checked against the actual Data and source wires; exports write copies only.
 - Native stores, canvas and conversion coordination live in this directory, and the UI package never depends on it in reverse.
 
 The local web app uses AstroPhotoFlow branding for the menu, startup and installation, with links to project documentation and feedback. Menus, shortcuts and settings hide upstream account, generation template and model management entry points. The node catalog shows nodes registered by the runtime.
+
+## Canvas nodes
+
+- Data receives one file path through the system chooser shared with the library and imports it. Manual path entry is collapsed. Cancellation, failure or node replacement preserves the existing binding. Single-image names appear only in the title, collections retain the current member name, and full information is available in details.
+- Preview height follows content, and single images hide pagination. Saving to the library and exporting locally continue to use checked complete data. Preview resolution and channel selection affect display only.
+- Software result cards use the native channel dropdown and place logs and complete-file downloads in the more menu. Reset restores every parameter from the instance definition, including advanced parameters, in one native undo transaction. Automatic mode submits one combined calculation, while manual mode waits for a run.
+- Native widgets resolve their owner again when undo recreates a node with the same ID. Automatic float precision represents declared defaults, and restoring a default preserves its value despite edit-time callback rounding.
+
+## Language resources
+
+- The web app ships only English and Simplified Chinese: `localeDefinitions` in `frontend/src/locales/localeConfig.ts` decides the available languages, and other locale directories are not shipped.
+- Native text lives in the `main`, `settings`, `commands` and `nodeDefs` catalogs under `frontend/src/locales/{en,zh}`; business text is merged into the same vue-i18n instance through `uiMessages` from `@astrophotoflow/ui`.
+- The language is stored as the `Comfy.Locale` workspace setting and switching applies immediately in the web app; the service renders domain errors in the same language, while Bundle text follows its own language boundaries.
+- New or changed text must be submitted in English and Chinese together; `tests/core/test_frontend_locale_coverage.py` checks that both key sets match, and the backend error catalog is checked by `tests/core/test_error_localization_coverage.py`.
+- The automated translation entry point is `pnpm locale` (requires `OPENAI_API_KEY`) and the offline check is `pnpm locale:check`; the guards above are the merge standard.
 
 ## Queries and polling
 

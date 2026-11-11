@@ -6,7 +6,7 @@ from pathlib import Path
 from astrophotoflow.contracts.development import BundleDevelopmentConfig, BundleWatchPath
 from astrophotoflow.modules.software.metadata import catalog, contained
 
-from .bindings import bindings, bindings_path, receipt_path
+from .bindings import REPOSITORY_BINDINGS, bindings_path, read_bindings, receipt_path, repository_roots, resolve_bindings
 
 
 def git_watch_paths(root: Path) -> list[BundleWatchPath]:
@@ -33,8 +33,15 @@ def git_watch_paths(root: Path) -> list[BundleWatchPath]:
 def bundle_watch_paths(workspace: Path) -> set[BundleWatchPath]:
     interests = {BundleWatchPath(bindings_path(workspace)),
                  BundleWatchPath(workspace / 'software', directory=True)}
-    sources = bindings(workspace)
-    for package_id in catalog():
+    values = read_bindings(workspace)
+    repository = values.get(REPOSITORY_BINDINGS)
+    if repository is not None:
+        directory = Path(repository['root'])
+        # Keep Windows watch handles on the parent so a checkout can be moved.
+        interests.add(BundleWatchPath(directory, directory=True, watch_subtree=True))
+        interests.update(BundleWatchPath(root / 'bundle.json') for root in repository_roots(directory))
+    sources = resolve_bindings(values)
+    for package_id in set(catalog()) | sources.keys():
         parent = workspace / 'software' / package_id
         root = Path(sources[package_id]['root']) if package_id in sources else parent / 'bundle'
         interests.update({BundleWatchPath(parent, directory=True), BundleWatchPath(root, directory=True),
@@ -51,7 +58,10 @@ def bundle_watch_paths(workspace: Path) -> set[BundleWatchPath]:
         if package_id not in sources:
             continue
         interests.add(BundleWatchPath(root / 'development.json'))
-        interests.update(git_watch_paths(root))
+        try:
+            interests.update(git_watch_paths(root))
+        except (OSError, ValueError):
+            interests.add(BundleWatchPath(root / '.git'))
         try:
             config = BundleDevelopmentConfig.model_validate_json((root / 'development.json').read_bytes())
             for pattern in config.watch:

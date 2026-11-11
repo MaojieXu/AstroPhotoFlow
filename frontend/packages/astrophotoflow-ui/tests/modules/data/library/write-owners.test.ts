@@ -33,7 +33,7 @@ describe('owned writes and fixed-scope invalidation',()=>{
     const {owner,connectionReady}=setup(useUpdateDatasetMembers)
     let finish!:(value:unknown)=>void
     members.mockImplementation(()=>new Promise(resolve=>{finish=resolve}))
-    const pending=owner.mutateAsync({workspaceId:'/a',datasetId:id,versionId:'fixed-version',revision:3,changes:{parameters:{gain:0}}})
+    const pending=owner.mutateAsync({workspaceId:'/a',datasetId:id,revision:3,changes:{parameters:{gain:0}}})
     const rejected=expect(pending).rejects.toThrow('工作区身份尚未确认')
     await vi.waitFor(()=>expect(members).toHaveBeenCalledTimes(1))
     if(mode==='close'){wrapper!.unmount();wrapper=undefined}
@@ -71,15 +71,15 @@ describe('owned writes and fixed-scope invalidation',()=>{
     expect(cache.getQueryState([...workspaceQueryKey('/b'),'projects'])?.isInvalidated).toBe(false)
   })
 
-  it('collects revisions from every fixed-version page in order before exactly one member write',async()=>{
+  it('collects revisions from every current dataset page in order before exactly one member write',async()=>{
     const {owner}=setup(useUpdateDatasetMembers)
     members.mockResolvedValueOnce({items:[{asset:{id:'first',revision:2}}],total:2,limit:1,offset:0})
       .mockResolvedValueOnce({items:[{asset:{id:'second',revision:7}}],total:2,limit:1,offset:1})
-    patchMembers.mockResolvedValue({dataset_id:id,revision:4,version_id:'fixed-version',assets:[{id:'first'},{id:'second'}]})
-    await owner.mutateAsync({workspaceId:'/a',datasetId:id,versionId:'fixed-version',revision:3,changes:{parameters:{gain:0,offset:null}}})
-    expect(members.mock.calls.map(call=>[call[1],call[2].offset])).toEqual([['fixed-version',0],['fixed-version',1]])
+    patchMembers.mockResolvedValue({dataset_id:id,revision:4,assets:[{id:'first'},{id:'second'}]})
+    await owner.mutateAsync({workspaceId:'/a',datasetId:id,revision:3,changes:{parameters:{gain:0,offset:null}}})
+    expect(members.mock.calls.map(call=>[call[0],call[1].offset])).toEqual([[id,0],[id,1]])
     expect(patchMembers).toHaveBeenCalledExactlyOnceWith(id,{
-      base_revision:3,base_version_id:'fixed-version',members:[{asset_id:'first',revision:2},{asset_id:'second',revision:7}],parameters:{gain:0,offset:null}
+      base_revision:3,members:[{asset_id:'first',revision:2},{asset_id:'second',revision:7}],parameters:{gain:0,offset:null}
     })
   })
 
@@ -87,7 +87,7 @@ describe('owned writes and fixed-scope invalidation',()=>{
     const {owner}=setup(useUpdateDatasetMembers)
     members.mockResolvedValueOnce({items:[{asset:{id:'first',revision:2}}],total:2,limit:1,offset:0})
       .mockResolvedValueOnce({items:[],total:2,limit:1,offset:1})
-    await expect(owner.mutateAsync({workspaceId:'/a',datasetId:id,versionId:'fixed-version',revision:3,changes:{parameters:{gain:0}}})).rejects.toThrow('Fixed member page ended')
+    await expect(owner.mutateAsync({workspaceId:'/a',datasetId:id,revision:3,changes:{parameters:{gain:0}}})).rejects.toThrow('Fixed member page ended')
     expect(members).toHaveBeenCalledTimes(2)
     expect(patchMembers).not.toHaveBeenCalled()
   })

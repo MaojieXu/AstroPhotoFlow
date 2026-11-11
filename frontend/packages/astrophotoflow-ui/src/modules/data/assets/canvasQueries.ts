@@ -30,19 +30,15 @@ export function useCanvasInspection(
     queryFn: async ({ signal }) => {
       const current = toValue(request)
       if (!current)
-        throw new Error('Canvas inspection requires a fixed reference')
+        throw new Error('Canvas inspection requires a material reference')
       const { reference, memberIndex } = current
       const result = await client.inspect(reference, memberIndex, signal)
-      const expected =
-        reference.kind === 'dataset_version'
-          ? reference.members[memberIndex]?.asset_version_id
-          : reference.asset_version_id
-      if (
-        result.member_index !== memberIndex ||
-        result.asset_version_id !== expected
-      )
+      const matches = reference.kind === 'asset'
+        ? result.asset_id === reference.asset_id
+        : !reference.asset_ids || reference.asset_ids.includes(result.asset_id)
+      if (result.member_index !== memberIndex || !matches)
         throw new ApiClientError(
-          'Canvas metadata does not match its fixed member',
+          'Canvas metadata does not match its selected member',
           'contract'
         )
       return result

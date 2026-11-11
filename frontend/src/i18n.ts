@@ -185,7 +185,7 @@ export function resolveNodeCategoryLabel(path: string, fallback: string): string
   return st(`nodeCategories.${normalizeI18nKey(path.replace(/^root\//, '').replace(/\/$/, ''))}`, fallback)
 }
 
-export type NodeDefTextField = 'display_name' | 'description'
+export type NodeDefTextField = 'display_name' | 'description' | 'help'
 
 /**
  * Raw `/object_info` text, kept out of the vue-i18n message tree so English

@@ -412,7 +412,7 @@ function processWidget(
       : undefined,
     callback: updateHandler,
     controlWidget,
-    label: widgetState.label,
+    label: live?.node.comfyClass?.startsWith('APF_') ? live.widget.label : widgetState.label,
     linkedUpstream,
     nodeLocatorId: widgetNodeLocatorId(ctx, bareWidgetId, sourceExecutionId),
     options: widgetOptions,

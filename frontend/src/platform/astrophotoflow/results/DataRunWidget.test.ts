@@ -155,7 +155,8 @@ it('uses the matching actual native result without writing the serialized refere
     global: { plugins: [PlatformQueryPlugin] }
   })
   await nextTick()
-  await waitFor(() => expect(screen.getByText('Full FITS')).toBeVisible())
+  await waitFor(() => expect(screen.getByRole('button', { name: 'astrophotoflow.dataExport.saveLibrary' })).toBeVisible())
+  expect(screen.queryByText('Full FITS')).not.toBeInTheDocument()
   expect(
     screen.getByRole('button', {
       name: 'astrophotoflow.dataExport.saveLibrary'
@@ -225,7 +226,7 @@ it('hides old native output on disconnect and verifies the result again in a new
     props: { widget, reference: '', bindings: { images: ['10', 0] } },
     global: { plugins: [PlatformQueryPlugin] }
   })
-  await waitFor(() => expect(screen.getByText('Full FITS')).toBeVisible())
+  await waitFor(() => expect(screen.getByRole('button', { name: 'astrophotoflow.dataExport.saveLibrary' })).toBeVisible())
   nativeWorkspace.workspaceId.value = undefined
   await nextTick()
   expect(screen.queryByText('Full FITS')).not.toBeInTheDocument()

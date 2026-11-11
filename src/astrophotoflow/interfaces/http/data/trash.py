@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, Request
 
 import astrophotoflow.interfaces.http.dependencies as deps
 import astrophotoflow.modules.data.public as data
+from astrophotoflow.interfaces.application.library_organization import execute_cleanup, preflight_cleanup
 from astrophotoflow.contracts.trash import (
     LibraryEntriesRemove,
     LibraryEntriesRemoveOut,
@@ -30,9 +31,11 @@ def restore_library_trash(body: LibraryTrashSelection, session: deps.WriteSessio
     return data.restore_library_trash(session=session, body=body)
 
 @router.post('/library/trash/delete-preview', dependencies=[Depends(deps.authenticate)], response_model=LibraryTrashPreviewOut, operation_id='library_trash_delete_preview_api_v1_library_trash_delete_preview_post')
-def library_trash_delete_preview(body: LibraryTrashSelection, request: Request, session: deps.ReadSession) -> LibraryTrashPreviewOut:
-    return data.plan_cleanup(session=session, settings=request.app.state.settings, body=body)
+def library_trash_delete_preview(body: LibraryTrashSelection, request: Request) -> LibraryTrashPreviewOut:
+    state = request.app.state
+    return preflight_cleanup(state.database, state.settings, body, state.data_exports)
 
 @router.post('/library/trash/delete', dependencies=[Depends(deps.authenticate)], response_model=LibraryTrashDeleteOut, operation_id='library_trash_delete_api_v1_library_trash_delete_post')
-def library_trash_delete(body: LibraryTrashDelete, request: Request, session: deps.ReadSession) -> LibraryTrashDeleteOut:
-    return data.delete_library_trash(session=session, database=request.app.state.database, settings=request.app.state.settings, body=body)
+def library_trash_delete(body: LibraryTrashDelete, request: Request, admission: deps.TaskAdmission) -> LibraryTrashDeleteOut:
+    state = request.app.state
+    return execute_cleanup(state.database, state.settings, body, state.data_exports)

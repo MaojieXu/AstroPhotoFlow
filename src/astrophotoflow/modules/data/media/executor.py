@@ -6,6 +6,7 @@ from threading import Condition, Thread
 
 logger = logging.getLogger(__name__)
 
+
 class PreviewExecutor(Executor):
     def __init__(self, max_workers):
         self._condition = Condition()
@@ -33,8 +34,10 @@ class PreviewExecutor(Executor):
 
     def prioritize(self, keys):
         with self._condition:
-            self._queue = [(min(priority, 1) if key in keys else priority, sequence, future, fn, args, kwargs, key)
-                           for priority, sequence, future, fn, args, kwargs, key in self._queue]
+            self._queue = [
+                (min(priority, 1) if key in keys else priority, sequence, future, fn, args, kwargs, key)
+                for priority, sequence, future, fn, args, kwargs, key in self._queue
+            ]
             heapify(self._queue)
 
     def _work(self):

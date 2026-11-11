@@ -26,8 +26,7 @@ vi.mock('./dataBridge', () => ({ addLibraryDataToCanvas: vi.fn() }))
 
 const source: CanvasDataRequest = {
   entry_type: 'asset',
-  id: '00000000-0000-4000-8000-000000000001',
-  version_id: '00000000-0000-4000-8000-000000000002'
+  id: '00000000-0000-4000-8000-000000000001'
 }
 
 beforeEach(() => {
@@ -205,7 +204,7 @@ describe('native library node placement', () => {
     await fireEvent.dragStart(button)
     selected.value = {
       ...source,
-      version_id: '00000000-0000-4000-8000-000000000003'
+      id: '00000000-0000-4000-8000-000000000003'
     }
     await fireEvent(
       button,

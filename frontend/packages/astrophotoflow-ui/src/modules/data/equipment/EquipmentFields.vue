@@ -48,7 +48,7 @@ function setSpec(key: string, numeric: boolean, value: string | number | null | 
       <div class="apf-device-grid">
         <label v-for="field in specFields[equipment.kind]" :key="field.key" class="apf-device-field" :class="{'apf-device-field-wide':field.key==='cfa_pattern'}">
           <span>{{ field.label }}</span>
-          <LibrarySelect v-if="field.options||field.key==='cfa_pattern'" :searchable="field.key!=='cfa_pattern'" :density="field.key==='cfa_pattern'?'compact':'normal'" :model-value="String(specValue(field,equipment.specs)??'')" :label="field.label" :options="specChoices(field).map(choice=>({value:choice.value,name:choice.label}))" @update:model-value="setSpec(field.key,false,$event)" />
+          <LibrarySelect v-if="field.options||field.key==='cfa_pattern'" :searchable="false" density="compact" :model-value="String(specValue(field,equipment.specs)??'')" :label="field.label" :options="specChoices(field).map(choice=>({value:choice.value,name:choice.label}))" @update:model-value="setSpec(field.key,false,$event)" />
           <span v-else class="apf-device-input-unit">
             <LibraryInput :model-value="String(specValue(field,equipment.specs)??'')" :aria-label="field.label" :type="field.type??'text'" :step="field.integer?1:'any'" @update:model-value="setSpec(field.key,field.type==='number',$event)" />
             <span v-if="field.unit" class="apf-device-unit" aria-hidden="true">{{ field.unit }}</span>

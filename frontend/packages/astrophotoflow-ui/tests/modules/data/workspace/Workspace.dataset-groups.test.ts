@@ -1,5 +1,5 @@
 import type { DatasetMemberOut } from '@ui/generated/api/types.gen'
-import { fixedMemberFixture } from '../../../fixtures/library-members'
+import { assetFixture, datasetMemberFixture } from '../../../fixtures/library-members'
 import { libraryAsset, libraryDataset, metadataForMembers, exposureForMembers } from '../../../fixtures/library-summary'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
@@ -20,26 +20,16 @@ const capabilities={stage:'ingestion',shared_library_read:true,project_assets_re
   asset_import:false,asset_reference_write:false,asset_preview:true,asset_metadata_edit:true,
   dataset_management:true,asset_task_management:true,calibration_matching:false,asset_publish:false}
 const page=(items:unknown[])=>({items,total:items.length,limit:50,offset:0})
-const versionFor=(assetId:string,index:number):NonNullable<Asset['current_version']>=>({view_base: `/astrophotoflow/api/v1/library/assets/${assetId}/versions/${idAt(index)}/previews`, id:idAt(index),asset_id:assetId,version_number:1,storage_mode:'reference',
-  storage_location:'test/'+index+'.fits',byte_size:100,content_hash:'b3:'+'a'.repeat(64),availability:'available',camera_id:null,optical_system_id:null,
-  filter_id:null,frame_type:'light',calibration_level:null,capture_snapshot:null,scientific_metadata:null,created_at:createdAt})
-const assetFor=(index:number,name:string,revision=1):Asset=>{
-  const version=versionFor(idAt(index),index+1000)
-  return {id:idAt(index),name,scope:'shared',owner_project_id:null,role:'raw',calibration_level:null,current_version_id:version.id,
-    classification:{frame_class:'subframe',frame_type:'light'},parameters:{camera_id:null,optical_system_id:null,filter_id:null,
-      parameter_mode:'standard',iso:null,gain:null,offset:null,exposure_seconds:30,integration_seconds:null,sensor_temperature_c:null,
-      binning_x:1,binning_y:1,cfa_pattern:null},equipment_snapshot:{},value_sources:{},notes:'Initial note',status:'active',revision,created_at:createdAt,current_version:version}
-}
-const member=(asset:ReturnType<typeof assetFor>,datasetVersionId:number,position:number,fixedVersionNumber?:number)=>{
-  const fixedVersion=fixedVersionNumber===undefined?asset.current_version!:versionFor(asset.id,fixedVersionNumber)
-  return {id:idAt(datasetVersionId+100+position),dataset_version_id:idAt(datasetVersionId),asset_version_id:fixedVersion.id,
-    position,relative_path:null,asset,version:fixedVersion}
-}
-const dataset=(index:number,name:string,versionId:number,count:number)=>({id:idAt(index),name,notes:null,status:'active',revision:1,
-  current_version_id:idAt(versionId),member_count:count,created_at:createdAt,updated_at:createdAt})
-const version=(datasetId:string,index:number,members:ReturnType<typeof member>[])=>({id:idAt(index),dataset_id:datasetId,version_number:1,created_at:createdAt,members})
-const historicalFixture=JSON.parse(realApiFixtureJson) as {dataset:ReturnType<typeof dataset>;version:ReturnType<typeof version>}
-const realApiFixture={...historicalFixture,version:{...historicalFixture.version,members:historicalFixture.version.members.map((item,index)=>fixedMemberFixture(item.asset,item.version,historicalFixture.version.id,index))}}
+const assetFor=(index:number,name:string,revision=1):Asset=>assetFixture({id:idAt(index),name,
+  classification:{frame_class:'subframe',frame_type:'light'},parameters:{camera_id:null,optical_system_id:null,filter_id:null,
+    parameter_mode:'standard',iso:null,gain:null,offset:null,exposure_seconds:30,integration_seconds:null,sensor_temperature_c:null,
+    binning_x:1,binning_y:1,cfa_pattern:null},notes:'Initial note',revision,
+  storage_mode:'reference',storage_location:'test/'+index+'.fits',byte_size:100})
+const member=(asset:Asset,datasetId:number,position:number)=>datasetMemberFixture(asset,idAt(datasetId),position)
+const dataset=(index:number,name:string,count:number)=>({id:idAt(index),name,notes:null,status:'active',revision:1,
+  calibration_status:'Unknown',calibration_counts:{UnCalibrated:0,Calibrated:0,Unknown:count},member_count:count,created_at:createdAt,updated_at:createdAt})
+const contents=(members:DatasetMemberOut[])=>({members})
+const realApiFixture: {dataset:ReturnType<typeof dataset>;contents:ReturnType<typeof contents>}=JSON.parse(realApiFixtureJson)
 
 let wrapper:ReturnType<typeof mount>
 let pinia:ReturnType<typeof createPinia>
@@ -64,23 +54,23 @@ beforeEach(()=>{
 afterEach(()=>{wrapper?.unmount();vi.unstubAllGlobals()})
 
 const assets=new Map<string,ReturnType<typeof assetFor>>()
-function configureLibrary(groups:Array<{dataset:ReturnType<typeof dataset>;version:Omit<ReturnType<typeof version>,'members'>&{members:DatasetMemberOut[]}}>,single=assetFor(900,'unrelated.fit')){
-  groups.forEach(group=>Object.assign(group.dataset,{summary:metadataForMembers(group.version.members),exposure_summary:exposureForMembers(group.version.members),input_ready:group.version.members.length>0,current_version_number:group.version.version_number}))
+function configureLibrary(groups:Array<{dataset:ReturnType<typeof dataset>;contents:{members:DatasetMemberOut[]}}>,single=assetFor(900,'unrelated.fit')){
+  groups.forEach(group=>Object.assign(group.dataset,{summary:metadataForMembers(group.contents.members),exposure_summary:exposureForMembers(group.contents.members),input_ready:group.contents.members.length>0}))
   assets.clear()
-  groups.flatMap(group=>group.version.members).forEach(item=>assets.set(item.asset.id,item.asset))
+  groups.flatMap(group=>group.contents.members).forEach(item=>assets.set(item.asset.id,assetFixture(item.asset)))
   assets.set(single.id,single)
   get.mockImplementation(async(path:string)=>{
     if(path.endsWith('/capabilities'))return capabilities
     if(path.endsWith('/library/filter-options'))return {frame_classes:[],frame_types:[],roles:['raw'],parameter_modes:[],bin_values:[],equipment:{camera_id:[],optical_system_id:[],filter_id:[]},numeric_ranges:{}}
-    const currentGroups=groups.map(group=>({...group,version:{...group.version,members:group.version.members.map(item=>({...item,asset:assets.get(item.asset.id)!}))}}))
+    const currentGroups=groups.map(group=>({...group,contents:{...group.contents,members:group.contents.members.map(item=>({...item,asset:assets.get(item.asset.id)!}))}}))
     if(path.includes('/library/items'))return page([
-      ...currentGroups.map(group=>libraryDataset(group.dataset,group.version)), libraryAsset(assets.get(single.id)!)
+      ...currentGroups.map(group=>libraryDataset(group.dataset,group.contents)), libraryAsset(assets.get(single.id)!)
     ])
-    const match=path.match(/\/datasets\/([^/]+)\/versions\/([^/?]+)/)
+    const match=path.match(/\/datasets\/([^/?]+)\//)
     if(match){const group=currentGroups.find(item=>item.dataset.id===match[1]);if(group){
       if(path.includes('/members?')){
         const query=new URL(path,'http://local').searchParams
-        const matching=group.version.members.filter(item=>!query.get('q')||item.asset.name.toLowerCase().includes(query.get('q')!.toLowerCase()))
+        const matching=group.contents.members.filter(item=>!query.get('q')||item.asset.name.toLowerCase().includes(query.get('q')!.toLowerCase()))
         const sort=query.get('sort_by')??'position', direction=query.get('order')==='desc'?-1:1
         const sortValue=(item:typeof matching[number]):unknown=>sort==='position'?item.position:sort==='name'?item.asset.name:sort==='parameter_mode'?item.asset.parameters?.gain??item.asset.parameters?.iso:item.asset.parameters?.[sort as keyof NonNullable<Asset['parameters']>]
         matching.sort((a,b)=>{
@@ -92,7 +82,7 @@ function configureLibrary(groups:Array<{dataset:ReturnType<typeof dataset>;versi
         const offset=Number(query.get('offset')??0),limit=Number(query.get('limit')??50)
         return {items:matching.slice(offset,offset+limit),total:matching.length,limit,offset}
       }
-      throw new Error('Default member browsing must not fetch a complete version')
+      throw new Error('Default member browsing must not fetch a complete dataset')
     }}
     return page([])
   })
@@ -106,10 +96,10 @@ async function enterGroup(name:string){
 }
 describe('dataset group member table',()=>{
   it('silently replaces a missing member thumbnail after background generation',async()=>{
-    const group=dataset(8301,'Background thumbnails',8302,1)
+    const group=dataset(8301,'Background thumbnails',1)
     const asset=assetFor(8303,'Background.fit')
-    const fixed=member(asset,8302,0,9301)
-    configureLibrary([{dataset:group,version:version(group.id,8302,[fixed])}])
+    const fixed=member(asset,8301,0)
+    configureLibrary([{dataset:group,contents:contents([fixed])}])
     let ready=false
     getBlob.mockImplementation(async(path:string)=>{
       if(path.includes('/members/')&&!ready)throw new Error('not ready')
@@ -135,83 +125,42 @@ describe('dataset group member table',()=>{
     }
   })
 
-  it('keeps separate thumbnails and pinned inputs for two versions of the same asset',async()=>{
-    const group=dataset(8401,'Repeated asset versions',8402,2)
-    const asset=assetFor(8403,'Repeated.fit')
-    const first=member(asset,8402,0,9401), second=member(asset,8402,1,9402)
-    configureLibrary([{dataset:group,version:version(group.id,8402,[first,second])}])
-    await mountLibrary();await enterGroup('Repeated asset versions')
-    const rows=wrapper.findAll('.apf-assets-table tbody tr')
-    expect(rows).toHaveLength(2)
-    expect(rows[0].get('.apf-thumb img').attributes('src')).not.toBe(rows[1].get('.apf-thumb img').attributes('src'))
-    const sources=wrapper.findAllComponents(LibraryCanvasSource).map(item=>item.props('source'))
-    expect(sources).toEqual([
-      {entry_type:'asset',id:asset.id,version_id:first.version.id},
-      {entry_type:'asset',id:asset.id,version_id:second.version.id}
-    ])
-    await rows[0].get('.apf-inline-value').trigger('dblclick')
-    const editor=rows[0].get('input[type="text"]')
-    await editor.setValue('Shared renamed.fit');await editor.trigger('keydown',{key:'Enter'});await flushPromises()
-    for(const item of wrapper.findAll('.apf-assets-table tbody tr'))expect(item.text()).toContain('Shared renamed.fit')
-    expect(wrapper.findAllComponents(LibraryCanvasSource).map(item=>item.props('source'))).toEqual(sources)
-    expect(send.mock.calls.filter(([_path,_schema,method])=>method==='PATCH')).toHaveLength(1)
-    for(const fixed of [first,second])expect(getBlob).toHaveBeenCalledWith('/astrophotoflow/api/v1/datasets/'+group.id+'/versions/'+group.current_version_id+'/members/'+fixed.version.id+'/thumbnail',expect.any(AbortSignal))
-    expect(getBlob.mock.calls.some(([path])=>String(path).includes('/versions/'+asset.current_version_id+'/'))).toBe(false)
-    await rows[1].get('.apf-thumb').trigger('click');await flushPromises()
-    const photo=wrapper.findComponent({name:'PhotoPreviewDialog'}).props('photo')
-    expect(photo.versionId).toBe(second.version.id)
-    expect(send.mock.calls.filter(([_path,_schema,method])=>method==='POST').map(([path])=>path)).toEqual(['/astrophotoflow/api/v1/library/assets/'+asset.id+'/versions/'+second.version.id+'/previews/display/auto-stretch'])
-  })
-
-  it('reports the pinned missing original even when the asset current version is available',async()=>{
-    const group=dataset(8501,'Missing pinned original',8502,1)
-    const asset=assetFor(8503,'Pinned missing.fit')
-    const pinned=member(asset,8502,0,9501)
-    pinned.version.availability='missing'
-    configureLibrary([{dataset:group,version:version(group.id,8502,[pinned])}])
-    await mountLibrary();await enterGroup('Missing pinned original')
-    expect(asset.current_version!.availability).toBe('available')
-    const row=wrapper.get('.apf-assets-table tbody tr')
-    expect(row.get('.apf-content-state').text()).toBe('原件异常')
-    expect(wrapper.findComponent(LibraryCanvasSource).props('source')).toBeUndefined()
-  })
-
-  it('offers the fixed group and member versions through a whole draggable row',async()=>{
-    const group=dataset(8101,'Canvas group',8102,1)
+  it('offers the dataset and member references through a whole draggable row',async()=>{
+    const group=dataset(8101,'Canvas group',1)
     const asset=assetFor(8103,'Pinned canvas member.fit')
-    const pinned=member(asset,8102,0,9104)
-    configureLibrary([{dataset:group,version:version(group.id,8102,[pinned])}])
+    const pinned=member(asset,8101,0)
+    configureLibrary([{dataset:group,contents:contents([pinned])}])
     await mountLibrary()
     expect(wrapper.find('button[aria-label="将 Canvas group 加入画布"]').exists()).toBe(false)
     const groupSources=wrapper.findAllComponents(LibraryCanvasSource).filter(item=>item.props('source')?.id===group.id)
     expect(groupSources).toHaveLength(1)
     expect(groupSources[0].props('as')).toBe('tr')
-    for(const item of groupSources)expect(item.props('source')).toEqual({entry_type:'dataset',id:group.id,version_id:idAt(8102)})
+    for(const item of groupSources)expect(item.props('source')).toEqual({entry_type:'dataset',id:group.id})
     await enterGroup('Canvas group')
     const memberSources=wrapper.findAllComponents(LibraryCanvasSource)
     expect(memberSources).toHaveLength(1)
     expect(memberSources[0].props('as')).toBe('tr')
-    for(const item of memberSources)expect(item.props('source')).toEqual({entry_type:'asset',id:asset.id,version_id:pinned.version.id})
+    for(const item of memberSources)expect(item.props('source')).toEqual({entry_type:'asset',id:asset.id})
     expect(send).not.toHaveBeenCalled()
   })
 
-  it('clicks a group member thumbnail to preview its pinned version',async()=>{
-    const group=dataset(8001,'Preview group',8002,1)
+  it('clicks a group member thumbnail to preview its original',async()=>{
+    const group=dataset(8001,'Preview group',1)
     const asset=assetFor(8003,'Pinned member.fit')
-    const pinned=member(asset,8002,0,9004)
-    configureLibrary([{dataset:group,version:version(group.id,8002,[pinned])}])
+    const pinned=member(asset,8001,0)
+    configureLibrary([{dataset:group,contents:contents([pinned])}])
     await mountLibrary();await enterGroup('Preview group')
-    send.mockResolvedValue({asset_version_id:pinned.version.id,size:'display',status:'available',width:1080,height:720,error:null,
+    send.mockResolvedValue({asset_id:asset.id,size:'display',status:'available',width:1080,height:720,error:null,
       stretch:{algorithm:'auto-mtf-1',input_offset:0,white_balance:[1],shadows:0,highlights:255,midtones:.2}})
     await wrapper.get('button.apf-thumb').trigger('click');await flushPromises()
-    expect(send.mock.calls.at(-1)![0]).toBe('/astrophotoflow/api/v1/library/assets/'+asset.id+'/versions/'+pinned.version.id+'/previews/display/auto-stretch')
+    expect(send.mock.calls.at(-1)![0]).toBe('/astrophotoflow/api/v1/library/assets/'+asset.id+'/previews/display/auto-stretch')
     expect(wrapper.get('[role="dialog"]').text()).toContain('Pinned member.fit')
     expect(wrapper.get('[role="dialog"] img').attributes('src')).toContain('blob:')
   })
 
   it('removes redundant manager entries while keeping direct group browsing',async()=>{
-    const group=dataset(9001,'Direct group',9002,1)
-    configureLibrary([{dataset:group,version:version(group.id,9002,[member(assetFor(9003,'Direct member.fit'),9002,0)])}])
+    const group=dataset(9001,'Direct group',1)
+    configureLibrary([{dataset:group,contents:contents([member(assetFor(9003,'Direct member.fit'),9001,0)])}])
     await mountLibrary()
     expect(wrapper.text()).not.toMatch(/管理成员|编辑成员|编辑图像组成员/)
     await enterGroup('Direct group')
@@ -220,9 +169,9 @@ describe('dataset group member table',()=>{
   })
 
   it('opens a group when its row is selected but preserves inline field clicks',async()=>{
-    const group=dataset(9,'Selectable group',19,1)
-    const groupVersion=version(group.id,19,[member(assetFor(90,'Selectable.fit'),19,0)])
-    configureLibrary([{dataset:group,version:groupVersion}])
+    const group=dataset(9,'Selectable group',1)
+    const groupVersion=contents([member(assetFor(90,'Selectable.fit'),9,0)])
+    configureLibrary([{dataset:group,contents:groupVersion}])
     await mountLibrary()
     const row=wrapper.findAll('.apf-assets-table tbody tr').find(item=>item.text().includes('Selectable group'))!
 
@@ -237,11 +186,11 @@ describe('dataset group member table',()=>{
     expect(wrapper.text()).toContain('Selectable.fit')
   })
 
-  it('loads only the selected version members and restores outer library state on return',async()=>{
-    const first=dataset(10,'Group A',20,2),second=dataset(11,'Group B',21,1)
-    const firstVersion=version(first.id,20,[member(assetFor(100,'A-1.fit'),20,0),member(assetFor(101,'A-2.fit'),20,1)])
-    const secondVersion=version(second.id,21,[member(assetFor(200,'B-only.fit'),21,0)])
-    configureLibrary([{dataset:first,version:firstVersion},{dataset:second,version:secondVersion}])
+  it('loads only the current dataset members and restores outer library state on return',async()=>{
+    const first=dataset(10,'Group A',2),second=dataset(11,'Group B',1)
+    const firstVersion=contents([member(assetFor(100,'A-1.fit'),10,0),member(assetFor(101,'A-2.fit'),10,1)])
+    const secondVersion=contents([member(assetFor(200,'B-only.fit'),11,0)])
+    configureLibrary([{dataset:first,contents:firstVersion},{dataset:second,contents:secondVersion}])
     const store=useWorkspaceStore(pinia);store.query='outer-query';store.offset=10;store.pageSize=10
     await mountLibrary()
     await wrapper.findAll('.apf-sort-button').find(button=>button.text().startsWith('名称'))!.trigger('click')
@@ -258,7 +207,7 @@ describe('dataset group member table',()=>{
     expect(wrapper.text()).not.toContain('B-only.fit')
     expect(wrapper.text()).not.toContain('unrelated.fit')
     expect(wrapper.get('.apf-table-scroll').classes()).toContain('detail')
-    expect(get.mock.calls.map(([path])=>String(path))).toContainEqual(expect.stringContaining('/datasets/'+first.id+'/versions/'+firstVersion.id+'/members?'))
+    expect(get.mock.calls.map(([path])=>String(path))).toContainEqual(expect.stringContaining('/datasets/'+first.id+'/members?'))
 
     await wrapper.get('select[aria-label="显示方式"]').setValue('simple')
     expect(wrapper.get('.apf-table-scroll').classes()).toContain('simple')
@@ -278,9 +227,9 @@ describe('dataset group member table',()=>{
   })
 
   it('leaves group context before loading each management module and returns to the outer library',async()=>{
-    const group=dataset(12,'Navigation group',22,1)
-    const groupVersion=version(group.id,22,[member(assetFor(120,'Member.fit'),22,0)])
-    configureLibrary([{dataset:group,version:groupVersion}])
+    const group=dataset(12,'Navigation group',1)
+    const groupVersion=contents([member(assetFor(120,'Member.fit'),12,0)])
+    configureLibrary([{dataset:group,contents:groupVersion}])
     await mountLibrary();await enterGroup('Navigation group')
 
     await wrapper.get('nav button[aria-label="设备管理"]').trigger('click');await flushPromises()
@@ -297,9 +246,9 @@ describe('dataset group member table',()=>{
   })
 
   it('closes outer filters on entry and keeps them unchanged inside the group',async()=>{
-    const group=dataset(13,'Filter group',23,1)
-    const groupVersion=version(group.id,23,[member(assetFor(130,'Filter member.fit'),23,0)])
-    configureLibrary([{dataset:group,version:groupVersion}])
+    const group=dataset(13,'Filter group',1)
+    const groupVersion=contents([member(assetFor(130,'Filter member.fit'),13,0)])
+    configureLibrary([{dataset:group,contents:groupVersion}])
     await mountLibrary()
     const filterButton=wrapper.findAll('button').find(button=>button.text().startsWith('筛选'))!
     await filterButton.trigger('click');await flushPromises()
@@ -323,14 +272,14 @@ describe('dataset group member table',()=>{
   })
 
   it('ignores a delayed member response after leaving the group',async()=>{
-    const group=dataset(14,'Late group',24,1)
-    const groupVersion=version(group.id,24,[member(assetFor(140,'Late member.fit'),24,0)])
-    configureLibrary([{dataset:group,version:groupVersion}])
+    const group=dataset(14,'Late group',1)
+    const groupVersion=contents([member(assetFor(140,'Late member.fit'),14,0)])
+    configureLibrary([{dataset:group,contents:groupVersion}])
     let resolveVersion!:(value:ReturnType<typeof page>)=>void
     get.mockImplementation((path:string)=>{
       if(path.endsWith('/capabilities'))return Promise.resolve(capabilities)
       if(path.includes('/library/items'))return Promise.resolve(page([libraryDataset(group,groupVersion)]))
-      if(path.includes('/datasets/'+group.id+'/versions/'))return new Promise(resolve=>{resolveVersion=resolve})
+      if(path.includes('/datasets/'+group.id+'/members?'))return new Promise(resolve=>{resolveVersion=resolve})
       if(path.includes('/projects'))return Promise.resolve(page([]))
       return Promise.resolve(page([]))
     })
@@ -345,14 +294,14 @@ describe('dataset group member table',()=>{
   })
 
   it('ignores a delayed member response after returning to the outer library',async()=>{
-    const group=dataset(16,'Return late group',26,1)
-    const groupVersion=version(group.id,26,[member(assetFor(160,'Return late member.fit'),26,0)])
-    configureLibrary([{dataset:group,version:groupVersion}])
+    const group=dataset(16,'Return late group',1)
+    const groupVersion=contents([member(assetFor(160,'Return late member.fit'),16,0)])
+    configureLibrary([{dataset:group,contents:groupVersion}])
     let resolveVersion!:(value:ReturnType<typeof page>)=>void
     get.mockImplementation((path:string)=>{
       if(path.endsWith('/capabilities'))return Promise.resolve(capabilities)
       if(path.includes('/library/items'))return Promise.resolve(page([libraryDataset(group,groupVersion)]))
-      if(path.includes('/datasets/'+group.id+'/versions/'))return new Promise(resolve=>{resolveVersion=resolve})
+      if(path.includes('/datasets/'+group.id+'/members?'))return new Promise(resolve=>{resolveVersion=resolve})
       return Promise.resolve(page([]))
     })
     await mountLibrary()
@@ -366,10 +315,10 @@ describe('dataset group member table',()=>{
   })
 
   it('searches, sorts, and paginates within the selected group',async()=>{
-    const group=dataset(25,'Paged group',35,12)
-    const members=Array.from({length:12},(_,position)=>member(assetFor(250+position,`Member ${String(12-position).padStart(2,'0')}.fit`),35,position))
-    const groupVersion=version(group.id,35,members)
-    configureLibrary([{dataset:group,version:groupVersion}])
+    const group=dataset(25,'Paged group',12)
+    const members=Array.from({length:12},(_,position)=>member(assetFor(250+position,`Member ${String(12-position).padStart(2,'0')}.fit`),25,position))
+    const groupVersion=contents(members)
+    configureLibrary([{dataset:group,contents:groupVersion}])
     await mountLibrary();await enterGroup('Paged group')
 
     const pageSize=wrapper.get('select[aria-label="每页数量"]')
@@ -397,18 +346,18 @@ describe('dataset group member table',()=>{
   })
 
   it('renders real API members across pages and restores the outer query state',async()=>{
-    configureLibrary([{dataset:realApiFixture.dataset,version:realApiFixture.version}])
+    configureLibrary([{dataset:realApiFixture.dataset,contents:realApiFixture.contents}])
     const store=useWorkspaceStore(pinia)
     store.query='outer search';store.offset=20;store.pageSize=20
     await mountLibrary();await enterGroup(realApiFixture.dataset.name)
 
-    expect(realApiFixture.version.members).toHaveLength(31)
+    expect(realApiFixture.contents.members).toHaveLength(31)
     expect(wrapper.findAll('.apf-assets-table tbody tr')).toHaveLength(31)
     await wrapper.get('select[aria-label="每页数量"]').setValue('10');await flushPromises()
     expect(wrapper.findAll('.apf-assets-table tbody tr')).toHaveLength(10)
     await wrapper.findAll('button').find(button=>button.text()==='下一页')!.trigger('click');await flushPromises()
     expect(wrapper.findAll('.apf-assets-table tbody tr')).toHaveLength(10)
-    const searchedName=realApiFixture.version.members[20].asset.name
+    const searchedName=realApiFixture.contents.members[20].asset.name
     const search=wrapper.get('input[aria-label="搜索"]')
     await search.setValue(searchedName)
     await new Promise(resolve=>setTimeout(resolve,300));await flushPromises()
@@ -428,33 +377,18 @@ describe('dataset group member table',()=>{
     expect(params.get('order')).toBe('desc')
   })
 
-  it('keeps the members’ Master and video classifications intact',async()=>{
-    const group=dataset(27,'Mixed classification group',37,2)
-    const master={...assetFor(270,'Master.fit'),classification:{frame_class:'masterframe' as const,frame_type:'light' as const}}
-    const video={...assetFor(271,'Capture video'),classification:{frame_class:'video' as const,frame_type:null}}
-    const groupVersion=version(group.id,37,[member(master,37,0),member(video,37,1)])
-    configureLibrary([{dataset:group,version:groupVersion}])
-    await mountLibrary();await enterGroup('Mixed classification group')
-
-    const rows=wrapper.findAll('.apf-assets-table tbody tr')
-    expect(rows).toHaveLength(2)
-    expect(rows[0].find('td:nth-child(3)').text()).toContain('合成帧')
-    expect(rows[1].find('td:nth-child(3)').text()).toContain('视频')
-    expect(rows[1].find('td:nth-child(3)').text()).not.toContain('单帧')
-  })
-
-  it('shows the fixed member thumbnail and uses the latest asset revision for consecutive edits',async()=>{
-    const group=dataset(30,'Editing group',40,2)
+  it('shows the member thumbnail and uses the latest asset revision for consecutive edits',async()=>{
+    const group=dataset(30,'Editing group',2)
     const asset=assetFor(300,'Editable.fit')
-    const fixed=member(asset,40,0,40)
-    const untouched=member(assetFor(301,'Untouched.fit'),40,1,41)
-    const groupVersion=version(group.id,40,[fixed,untouched])
-    configureLibrary([{dataset:group,version:groupVersion}])
+    const fixed=member(asset,30,0)
+    const untouched=member(assetFor(301,'Untouched.fit'),30,1)
+    const groupVersion=contents([fixed,untouched])
+    configureLibrary([{dataset:group,contents:groupVersion}])
     await mountLibrary();await enterGroup('Editing group')
 
     expect(wrapper.get('.apf-assets-table tbody tr button.apf-thumb').element.tagName).toBe('BUTTON')
-    expect(getBlob).toHaveBeenCalledWith('/astrophotoflow/api/v1/datasets/'+group.id+'/versions/'+group.current_version_id+'/members/'+fixed.version.id+'/thumbnail', expect.any(AbortSignal))
-    expect(get.mock.calls.some(([path])=>String(path).includes('/datasets/'+group.id+'/versions/'))).toBe(true)
+    expect(getBlob).toHaveBeenCalledWith('/astrophotoflow/api/v1/datasets/'+group.id+'/members/'+fixed.asset_id+'/thumbnail', expect.any(AbortSignal))
+    expect(get.mock.calls.some(([path])=>String(path).includes('/datasets/'+group.id+'/members?'))).toBe(true)
     const row=wrapper.findAll('.apf-assets-table tbody tr').find(item=>item.text().includes('Editable.fit'))!
     const nameButton=row.find('.apf-inline-value')
     await nameButton.trigger('dblclick')
@@ -493,24 +427,24 @@ describe('dataset group member table',()=>{
     expect(send.mock.calls.map(([path])=>path)).toEqual(Array(4).fill('/astrophotoflow/api/v1/library/assets/'+asset.id))
     const untouchedRow=wrapper.findAll('.apf-assets-table tbody tr').find(item=>item.text().includes('Untouched.fit'))!
     expect(untouchedRow.text()).toContain('30 s')
-    expect(get.mock.calls.filter(([path])=>String(path).includes('/datasets/')&&String(path).includes('/versions/')).every(([path])=>String(path).startsWith('/astrophotoflow/api/v1/datasets/'+group.id+'/versions/'+fixed.dataset_version_id+'/members?'))).toBe(true)
+    expect(get.mock.calls.filter(([path])=>String(path).includes('/datasets/')&&String(path).includes('/members?')).every(([path])=>String(path).startsWith('/astrophotoflow/api/v1/datasets/'+group.id+'/members?'))).toBe(true)
   })
 
   it('sorts exposure and temperature numerically and keeps missing values last in either direction',async()=>{
-    const group=dataset(31,'Numeric group',41,4)
+    const group=dataset(31,'Numeric group',4)
     const numericMember=(index:number,name:string,exposure:number|null,temperature:number|null,position:number)=>{
       const asset=assetFor(index,name)
       asset.parameters.exposure_seconds=exposure
       asset.parameters.sensor_temperature_c=temperature
-      return member(asset,41,position)
+      return member(asset,31,position)
     }
-    const groupVersion=version(group.id,41,[
+    const groupVersion=contents([
       numericMember(310,'Half.fit',0.5,-5,0),
       numericMember(311,'Quarter.fit',0.25,-10,1),
       numericMember(312,'Zero.fit',0,0,2),
       numericMember(313,'Missing.fit',null,null,3)
     ])
-    configureLibrary([{dataset:group,version:groupVersion}])
+    configureLibrary([{dataset:group,contents:groupVersion}])
     await mountLibrary();await enterGroup('Numeric group')
     const names=()=>wrapper.findAll('.apf-assets-table tbody tr').map(row=>row.find('td:nth-child(2) button.apf-inline-value').text())
     const exposure=wrapper.findAll('.apf-sort-button').find(button=>button.text().startsWith('曝光'))!
@@ -526,19 +460,19 @@ describe('dataset group member table',()=>{
   })
 
   it('sorts fractional gain numerically and keeps zero before missing in either direction',async()=>{
-    const group=dataset(32,'Gain group',42,4)
+    const group=dataset(32,'Gain group',4)
     const gainMember=(index:number,name:string,gain:number|null,position:number)=>{
       const asset=assetFor(index,name)
       asset.parameters.parameter_mode='gain';asset.parameters.iso=null;asset.parameters.gain=gain
-      return member(asset,42,position)
+      return member(asset,32,position)
     }
-    const groupVersion=version(group.id,42,[
+    const groupVersion=contents([
       gainMember(320,'Half gain.fit',0.5,0),
       gainMember(321,'Quarter gain.fit',0.25,1),
       gainMember(322,'Zero gain.fit',0,2),
       gainMember(323,'Missing gain.fit',null,3)
     ])
-    configureLibrary([{dataset:group,version:groupVersion}])
+    configureLibrary([{dataset:group,contents:groupVersion}])
     await mountLibrary();await enterGroup('Gain group')
     const names=()=>wrapper.findAll('.apf-assets-table tbody tr').map(row=>row.find('td:nth-child(2) button.apf-inline-value').text())
     const parameterMode=wrapper.findAll('.apf-sort-button').find(button=>button.text().startsWith('ISO／Gain'))!
@@ -549,10 +483,10 @@ describe('dataset group member table',()=>{
   })
 
   it('keeps a failed member edit draft and reports a revision conflict',async()=>{
-    const group=dataset(45,'Conflict group',55,1)
+    const group=dataset(45,'Conflict group',1)
     const asset=assetFor(450,'Conflict.fit')
-    const groupVersion=version(group.id,55,[member(asset,55,0)])
-    configureLibrary([{dataset:group,version:groupVersion}])
+    const groupVersion=contents([member(asset,45,0)])
+    configureLibrary([{dataset:group,contents:groupVersion}])
     send.mockRejectedValueOnce(new ApiClientError('记录已被其他窗口修改','service',409,'REVISION_CONFLICT'))
     await mountLibrary();await enterGroup('Conflict group')
 
@@ -568,9 +502,9 @@ describe('dataset group member table',()=>{
   })
 
   it('waits for an outer inline save before opening a group',async()=>{
-    const group=dataset(48,'Saving group',58,1)
-    const groupVersion=version(group.id,58,[member(assetFor(480,'Saving member.fit'),58,0)])
-    configureLibrary([{dataset:group,version:groupVersion}])
+    const group=dataset(48,'Saving group',1)
+    const groupVersion=contents([member(assetFor(480,'Saving member.fit'),48,0)])
+    configureLibrary([{dataset:group,contents:groupVersion}])
     let resolveSave!:(value:ReturnType<typeof dataset>)=>void
     send.mockImplementationOnce(()=>new Promise(resolve=>{resolveSave=resolve}))
     await mountLibrary()
@@ -595,9 +529,9 @@ describe('dataset group member table',()=>{
   })
 
   it('keeps the outer list and failed draft when any group entry is attempted',async()=>{
-    const group=dataset(49,'Protected group',59,1)
-    const groupVersion=version(group.id,59,[member(assetFor(490,'Protected member.fit'),59,0)])
-    configureLibrary([{dataset:group,version:groupVersion}])
+    const group=dataset(49,'Protected group',1)
+    const groupVersion=contents([member(assetFor(490,'Protected member.fit'),49,0)])
+    configureLibrary([{dataset:group,contents:groupVersion}])
     send.mockRejectedValueOnce(new ApiClientError('记录已被其他窗口修改','service',409,'REVISION_CONFLICT'))
     const store=useWorkspaceStore(pinia)
     store.query='outer query';store.offset=0
@@ -626,9 +560,9 @@ describe('dataset group member table',()=>{
   })
 
   it('keeps a single asset thumbnail on the existing preview path and presents an empty group state',async()=>{
-    const group=dataset(50,'Empty group',60,0)
-    const emptyVersion=version(group.id,60,[])
-    configureLibrary([{dataset:group,version:emptyVersion}])
+    const group=dataset(50,'Empty group',0)
+    const emptyVersion=contents([])
+    configureLibrary([{dataset:group,contents:emptyVersion}])
     await mountLibrary()
     await wrapper.findAll('button').find(button=>button.text()==='图像组 · 0 张')!.trigger('click')
     await flushPromises()
@@ -642,13 +576,13 @@ describe('dataset group member table',()=>{
     await flushPromises()
     expect(wrapper.find('.apf-preview-overlay').exists()).toBe(false)
     expect(getBlob).toHaveBeenCalledTimes(previewRequests)
-    expect(getBlob).toHaveBeenCalledWith('/astrophotoflow/api/v1/library/assets/'+idAt(900)+'/versions/'+versionFor(idAt(900),1900).id+'/previews/thumbnail', expect.any(AbortSignal))
+    expect(getBlob).toHaveBeenCalledWith('/astrophotoflow/api/v1/library/assets/'+idAt(900)+'/previews/thumbnail', expect.any(AbortSignal))
   })
 
   it('cancels a pending group open when the search removes its row',async()=>{
-    const group=dataset(84,'Pending group',94,1)
+    const group=dataset(84,'Pending group',1)
     const single=assetFor(900,'unrelated.fit')
-    configureLibrary([{dataset:group,version:version(group.id,94,[member(assetFor(840,'Member.fit'),94,0)])}],single)
+    configureLibrary([{dataset:group,contents:contents([member(assetFor(840,'Member.fit'),84,0)])}],single)
     const baseGet=get.getMockImplementation()!
     get.mockImplementation(async(path:string)=>path.includes('/library/items')&&path.includes('q=unrelated')
       ?page([libraryAsset(single)]):baseGet(path))
@@ -678,10 +612,10 @@ describe('dataset group member table',()=>{
 })
 
 
-it('keeps content observation aware of a standalone summary version', async () => {
+it('keeps content observation aware of a standalone original', async () => {
   configureLibrary([])
   await mountLibrary()
   await wrapper.findAll('.apf-assets-table tbody tr').find(row => row.text().includes('unrelated.fit'))!.trigger('click')
   await flushPromises()
-  expect(wrapper.findComponent({name: 'AssetContentChange'}).props('hasVersion')).toBe(true)
+  expect(wrapper.findComponent({name: 'AssetContentChange'}).props('hasOriginal')).toBe(true)
 })

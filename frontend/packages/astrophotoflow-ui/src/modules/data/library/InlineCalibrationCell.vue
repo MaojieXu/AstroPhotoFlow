@@ -21,22 +21,21 @@ const targets = useQuery({
   staleTime: 30_000
 })
 const label = computed(() => calibrationCellLabel(props.binding.value))
-const failureKey = computed(() => `calibration:${props.binding.context?.assetId}:${props.binding.context?.versionId}:${props.binding.slot}`)
+const failureKey = computed(() => `calibration:${props.binding.context?.assetId}:${props.binding.slot}`)
 const title = computed(() => {
   const value = props.binding.value, target = value.target_detail
-  const source = uiT(value.source === 'mixed' ? 'apfUi.calibration_multiple' : value.source === 'member_override' ? 'apfUi.calibration_from_member' : value.source === 'dataset_default' ? 'apfUi.calibration_from_default' : 'apfUi.calibration_standalone')
-  return [label.value, target ? `v${target.version_number} · ${target.target.id}` : '', source,
+  const source = uiT(value.source === 'dataset' ? 'apfUi.calibration_from_dataset' : 'apfUi.calibration_standalone')
+  return [label.value, target ? target.target.id : '', source,
     !props.binding.context ? uiT('apfUi.calibration_open_group_hint') : ''].filter(Boolean).join('\n')
 })
 const choices = computed(() => {
   const result = [
-    ...(props.binding.context?.dataset ? [{value:'inherit',label:uiT('apfUi.inherit_group_default')}] : []),
     {value:'unconfigured',label:uiT('apfUi.calibration_unconfigured')},
     {value:'disabled',label:uiT('apfUi.calibration_disabled')},
-    ...(targets.data.value?.items.map(item => ({value:item.target.id,label:`${item.name} · v${item.version_number}`})) ?? [])
+    ...(targets.data.value?.items.map(item => ({value:item.target.id,label:item.name})) ?? [])
   ]
   const target = props.binding.value.target_detail
-  if (target && !result.some(item => item.value === target.target.id)) result.push({value:target.target.id,label:`${target.name} · v${target.version_number}`})
+  if (target && !result.some(item => item.value === target.target.id)) result.push({value:target.target.id,label:target.name})
   return result
 })
 const save = computed(() => {
@@ -44,15 +43,12 @@ const save = computed(() => {
   const saveFailureKey = failureKey.value
   return async (value: string | number | null) => {
   if (!context) return
-  const choice: CalibrationChoice = value === 'inherit' ? {mode:'inherit'} : value === 'disabled' ? {mode:'disabled'}
-    : value === 'unconfigured' ? {mode:'unconfigured'} : {mode:'target',target:{kind:'asset_version',id:String(value)}}
+  const choice: CalibrationChoice = value === 'disabled' ? {mode:'disabled'}
+    : value === 'unconfigured' ? {mode:'unconfigured'} : {mode:'target',target:{kind:'asset',id:String(value)}}
   const changes: CalibrationPatch = {[slot]:choice}
   const requestId = crypto.randomUUID()
-  const submit = (acceptUnknown: boolean) => context.dataset
-    ? calibrationApi.updateMembers(context.dataset.id,{request_id:requestId,expected_revision:context.dataset.revision,
-      base_version_id:context.dataset.current_version_id,members:[{asset_version_id:context.versionId,changes}],accept_unknown:acceptUnknown})
-    : calibrationApi.updateImage(context.assetId,context.versionId,{request_id:requestId,expected_revision:context.revision,
-      base_binding_version_id:context.bindingVersionId,changes,accept_unknown:acceptUnknown})
+  const submit = (acceptUnknown: boolean) => calibrationApi.updateImage(context.assetId,{
+    request_id:requestId,expected_revision:context.revision,changes,accept_unknown:acceptUnknown})
   await context.runSave(saveFailureKey, async () => {
     try { await submit(false) }
     catch (cause) {
@@ -61,7 +57,7 @@ const save = computed(() => {
       if (!window.confirm(uiT('apfUi.calibration_confirm_unknown',{details}))) throw cause
       await submit(true)
     }
-    await context.saved(context.dataset?.id)
+    await context.saved()
   })
   }
 })

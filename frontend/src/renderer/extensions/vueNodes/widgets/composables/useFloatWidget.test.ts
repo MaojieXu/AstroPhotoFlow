@@ -1,9 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { INumericWidget } from '@/lib/litegraph/src/types/widgets'
-import { _for_testing } from '@/renderer/extensions/vueNodes/widgets/composables/useFloatWidget'
+import { _for_testing, useFloatWidget } from '@/renderer/extensions/vueNodes/widgets/composables/useFloatWidget'
+import type { LGraphNode } from '@/lib/litegraph/src/litegraph'
+import type { InputSpec } from '@/schemas/nodeDef/nodeDefSchemaV2'
 
 vi.mock(import('@/scripts/app'))
+vi.mock('@/platform/settings/settingStore', () => ({ useSettingStore: () => ({ get: () => 0 }) }))
 vi.mock(import('@/core/graph/widgets/valueControlWidgets'), () => ({
   addValueControlWidgets: vi.fn()
 }))
@@ -11,6 +14,15 @@ vi.mock(import('@/core/graph/widgets/valueControlWidgets'), () => ({
 const { onFloatValueChange } = _for_testing
 
 describe('useFloatWidget', () => {
+  it.each([[0.25, 2], [0.000001, 6]])('preserves a declared default of %s with automatic rounding', (value, precision) => {
+    const node = { addWidget: vi.fn((_type: unknown, name: string, initial: number, _callback: unknown, options: INumericWidget['options']) =>
+      ({ type: 'number' as const, name, value: initial, options })) }
+    useFloatWidget()(node as unknown as LGraphNode, { name: 'value', type: 'FLOAT', default: value } as InputSpec)
+    const widget = node.addWidget.mock.results[0]!.value as INumericWidget
+    onFloatValueChange.call(widget, value)
+    expect(widget.value).toBe(value)
+    expect(widget.options.precision).toBe(precision)
+  })
   describe('onFloatValueChange', () => {
     let widget: INumericWidget
 

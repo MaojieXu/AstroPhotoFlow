@@ -59,7 +59,7 @@ function changeBound(key:string,side:'min'|'max',event:Event){
   if(side==='min')draft.value[key+'_min']=String(Math.min(value,other))
   else draft.value[key+'_max']=String(Math.max(value,other))
 }
-function step(key:string){return key==='sensor_temperature_c'||key==='iso'?'1':'any'}
+function step(key:string){return key==='iso'?'1':'any'}
 function placePanel(){
   const container=panel.value?.parentElement
   if(!container||!props.anchor)return
@@ -87,6 +87,7 @@ const groups = computed<Group[]>(() => {
   const result = options.value
   if (!result) return []
   return [
+      {key:'calibration_status',get label() { return uiT('apfUi.calibration_status') },values:['UnCalibrated','Calibrated','Unknown']},
       {key:'frame_classes',get label() { return uiT('apfUi.asset_form') },values:result.frame_classes},
       {key:'frame_types',get label() { return uiT('apfUi.frame_use') },values:result.frame_types},
       {key:'roles',get label() { return uiT('apfUi.classification') },values:result.roles},

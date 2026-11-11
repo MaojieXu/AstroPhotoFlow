@@ -2,70 +2,68 @@
 
 import json
 from copy import deepcopy
-from datetime import UTC, datetime
+from datetime import datetime
 from uuid import UUID, uuid4
-
-from sqlalchemy import select, update
+from sqlalchemy import select, delete
 from sqlalchemy.orm import Session
-
 from astrophotoflow.contracts.image_management import MasterProvenanceChanges
 from astrophotoflow.core.errors import ApiError, invalid_reference, not_found
-from astrophotoflow.modules.data.assets.models import (
-    Asset,
-    AssetVersion,
-    MasterProvenanceReference,
-    MasterProvenanceRevision,
-)
-from astrophotoflow.modules.data.datasets.calibration import validate_bindings, version_classification
-from astrophotoflow.modules.data.datasets.models import Dataset, DatasetMember, DatasetVersion
+from astrophotoflow.modules.data.assets.models import Asset, MasterProvenanceReference
+from astrophotoflow.modules.data.datasets.calibration import validate_bindings
+from astrophotoflow.modules.data.assets.metadata import asset_classification
 
 
-def _master(session: Session, asset_id: UUID | str, version_id: UUID | str):
+def _master(session: Session, asset_id: UUID | str) -> Asset:
     asset = session.get(Asset, str(asset_id))
-    version = session.get(AssetVersion, str(version_id))
-    if asset is None or asset.scope != "shared" or version is None or version.asset_id != asset.id:
+    if asset is None or asset.scope != "shared":
         raise not_found()
-    if version_classification(asset, version).get("frame_class") != "masterframe":
-        raise invalid_reference("Master provenance is available only for Master image versions.")
-    return asset, version
+    if (asset_classification(asset) or {}).get("frame_class") != "masterframe":
+        raise invalid_reference("Master provenance is available only for Master images.")
+    return asset
 
 
-def _source_versions(session: Session, sources: list[dict] | None, master_version_id: str) -> tuple[list[AssetVersion], set[str], set[str]]:
-    versions, assets, datasets = [], set(), set()
+def _source_assets(
+    session: Session, sources: list[dict] | None, master_id: str, *, refresh_members: bool = True
+) -> tuple[list[Asset], set[str], set[str]]:
+    from astrophotoflow.modules.data.assets.references import require_referenceable
+    selected_assets, asset_ids, dataset_ids = [], set(), set()
     for source in sources or []:
-        if source["kind"] == "asset_version":
-            version = session.get(AssetVersion, source["asset_version_id"])
-            asset = session.get(Asset, version.asset_id) if version else None
-            if asset is None or asset.scope != "shared" or asset.id != source["asset_id"]:
-                raise invalid_reference("A Master source must identify its actual fixed image version.")
-            selected = [version]
-            assets.add(version.id)
+        if source["kind"] == "asset":
+            asset = session.get(Asset, str(source["asset_id"]))
+            if asset is None or asset.scope != "shared":
+                raise invalid_reference("A Master source must identify an existing image.")
+            if refresh_members:
+                require_referenceable(session, 'asset', asset.id)
+            selected = [asset]
         else:
-            version = session.get(DatasetVersion, source["dataset_version_id"])
-            dataset = session.get(Dataset, source["dataset_id"])
-            if version is None or dataset is None or version.dataset_id != dataset.id:
-                raise invalid_reference("A Master source must identify its actual fixed dataset version.")
-            members = session.scalars(select(DatasetMember).where(DatasetMember.dataset_version_id == version.id)
-                                      .order_by(DatasetMember.position)).all()
-            ids = [member.asset_version_id for member in members]
-            requested = source.get("member_asset_version_ids")
-            if requested is not None and (len(set(requested)) != len(requested) or set(requested) - set(ids)):
-                raise invalid_reference("Selected Master source members must belong to the fixed dataset version.")
-            selected = [session.get(AssetVersion, identity) for identity in ids if requested is None or identity in requested]
-            if not selected:
-                raise invalid_reference("A Master source dataset selection must not be empty.")
-            datasets.add(version.id)
-            assets.update(item.id for item in selected)
-        if any(item.id == master_version_id for item in selected):
+            if refresh_members:
+                from astrophotoflow.modules.data.science.inputs import current_dataset_members
+
+                dataset, members = current_dataset_members(session, source["dataset_id"], source.get("member_asset_ids"))
+                identities = [member.asset_id for member in members]
+                dataset_identity = dataset.id
+            else:
+                identities = source.get("member_asset_ids") or []
+                dataset_identity = str(source["dataset_id"])
+            selected = [session.get(Asset, identity) for identity in identities]
+            if not selected or any(asset is None or asset.scope != "shared" for asset in selected):
+                raise invalid_reference("A Master source contains a missing image.")
+            if refresh_members:
+                for asset in selected:
+                    require_referenceable(session, 'asset', asset.id)
+            source["member_asset_ids"] = [asset.id for asset in selected]
+            dataset_ids.add(dataset_identity)
+        if any(asset.id == master_id for asset in selected):
             raise invalid_reference("A Master cannot declare itself as a source.")
-        versions.extend(selected)
-    return versions, assets, datasets
+        selected_assets.extend(selected)
+        asset_ids.update(asset.id for asset in selected)
+    return selected_assets, asset_ids, dataset_ids
 
 
-def _time_range(versions: list[AssetVersion]) -> dict:
-    starts, ends, complete = [], [], bool(versions)
-    for version in versions:
-        times = ((version.capture_snapshot or {}).get("image_metadata") or {}).get("times", {})
+def _time_range(assets: list[Asset]) -> dict:
+    starts, ends, complete = ([], [], bool(assets))
+    for asset in assets:
+        times = ((asset.capture_snapshot or {}).get("image_metadata") or {}).get("times", {})
         start = times.get("capture_start") or {}
         end = times.get("capture_end") or {}
         if not start.get("utc") or not end.get("utc"):
@@ -74,80 +72,72 @@ def _time_range(versions: list[AssetVersion]) -> dict:
             starts.append(start)
         if end.get("utc"):
             ends.append(end)
+
     def instant(value):
         return datetime.fromisoformat(value["utc"])
-    return {"start": min(starts, key=instant) if starts else None,
-            "end": max(ends, key=instant) if ends else None, "complete": complete}
+
+    return {"start": min(starts, key=instant) if starts else None, "end": max(ends, key=instant) if ends else None, "complete": complete}
 
 
-def get_master_provenance(session: Session, asset_id: UUID | str, version_id: UUID | str,
-                            provenance_version_id: UUID | str | None = None) -> dict:
-    asset, version = _master(session, asset_id, version_id)
-    if provenance_version_id is not None:
-        row = session.get(MasterProvenanceRevision, str(provenance_version_id))
-        if row is None or row.asset_version_id != version.id:
-            raise not_found()
-    else:
-        row = session.scalar(select(MasterProvenanceRevision).where(MasterProvenanceRevision.asset_version_id == version.id)
-                             .order_by(MasterProvenanceRevision.revision.desc()).limit(1))
-    return {"asset_id": asset.id, "asset_version_id": version.id, "asset_revision": asset.revision,
-            "provenance_version_id": row.id if row else None, "revision": row.revision if row else 0,
-            "source_kind": "user_declared", "declaration": deepcopy(row.data) if row else {},
-            "platform_provenance": deepcopy((version.scientific_metadata or {}).get("export_provenance")),
-            "source_time_range": deepcopy(row.source_time_range) if row else {"start": None, "end": None, "complete": False}}
+def get_master_provenance(session: Session, asset_id: UUID | str) -> dict:
+    asset = _master(session, asset_id)
+    stored = asset.master_provenance or {}
+    return {
+        "asset_id": asset.id,
+        "asset_revision": asset.revision,
+        "revision": asset.revision,
+        "source_kind": "user_declared",
+        "declaration": deepcopy(stored.get("declaration", {})),
+        "platform_provenance": deepcopy((asset.scientific_metadata or {}).get("export_provenance")),
+        "source_time_range": deepcopy(stored.get("source_time_range", {"start": None, "end": None, "complete": False})),
+    }
 
 
-def update_master_provenance(session: Session, asset_id: UUID | str, version_id: UUID | str,
-                               expected_revision: int, changes: MasterProvenanceChanges) -> dict:
-    asset, version = _master(session, asset_id, version_id)
+def update_master_provenance(session: Session, asset_id: UUID | str, expected_revision: int, changes: MasterProvenanceChanges) -> dict:
+    from astrophotoflow.modules.data.assets.references import require_referenceable
+    require_referenceable(session, 'asset', asset_id)
+    asset = _master(session, asset_id)
     if asset.revision != expected_revision:
-        raise ApiError(409, "REVISION_CONFLICT", "The image changed; read its current revision before saving provenance.")
-    previous = session.scalar(select(MasterProvenanceRevision).where(MasterProvenanceRevision.asset_version_id == version.id)
-                              .order_by(MasterProvenanceRevision.revision.desc()).limit(1))
-    declaration = {**(previous.data if previous else {}), **changes.model_dump(mode="json", exclude_unset=True)}
+        raise ApiError(409, "REVISION_CONFLICT", "The image changed; read it again.", message_key='the_image_changed_read_it_again')
+    previous = asset.master_provenance or {}
+    declaration = {**previous.get("declaration", {}), **changes.model_dump(mode="json", exclude_unset=True)}
     declaration = MasterProvenanceChanges.model_validate_json(json.dumps(declaration)).model_dump(mode="json", exclude_unset=True)
-    source_versions, asset_refs, dataset_refs = _source_versions(session, declaration.get("sources"), version.id)
+    sources, asset_refs, dataset_refs = _source_assets(
+        session, declaration.get("sources"), asset.id, refresh_members="sources" in changes.model_fields_set
+    )
     applied = declaration.get("applied_calibrations") or {}
     validate_bindings(session, applied, {})
     for target in applied.values():
-        if target["kind"] == "asset_version":
-            if target["id"] == version.id:
-                raise invalid_reference("A Master cannot be its own applied calibration.")
-            asset_refs.add(target["id"])
-        else:
-            dataset_refs.add(target["id"])
-    source_range = _time_range(source_versions)
-    # An unchanged source declaration retains the historical observed source times.
-    if previous and "sources" not in changes.model_fields_set:
-        source_range = deepcopy(previous.source_time_range)
-    result = session.execute(update(Asset).where(Asset.id == asset.id, Asset.revision == expected_revision)
-                             .values(revision=expected_revision + 1))
-    if result.rowcount != 1:
-        raise ApiError(409, "REVISION_CONFLICT", "The image changed while saving provenance.")
-    row = MasterProvenanceRevision(id=str(uuid4()), asset_version_id=version.id,
-                                   revision=(previous.revision if previous else 0) + 1,
-                                   asset_revision=expected_revision + 1, source_kind="user_declared", data=declaration,
-                                   source_time_range=source_range, created_at=datetime.now(UTC))
-    session.add(row)
-    session.flush()
+        if target["id"] == asset.id:
+            raise invalid_reference("A Master cannot be its own applied calibration.")
+        asset_refs.add(target["id"])
+    source_range = (
+        _time_range(sources) if "sources" in changes.model_fields_set else previous.get("source_time_range", _time_range(sources))
+    )
+    session.execute(delete(MasterProvenanceReference).where(MasterProvenanceReference.asset_id == asset.id))
     for identity in asset_refs:
-        session.add(MasterProvenanceReference(id=str(uuid4()), provenance_id=row.id, asset_version_id=identity))
+        session.add(MasterProvenanceReference(id=str(uuid4()), asset_id=asset.id, source_asset_id=identity))
     for identity in dataset_refs:
-        session.add(MasterProvenanceReference(id=str(uuid4()), provenance_id=row.id, dataset_version_id=identity))
+        session.add(MasterProvenanceReference(id=str(uuid4()), asset_id=asset.id, dataset_id=identity))
+    asset.master_provenance = {"declaration": declaration, "source_time_range": source_range}
+    asset.revision += 1
     session.flush()
-    session.expire(asset)
-    return get_master_provenance(session, asset.id, version.id)
+    return get_master_provenance(session, asset.id)
 
 
-def master_provenance_references(session: Session, asset_version_ids: set[str], dataset_version_ids: set[str],
-                                  excluded_asset_version_ids: set[str] = frozenset()) -> list[dict]:
-    """Historical declarations protect their fixed sources while their Master survives."""
+def master_provenance_references(
+    session: Session, asset_ids: set[str], dataset_ids: set[str], excluded_asset_ids: set[str] = frozenset()
+) -> list[dict]:
     from sqlalchemy import or_
-    rows = session.execute(select(MasterProvenanceReference, MasterProvenanceRevision, Asset).join(
-        MasterProvenanceRevision, MasterProvenanceRevision.id == MasterProvenanceReference.provenance_id).join(
-        AssetVersion, AssetVersion.id == MasterProvenanceRevision.asset_version_id).join(Asset, Asset.id == AssetVersion.asset_id)
-        .where(or_(MasterProvenanceReference.asset_version_id.in_(asset_version_ids),
-                   MasterProvenanceReference.dataset_version_id.in_(dataset_version_ids)),
-               MasterProvenanceRevision.asset_version_id.not_in(excluded_asset_version_ids)))
-    return [{"id": UUID(reference.id), "kind": "master_provenance", "name": f"{asset.name} · Master provenance",
-             "version": provenance.revision} for reference, provenance, asset in rows]
+
+    rows = session.execute(
+        select(MasterProvenanceReference, Asset)
+        .join(Asset, Asset.id == MasterProvenanceReference.asset_id)
+        .where(
+            or_(MasterProvenanceReference.source_asset_id.in_(asset_ids), MasterProvenanceReference.dataset_id.in_(dataset_ids)),
+            MasterProvenanceReference.asset_id.not_in(excluded_asset_ids),
+        )
+    )
+    return [
+        {"id": UUID(reference.id), "kind": "master_provenance", "name": f"{asset.name} · Master provenance"} for reference, asset in rows
+    ]

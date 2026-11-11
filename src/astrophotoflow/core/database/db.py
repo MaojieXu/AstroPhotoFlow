@@ -29,21 +29,28 @@ class Database:
 
     @contextmanager
     def read_session(self) -> Iterator[Session]:
-        with self.sessions() as session:
-            yield session
+        with self.engine.connect() as connection:
+            # sqlite3's legacy transaction mode does not BEGIN for SELECT.
+            # Explicitly fix one snapshot for members, metadata and calibration.
+            connection.exec_driver_sql('BEGIN')
+            with self.sessions(bind=connection) as session:
+                yield session
 
     @contextmanager
     def write_session(self) -> Iterator[Session]:
         with self.engine.connect() as connection:
             connection.exec_driver_sql("BEGIN IMMEDIATE")
             try:
-                with Session(bind=connection, expire_on_commit=False) as session:
+                with self.sessions(bind=connection) as session:
                     yield session
                     session.flush()
+                    callbacks = list(session.info.get('after_commit_callbacks', ()))
                 connection.commit()
             except BaseException:
                 connection.rollback()
                 raise
+        for callback in callbacks:
+            callback()
 
     def close(self) -> None:
         self.engine.dispose()

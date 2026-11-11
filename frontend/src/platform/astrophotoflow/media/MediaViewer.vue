@@ -160,7 +160,12 @@ async function attachImage(image: MediaState, scope: string | undefined) {
     return
   if (viewer.value) savedViewport = viewer.value.snapshot()
   const options = {
-    previous: savedViewport,
+    previous: savedViewport ?? (request.focus ? {
+      width: image.width,
+      height: image.height,
+      center: [request.focus[0] / image.width, request.focus[1] / image.width] as [number, number],
+      zoom: 1 / (window.devicePixelRatio || 1)
+    } : undefined),
     zoom: (value: number) => {
       if (image === state.value && scope === model.scope.value)
         percent.value = value
@@ -385,9 +390,10 @@ onBeforeUnmount(() => {
             >{{ t('astrophotoflow.media.displayThresholds') }}</Button
           >
           <PreviewControls
-            v-if="state?.kind === 'image' && !state.needs_selection"
+            v-if="!request.fixedDisplay && state?.kind === 'image' && !state.needs_selection"
             v-model:max-edge="form.preview_max_edge"
             v-model:balance="form.display_balance"
+            :media="state"
             :disabled="loading"
             @change="load(index, { ...form, display_range: null })"
           />

@@ -11,6 +11,8 @@
 .apf-equipment-management .apf-setup-table th,.apf-equipment-management .apf-setup-table td{height:48px;box-sizing:border-box;vertical-align:middle}
 .apf-equipment-management .apf-setup-table .apf-setup-select-cell{width:28px;padding-inline:4px}
 .apf-equipment-management .apf-setup-table .apf-setup-name-cell{width:140px}
+.apf-equipment-management .apf-setup-table .apf-setup-action-cell{width:44px;text-align:center}
+.apf-workspace .apf-equipment-management .apf-setup-edit{width:32px;height:32px;min-height:32px;padding:0}
 .apf-equipment-management .apf-setup-table .apf-sort-button{min-height:28px;padding:4px 6px;border-radius:8px;background:var(--comfy-menu-secondary-bg,#292929);font:inherit}
 .apf-workspace .apf-equipment-management .apf-setup-table .apf-setup-name{display:block;width:100%;min-height:28px;padding:2px 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left;font-size:12px;background:transparent}
 .apf-equipment-management .apf-setup-equipment-cell{display:flex;align-items:center;min-width:0}
@@ -39,7 +41,6 @@
 .apf-equipment-management .apf-details{padding:8px}
 .apf-equipment-management .apf-detail-fields{grid-template-columns:1fr;gap:4px}
 .apf-equipment-management .apf-detail-fields>label{display:grid;grid-template-columns:minmax(96px,1fr) minmax(0,2fr);align-items:center;gap:8px;min-height:28px}
-.apf-equipment-management .apf-setup-actions{margin:8px 10px;display:flex;gap:8px}
 .apf-equipment-management .apf-setup-manager>p{margin:8px 10px}
 .apf-equipment-management .apf-setup-manager li{margin:4px 0;overflow-wrap:anywhere}
 .apf-equipment-modal-backdrop{position:fixed;inset:0;z-index:1700;display:flex;align-items:center;justify-content:center;background:#0008}

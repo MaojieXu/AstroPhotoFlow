@@ -2,19 +2,20 @@ import { createPlatformClient } from '../../../core/api/client'
 import type { FetchApi } from '../../../core/api/client'
 import {
   getDatasetApiV1DatasetsDatasetIdGet,
-  getDatasetVersionApiV1DatasetsDatasetIdVersionsVersionIdGet,
-  listDatasetVersionsApiV1DatasetsDatasetIdVersionsGet,
   listCalibrationTargetsApiV1CalibrationTargetsGet,
   createDatasetApiV1DatasetsPost,
-  createDatasetVersionApiV1DatasetsDatasetIdVersionsPost
+  editImageDatasetMembers,
+  getCalibrationOperation,
+  replaceDatasetMembers
 } from '../../../generated/api/sdk.gen'
 import type {
-  ListDatasetVersionsApiV1DatasetsDatasetIdVersionsGetData,
   ListCalibrationTargetsApiV1CalibrationTargetsGetData,
   DatasetCreate,
-  CreateDatasetVersionApiV1DatasetsDatasetIdVersionsPostData
+  ImageDatasetCreate,
+  ImageDatasetEditMembers,
+  ReplaceDatasetMembersData
 } from '../../../generated/api/types.gen'
-import { zDatasetOut } from '../../../generated/api/zod.gen'
+import { zDatasetOut, zImageOperationOut } from '../../../generated/api/zod.gen'
 
 export function createDatasetClient(fetchApi: FetchApi) {
   const options = {
@@ -27,31 +28,6 @@ export function createDatasetClient(fetchApi: FetchApi) {
         await getDatasetApiV1DatasetsDatasetIdGet<true>({
           ...options,
           path: { dataset_id: id },
-          signal
-        })
-      ).data,
-    version: async (id: string, versionId: string, signal?: AbortSignal) =>
-      (
-        await getDatasetVersionApiV1DatasetsDatasetIdVersionsVersionIdGet<true>(
-          {
-            ...options,
-            path: { dataset_id: id, version_id: versionId },
-            signal
-          }
-        )
-      ).data,
-    versions: async (
-      id: string,
-      query: NonNullable<
-        ListDatasetVersionsApiV1DatasetsDatasetIdVersionsGetData['query']
-      >,
-      signal?: AbortSignal
-    ) =>
-      (
-        await listDatasetVersionsApiV1DatasetsDatasetIdVersionsGet<true>({
-          ...options,
-          path: { dataset_id: id },
-          query,
           signal
         })
       ).data,
@@ -68,14 +44,20 @@ export function createDatasetClient(fetchApi: FetchApi) {
           signal
         })
       ).data,
+    createFromMembers: async (body: ImageDatasetCreate) =>
+      zImageOperationOut.parse((await createDatasetApiV1DatasetsPost<true>({ ...options, body })).data),
+    operation: async (id: string) =>
+      (await getCalibrationOperation<true>({ ...options, path: { request_id: id } })).data,
     create: async (body: DatasetCreate) =>
       zDatasetOut.parse((await createDatasetApiV1DatasetsPost<true>({ ...options, body })).data),
-    publish: async (
+    editMembers: async (id: string, body: ImageDatasetEditMembers) =>
+      (await editImageDatasetMembers<true>({ ...options, path: { dataset_id: id }, body })).data,
+    replaceMembers: async (
       id: string,
-      body: CreateDatasetVersionApiV1DatasetsDatasetIdVersionsPostData['body']
+      body: ReplaceDatasetMembersData['body']
     ) =>
       (
-        await createDatasetVersionApiV1DatasetsDatasetIdVersionsPost<true>({
+        await replaceDatasetMembers<true>({
           ...options,
           path: { dataset_id: id },
           body

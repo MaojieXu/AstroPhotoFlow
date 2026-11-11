@@ -7,7 +7,7 @@ Thumbnails and large-image viewing share one set of derived caches; caches are r
 ## Thumbnails
 
 - The background generates a 100px-longest-edge JPEG for every image that can be previewed automatically, without blocking an import.
-- A fixed dataset uses the recipe of its first member in fixed version order; independent assets are computed separately, and an unavailable reference frame is not replaced by another.
+- A dataset uses the recipe of its first member in current order; independent assets are computed separately, and an unavailable reference frame is not replaced by another.
 - The web page raises fetch priority for the viewport and nearby rows, with at most 4 requests per page, and each cell is replaced once its cache key becomes ready.
 - Known failed or unsupported entries stop being fetched repeatedly, explicit retry uses the batch endpoint, and the backend sweeps lost files in batches and recovers after restarts.
 
@@ -21,7 +21,7 @@ Thumbnails and large-image viewing share one set of derived caches; caches are r
 ## Cache budgets
 
 - The browser keeps 128 tiles at 512px RGBA, at most 128MiB, and the backend keeps at most 256MiB of encoded tile bytes.
-- Disk usage is at most 4GiB including display bases, tiles, proxies and frame maps, stored under the actual `data_dir/previews/{version}/media/{key}/`.
+- Disk usage is at most 4GiB including display bases, tiles, proxies and frame maps, stored under the actual `data_dir/previews/{asset_id}/media/{key}/`.
 - Only previews-owned derived files are evicted; originals and scientific records are kept, and in-progress ownership blocks concurrent permanent cleanup.
 
 ## States and failures
@@ -34,7 +34,7 @@ Thumbnails and large-image viewing share one set of derived caches; caches are r
 
 - Known-classification datasets use the established MTF and background white-balance recipe during import, while other sources keep percentile thumbnails.
 - RGB first estimates background white balance and then applies the stretch, Mono only stretches; the recipe is stored as a preview record and a display cache is not registered as a scientific asset.
-- A recipe is keyed by fixed version, HDU, size and algorithm version; a generation in progress for the same version is shared, and a request waiting for an older recipe adds the automatic recipe after it finishes.
+- A recipe is keyed by asset identity, HDU, size and algorithm version; a generation in progress for the same asset is shared, and a request waiting for an older recipe adds the automatic recipe after it finishes.
 
 ## External contracts
 

@@ -103,7 +103,7 @@ it('cancels fixed member reads and never carries member data across a new fixed 
     pageSize: 50,
     offset: 0,
     search: '',
-    dataset: { id: 'dataset-a', versionId: 'fixed-a' },
+    dataset: { id: 'dataset-a' },
     sort: { by: 'member_position', order: 'asc' as const }
   })
   const paused = ref(false)
@@ -126,15 +126,15 @@ it('cancels fixed member reads and never carries member data across a new fixed 
     })
   )
   await flushPromises()
-  const signal = members.mock.calls[0][3] as AbortSignal
+  const signal = members.mock.calls[0][2] as AbortSignal
   paused.value = true
   input.value = {
     ...input.value,
-    dataset: { id: 'dataset-b', versionId: 'fixed-b' }
+    dataset: { id: 'dataset-b' }
   }
   await flushPromises()
   expect(signal.aborted).toBe(true)
-  expect(view.request.value?.versionId).toBe('fixed-b')
+  expect(view.request.value?.datasetId).toBe('dataset-b')
   finish({ items: [], total: 0, limit: 50, offset: 0 })
   await flushPromises()
   expect(view.query.data.value).toBeUndefined()

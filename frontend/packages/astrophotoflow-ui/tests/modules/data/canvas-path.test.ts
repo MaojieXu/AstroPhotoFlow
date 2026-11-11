@@ -67,7 +67,6 @@ const task = {
       metadata_status: 'pending',
       preview_status: 'pending',
       asset_id: id(3),
-      asset_version_id: id(4),
       error: null,
       created_at: timestamp,
       updated_at: timestamp
@@ -75,15 +74,15 @@ const task = {
   ]
 }
 
-it('binds the imported fixed version before preview generation finishes', async () => {
+it('binds the imported registered asset before preview generation finishes', async () => {
   const prepared = {
     native_type: 'APF_DATA_REFERENCE',
     title: 'source.fit',
     reference: {
-      kind: 'asset_version',
-      asset_version_id: id(4),
-      selection: { kind: 'whole_file' }
-    }
+                 kind: 'asset',
+                 asset_id: id(3),
+                 selection: { kind: 'whole_file' }
+               }
   }
   const fetch = vi
     .fn()
@@ -97,10 +96,9 @@ it('binds the imported fixed version before preview generation finishes', async 
     storage_mode: 'managed'
   })
   expect(JSON.parse(fetch.mock.calls[2][1].body)).toEqual({
-    entry_type: 'asset',
-    id: id(3),
-    version_id: id(4)
-  })
+                                                            entry_type: 'asset',
+                                                            id: id(3)
+                                                          })
 })
 
 it('reports an import failure without submitting another import', async () => {
@@ -135,10 +133,10 @@ it('observes only the original task until content is ready and stops before prev
     native_type: 'APF_DATA_REFERENCE',
     title: 'source.fit',
     reference: {
-      kind: 'asset_version',
-      asset_version_id: id(4),
-      selection: { kind: 'whole_file' }
-    }
+                 kind: 'asset',
+                 asset_id: id(3),
+                 selection: { kind: 'whole_file' }
+               }
   }
   const waiting = {
     ...task,
@@ -146,8 +144,7 @@ it('observes only the original task until content is ready and stops before prev
       {
         ...task.items[0],
         content_status: 'pending',
-        asset_id: null,
-        asset_version_id: null
+        asset_id: null
       }
     ]
   }
@@ -176,10 +173,10 @@ it('recovers a failed observation by reading the original task, not submitting a
     native_type: 'APF_DATA_REFERENCE',
     title: 'source.fit',
     reference: {
-      kind: 'asset_version',
-      asset_version_id: id(4),
-      selection: { kind: 'whole_file' }
-    }
+                 kind: 'asset',
+                 asset_id: id(3),
+                 selection: { kind: 'whole_file' }
+               }
   }
   const fetch = vi
     .fn()

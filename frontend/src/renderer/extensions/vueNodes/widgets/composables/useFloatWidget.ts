@@ -52,13 +52,15 @@ export const useFloatWidget = () => {
             : 'number'
 
     const step = inputSpec.step ?? 0.5
-    const precision =
-      settingStore.get('Comfy.FloatRoundingPrecision') ||
-      Math.max(0, -Math.floor(Math.log10(step)))
-    const enableRounding = !settingStore.get('Comfy.DisableFloatRounding')
-
     /** Assertion {@link inputSpec.default} */
     const defaultValue = (inputSpec.default as number | undefined) ?? 0
+    const [mantissa, exponent = '0'] = String(defaultValue).split('e')
+    const defaultPrecision = Math.max(0, (mantissa!.split('.')[1]?.length ?? 0) - Number(exponent))
+    const precision =
+      settingStore.get('Comfy.FloatRoundingPrecision') ||
+      Math.max(defaultPrecision, 0, -Math.floor(Math.log10(step)))
+    const enableRounding = !settingStore.get('Comfy.DisableFloatRounding')
+
     const widget = node.addWidget(
       widgetType,
       inputSpec.name,

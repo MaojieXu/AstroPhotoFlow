@@ -1,9 +1,7 @@
 """Typed HTTP adaptation for explicit image metadata and calibration use cases."""
-from typing import Annotated
+
 from uuid import UUID
-
-from fastapi import APIRouter, Depends, Query, Request
-
+from fastapi import APIRouter, Depends, Request
 import astrophotoflow.interfaces.http.dependencies as deps
 import astrophotoflow.modules.data.public as data
 from astrophotoflow.contracts.image_calibration import (
@@ -11,9 +9,8 @@ from astrophotoflow.contracts.image_calibration import (
     CalibrationCheckPage,
     CalibrationCheckRequest,
     CalibrationSearchRequest,
-    DatasetCalibrationPage,
+    DatasetCalibrationOut,
     DatasetCalibrationUpdate,
-    DatasetMemberCalibrationUpdate,
     ImageCalibrationOut,
     ImageCalibrationUpdate,
     ImageDatasetEditMembers,
@@ -34,8 +31,8 @@ router = APIRouter(prefix="/api/v1", dependencies=[Depends(deps.authenticate)], 
 
 
 @router.get("/library/assets/{asset_id}/detail", response_model=ImageDetail, operation_id="getImageDetail")
-def get_image(asset_id: UUID, session: deps.ReadSession, version_id: UUID | None = None):
-    return ImageDetail.model_validate(data.get_image(session, asset_id, version_id), strict=False)
+def get_image(asset_id: UUID, session: deps.ReadSession):
+    return ImageDetail.model_validate(data.get_image(session, asset_id), strict=False)
 
 
 @router.post("/library/assets/metadata-updates", response_model=ImageBatchResult, operation_id="updateImageMetadataBatch")
@@ -48,19 +45,21 @@ def apply_equipment(body: ImageEquipmentApply, session: deps.WriteSession):
     return ImageBatchResult.model_validate(data.apply_image_equipment(session, body.assets, body.equipment), strict=False)
 
 
-@router.get("/library/assets/{asset_id}/versions/{version_id}/master-provenance", response_model=MasterProvenanceOut, operation_id="getMasterProvenance")
-def master_provenance(asset_id: UUID, version_id: UUID, session: deps.ReadSession, provenance_version_id: UUID | None = None):
-    return MasterProvenanceOut.model_validate(data.get_master_provenance(session, asset_id, version_id, provenance_version_id), strict=False)
+@router.get("/library/assets/{asset_id}/master-provenance", response_model=MasterProvenanceOut, operation_id="getMasterProvenance")
+def master_provenance(asset_id: UUID, session: deps.ReadSession):
+    return MasterProvenanceOut.model_validate(data.get_master_provenance(session, asset_id), strict=False)
 
 
-@router.patch("/library/assets/{asset_id}/versions/{version_id}/master-provenance", response_model=MasterProvenanceOut, operation_id="updateMasterProvenance")
-def update_provenance(asset_id: UUID, version_id: UUID, body: MasterProvenanceUpdate, session: deps.WriteSession):
-    return MasterProvenanceOut.model_validate(data.update_master_provenance(session, asset_id, version_id, body.expected_revision, body.changes), strict=False)
+@router.patch("/library/assets/{asset_id}/master-provenance", response_model=MasterProvenanceOut, operation_id="updateMasterProvenance")
+def update_provenance(asset_id: UUID, body: MasterProvenanceUpdate, session: deps.WriteSession):
+    return MasterProvenanceOut.model_validate(
+        data.update_master_provenance(session, asset_id, body.expected_revision, body.changes), strict=False
+    )
 
 
 @router.get("/datasets/{dataset_id}/detail", response_model=DatasetImageDetail, operation_id="getImageDatasetDetail")
-def dataset_detail(dataset_id: UUID, session: deps.ReadSession, version_id: UUID | None = None):
-    return DatasetImageDetail.model_validate(data.get_image_dataset(session, dataset_id, version_id), strict=False)
+def dataset_detail(dataset_id: UUID, session: deps.ReadSession):
+    return DatasetImageDetail.model_validate(data.get_image_dataset(session, dataset_id), strict=False)
 
 
 @router.post("/datasets/{dataset_id}/member-edits", response_model=ImageOperationOut, operation_id="editImageDatasetMembers")
@@ -80,34 +79,29 @@ def calibration_check(body: CalibrationCheckRequest, session: deps.ReadSession):
 
 @router.post("/calibration/import-check", response_model=ScannedCalibrationCheckPage, operation_id="checkImportCalibration")
 def calibration_import_check(body: ScannedCalibrationCheckRequest, request: Request, session: deps.ReadSession):
-    return ScannedCalibrationCheckPage.model_validate(data.check_import_calibration(session, request.app.state.settings, body), strict=False)
+    return ScannedCalibrationCheckPage.model_validate(
+        data.check_import_calibration(session, request.app.state.settings, body), strict=False
+    )
 
 
-@router.get("/library/assets/{asset_id}/versions/{asset_version_id}/calibration", response_model=ImageCalibrationOut, operation_id="getImageCalibration")
-def image_calibration(asset_id: UUID, asset_version_id: UUID, session: deps.ReadSession, binding_version_id: UUID | None = None):
-    return ImageCalibrationOut.model_validate(data.get_image_calibration(session, asset_id, asset_version_id, binding_version_id), strict=False)
+@router.get("/library/assets/{asset_id}/calibration", response_model=ImageCalibrationOut, operation_id="getImageCalibration")
+def image_calibration(asset_id: UUID, session: deps.ReadSession):
+    return ImageCalibrationOut.model_validate(data.get_image_calibration(session, asset_id), strict=False)
 
 
-@router.post("/library/assets/{asset_id}/versions/{asset_version_id}/calibration", response_model=ImageOperationOut, operation_id="updateImageCalibration")
-def update_image_calibration(asset_id: UUID, asset_version_id: UUID, body: ImageCalibrationUpdate, session: deps.WriteSession):
-    return ImageOperationOut.model_validate(data.update_image_calibration(session, asset_id, asset_version_id, body), strict=False)
+@router.post("/library/assets/{asset_id}/calibration", response_model=ImageOperationOut, operation_id="updateImageCalibration")
+def update_image_calibration(asset_id: UUID, body: ImageCalibrationUpdate, session: deps.WriteSession):
+    return ImageOperationOut.model_validate(data.update_image_calibration(session, asset_id, body), strict=False)
 
 
-@router.get("/datasets/{dataset_id}/versions/{version_id}/calibration", response_model=DatasetCalibrationPage, operation_id="getDatasetCalibration")
-def dataset_calibration(dataset_id: UUID, version_id: UUID, session: deps.ReadSession,
-                        member_asset_version_ids: Annotated[list[UUID] | None, Query()] = None,
-                        limit: deps.Limit = 50, offset: deps.Offset = 0, combination_key: str | None = None):
-    return DatasetCalibrationPage.model_validate(data.get_image_dataset_calibration(session, dataset_id, version_id, member_asset_version_ids, limit, offset, combination_key), strict=False)
+@router.get("/datasets/{dataset_id}/calibration", response_model=DatasetCalibrationOut, operation_id="getDatasetCalibration")
+def dataset_calibration(dataset_id: UUID, session: deps.ReadSession):
+    return DatasetCalibrationOut.model_validate(data.get_image_dataset_calibration(session, dataset_id), strict=False)
 
 
-@router.post("/datasets/{dataset_id}/calibration/defaults", response_model=ImageOperationOut, operation_id="updateDatasetCalibrationDefaults")
-def update_defaults(dataset_id: UUID, body: DatasetCalibrationUpdate, session: deps.WriteSession):
-    return ImageOperationOut.model_validate(data.update_image_dataset_calibration_defaults(session, dataset_id, body), strict=False)
-
-
-@router.post("/datasets/{dataset_id}/calibration/members", response_model=ImageOperationOut, operation_id="updateDatasetCalibrationMembers")
-def update_members(dataset_id: UUID, body: DatasetMemberCalibrationUpdate, session: deps.WriteSession):
-    return ImageOperationOut.model_validate(data.update_image_dataset_calibration_members(session, dataset_id, body), strict=False)
+@router.post("/datasets/{dataset_id}/calibration", response_model=ImageOperationOut, operation_id="updateDatasetCalibration")
+def update_dataset_calibration(dataset_id: UUID, body: DatasetCalibrationUpdate, session: deps.WriteSession):
+    return ImageOperationOut.model_validate(data.update_image_dataset_calibration(session, dataset_id, body), strict=False)
 
 
 @router.get("/calibration/operations/{request_id}", response_model=ImageOperationOut, operation_id="getCalibrationOperation")

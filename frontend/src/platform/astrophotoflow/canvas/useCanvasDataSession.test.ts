@@ -40,8 +40,8 @@ function lastState() {
 function command(): Extract<CanvasCommand, { data: unknown }> {
   const state = lastState()
   return {
-    request: { operation_id: ids.operation, page_id: ids.page, workflow_id: state.workflow_id, graph_id: state.graph_id, content_token: state.content_token, source: { entry_type: 'asset', id: ids.asset, version_id: ids.version, member_indexes: null } },
-    data: { native_type: 'APF_DATA_REFERENCE', title: 'Fixed science', reference: { kind: 'asset_version', asset_version_id: ids.version, selection: { kind: 'whole_file', hdu_index: null } } }
+    request: { operation_id: ids.operation, page_id: ids.page, workflow_id: state.workflow_id, graph_id: state.graph_id, content_token: state.content_token, source: { entry_type: 'asset', id: ids.asset, asset_ids: null } },
+    data: { native_type: 'APF_DATA_REFERENCE', title: 'Science', reference: { kind: 'asset', asset_id: ids.asset, selection: { kind: 'whole_file', hdu_index: null } } }
   }
 }
 

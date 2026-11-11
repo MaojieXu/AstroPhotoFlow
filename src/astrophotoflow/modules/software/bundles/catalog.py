@@ -39,5 +39,8 @@ def operation(workspace: Path, package_id: str, operation_id: str, ready: bool, 
 
 def operation_from_entry(entry, ready: bool, reason: str | None):
     value = SoftwareOperation.model_validate(dict(entry['operation'], content_token='', ready=ready, reason=reason))
+    if 'calibration_effect' not in entry['operation']:
+        from astrophotoflow.modules.software.packages.calibration import declared_calibration_effect
+        value = value.model_copy(update={'calibration_effect': declared_calibration_effect(value)})
     encoded = json.dumps(value.model_dump(mode='json', exclude={'content_token', 'ready', 'reason'}), sort_keys=True, separators=(',', ':'), ensure_ascii=False)
     return value.model_copy(update={'content_token': hashlib.sha256(encoded.encode()).hexdigest()})

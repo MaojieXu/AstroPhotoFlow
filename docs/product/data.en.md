@@ -2,15 +2,17 @@
 
 English | [中文](data.md)
 
-The asset library holds the science files users import and their traceable metadata. Asset identity, fixed versions, equipment snapshots and calibration relations are maintained by the data capability; this page states what users need and which product rules must hold. Concrete behavior and interfaces are in the [library subsystem](../subsystems/library.en.md) and [references](../references.en.md).
+The asset library holds the science files users import and their traceable metadata. Asset identity, current datasets, equipment snapshots and calibration relations are maintained by the data capability; this page states what users need and which product rules must hold. Concrete behavior and interfaces are in the [library subsystem](../subsystems/library.en.md) and [references](../references.en.md).
 
-## Assets and fixed versions
+## Assets and datasets
 
 - Every file gets a stable asset identity at import; later name, thumbnail or metadata updates do not change it.
-- Assets and collections have fixed versions; a collection's members and order are fixed at acceptance, and appending to an existing collection does not reorder existing members.
+- Each asset has one registered original referenced by asset_id. A dataset stores its current ordered members under dataset_id, and appending preserves the order of existing members.
 - New runs use corrected metadata and record it; old runs do not change because metadata was updated.
-- Import can create a single image, a new collection, or append to a specified collection; one collection may span nights, exposures and devices, and each member keeps its own fixed calibration relations; appending an image without calibration configuration must not silently inherit the previous night's flats.
+- Import can save a standalone asset, create a subframe dataset, or append to a specified dataset. Datasets contain assets explicitly classified as subframes. Master frames are saved independently.
 - Successful members and their relations are published together; failed members keep their identity and are reported separately.
+- Users or Agents submit ordered member lists. The platform displays differences in purpose, equipment, readout mode, ISO/Gain/Offset, temperature, exposure, filter, Binning and optical configuration. A group temperature range up to and including 1°C matches. Larger ranges and other capture parameter differences produce warnings and allow saving and processing. Capture time, filename and sequence may differ. Unknown facts remain unknown, and differences in filter labels and observed device names remain visible.
+- Every import registers an independent asset and copies its original. An asset ID belongs to at most one dataset. Removing a member retains its original and permits later assignment to another dataset. Asset trash handles original cleanup.
 
 ## Import
 
@@ -37,18 +39,24 @@ The asset library holds the science files users import and their traceable metad
 
 ## Calibration
 
-- Calibration relations appear directly as columns of the asset table, with no separate calibration card, duplicated member table or matching filter; an unconfigured slot is never written as "unused" automatically.
-- Single-image configuration is versioned independently; a collection uses collection defaults plus member overrides and does not dynamically adopt the latest single-image binding; inherited, not yet configured, explicitly unused and fixed targets are expressed separately.
+- Edit calibration in the project dataset details and view current targets in the asset table. Unconfigured and explicitly unused slots are distinct.
+- Each dataset stores one current calibration configuration shared by all members, with at most one Master asset per purpose. Keep subframes that require different calibration in separate datasets. A standalone image stores its current calibration settings.
 - Every slot is optional: Light may take Dark, Flat or Bias; Flat may take Bias or Dark-flat; Dark and Dark-flat may take Bias; not all slots must be configured.
-- A binding target must be an existing fixed masterframe version for the matching purpose and cannot reference a raw calibration group or subframe; raw groups remain manageable and usable as fixed sources for a Master.
+- A binding target must be an existing masterframe asset for the matching purpose and cannot reference a raw calibration group or subframe; raw groups remain manageable and usable as sources for a Master.
 - Saving a calibration relation does not run calibration; binding is not the same as having executed it.
-- A collection shows subframe count and accumulated exposure automatically, summed from single-frame exposure over the whole fixed member range regardless of paging or filters; the number 0 and unknown are kept apart.
-- Calibration candidates provide conflict and unknown evidence; manual Master sources and the platform's actual processing facts are kept separately.
+- A collection shows subframe count and accumulated exposure automatically, summed from single-frame exposure over the whole current member range regardless of paging or filters; the number 0 and unknown are kept apart.
+- Calibration candidates provide conflict and unknown evidence; the current user-declared Master sources are kept separately from the platform's actual processing facts.
+
+## Calibration status
+
+- Current asset status uses `UnCalibrated`, `Calibrated` and `Unknown`. External imports default to `Unknown`, and an explicit declaration records its evidence. Masters also retain their own status.
+- Saving Master bindings preserves asset status. Successful calibration outputs register as new assets with the actual inputs, Masters, parameters and call. Operations explicitly preserving status inherit it, and unspecified processing semantics produce `Unknown`.
+- A dataset displays the common member status, or aggregates mixed states as `Unknown` with counts for all three statuses. User declarations and actual processing evidence are retained separately.
 
 ## Asset library display
 
-- The asset library offers a compact list and a detail mode; a fixed collection can switch members while keeping the image, name and parameters.
-- The calibration column shows the final Master name on one line, with version, source and diagnostics available on demand.
+- The library provides global filters, lists, and previews. Projects manage references to subframe datasets and independent master frames. Multiple projects may reference a dataset. Its details show affected projects, and edits apply to their next processing call.
+- The calibration column shows the final Master name on one line, with source and diagnostics available on demand.
 - Normal browsing batch-reads calibration relations for the current page and does not rerun scientific checks.
 - Local writes refresh immediately; external MCP changes sync through the existing lightweight refresh, without a new event system.
 

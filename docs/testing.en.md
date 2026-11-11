@@ -17,8 +17,9 @@ Test layers cover documentation, Python, architecture, frontend, browser, and di
 
 ## Gates and CI
 
-- The `docs` job runs `pnpm check:docs` and `pytest tests/docs` on ubuntu.
-- The `product` job builds the frontend on an ubuntu and windows matrix, discovers browser test cases, runs Python and frontend tests, and builds and verifies the distribution.
+- The `docs` job runs the documentation gate and `pytest tests/docs` on Ubuntu.
+- The `product` job installs dependencies from the project lockfiles, builds the frontend, discovers browser test cases, runs Python and frontend tests, and builds and verifies the distribution on Ubuntu and Windows.
+- The `product` job's Python tests also include language coverage guards: the web app `en`/`zh` catalogs keep identical key sets, and every platform error renders through the message catalog.
 - The `checks` job aggregates both, with the status name `all checks passed` referenced by branch protection.
 
 ## Writing receipts
@@ -33,8 +34,21 @@ Test layers cover documentation, Python, architecture, frontend, browser, and di
 - Browser tests run only against a locally chosen workspace: `APF_WEB_URL` must be a loopback address and must point to the same workspace as `APF_TEST_WORKSPACE`; the shared `dev` and `default` workspaces are rejected.
 - CI only runs `pnpm test:browser --list` to discover cases and does not start services.
 - The default config runs the native web page, layout, and workbench settings cases; `pnpm test:browser:modernization` and `pnpm test:browser:native` are separate configs chosen by change scope.
-- Reports go to `.artifacts/reports/browser/`; parallel or per-worktree runs set `APF_BROWSER_REPORT` to a dedicated subdirectory under that directory.
+- Reports go to `.artifacts/reports/browser/`. Parallel browser runs use `APF_BROWSER_REPORT` for a dedicated subdirectory, and parallel pytest runs use `--basetemp=.artifacts/pytest-<task>` for a dedicated temporary directory.
 - The worker count is 1 and failures are not retried automatically; failures keep traces and screenshots, and native queue or restart scenarios that are not explicitly enabled are reported as skipped, not passed.
+
+## Real materials
+
+`tests/real_data/` uses five original source directories with explicit groups in `tests/fixtures/real-data-catalog.json`. The authored lists contain 30 subframe groups and 10 standalone Masters, totaling 514 files. Cases check every header, representative imports, current members, shared calibration, interface parity, readable layout, JSON synchronization and status propagation.
+
+Supply the source root with `--real-data-root`. Omission reports a skip reason. An explicitly supplied missing directory or changed baseline fails. Sources are read-only, and copies, databases and fault injection use pytest temporary directories. Full copying additionally requires `--run-full-import`.
+
+```powershell
+uv run --locked --no-sync pytest tests/real_data --real-data-root "E:/AstroPhotoFlow/Erellaz" -m "not full_import"
+uv run --locked --no-sync pytest tests/real_data --real-data-root "E:/AstroPhotoFlow/Erellaz" --run-full-import -m full_import
+```
+
+Markers are `real_data`, `full_import` and `plan_a`. Receipts under `.artifacts/reports/real-data/` retain sources, task IDs, phases, errors and passed/failed/skipped counts. Controlled successful receipts verify status propagation. Actual software processing is recorded separately.
 
 ## Validation boundaries
 

@@ -74,6 +74,7 @@ def start_services(config_path: Path, result: WorkbenchResult, control: dict) ->
     state.write_state(workspace, record)
     pending_child = None
     try:
+        launched = []
         for command, cwd, role, timeout in ((service_command, workspace, "asset-service", 90),
                                             (comfy_command, comfyui, "comfyui", 180)):
             control["pending_process"] = {"role": role, "pid": None, "command": command, "workspace": str(workspace),
@@ -90,16 +91,23 @@ def start_services(config_path: Path, result: WorkbenchResult, control: dict) ->
             control.pop("pending_process")
             state.write_control(workspace, control)
             pending_child = None
-            deadline = time.monotonic() + timeout
-            while True:
-                if child.poll() is not None:
+            ready = (lambda path=config_path: observations.service_healthy(path)) if role == "asset-service" \
+                else (lambda: observations.web_healthy(web_url, workspace))
+            launched.append({"role": role, "process": child, "timeout": timeout, "ready": ready,
+                             "deadline": time.monotonic() + timeout})
+        waiting = {entry["role"]: entry for entry in launched}
+        while waiting:
+            for role, entry in list(waiting.items()):
+                if entry["process"].poll() is not None:
                     raise WorkbenchError(f"{role}启动失败；请查看workspace/logs。")
-                ready = observations.service_healthy(config_path) if role == "asset-service" else observations.web_healthy(web_url, workspace)
-                if ready:
-                    break
-                if time.monotonic() >= deadline:
-                    raise WorkbenchError(f"{role}未能在{timeout}秒内就绪；请查看workspace/logs。")
-                time.sleep(0.25)
+                if entry["ready"]():
+                    waiting.pop(role)
+            if not waiting:
+                break
+            for role, entry in waiting.items():
+                if time.monotonic() >= entry["deadline"]:
+                    raise WorkbenchError(f"{role}未能在{entry['timeout']}秒内就绪；请查看workspace/logs。")
+            time.sleep(0.25)
     except Exception as startup_error:
         if pending_child is None and control.get("pending_process", {}).get("pid") is None:
             control.pop("pending_process", None)

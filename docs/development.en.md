@@ -2,75 +2,58 @@
 
 English | [中文](development.md)
 
-Development on Windows x64 is prepared through the fixed `scripts/bootstrap.ps1` entry: it selects and verifies tools and forwards arguments to `scripts/dev_prepare.py` (`--watch` goes to `scripts/dev_frontend.py`), without changing the global PATH, Python registrations, or the default workspace. Other platforms have no validated path.
+Develop in a single Git checkout. See the [Quickstart](../README.en.md#quickstart) for installation and startup. The full workbench is validated on Windows x64.
 
-## Environment and versions
+## Tools and dependencies
 
 | Dependency | Version | Notes |
 | --- | --- | --- |
-| Python | 3.12 | `pyproject.toml` requires `>=3.12`; bootstrap always installs and uses the uv-managed 3.12.15 instead of borrowing a system interpreter |
-| uv | 0.13.5 | Python dependency and toolchain entry |
+| Python | 3.12.15 | Managed by uv according to `.python-version` |
+| uv | 0.13.5 | Installs Python dependencies and runs commands in the project environment |
 | Node.js | `>=26.8.2 <27` | Frontend build and tests |
-| pnpm | 11.13.1 | Pinned by `packageManager` in `package.json` |
+| pnpm | 11.13.1 | Pinned by `packageManager` in the root `package.json` |
 
-The lock files are the root `uv.lock` and `frontend/pnpm-lock.yaml`. The root `package.json` is the task entry; frontend dependencies and lock files live in `frontend`, and `pnpm install` is not run at the repository root.
+The root `uv.lock` governs `.venv`, and `frontend/pnpm-lock.yaml` governs `frontend/node_modules`. pnpm uses its hoisted layout so Windows terminals without directory symlink permissions can resolve dependencies. The package managers own their download caches.
 
-## Fixed entry point
+## Directories
 
-On Windows x64, `scripts/bootstrap.ps1` is the only startup entry:
+- `.artifacts/build/frontend` holds built web assets and `.artifacts/dist` holds distribution artifacts. `frontend/build` is source code.
+- `.artifacts/runtime` holds the fixed CPU engine for a source checkout. The first `apf init` prepares it, and later runs verify and reuse it. To isolate the engine, set `ASTROPHOTOFLOW_RUNTIME` to an absolute path.
+- `.artifacts/workspaces/dev` holds the daily workbench configuration, database, assets, and workflows. `apf init` copies the web assets into that workspace's `web` directory, and `--no-activate` preserves the default workspace pointer. Preserve the workbench directory when cleaning build outputs.
 
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/bootstrap.ps1 --workspace .artifacts/workspaces/dev --build --start
-```
+The database is currently in v1 development, and all existing workspace contents are replaceable test data. Schema changes update the single initialization baseline directly. Replace or rebuild test workspaces as needed, without preserving old test contents or writing migrations for earlier development versions. When database v2 development formally begins, preserve v1 data and design and validate upgrade migrations. Here, v1 and v2 refer to database development stages.
 
-| Argument | Effect |
-| --- | --- |
-| `--workspace` | Required; an independent workspace directory |
-| `--build` | Builds the frontend output from the current sources |
-| `--frontend-assets` | Reuses a previously verified web output directory |
-| `--start`, `--stop` | Starts both services; stops only that workspace |
-| `--watch --port <port> --strictPort` | Runs Vite hot reload |
-| `--service-port`, `--comfyui-port` | Domain service and ComfyUI ports; a new workspace defaults to 8190 / 8188, an existing `config.toml` is authoritative, and a conflicting explicit value is an error |
-| `--runtime-dir`, `--cache-dir` | Private runtime and tool/package cache directories |
-| `--offline` | Uses only local caches, no network |
-| `--bundle-source`, `--clear-bundle-source` | Binds or unbinds a development bundle source |
-
-Missing tools are downloaded as pinned archives into `.artifacts/toolchains` and verified; caches default to the main checkout's `.artifacts/cache` and can be overridden with `--cache-dir` or the `ASTROPHOTOFLOW_DEV_CACHE` environment variable. The receipt is written to `.artifacts/dev-prepare.json` and logs to `.artifacts/logs/dev-prepare/<run_id>`.
-
-The development venv's base interpreter is pinned to the uv-managed 3.12.15; bootstrap recreates an existing venv whose `pyvenv.cfg` points at another interpreter. `apf env doctor` checks the interpreter, tools, runtime, and workspace ports.
+After changing the ORM, run `pnpm generate:database-baseline`, review the generated constraints, and use `tests/core/test_image_management_migration.py` to verify that a fresh database matches the ORM. Before rebuilding in place, stop the target instance through the core control entry point and verify the absolute target path and cleanup scope. Confirmed v1 test workspaces may be replaced directly as part of development tasks. Original assets outside the workspace remain subject to original-file protection rules.
 
 ## Common commands
 
 | Task | Command |
 | --- | --- |
-| Install development dependencies | `uv sync --locked --extra dev` |
-| Prepare dependencies and a workspace | `pnpm dev:prepare --workspace .artifacts/workspaces/<name> --start` |
-| Build the frontend output | `pnpm build` |
-| Frontend hot reload | `pnpm build:watch --workspace .artifacts/workspaces/<name> --port 32589 --strictPort` |
-| MCP development reload | `pnpm dev:mcp --workspace .artifacts/workspaces/<name> --port 8765` |
+| Stop the development workbench | `uv run --locked --no-sync apf stop --workspace .artifacts/workspaces/dev` |
+| Frontend hot reload | `pnpm build:watch --workspace .artifacts/workspaces/dev --port 32589 --strictPort` |
+| MCP development reload | `pnpm dev:mcp --workspace .artifacts/workspaces/<test> --port 8765` |
+| Development Bundle sources | `uv run --locked --no-sync python scripts/dev_bundle_sources.py --help` |
 | Python tests | `uv run --locked --no-sync pytest -q --basetemp=.artifacts/pytest-<task>` |
 | Frontend unit tests | `pnpm test` |
-| Browser tests | `pnpm test:browser` |
 | Architecture boundary check | `pnpm check:boundaries` |
 | Documentation gate | `pnpm check:docs` |
 | Interface artifacts | `pnpm docs:api` |
-| Check the development environment | `apf env doctor` |
-| Prune expired temporary artifacts | `python scripts/prune_artifacts.py` (`--apply` deletes) |
+| Check the development environment | `uv run --locked --no-sync apf env doctor --workspace .artifacts/workspaces/dev` |
+| Prune expired temporary artifacts | `uv run --locked --no-sync python scripts/prune_artifacts.py` (`--apply` deletes) |
 
-## Artifacts and receipts
+## Develop against Bundle sources
 
-- `.artifacts/build`: frontend, engine, and Python build artifacts; `frontend/build` is source, not an artifact.
-- `.artifacts/dist`: distribution artifacts.
-- `.artifacts/venvs/dev`, `.artifacts/toolchains`, `.artifacts/managed-python`, `.artifacts/cache`: development environment and caches.
-- `.artifacts/workspaces/<name>`: an independent workspace with configuration, database, objects, previews, and run records.
-- `.artifacts/dev-prepare.json`: arguments, stages, and result of the latest preparation.
-- `.artifacts/logs/dev-prepare/<run_id>`: stage logs from bootstrap and preparation.
+At the repository root, enable source discovery for a prepared test workspace, then check out development repositories into direct children of `bundles/`. Each checkout has its own Git history.
 
-## Debug entry points
+```powershell
+uv run --locked --no-sync python scripts/dev_bundle_sources.py --workspace .artifacts/workspaces/bundle-test --repo-bundles
+git clone --branch dev https://github.com/MaojieXu/AstroPhotoFlow-Siril.git bundles/siril
+```
 
-- The receipt's `completed` means the preparation request finished and `ready` means the services are ready; neither means the page has been displayed. Use the receipt's `web_url` as the page address.
-- Start no longer writes actual ports back into `config.toml`; use the receipt and `actual_ports` in `workspace/run/processes.json` for the effective addresses.
-- Point browser validation at your own receipt address with `APF_WEB_URL` and at your own workspace with `APF_TEST_WORKSPACE`.
-- Native queue and restart scenarios require `APF_ALLOW_NATIVE_QUEUE=1` and `APF_ALLOW_WORKBENCH_RESTART=1` explicitly set; otherwise they are reported as skipped.
-- Parallel pytest runs must each pass a distinct `--basetemp=.artifacts/pytest-<task>`.
-- After changing Python or service code, explicitly restart your own instance; MCP hot reload does not restart the domain service.
+After saving an adapter, the next run or preview uses the new code. After declarations change, the open page refreshes the node catalog. Existing instances whose parameters or ports changed appear unavailable. Add the new node from the catalog. Use `--clear-repo-bundles` to clear the directory binding or `--bundle-source <id>=<path>` to bind a specific directory.
+
+## Debugging
+
+- Use the actual `web_url` from `apf start` or `apf status`. The workspace's `run/processes.json` records the actual ports, and `config.toml` holds the preferred ports.
+- Use an isolated test workspace in the checkout for browser and MCP validation. See [Testing](testing.en.md) for browser and parallel test settings.
+- Stop your own instance before updating dependencies, the engine, or workbench web assets. Explicitly restart after changing Python service code. MCP hot reload only refreshes the MCP process.

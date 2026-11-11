@@ -1,5 +1,6 @@
 import type { Equipment } from '../api/contracts'
 import { uiT } from '../../../core/i18n'
+import { displayLabel } from '../library/presentation'
 
 type InputField = { key: string; label: string; unit?: string; type?: string; options?: string[]; integer?: boolean }
 
@@ -8,7 +9,8 @@ export const specFields: Record<string, InputField[]> = {
     { key: 'sensor_width_px', get label() { return uiT('apfUi.sensor_width') }, unit: 'px', type: 'number', integer: true },
     { key: 'sensor_height_px', get label() { return uiT('apfUi.sensor_height') }, unit: 'px', type: 'number', integer: true },
     { key: 'pixel_size_um', get label() { return uiT('apfUi.pixel_size') }, unit: 'µm', type: 'number' },
-    { key: 'cfa_pattern', get label() { return uiT('apfUi.cfa_pattern') } }
+    { key: 'cfa_pattern', get label() { return uiT('apfUi.cfa_pattern') } },
+    { key: 'default_parameter_mode', get label() { return uiT('apfUi.camera_parameter_mode') }, options: ['iso', 'gain'] }
   ],
   telescope: [
     { key: 'native_focal_length_mm', get label() { return uiT('apfUi.native_focal_length') }, unit: 'mm', type: 'number' }
@@ -31,7 +33,7 @@ export function specKind(field:InputField):'number'|'select'|'text'{
 }
 export function specChoices(field:InputField){
   if(field.key==='cfa_pattern')return cfaChoices
-  if(field.options)return [{value:'',get label() { return uiT('apfUi.not_specified') }},...field.options.map(value=>({value,label:value}))]
+  if(field.options)return [{value:'',get label() { return uiT('apfUi.not_specified') }},...field.options.map(value=>({value,label:displayLabel(value)}))]
   return []
 }
 export function specDisplay(field:InputField,value:unknown){

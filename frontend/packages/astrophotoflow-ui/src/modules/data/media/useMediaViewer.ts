@@ -89,7 +89,7 @@ export function useMediaViewer(
                 selected?.basePath ?? null
               ]
             : ['viewer-thumbnail-idle', index],
-          enabled: Boolean(current && selected),
+          enabled: Boolean(current && selected && !current.source.fixedDisplay),
           queryFn: async ({ signal }: { signal: AbortSignal }) => {
             if (!current || !selected)
               throw new Error('Viewer thumbnail requires a fixed member')

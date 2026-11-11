@@ -8,18 +8,17 @@ import type { LibraryCalibrationSlot } from '@ui/generated/api/types.gen'
 import type { LibraryTableRow } from '@ui/modules/data/library/tableTypes'
 import { ApiClientError } from '@ui/core/api/errors'
 
-const api = vi.hoisted(() => ({search:vi.fn(),updateImage:vi.fn(),updateMembers:vi.fn()}))
+const api = vi.hoisted(() => ({search:vi.fn(),updateImage:vi.fn()}))
 vi.mock('@ui/modules/data/api/calibration', () => ({calibrationApi:api}))
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12,'0')}`
 const unconfigured = (): LibraryCalibrationSlot => ({choice:{mode:'unconfigured'},source:'standalone',status:'unconfigured',check_state:'not_checked'})
-const target = (name: string, n: number): LibraryCalibrationSlot => ({choice:{mode:'target',target:{kind:'asset_version',id:id(n)}},source:'member_override',status:'target',target_detail:{target:{kind:'asset_version',id:id(n)},asset_id:id(n+100),name,version_number:2,target_kind:'master',master_required:false}})
-function binding(dataset = false): InlineCalibrationBinding {
-  return {slot:'flat',label:'平场',value:unconfigured(),context:{workspaceId:`inline-${dataset}`,assetId:id(1),versionId:id(2),revision:4,bindingVersionId:null,
-    dataset:dataset?{id:id(3),current_version_id:id(4),revision:5,followsCurrent:true}:undefined,
+const target = (name: string, n: number): LibraryCalibrationSlot => ({choice:{mode:'target',target:{kind:'asset',id:id(n)}},source:'dataset',status:'target',target_detail:{target:{kind:'asset',id:id(n)},asset_id:id(n+100),name,target_kind:'master',master_required:false}})
+function binding(): InlineCalibrationBinding {
+  return {slot:'flat',label:'平场',value:unconfigured(),context:{workspaceId:"inline",assetId:id(1),revision:4,
     saved:vi.fn().mockResolvedValue(undefined),runSave:(_key,operation)=>operation(),cancel:vi.fn()}}
 }
 let wrapper: ReturnType<typeof mount> | undefined
-beforeEach(()=>{api.search.mockReset().mockResolvedValue({items:[{target:{kind:'asset_version',id:id(9)},name:'Master Flat H',version_number:2}],total:1,limit:200,offset:0});api.updateImage.mockReset().mockResolvedValue({});api.updateMembers.mockReset().mockResolvedValue({})})
+beforeEach(()=>{api.search.mockReset().mockResolvedValue({items:[{target:{kind:'asset',id:id(9)},name:'Master Flat H'}],total:1,limit:200,offset:0});api.updateImage.mockReset().mockResolvedValue({})})
 afterEach(()=>{wrapper?.unmount();wrapper=undefined;vi.restoreAllMocks()})
 
 describe('calibration directly in existing table cells',()=>{
@@ -38,17 +37,8 @@ describe('calibration directly in existing table cells',()=>{
     const select=wrapper.get('select')
     expect(select.element.value).toBe('unconfigured')
     await select.setValue(id(9));await select.trigger('keydown',{key:'Enter'});await flushPromises()
-    expect(api.updateImage).toHaveBeenCalledWith(id(1),id(2),expect.objectContaining({expected_revision:4,changes:{flat:{mode:'target',target:{kind:'asset_version',id:id(9)}}},accept_unknown:false}))
+    expect(api.updateImage).toHaveBeenCalledWith(id(1),expect.objectContaining({expected_revision:4,changes:{flat:{mode:'target',target:{kind:'asset',id:id(9)}}},accept_unknown:false}))
     expect(data.context?.saved).toHaveBeenCalled()
-    expect(api.updateMembers).not.toHaveBeenCalled()
-  })
-  it('uses a member patch to restore inheritance without rewriting all members',async()=>{
-    const data=binding(true);data.value=target('Flat A',8)
-    wrapper=mount(InlineCalibrationCell,{props:{binding:data}})
-    await wrapper.get('button').trigger('dblclick');await flushPromises()
-    await wrapper.get('select').setValue('inherit');await wrapper.get('select').trigger('keydown',{key:'Enter'});await flushPromises()
-    expect(api.updateMembers).toHaveBeenCalledWith(id(3),expect.objectContaining({expected_revision:5,base_version_id:id(4),members:[{asset_version_id:id(2),changes:{flat:{mode:'inherit'}}}]}))
-    expect(api.updateImage).not.toHaveBeenCalled()
   })
   it('asks about the specific unknowns before accepting them and does not bypass scientific conflicts',async()=>{
     api.updateImage.mockRejectedValueOnce(new ApiClientError('Unknown','service',409,'CALIBRATION_UNKNOWN',undefined,[{path:'flat',message:'temperature unknown'}])).mockResolvedValueOnce({})
@@ -57,10 +47,9 @@ describe('calibration directly in existing table cells',()=>{
     await wrapper.get('button').trigger('dblclick');await flushPromises()
     await wrapper.get('select').setValue(id(9));await wrapper.get('select').trigger('keydown',{key:'Enter'});await flushPromises()
     expect(confirm).toHaveBeenCalledWith(expect.stringContaining('temperature unknown'))
-    expect(api.updateImage.mock.calls[1][2].accept_unknown).toBe(true)
+    expect(api.updateImage.mock.calls[1][1].accept_unknown).toBe(true)
   })
   it('distinguishes group summaries, empty optional slots and non-applicable slots',()=>{
-    expect(calibrationCellLabel({...unconfigured(),status:'mixed',choice:null})).toBe('多种')
     expect(calibrationCellLabel({...unconfigured(),status:'not_applicable'})).toBe('—')
     expect(calibrationCellLabel({...unconfigured(),status:'disabled',choice:{mode:'disabled'}})).toBe('不使用')
   })
@@ -80,12 +69,12 @@ describe('calibration directly in existing table cells',()=>{
     await wrapper.get('button').trigger('dblclick');await flushPromises()
     await wrapper.setProps({binding:{...original,context:{...original.context!,revision:9}}})
     await wrapper.get('select').setValue(id(9));await wrapper.get('select').trigger('keydown',{key:'Enter'});await flushPromises()
-    expect(api.updateImage.mock.calls[0][2].expected_revision).toBe(4)
+    expect(api.updateImage.mock.calls[0][1].expected_revision).toBe(4)
   })
   it('adds columns to the original table and keeps group exposure visible in compact mode',()=>{
     const field={value:'',save:vi.fn().mockResolvedValue(undefined)}
     const row:LibraryTableRow={key:'g',title:'M31',subtitle:'',dataset:true,video:false,selected:false,memberCount:2,mixedUse:false,readiness:'',parametersDisplay:'',parameterSource:'',storage:'',availability:'',exposureSummary:'10分',
-      calibration:[{slot:'flat',label:'平场',value:{...unconfigured(),status:'mixed',choice:null}},{slot:'dark_flat',label:'暗平场',value:{...unconfigured(),status:'not_applicable'}}],
+      calibration:[{slot:'flat',label:'平场',value:target('Master Flat', 9)},{slot:'dark_flat',label:'暗平场',value:{...unconfigured(),status:'not_applicable'}}],
       fields:{name:{...field,value:'M31'},groupClass:field,groupType:field,assetClass:field,assetType:field,camera:field,
         parameters:{value:{parameter_mode:null,iso:null,gain:null,offset:null},display:'',unsetMode:null,save:field.save},exposure:field,temperature:field,binning:field,cfa:field,opticalSystem:field,filter:field,integration:field,status:field,notes:field,opticalSystemReference:field,filterReference:field,statusReference:field,notesReference:field}}
     wrapper=mount(LibraryTable,{props:{rows:[row],library:true,viewMode:'simple',sortable:true,sort:{by:'name',order:'asc'},selectMode:false,selectionAllowed:true,deleting:false,allSelected:false,partiallySelected:false}})
@@ -93,6 +82,6 @@ describe('calibration directly in existing table cells',()=>{
     expect(wrapper.get('thead').text()).toContain('平场')
     expect(wrapper.get('thead').text()).not.toContain('暗平场')
     expect(wrapper.get('.apf-group-total').text()).toBe('10分')
-    expect(wrapper.text()).toContain('多种')
+    expect(wrapper.text()).toContain('Master Flat')
   })
 })

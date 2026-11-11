@@ -30,8 +30,8 @@ async function setup() {
     identity: 'first',
     body: {
       reference: {
-        kind: 'asset_version',
-        asset_version_id: '00000000-0000-4000-8000-000000000001',
+        kind: 'asset',
+        asset_id: '00000000-0000-4000-8000-000000000001',
         selection: { kind: 'whole_file' }
       },
       member_index: 0,

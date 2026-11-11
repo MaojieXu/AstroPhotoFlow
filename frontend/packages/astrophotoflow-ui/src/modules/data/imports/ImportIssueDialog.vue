@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ImportOrganizationRecovery from './ImportOrganizationRecovery.vue'
 import { uiT } from '../../../core/i18n'
 import { computed, watch } from 'vue'
 import { useImportIssueReport } from './queries'
@@ -11,6 +12,7 @@ const emit=defineEmits<{close:[];retried:[taskId:string]}>()
 const report=useImportIssueReport(()=>props.issue?{workspaceId:props.workspaceId,taskId:props.issue.taskId}:undefined)
 const retryMutation=useRetryImport()
 const task=computed(()=>report.data.value?.task)
+const publicationError=computed(()=>task.value?.report.dataset_publish_error)
 const loading=report.isFetching
 const saving=retryMutation.isPending
 const error=computed(()=>retryMutation.error.value instanceof Error?retryMutation.error.value.message:
@@ -41,9 +43,15 @@ async function retry(){
       <p v-if="loading" role="status">{{ $t('apfUi.reading_failure_reasons') }}</p>
       <p v-if="error" role="alert">{{error}} <LibraryButton @click="load">{{ $t('apfUi.read_again') }}</LibraryButton></p>
       <p v-if="task?.error" class="break-words">{{task.error.message??task.error.code}}</p>
+      <section v-if="publicationError" class="space-y-1 break-words" role="alert">
+        <p>{{ $t('apfUi.dataset_publication_failed') }} · {{ publicationError.message ?? publicationError.code }}</p>
+        <ul><li v-for="field in publicationError.fields" :key="field.path">{{ field.path }} · {{ field.message }}</li></ul>
+      </section>
       <p v-for="item in failures" :key="item.id" class="break-words">{{item.source_path}}：{{String(item.error?.message??item.error?.code??$t('apfUi.preview_is_not_supported_for_this_format_yet')).replace($t('apfUi.original_files_will_continue_to_be_ingested'),item.content_status==='available'?$t('apfUi.original_management_complete'):$t('apfUi.original_not_yet_managed'))}}</p>
+      <ImportOrganizationRecovery v-if="task && !active && report.data.value" :key="workspaceId + ':' + task.id"
+        :workspace-id="workspaceId" :task="task" :items="report.data.value.items" @changed="load" />
       <p v-if="active">{{ $t('apfUi.background_processing_is_still_running_retry_failed_items_after_it_fin') }}<LibraryButton :disabled="loading" @click="load">{{ $t('apfUi.refresh_status') }}</LibraryButton></p>
-      <p v-if="task&&!loading&&!failures.length&&!task.error">{{ $t('apfUi.no_failed_files_in_this_stage') }}</p>
+      <p v-if="task&&!loading&&!failures.length&&!task.error&&!publicationError">{{ $t('apfUi.no_failed_files_in_this_stage') }}</p>
     </div>
     <footer class="apf-equipment-dialog-footer"><LibraryButton :disabled="saving" @click="emit('close')">{{ $t('apfUi.close') }}</LibraryButton><LibraryButton v-if="retryIds.length" :disabled="active||saving||loading||report.isError.value" @click="retry">{{saving?$t('apfUi.accepting'):$t('apfUi.retry_failed_items')}}</LibraryButton></footer>
   </LibraryDialog>

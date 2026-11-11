@@ -21,7 +21,7 @@ from filelock import FileLock
 from astrophotoflow.contracts.workbench import ProcessInfo, WorkbenchState
 from astrophotoflow.core import config as app_config
 from astrophotoflow.core import workbench
-from astrophotoflow.core.database.schema import database_lock, upgrade_database
+from astrophotoflow.core.database.schema import database_lock, initialize_database
 from astrophotoflow.core.workbench import constants as wb_constants
 from astrophotoflow.core.workbench import control as wb_control
 from astrophotoflow.core.workbench import errors as wb_errors
@@ -153,6 +153,8 @@ def test_runtime_receipt_skips_install_and_failed_update_cannot_be_reused(tmp_pa
     commands = []
 
     def install(command, env=None):
+        assert env["UV_PYTHON_PREFERENCE"] == "only-managed"
+        assert env["UV_PYTHON_INSTALL_REGISTRY"] == "0"
         commands.append(command)
         python = runtime / "comfyui-env" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
         python.parent.mkdir(parents=True, exist_ok=True)
@@ -167,8 +169,7 @@ def test_runtime_receipt_skips_install_and_failed_update_cannot_be_reused(tmp_pa
     monkeypatch.setattr(wb_runtime, 'probe_python', probe)
     monkeypatch.setattr(wb_runtime, 'run_command', install)
     assert wb_runtime.prepare_runtime()["reused"] is False
-    if os.name == "nt":
-        assert any(command[1:3] == ["python", "install"] and "--no-registry" in command for command in commands)
+    assert commands[0] == ["uv", "venv", "--python", wb_runtime.PYTHON_VERSION, str(runtime / "comfyui-env")]
     count = len(commands)
     assert wb_runtime.prepare_runtime()["reused"] is True
     assert len(commands) == count
@@ -349,7 +350,7 @@ def test_native_start_failure_drains_ready_domain_and_preserves_it_until_confirm
             if not clients:
                 adopted = app_config.load_running_settings(workspace)
                 with database_lock(adopted):
-                    upgrade_database(adopted)
+                    initialize_database(adopted)
                 app = create_app(adopted, "test-token")
                 app.state.shutdown = lambda: calls.append("shutdown")
                 clients.append(resources.enter_context(TestClient(app)))
@@ -969,3 +970,22 @@ def test_process_registration_uses_the_shared_typed_process_contract(tmp_path):
     assert parsed.workspace == str(tmp_path) and parsed.command == ['test-process']
     with pytest.raises(ValueError):
         wb_processes.record_process(SimpleNamespace(pid=process.pid), 'foreign-process', tmp_path, [])
+
+
+def test_runtime_path_uses_checkout_installation_or_explicit_override(tmp_path, monkeypatch):
+    checkout = tmp_path / 'checkout'
+    (checkout / 'frontend').mkdir(parents=True)
+    (checkout / 'frontend/package.json').touch()
+    (checkout / 'pyproject.toml').touch()
+    app_data = tmp_path / 'app-data'
+    monkeypatch.delenv('ASTROPHOTOFLOW_RUNTIME', raising=False)
+    monkeypatch.setattr(wb_paths, 'app_data', lambda: app_data)
+    monkeypatch.setattr(wb_paths, 'package_directory', lambda: checkout / 'src/astrophotoflow')
+    assert wb_paths.runtime_dir() == checkout / '.artifacts/runtime'
+
+    monkeypatch.setattr(wb_paths, 'package_directory', lambda: checkout / '.venv/site-packages/astrophotoflow')
+    assert wb_paths.runtime_dir() == app_data / 'runtime/native-web-0.1.0'
+
+    override = tmp_path / 'private-runtime'
+    monkeypatch.setenv('ASTROPHOTOFLOW_RUNTIME', str(override))
+    assert wb_paths.runtime_dir() == override.resolve()

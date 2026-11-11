@@ -13,7 +13,7 @@ from comfy_execution.utils import get_executing_context
 from astrophotoflow.contracts.nodes import NodeDefinition, definition_content_token
 from astrophotoflow.contracts.software import SoftwareOperation
 from astrophotoflow.core.config import load_running_settings
-from astrophotoflow.interfaces.native.replies import software_call_reply
+from astrophotoflow.interfaces.native.replies import software_call_error, software_call_reply
 
 
 async def request_service(session: aiohttp.ClientSession, method: str, path: str, body=None):
@@ -50,7 +50,7 @@ class BundleNode(io.ComfyNode):
             inputs.append(socket)
         controls = []
         for parameter in definition.parameters:
-            options = {"default": parameter.default, 'advanced': parameter.advanced}
+            options = {"default": parameter.default}
             if parameter.kind in {"float", "int"}:
                 options.update(min=parameter.minimum if parameter.minimum is not None else (-sys.float_info.max if parameter.kind == "float" else -(2**53-1)),
                                max=parameter.maximum if parameter.maximum is not None else (sys.float_info.max if parameter.kind == "float" else 2**53-1))
@@ -126,9 +126,7 @@ class BundleNode(io.ComfyNode):
                 await asyncio.shield(request_service(session, "POST", path + "/cancel"))
                 raise
             if record["state"] != "completed":
-                error = record.get("error") or (record.get("result") or {}).get("error")
-                message = (error or {}).get("message", f"软件操作状态为 {record['state']}，请检查本次运行日志。")
-                raise RuntimeError(message + f'\n调用日志：/astrophotoflow/api/v1/runs/{context.prompt_id}/calls/{call_id}/log')
+                raise software_call_error(record, str(context.prompt_id), call_id)
             summary = await request_service(session, 'GET', f'/api/v1/runs/{context.prompt_id}/calls/{call_id}')
             result = software_call_reply(summary, context.prompt_id, call_id)
             ui = {'images': record['images'], 'apf_result': [result.model_dump(mode='json')]}

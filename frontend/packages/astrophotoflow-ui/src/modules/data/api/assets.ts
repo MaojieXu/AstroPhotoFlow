@@ -2,10 +2,8 @@ import { createPlatformClient } from '../../../core/api/client'
 import type { FetchApi } from '../../../core/api/client'
 import {
   getAssetApiV1LibraryAssetsAssetIdGet,
-  observeContentApiV1LibraryAssetsAssetIdContentObservationPost,
-  acceptContentApiV1LibraryAssetsAssetIdContentAcceptPost
+  observeContentApiV1LibraryAssetsAssetIdContentObservationPost
 } from '../../../generated/api/sdk.gen'
-import type { AssetContentAccept } from '../../../generated/api/types.gen'
 
 export function createAssetClient(fetchApi: FetchApi) {
   const options = {
@@ -30,14 +28,6 @@ export function createAssetClient(fetchApi: FetchApi) {
             signal
           }
         )
-      ).data,
-    accept: async (id: string, body: AssetContentAccept) =>
-      (
-        await acceptContentApiV1LibraryAssetsAssetIdContentAcceptPost<true>({
-          ...options,
-          path: { asset_id: id },
-          body
-        })
       ).data
   }
 }

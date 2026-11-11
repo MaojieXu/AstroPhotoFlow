@@ -33,7 +33,7 @@ async def start(body:NativeBundleCall,request:Request):
         if any(not task.done() for task in state.software_tasks.values()):raise ApiError(409,'SOFTWARE_BUSY','Software maintenance is in progress.', message_key='software_maintenance_active')
         record,created=calls.prepare_native_call(state.settings,body)
         if created:
-            task=asyncio.create_task(calls.execute_native_call(state.database,state.settings,body))
+            task=asyncio.create_task(calls.execute_native_call(state.database,state.settings,body,admission_lock=state.maintenance_lock))
             state.software_calls[body.call_id]=task
             task.add_done_callback(lambda _task:state.software_calls.pop(body.call_id,None))
         return record

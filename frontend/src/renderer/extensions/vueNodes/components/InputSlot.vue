@@ -48,11 +48,7 @@
               )
             "
             :is-editing
-            :model-value="
-              slotData.label ||
-              slotData.localized_name ||
-              (slotData.name ?? `Input ${index}`)
-            "
+            :model-value="accessibleName ?? ''"
             @cancel="isEditing = false"
             @dblclick="isEditing = true"
             @edit="onEditLabel"
@@ -66,6 +62,7 @@
 
 <script setup lang="ts">
 import { computed, onErrorCaptured, ref } from 'vue'
+import { resolveNodeDefSlotText } from '@/i18n'
 
 import EditableText from '@/components/common/EditableText.vue'
 import Tooltip from '@/components/ui/tooltip/Tooltip.vue'
@@ -110,8 +107,8 @@ const dotOnly = computed(() => props.dotOnly || hasNoLabel.value)
 const accessibleName = computed(
   () =>
     props.slotData.label ||
-    props.slotData.localized_name ||
-    props.slotData.name ||
+    resolveNodeDefSlotText('name', props.nodeType || '', props.slotData.name,
+      undefined, props.slotData.localized_name || props.slotData.name || '') ||
     undefined
 )
 const renderError = ref<string | null>(null)

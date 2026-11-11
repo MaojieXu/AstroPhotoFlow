@@ -11,7 +11,7 @@ export type AnalysisResult = {
     /**
      * Kind
      */
-    kind: 'metrics' | 'table' | 'series' | 'text' | 'json';
+    kind: 'metrics' | 'table' | 'series' | 'histogram' | 'text' | 'json';
     /**
      * Title
      */
@@ -50,6 +50,19 @@ export type AnalysisResult = {
      * Member Index
      */
     member_index: number | null;
+    /**
+     * Output
+     */
+    output?: string | null;
+    /**
+     * Frame Index
+     */
+    frame_index?: number | null;
+    /**
+     * Row Positions
+     */
+    row_positions?: Array<MediaPosition> | null;
+    histogram?: Histogram | null;
 };
 
 /**
@@ -68,10 +81,6 @@ export type AppendDatasetDestination = {
      * Expected Revision
      */
     expected_revision: number;
-    /**
-     * Base Version Id
-     */
-    base_version_id: string;
 };
 
 /**
@@ -81,19 +90,11 @@ export type AssetCalibrationConsumer = {
     /**
      * Kind
      */
-    kind: 'asset_version';
+    kind: 'asset';
     /**
      * Asset Id
      */
     asset_id: string;
-    /**
-     * Asset Version Id
-     */
-    asset_version_id: string;
-    /**
-     * Binding Version Id
-     */
-    binding_version_id?: string | null;
 };
 
 /**
@@ -111,24 +112,6 @@ export type AssetClassification = {
 };
 
 /**
- * AssetContentAccept
- */
-export type AssetContentAccept = {
-    /**
-     * Base Version Id
-     */
-    base_version_id: string;
-    /**
-     * Base Revision
-     */
-    base_revision: number;
-    /**
-     * Expected Observed Hash
-     */
-    expected_observed_hash: string;
-};
-
-/**
  * AssetContentObservation
  */
 export type AssetContentObservation = {
@@ -136,10 +119,6 @@ export type AssetContentObservation = {
      * Asset Id
      */
     asset_id: string;
-    /**
-     * Base Version Id
-     */
-    base_version_id: string;
     /**
      * Base Revision
      */
@@ -180,15 +159,11 @@ export type AssetInputReference = {
     /**
      * Kind
      */
-    kind: 'asset_version';
+    kind: 'asset';
     /**
-     * Asset Version Id
+     * Asset Id
      */
-    asset_version_id: string;
-    /**
-     * Binding Version Id
-     */
-    binding_version_id?: string | null;
+    asset_id: string;
     selection: ScienceSelection;
 };
 
@@ -211,6 +186,28 @@ export type AssetMetadataChange = {
  * AssetOut
  */
 export type AssetOut = {
+    /**
+     * Calibration Status
+     */
+    calibration_status: 'UnCalibrated' | 'Calibrated' | 'Unknown';
+    /**
+     * Calibration Evidence
+     */
+    calibration_evidence?: {
+        [key: string]: JsonValue;
+    };
+    /**
+     * In Trash
+     */
+    in_trash?: boolean;
+    /**
+     * Dataset Id
+     */
+    dataset_id?: string | null;
+    /**
+     * Dataset Name
+     */
+    dataset_name?: string | null;
     /**
      * Id
      */
@@ -235,10 +232,6 @@ export type AssetOut = {
      * Calibration Level
      */
     calibration_level: 'individual' | 'master' | null;
-    /**
-     * Current Version Id
-     */
-    current_version_id: string | null;
     classification: AssetClassification;
     parameters: AssetParametersPatch;
     equipment_snapshot: EquipmentSnapshots;
@@ -246,7 +239,7 @@ export type AssetOut = {
      * Value Sources
      */
     value_sources: {
-        [key: string]: 'manual' | 'file' | 'unknown';
+        [key: string]: 'manual' | 'file' | 'equipment' | 'unknown';
     };
     /**
      * Notes
@@ -261,10 +254,40 @@ export type AssetOut = {
      */
     revision: number;
     /**
+     * View Base
+     */
+    view_base: string;
+    /**
+     * Storage Mode
+     */
+    storage_mode: 'reference' | 'managed';
+    /**
+     * Storage Location
+     */
+    storage_location: string;
+    /**
+     * Byte Size
+     */
+    byte_size: number | null;
+    /**
+     * Content Hash
+     */
+    content_hash: string | null;
+    /**
+     * Availability
+     */
+    availability: 'unknown' | 'available' | 'changed' | 'missing';
+    capture_snapshot: CaptureSnapshot | null;
+    /**
+     * Scientific Metadata
+     */
+    scientific_metadata: {
+        [key: string]: JsonValue;
+    } | null;
+    /**
      * Created At
      */
     created_at: string;
-    current_version: AssetVersionOut | null;
 };
 
 /**
@@ -421,6 +444,14 @@ export type AssetPatch = {
      * Base Revision
      */
     base_revision: number;
+    /**
+     * Calibration Status
+     */
+    calibration_status?: 'UnCalibrated' | 'Calibrated' | 'Unknown';
+    /**
+     * Calibration Reason
+     */
+    calibration_reason?: string | null;
     /**
      * Name
      */
@@ -626,101 +657,6 @@ export type AssetTaskSummary = {
 };
 
 /**
- * AssetVersionOut
- */
-export type AssetVersionOut = {
-    /**
-     * Id
-     */
-    id: string;
-    /**
-     * Asset Id
-     */
-    asset_id: string;
-    /**
-     * View Base
-     */
-    view_base: string;
-    /**
-     * Version Number
-     */
-    version_number: number;
-    /**
-     * Storage Mode
-     */
-    storage_mode: 'reference' | 'managed';
-    /**
-     * Storage Location
-     */
-    storage_location: string;
-    /**
-     * Byte Size
-     */
-    byte_size: number | null;
-    /**
-     * Content Hash
-     */
-    content_hash: string | null;
-    /**
-     * Availability
-     */
-    availability: 'unknown' | 'available' | 'changed' | 'missing';
-    /**
-     * Camera Id
-     */
-    camera_id: string | null;
-    /**
-     * Optical System Id
-     */
-    optical_system_id: string | null;
-    /**
-     * Filter Id
-     */
-    filter_id: string | null;
-    /**
-     * Frame Type
-     */
-    frame_type: 'light' | 'bias' | 'dark' | 'flat' | 'dark_flat' | null;
-    /**
-     * Calibration Level
-     */
-    calibration_level: 'individual' | 'master' | null;
-    capture_snapshot: VersionCaptureSnapshot | null;
-    /**
-     * Scientific Metadata
-     */
-    scientific_metadata: {
-        [key: string]: JsonValue;
-    } | null;
-    /**
-     * Created At
-     */
-    created_at: string;
-};
-
-/**
- * AssetVersionPage
- */
-export type AssetVersionPage = {
-    /**
-     * Total
-     */
-    total: number;
-    /**
-     * Limit
-     */
-    limit: number;
-    /**
-     * Offset
-     */
-    offset: number;
-    /**
-     * Items
-     */
-    items: Array<AssetVersionOut>;
-};
-
-/**
  * AutoStretch
  */
 export type AutoStretch = {
@@ -852,9 +788,9 @@ export type BundlePreviewRequest = {
      * Reference
      */
     reference: ({
-        kind: 'asset_version';
+        kind: 'asset';
     } & AssetInputReference) | ({
-        kind: 'dataset_version';
+        kind: 'dataset';
     } & DatasetInputReference);
     /**
      * Member Index
@@ -906,10 +842,6 @@ export type CalibrationCandidate = {
      */
     frame_type: 'bias' | 'dark' | 'flat' | 'dark_flat';
     /**
-     * Version Number
-     */
-    version_number: number;
-    /**
      * Member Count
      */
     member_count: number;
@@ -952,9 +884,9 @@ export type CalibrationCandidatePage = {
  */
 export type CalibrationCheckItem = {
     /**
-     * Asset Version Id
+     * Asset Id
      */
-    asset_version_id: string;
+    asset_id: string;
     /**
      * Slot
      */
@@ -963,7 +895,7 @@ export type CalibrationCheckItem = {
     /**
      * State
      */
-    state: 'compatible' | 'unknown' | 'conflict';
+    state: 'compatible' | 'warning' | 'unknown' | 'conflict';
     /**
      * Master Required
      */
@@ -977,7 +909,7 @@ export type CalibrationCheckItem = {
     /**
      * Binding Source
      */
-    binding_source?: 'standalone' | 'dataset_default' | 'member_override' | 'proposal' | 'dependency';
+    binding_source?: 'standalone' | 'dataset' | 'proposal' | 'dependency';
     /**
      * Dependency Path
      */
@@ -1027,7 +959,7 @@ export type CalibrationCheckPage = {
     /**
      * State
      */
-    state: 'compatible' | 'unknown' | 'conflict';
+    state: 'compatible' | 'warning' | 'unknown' | 'conflict';
     /**
      * Checked Bindings
      */
@@ -1040,6 +972,10 @@ export type CalibrationCheckPage = {
      * Unknown Count
      */
     unknown_count: number;
+    /**
+     * Warning Count
+     */
+    warning_count?: number;
     /**
      * Master Required Count
      */
@@ -1055,10 +991,6 @@ export type CalibrationCheckPage = {
  */
 export type CalibrationCheckProposal = {
     changes?: CalibrationPatch;
-    /**
-     * Member Changes
-     */
-    member_changes?: Array<MemberCalibrationChange>;
 };
 
 /**
@@ -1069,9 +1001,9 @@ export type CalibrationCheckRequest = {
      * Consumer
      */
     consumer: ({
-        kind: 'asset_version';
+        kind: 'asset';
     } & AssetCalibrationConsumer) | ({
-        kind: 'dataset_version';
+        kind: 'dataset';
     } & DatasetCalibrationConsumer);
     proposal?: CalibrationCheckProposal | null;
     /**
@@ -1085,70 +1017,6 @@ export type CalibrationCheckRequest = {
 };
 
 /**
- * CalibrationCombination
- */
-export type CalibrationCombination = {
-    /**
-     * Key
-     */
-    key: string;
-    /**
-     * Member Count
-     */
-    member_count: number;
-    /**
-     * Effective
-     */
-    effective: {
-        bias?: ({
-            mode: 'inherit';
-        } & CalibrationInherit) | ({
-            mode: 'unconfigured';
-        } & CalibrationUnconfigured) | ({
-            mode: 'disabled';
-        } & CalibrationDisabled) | ({
-            mode: 'target';
-        } & CalibrationFixedTarget);
-        dark?: ({
-            mode: 'inherit';
-        } & CalibrationInherit) | ({
-            mode: 'unconfigured';
-        } & CalibrationUnconfigured) | ({
-            mode: 'disabled';
-        } & CalibrationDisabled) | ({
-            mode: 'target';
-        } & CalibrationFixedTarget);
-        flat?: ({
-            mode: 'inherit';
-        } & CalibrationInherit) | ({
-            mode: 'unconfigured';
-        } & CalibrationUnconfigured) | ({
-            mode: 'disabled';
-        } & CalibrationDisabled) | ({
-            mode: 'target';
-        } & CalibrationFixedTarget);
-        dark_flat?: ({
-            mode: 'inherit';
-        } & CalibrationInherit) | ({
-            mode: 'unconfigured';
-        } & CalibrationUnconfigured) | ({
-            mode: 'disabled';
-        } & CalibrationDisabled) | ({
-            mode: 'target';
-        } & CalibrationFixedTarget);
-    };
-    /**
-     * Slots
-     */
-    slots: {
-        bias?: CalibrationSlotDetail;
-        dark?: CalibrationSlotDetail;
-        flat?: CalibrationSlotDetail;
-        dark_flat?: CalibrationSlotDetail;
-    };
-};
-
-/**
  * CalibrationDisabled
  */
 export type CalibrationDisabled = {
@@ -1156,6 +1024,41 @@ export type CalibrationDisabled = {
      * Mode
      */
     mode: 'disabled';
+};
+
+/**
+ * CalibrationEffect
+ *
+ * Declared behavior for successful science outputs of one operation.
+ */
+export type CalibrationEffect = {
+    /**
+     * Behavior
+     */
+    behavior?: 'unknown' | 'preserve' | 'calibrate';
+    /**
+     * Input
+     */
+    input?: string | null;
+    /**
+     * Outputs
+     */
+    outputs?: Array<string>;
+    /**
+     * Masters
+     */
+    masters?: {
+        bias?: string;
+        dark?: string;
+        flat?: string;
+        dark_flat?: string;
+    };
+    /**
+     * Parameter Calibrations
+     */
+    parameter_calibrations?: {
+        [key: string]: JsonValue;
+    };
 };
 
 /**
@@ -1170,16 +1073,6 @@ export type CalibrationFixedTarget = {
 };
 
 /**
- * CalibrationInherit
- */
-export type CalibrationInherit = {
-    /**
-     * Mode
-     */
-    mode: 'inherit';
-};
-
-/**
  * CalibrationPatch
  */
 export type CalibrationPatch = {
@@ -1187,8 +1080,6 @@ export type CalibrationPatch = {
      * Bias
      */
     bias?: ({
-        mode: 'inherit';
-    } & CalibrationInherit) | ({
         mode: 'unconfigured';
     } & CalibrationUnconfigured) | ({
         mode: 'disabled';
@@ -1199,8 +1090,6 @@ export type CalibrationPatch = {
      * Dark
      */
     dark?: ({
-        mode: 'inherit';
-    } & CalibrationInherit) | ({
         mode: 'unconfigured';
     } & CalibrationUnconfigured) | ({
         mode: 'disabled';
@@ -1211,8 +1100,6 @@ export type CalibrationPatch = {
      * Flat
      */
     flat?: ({
-        mode: 'inherit';
-    } & CalibrationInherit) | ({
         mode: 'unconfigured';
     } & CalibrationUnconfigured) | ({
         mode: 'disabled';
@@ -1223,8 +1110,6 @@ export type CalibrationPatch = {
      * Dark Flat
      */
     dark_flat?: ({
-        mode: 'inherit';
-    } & CalibrationInherit) | ({
         mode: 'unconfigured';
     } & CalibrationUnconfigured) | ({
         mode: 'disabled';
@@ -1267,9 +1152,9 @@ export type CalibrationSearchRequest = {
      * Consumer
      */
     consumer?: ({
-        kind: 'asset_version';
+        kind: 'asset';
     } & AssetCalibrationConsumer) | ({
-        kind: 'dataset_version';
+        kind: 'dataset';
     } & DatasetCalibrationConsumer) | null;
     query?: CalibrationSearch | null;
 };
@@ -1282,8 +1167,6 @@ export type CalibrationSlotDetail = {
      * Choice
      */
     choice: ({
-        mode: 'inherit';
-    } & CalibrationInherit) | ({
         mode: 'unconfigured';
     } & CalibrationUnconfigured) | ({
         mode: 'disabled';
@@ -1293,7 +1176,7 @@ export type CalibrationSlotDetail = {
     /**
      * Source
      */
-    source: 'standalone' | 'dataset_default' | 'member_override';
+    source: 'standalone' | 'dataset';
     /**
      * Status
      */
@@ -1312,7 +1195,7 @@ export type CalibrationTarget = {
     /**
      * Kind
      */
-    kind: 'asset_version';
+    kind: 'asset';
     /**
      * Id
      */
@@ -1323,6 +1206,10 @@ export type CalibrationTarget = {
  * CalibrationTargetDetail
  */
 export type CalibrationTargetDetail = {
+    /**
+     * In Trash
+     */
+    in_trash?: boolean;
     target: CalibrationTarget;
     /**
      * Asset Id
@@ -1336,10 +1223,6 @@ export type CalibrationTargetDetail = {
      * Name
      */
     name: string;
-    /**
-     * Version Number
-     */
-    version_number: number;
     /**
      * Target Kind
      */
@@ -1363,10 +1246,6 @@ export type CalibrationTargetOption = {
      * Frame Type
      */
     frame_type: 'bias' | 'dark' | 'flat' | 'dark_flat';
-    /**
-     * Version Number
-     */
-    version_number: number;
     /**
      * Member Count
      */
@@ -1564,6 +1443,10 @@ export type CameraSnapshotSpecs = {
      */
     cfa_pattern?: 'MONO' | 'RGGB' | 'BGGR' | 'GRBG' | 'GBRG' | 'XTRANS' | 'QUAD_BAYER' | null;
     /**
+     * Default Parameter Mode
+     */
+    default_parameter_mode?: 'iso' | 'gain' | null;
+    /**
      * Sensor Mode
      */
     sensor_mode?: 'mono' | 'color' | null;
@@ -1593,6 +1476,10 @@ export type CameraSpecs = {
      * Cfa Pattern
      */
     cfa_pattern?: 'MONO' | 'RGGB' | 'BGGR' | 'GRBG' | 'GBRG' | 'XTRANS' | 'QUAD_BAYER' | null;
+    /**
+     * Default Parameter Mode
+     */
+    default_parameter_mode?: 'iso' | 'gain' | null;
 };
 
 /**
@@ -1729,9 +1616,9 @@ export type CanvasDataOut = {
      * Reference
      */
     reference: ({
-        kind: 'asset_version';
+        kind: 'asset';
     } & AssetInputReference) | ({
-        kind: 'dataset_version';
+        kind: 'dataset';
     } & DatasetInputReference);
 };
 
@@ -1748,13 +1635,9 @@ export type CanvasDataRequest = {
      */
     id: string;
     /**
-     * Version Id
+     * Asset Ids
      */
-    version_id: string;
-    /**
-     * Member Indexes
-     */
-    member_indexes?: Array<number> | null;
+    asset_ids?: Array<string> | null;
 };
 
 /**
@@ -1830,9 +1713,9 @@ export type CanvasInspectOut = {
      */
     title: string;
     /**
-     * Total
+     * Member Count
      */
-    total: number;
+    member_count: number;
     /**
      * Member Index
      */
@@ -1841,10 +1724,6 @@ export type CanvasInspectOut = {
      * Asset Id
      */
     asset_id: string;
-    /**
-     * Asset Version Id
-     */
-    asset_version_id: string;
     /**
      * View Base
      */
@@ -1919,9 +1798,9 @@ export type CanvasInspectRequest = {
      * Reference
      */
     reference: ({
-        kind: 'asset_version';
+        kind: 'asset';
     } & AssetInputReference) | ({
-        kind: 'dataset_version';
+        kind: 'dataset';
     } & DatasetInputReference);
     /**
      * Member Index
@@ -2015,6 +1894,96 @@ export type CapabilityDisplay = {
 };
 
 /**
+ * CaptureDiagnostics
+ */
+export type CaptureDiagnostics = {
+    /**
+     * Warnings
+     */
+    warnings?: Array<CaptureWarning>;
+    /**
+     * Unknown Counts
+     */
+    unknown_counts?: {
+        [key: string]: number;
+    };
+};
+
+/**
+ * CaptureDifferenceMember
+ */
+export type CaptureDifferenceMember = {
+    /**
+     * Asset Id
+     */
+    asset_id: string;
+    /**
+     * Value
+     */
+    value: string | number | number | CaptureEquipmentIdentity | null;
+};
+
+/**
+ * CaptureEquipmentIdentity
+ */
+export type CaptureEquipmentIdentity = {
+    /**
+     * Id
+     */
+    id?: string | null;
+    /**
+     * Name
+     */
+    name?: string | null;
+    /**
+     * Optical Accessory Id
+     */
+    optical_accessory_id?: string | null;
+    /**
+     * Effective Focal Length Mm
+     */
+    effective_focal_length_mm?: number | null;
+};
+
+/**
+ * CaptureSnapshot
+ */
+export type CaptureSnapshot = {
+    /**
+     * Image Metadata
+     */
+    image_metadata?: {
+        [key: string]: JsonValue;
+    } | null;
+    parameters?: AssetParametersPatch;
+    classification?: AssetClassification;
+    equipment_snapshot?: EquipmentSnapshots;
+    import_provenance?: ImportProvenance | null;
+};
+
+/**
+ * CaptureWarning
+ */
+export type CaptureWarning = {
+    /**
+     * Code
+     */
+    code: string;
+    /**
+     * Field
+     */
+    field: string;
+    /**
+     * Severity
+     */
+    severity: 'warning';
+    /**
+     * Members
+     */
+    members: Array<CaptureDifferenceMember>;
+};
+
+/**
  * ConfigSave
  */
 export type ConfigSave = {
@@ -2095,6 +2064,14 @@ export type ConfigValues = {
  * ConfirmedFile
  */
 export type ConfirmedFile = {
+    /**
+     * Calibration Status
+     */
+    calibration_status?: 'UnCalibrated' | 'Calibrated' | 'Unknown';
+    /**
+     * Calibration Reason
+     */
+    calibration_reason?: string | null;
     /**
      * File Id
      */
@@ -2190,6 +2167,14 @@ export type DataNodeMember = {
      * Byte Size
      */
     byte_size: number;
+    /**
+     * Content Hash
+     */
+    content_hash?: string | null;
+    /**
+     * Position Token
+     */
+    position_token?: string | null;
 };
 
 /**
@@ -2224,9 +2209,9 @@ export type DataNodeResult = {
      * Reference
      */
     reference: ({
-        kind: 'asset_version';
+        kind: 'asset';
     } & AssetInputReference) | ({
-        kind: 'dataset_version';
+        kind: 'dataset';
     } & DatasetInputReference) | OutputLocator | null;
     output: OutputLocator | null;
     /**
@@ -2248,56 +2233,40 @@ export type DatasetCalibrationConsumer = {
     /**
      * Kind
      */
-    kind: 'dataset_version';
+    kind: 'dataset';
     /**
      * Dataset Id
      */
     dataset_id: string;
     /**
-     * Dataset Version Id
+     * Member Asset Ids
      */
-    dataset_version_id: string;
-    /**
-     * Member Asset Version Ids
-     */
-    member_asset_version_ids?: Array<string> | null;
+    member_asset_ids?: Array<string> | null;
 };
 
 /**
- * DatasetCalibrationPage
+ * DatasetCalibrationOut
  */
-export type DatasetCalibrationPage = {
+export type DatasetCalibrationOut = {
     /**
-     * Total
+     * Diagnostics
      */
-    total: number;
-    /**
-     * Limit
-     */
-    limit: number;
-    /**
-     * Offset
-     */
-    offset: number;
+    diagnostics?: Array<{
+        [key: string]: JsonValue;
+    }>;
     /**
      * Dataset Id
      */
     dataset_id: string;
-    /**
-     * Dataset Version Id
-     */
-    dataset_version_id: string;
     /**
      * Revision
      */
     revision: number;
     /**
-     * Defaults
+     * Calibration
      */
-    defaults: {
+    calibration: {
         bias?: ({
-            mode: 'inherit';
-        } & CalibrationInherit) | ({
             mode: 'unconfigured';
         } & CalibrationUnconfigured) | ({
             mode: 'disabled';
@@ -2305,8 +2274,6 @@ export type DatasetCalibrationPage = {
             mode: 'target';
         } & CalibrationFixedTarget);
         dark?: ({
-            mode: 'inherit';
-        } & CalibrationInherit) | ({
             mode: 'unconfigured';
         } & CalibrationUnconfigured) | ({
             mode: 'disabled';
@@ -2314,8 +2281,6 @@ export type DatasetCalibrationPage = {
             mode: 'target';
         } & CalibrationFixedTarget);
         flat?: ({
-            mode: 'inherit';
-        } & CalibrationInherit) | ({
             mode: 'unconfigured';
         } & CalibrationUnconfigured) | ({
             mode: 'disabled';
@@ -2323,8 +2288,6 @@ export type DatasetCalibrationPage = {
             mode: 'target';
         } & CalibrationFixedTarget);
         dark_flat?: ({
-            mode: 'inherit';
-        } & CalibrationInherit) | ({
             mode: 'unconfigured';
         } & CalibrationUnconfigured) | ({
             mode: 'disabled';
@@ -2333,13 +2296,14 @@ export type DatasetCalibrationPage = {
         } & CalibrationFixedTarget);
     };
     /**
-     * Items
+     * Slots
      */
-    items: Array<DatasetMemberCalibrationOut>;
-    /**
-     * Combinations
-     */
-    combinations: Array<CalibrationCombination>;
+    slots: {
+        bias?: CalibrationSlotDetail;
+        dark?: CalibrationSlotDetail;
+        flat?: CalibrationSlotDetail;
+        dark_flat?: CalibrationSlotDetail;
+    };
 };
 
 /**
@@ -2354,10 +2318,6 @@ export type DatasetCalibrationUpdate = {
      * Expected Revision
      */
     expected_revision: number;
-    /**
-     * Base Version Id
-     */
-    base_version_id: string;
     changes: CalibrationPatch;
     /**
      * Accept Unknown
@@ -2396,9 +2356,9 @@ export type DatasetCreate = {
      */
     notes?: string | null;
     /**
-     * Asset Version Ids
+     * Asset Ids
      */
-    asset_version_ids: Array<string>;
+    asset_ids: Array<string>;
 };
 
 /**
@@ -2406,7 +2366,6 @@ export type DatasetCreate = {
  */
 export type DatasetImageDetail = {
     dataset: DatasetOut;
-    version: DatasetVersionSummary | null;
 };
 
 /**
@@ -2474,25 +2433,28 @@ export type DatasetImageSummary = {
      * Matching Member Count
      */
     matching_member_count: number;
-    /**
-     * Version Id
-     */
-    version_id: string | null;
 };
 
 /**
- * DatasetInputMember
+ * DatasetImportExclusion
  */
-export type DatasetInputMember = {
+export type DatasetImportExclusion = {
     /**
-     * Member Index
+     * Asset Id
      */
-    member_index: number;
+    asset_id: string;
     /**
-     * Asset Version Id
+     * Name
      */
-    asset_version_id: string;
-    selection: ScienceSelection;
+    name: string;
+    /**
+     * Code
+     */
+    code: string;
+    /**
+     * Message
+     */
+    message: string;
 };
 
 /**
@@ -2502,158 +2464,16 @@ export type DatasetInputReference = {
     /**
      * Kind
      */
-    kind: 'dataset_version';
+    kind: 'dataset';
     /**
-     * Dataset Version Id
+     * Dataset Id
      */
-    dataset_version_id: string;
+    dataset_id: string;
     /**
-     * Members
+     * Asset Ids
      */
-    members: Array<DatasetInputMember>;
-};
-
-/**
- * DatasetMemberCalibrationOut
- */
-export type DatasetMemberCalibrationOut = {
-    /**
-     * Asset Id
-     */
-    asset_id: string;
-    /**
-     * Asset Name
-     */
-    asset_name: string;
-    /**
-     * Asset Version Number
-     */
-    asset_version_number: number;
-    /**
-     * Frame Type
-     */
-    frame_type: string | null;
-    /**
-     * Asset Version Id
-     */
-    asset_version_id: string;
-    /**
-     * Overrides
-     */
-    overrides: {
-        bias?: ({
-            mode: 'inherit';
-        } & CalibrationInherit) | ({
-            mode: 'unconfigured';
-        } & CalibrationUnconfigured) | ({
-            mode: 'disabled';
-        } & CalibrationDisabled) | ({
-            mode: 'target';
-        } & CalibrationFixedTarget);
-        dark?: ({
-            mode: 'inherit';
-        } & CalibrationInherit) | ({
-            mode: 'unconfigured';
-        } & CalibrationUnconfigured) | ({
-            mode: 'disabled';
-        } & CalibrationDisabled) | ({
-            mode: 'target';
-        } & CalibrationFixedTarget);
-        flat?: ({
-            mode: 'inherit';
-        } & CalibrationInherit) | ({
-            mode: 'unconfigured';
-        } & CalibrationUnconfigured) | ({
-            mode: 'disabled';
-        } & CalibrationDisabled) | ({
-            mode: 'target';
-        } & CalibrationFixedTarget);
-        dark_flat?: ({
-            mode: 'inherit';
-        } & CalibrationInherit) | ({
-            mode: 'unconfigured';
-        } & CalibrationUnconfigured) | ({
-            mode: 'disabled';
-        } & CalibrationDisabled) | ({
-            mode: 'target';
-        } & CalibrationFixedTarget);
-    };
-    /**
-     * Effective
-     */
-    effective: {
-        bias?: ({
-            mode: 'inherit';
-        } & CalibrationInherit) | ({
-            mode: 'unconfigured';
-        } & CalibrationUnconfigured) | ({
-            mode: 'disabled';
-        } & CalibrationDisabled) | ({
-            mode: 'target';
-        } & CalibrationFixedTarget);
-        dark?: ({
-            mode: 'inherit';
-        } & CalibrationInherit) | ({
-            mode: 'unconfigured';
-        } & CalibrationUnconfigured) | ({
-            mode: 'disabled';
-        } & CalibrationDisabled) | ({
-            mode: 'target';
-        } & CalibrationFixedTarget);
-        flat?: ({
-            mode: 'inherit';
-        } & CalibrationInherit) | ({
-            mode: 'unconfigured';
-        } & CalibrationUnconfigured) | ({
-            mode: 'disabled';
-        } & CalibrationDisabled) | ({
-            mode: 'target';
-        } & CalibrationFixedTarget);
-        dark_flat?: ({
-            mode: 'inherit';
-        } & CalibrationInherit) | ({
-            mode: 'unconfigured';
-        } & CalibrationUnconfigured) | ({
-            mode: 'disabled';
-        } & CalibrationDisabled) | ({
-            mode: 'target';
-        } & CalibrationFixedTarget);
-    };
-    /**
-     * Slots
-     */
-    slots: {
-        bias?: CalibrationSlotDetail;
-        dark?: CalibrationSlotDetail;
-        flat?: CalibrationSlotDetail;
-        dark_flat?: CalibrationSlotDetail;
-    };
-};
-
-/**
- * DatasetMemberCalibrationUpdate
- */
-export type DatasetMemberCalibrationUpdate = {
-    /**
-     * Request Id
-     */
-    request_id: string;
-    /**
-     * Expected Revision
-     */
-    expected_revision: number;
-    /**
-     * Base Version Id
-     */
-    base_version_id: string;
-    /**
-     * Members
-     */
-    members: Array<MemberCalibrationChange>;
-    /**
-     * Accept Unknown
-     */
-    accept_unknown?: boolean;
+    asset_ids?: Array<string> | null;
+    selection?: ScienceSelection;
 };
 
 /**
@@ -2661,10 +2481,9 @@ export type DatasetMemberCalibrationUpdate = {
  */
 export type DatasetMemberInput = {
     /**
-     * Asset Version Id
+     * Asset Id
      */
-    asset_version_id: string;
-    calibration?: CalibrationPatch;
+    asset_id: string;
 };
 
 /**
@@ -2676,13 +2495,13 @@ export type DatasetMemberOut = {
      */
     id: string;
     /**
-     * Dataset Version Id
+     * Dataset Id
      */
-    dataset_version_id: string;
+    dataset_id: string;
     /**
-     * Asset Version Id
+     * Asset Id
      */
-    asset_version_id: string;
+    asset_id: string;
     /**
      * Position
      */
@@ -2691,18 +2510,7 @@ export type DatasetMemberOut = {
      * Relative Path
      */
     relative_path: string | null;
-    /**
-     * Calibration Overrides
-     */
-    calibration_overrides?: {
-        bias?: CalibrationTarget | CalibrationUnconfigured | null;
-        dark?: CalibrationTarget | CalibrationUnconfigured | null;
-        flat?: CalibrationTarget | CalibrationUnconfigured | null;
-        dark_flat?: CalibrationTarget | CalibrationUnconfigured | null;
-    };
-    calibration_projection?: LibraryCalibrationProjection | null;
     asset: AssetOut;
-    version: AssetVersionOut;
 };
 
 /**
@@ -2736,10 +2544,6 @@ export type DatasetMemberParametersUpdate = {
      */
     base_revision: number;
     /**
-     * Base Version Id
-     */
-    base_version_id: string;
-    /**
      * Members
      */
     members: Array<DatasetMemberRevision>;
@@ -2759,10 +2563,6 @@ export type DatasetMemberParametersUpdateOut = {
      * Revision
      */
     revision: number;
-    /**
-     * Version Id
-     */
-    version_id: string;
     /**
      * Assets
      */
@@ -2787,6 +2587,18 @@ export type DatasetMemberRevision = {
  * DatasetMemberSummary
  */
 export type DatasetMemberSummary = {
+    /**
+     * Calibration Status
+     */
+    calibration_status: 'UnCalibrated' | 'Calibrated' | 'Unknown';
+    /**
+     * Calibration Counts
+     */
+    calibration_counts: {
+        UnCalibrated?: number;
+        Calibrated?: number;
+        Unknown?: number;
+    };
     /**
      * Entry Type
      */
@@ -2816,14 +2628,6 @@ export type DatasetMemberSummary = {
      */
     created_at: string;
     /**
-     * Version Id
-     */
-    version_id: string | null;
-    /**
-     * Version Number
-     */
-    version_number: number | null;
-    /**
      * Member Count
      */
     member_count: 1;
@@ -2851,10 +2655,6 @@ export type DatasetMemberSummary = {
      * Dataset Id
      */
     dataset_id: string;
-    /**
-     * Dataset Version Id
-     */
-    dataset_version_id: string;
     /**
      * Member Position
      */
@@ -2896,35 +2696,49 @@ export type DatasetMembersCreate = {
      */
     base_revision: number;
     /**
-     * Asset Version Ids
+     * Asset Ids
      */
-    asset_version_ids: Array<string>;
+    asset_ids: Array<string>;
     /**
-     * Calibration Defaults
+     * Calibration
      */
-    calibration_defaults?: {
+    calibration?: {
         bias?: CalibrationTarget | CalibrationUnconfigured | null;
         dark?: CalibrationTarget | CalibrationUnconfigured | null;
         flat?: CalibrationTarget | CalibrationUnconfigured | null;
         dark_flat?: CalibrationTarget | CalibrationUnconfigured | null;
     } | null;
     /**
-     * Member Calibration Overrides
+     * Accept Unknown
      */
-    member_calibration_overrides?: {
-        [key: string]: {
-            bias?: CalibrationTarget | CalibrationUnconfigured | null;
-            dark?: CalibrationTarget | CalibrationUnconfigured | null;
-            flat?: CalibrationTarget | CalibrationUnconfigured | null;
-            dark_flat?: CalibrationTarget | CalibrationUnconfigured | null;
-        };
-    } | null;
+    accept_unknown?: boolean;
 };
 
 /**
  * DatasetOut
  */
 export type DatasetOut = {
+    /**
+     * Calibration Status
+     */
+    calibration_status: 'UnCalibrated' | 'Calibrated' | 'Unknown';
+    /**
+     * Calibration Counts
+     */
+    calibration_counts: {
+        UnCalibrated?: number;
+        Calibrated?: number;
+        Unknown?: number;
+    };
+    /**
+     * In Trash
+     */
+    in_trash?: boolean;
+    capture_diagnostics?: CaptureDiagnostics;
+    /**
+     * Referencing Projects
+     */
+    referencing_projects?: Array<ReferencingProject>;
     summary: LibraryMetadataSummary;
     exposure_summary: ExposureSummary;
     /**
@@ -2952,21 +2766,34 @@ export type DatasetOut = {
      */
     revision: number;
     /**
-     * Current Version Id
-     */
-    current_version_id: string | null;
-    /**
-     * Current Version Number
-     */
-    current_version_number: number | null;
-    /**
      * Member Count
      */
     member_count: number;
     /**
+     * Library Directory
+     */
+    library_directory?: string | null;
+    /**
+     * Manifest Status
+     */
+    manifest_status?: 'pending' | 'ready' | 'failed';
+    /**
+     * Manifest Error
+     */
+    manifest_error?: string | null;
+    /**
      * Created At
      */
     created_at: string;
+    /**
+     * Calibration
+     */
+    calibration?: {
+        bias?: CalibrationTarget | CalibrationUnconfigured | null;
+        dark?: CalibrationTarget | CalibrationUnconfigured | null;
+        flat?: CalibrationTarget | CalibrationUnconfigured | null;
+        dark_flat?: CalibrationTarget | CalibrationUnconfigured | null;
+    };
     /**
      * Updated At
      */
@@ -3018,93 +2845,26 @@ export type DatasetPatch = {
 };
 
 /**
- * DatasetVersionOut
+ * DatasetPublicationError
  */
-export type DatasetVersionOut = {
+export type DatasetPublicationError = {
     /**
-     * Id
+     * Code
      */
-    id: string;
+    code: string;
     /**
-     * Dataset Id
+     * Message
      */
-    dataset_id: string;
+    message?: string | null;
     /**
-     * Version Number
+     * Fields
      */
-    version_number: number;
-    /**
-     * Created At
-     */
-    created_at: string;
-    /**
-     * Calibration Defaults
-     */
-    calibration_defaults?: {
-        bias?: CalibrationTarget | CalibrationUnconfigured | null;
-        dark?: CalibrationTarget | CalibrationUnconfigured | null;
-        flat?: CalibrationTarget | CalibrationUnconfigured | null;
-        dark_flat?: CalibrationTarget | CalibrationUnconfigured | null;
-    };
-    /**
-     * Members
-     */
-    members: Array<DatasetMemberOut>;
-    exposure_summary: ExposureSummary;
-};
-
-/**
- * DatasetVersionPage
- */
-export type DatasetVersionPage = {
-    /**
-     * Total
-     */
-    total: number;
-    /**
-     * Limit
-     */
-    limit: number;
-    /**
-     * Offset
-     */
-    offset: number;
-    /**
-     * Items
-     */
-    items: Array<DatasetVersionSummary>;
-};
-
-/**
- * DatasetVersionSummary
- */
-export type DatasetVersionSummary = {
-    /**
-     * Id
-     */
-    id: string;
-    /**
-     * Dataset Id
-     */
-    dataset_id: string;
-    /**
-     * Version Number
-     */
-    version_number: number;
-    /**
-     * Created At
-     */
-    created_at: string;
-    /**
-     * Calibration Defaults
-     */
-    calibration_defaults?: {
-        bias?: CalibrationTarget | CalibrationUnconfigured | null;
-        dark?: CalibrationTarget | CalibrationUnconfigured | null;
-        flat?: CalibrationTarget | CalibrationUnconfigured | null;
-        dark_flat?: CalibrationTarget | CalibrationUnconfigured | null;
-    };
-    exposure_summary: ExposureSummary;
+    fields?: Array<{
+        [key: string]: string;
+    }>;
+    [key: string]: JsonValue | string | string | null | Array<{
+        [key: string]: string;
+    }> | undefined;
 };
 
 /**
@@ -3198,9 +2958,9 @@ export type DisplayLabel = {
  */
 export type DisplayPreviewState = {
     /**
-     * Asset Version Id
+     * Asset Id
      */
-    asset_version_id: string;
+    asset_id: string;
     /**
      * Size
      */
@@ -3453,6 +3213,14 @@ export type ErrorEnvelope = {
  */
 export type ExplicitImportRequest = {
     /**
+     * Project Id
+     */
+    project_id?: string | null;
+    /**
+     * Project Base Revision
+     */
+    project_base_revision?: number | null;
+    /**
      * Request Id
      */
     request_id: string;
@@ -3475,12 +3243,11 @@ export type ExplicitImportRequest = {
         mode: 'append_dataset';
     } & AppendDatasetDestination);
     defaults?: ImportDefaults;
-    calibration_defaults?: CalibrationPatch;
-    incoming_calibration?: CalibrationPatch;
+    calibration?: CalibrationPatch;
     /**
      * Storage Mode
      */
-    storage_mode?: 'managed' | 'reference';
+    storage_mode?: 'managed';
     /**
      * Accept Unknown
      */
@@ -3898,9 +3665,9 @@ export type FitsHduOut = {
      */
     id: string;
     /**
-     * Asset Version Id
+     * Asset Id
      */
-    asset_version_id: string;
+    asset_id: string;
     /**
      * Hdu Index
      */
@@ -3982,9 +3749,9 @@ export type FitsHduPage = {
  */
 export type FitsHeaderOut = {
     /**
-     * Asset Version Id
+     * Asset Id
      */
-    asset_version_id: string;
+    asset_id: string;
     /**
      * Hdu Index
      */
@@ -4004,15 +3771,11 @@ export type FixedAssetSource = {
     /**
      * Kind
      */
-    kind: 'asset_version';
+    kind: 'asset';
     /**
      * Asset Id
      */
     asset_id: string;
-    /**
-     * Asset Version Id
-     */
-    asset_version_id: string;
 };
 
 /**
@@ -4022,19 +3785,15 @@ export type FixedDatasetSource = {
     /**
      * Kind
      */
-    kind: 'dataset_version';
+    kind: 'dataset';
     /**
      * Dataset Id
      */
     dataset_id: string;
     /**
-     * Dataset Version Id
+     * Member Asset Ids
      */
-    dataset_version_id: string;
-    /**
-     * Member Asset Version Ids
-     */
-    member_asset_version_ids?: Array<string> | null;
+    member_asset_ids?: Array<string> | null;
 };
 
 /**
@@ -4169,6 +3928,28 @@ export type FrozenRegisteredMember = {
 };
 
 /**
+ * Histogram
+ */
+export type Histogram = {
+    /**
+     * Channel
+     */
+    channel: 'composite' | 'red' | 'green' | 'blue';
+    /**
+     * Edges
+     */
+    edges: Array<number>;
+    /**
+     * Counts
+     */
+    counts: Array<number>;
+    /**
+     * Intensity Unit
+     */
+    intensity_unit: string;
+};
+
+/**
  * ImageBatchResult
  */
 export type ImageBatchResult = {
@@ -4183,32 +3964,24 @@ export type ImageBatchResult = {
  */
 export type ImageCalibrationOut = {
     /**
+     * Diagnostics
+     */
+    diagnostics?: Array<{
+        [key: string]: JsonValue;
+    }>;
+    /**
      * Asset Id
      */
     asset_id: string;
-    /**
-     * Asset Version Id
-     */
-    asset_version_id: string;
     /**
      * Asset Revision
      */
     asset_revision: number;
     /**
-     * Binding Version Id
-     */
-    binding_version_id: string | null;
-    /**
-     * Version Number
-     */
-    version_number: number | null;
-    /**
      * Bindings
      */
     bindings: {
         bias?: ({
-            mode: 'inherit';
-        } & CalibrationInherit) | ({
             mode: 'unconfigured';
         } & CalibrationUnconfigured) | ({
             mode: 'disabled';
@@ -4216,8 +3989,6 @@ export type ImageCalibrationOut = {
             mode: 'target';
         } & CalibrationFixedTarget);
         dark?: ({
-            mode: 'inherit';
-        } & CalibrationInherit) | ({
             mode: 'unconfigured';
         } & CalibrationUnconfigured) | ({
             mode: 'disabled';
@@ -4225,8 +3996,6 @@ export type ImageCalibrationOut = {
             mode: 'target';
         } & CalibrationFixedTarget);
         flat?: ({
-            mode: 'inherit';
-        } & CalibrationInherit) | ({
             mode: 'unconfigured';
         } & CalibrationUnconfigured) | ({
             mode: 'disabled';
@@ -4234,8 +4003,6 @@ export type ImageCalibrationOut = {
             mode: 'target';
         } & CalibrationFixedTarget);
         dark_flat?: ({
-            mode: 'inherit';
-        } & CalibrationInherit) | ({
             mode: 'unconfigured';
         } & CalibrationUnconfigured) | ({
             mode: 'disabled';
@@ -4270,10 +4037,6 @@ export type ImageCalibrationUpdate = {
      * Expected Revision
      */
     expected_revision: number;
-    /**
-     * Base Binding Version Id
-     */
-    base_binding_version_id: string | null;
     changes: CalibrationPatch;
     /**
      * Accept Unknown
@@ -4345,6 +4108,14 @@ export type ImageChanges = {
     parameters?: ImageCaptureParameters;
     times?: ImageTimes;
     /**
+     * Calibration Status
+     */
+    calibration_status?: 'UnCalibrated' | 'Calibrated' | 'Unknown';
+    /**
+     * Calibration Reason
+     */
+    calibration_reason?: string;
+    /**
      * Name
      */
     name?: string;
@@ -4363,6 +4134,14 @@ export type ImageChanges = {
  */
 export type ImageDatasetCreate = {
     /**
+     * Project Id
+     */
+    project_id?: string | null;
+    /**
+     * Project Base Revision
+     */
+    project_base_revision?: number | null;
+    /**
      * Request Id
      */
     request_id: string;
@@ -4374,7 +4153,7 @@ export type ImageDatasetCreate = {
      * Members
      */
     members: Array<DatasetMemberInput>;
-    calibration_defaults?: CalibrationPatch;
+    calibration?: CalibrationPatch;
     /**
      * Notes
      */
@@ -4397,10 +4176,6 @@ export type ImageDatasetEditMembers = {
      * Expected Revision
      */
     expected_revision: number;
-    /**
-     * Base Version Id
-     */
-    base_version_id: string;
     /**
      * Add
      */
@@ -4433,7 +4208,6 @@ export type ImageDetail = {
     asset: AssetOut;
     metadata: ImageMetadata;
     equipment_context?: ImportDefaultsSnapshot | null;
-    version?: AssetVersionOut | null;
 };
 
 /**
@@ -4464,9 +4238,9 @@ export type ImageHeaderPage = {
      */
     offset: number;
     /**
-     * Asset Version Id
+     * Asset Id
      */
-    asset_version_id: string;
+    asset_id: string;
     /**
      * Hdu Index
      */
@@ -4484,6 +4258,16 @@ export type ImageHeaderPage = {
  */
 export type ImageImportItem = {
     /**
+     * Calibration Status
+     */
+    calibration_status: 'UnCalibrated' | 'Calibrated' | 'Unknown';
+    /**
+     * Calibration Evidence
+     */
+    calibration_evidence?: {
+        [key: string]: JsonValue;
+    };
+    /**
      * File Id
      */
     file_id: string | null;
@@ -4495,10 +4279,6 @@ export type ImageImportItem = {
      * Asset Id
      */
     asset_id: string | null;
-    /**
-     * Asset Version Id
-     */
-    asset_version_id: string | null;
     /**
      * Status
      */
@@ -4520,9 +4300,9 @@ export type ImageImportItem = {
      */
     publication_status: 'published' | 'conflict' | 'excluded' | 'not_ready' | 'pending';
     /**
-     * Calibration Status
+     * Calibration Binding Status
      */
-    calibration_status: 'saved' | 'pending' | 'blocked' | 'not_checked';
+    calibration_binding_status: 'saved' | 'pending' | 'blocked' | 'not_checked';
     /**
      * Errors
      */
@@ -4545,6 +4325,13 @@ export type ImageImportItem = {
  * ImageImportReceipt
  */
 export type ImageImportReceipt = {
+    /**
+     * Organization Recovery
+     */
+    organization_recovery?: {
+        [key: string]: JsonValue;
+    } | null;
+    destination?: ImportDestinationReport | null;
     /**
      * Request Id
      */
@@ -4767,10 +4554,6 @@ export type ImagePublicationStage = {
      */
     dataset_id?: string | null;
     /**
-     * Dataset Version Id
-     */
-    dataset_version_id?: string | null;
-    /**
      * Dataset Revision
      */
     dataset_revision?: number | null;
@@ -4780,6 +4563,12 @@ export type ImagePublicationStage = {
     binding?: {
         [key: string]: JsonValue;
     } | null;
+    /**
+     * Bindings
+     */
+    bindings?: Array<{
+        [key: string]: JsonValue;
+    }>;
     /**
      * Errors
      */
@@ -4949,13 +4738,45 @@ export type ImportContentProgress = {
  */
 export type ImportCreate = {
     /**
+     * Calibration Status
+     */
+    calibration_status?: 'UnCalibrated' | 'Calibrated' | 'Unknown';
+    /**
+     * Calibration Reason
+     */
+    calibration_reason?: string | null;
+    /**
+     * Request Id
+     */
+    request_id?: string | null;
+    /**
+     * Mode
+     */
+    mode?: 'standalone' | 'new_dataset' | 'append_dataset';
+    /**
+     * Target Dataset Id
+     */
+    target_dataset_id?: string | null;
+    /**
+     * Dataset Base Revision
+     */
+    dataset_base_revision?: number | null;
+    /**
+     * Project Id
+     */
+    project_id?: string | null;
+    /**
+     * Project Base Revision
+     */
+    project_base_revision?: number | null;
+    /**
      * Sources
      */
     sources: Array<ImportSource>;
     /**
      * Storage Mode
      */
-    storage_mode: 'reference' | 'managed';
+    storage_mode: 'managed';
     classification?: AssetClassification;
     parameters?: AssetParameters;
     /**
@@ -4973,6 +4794,14 @@ export type ImportCreate = {
  * ImportDefaults
  */
 export type ImportDefaults = {
+    /**
+     * Calibration Status
+     */
+    calibration_status?: 'UnCalibrated' | 'Calibrated' | 'Unknown';
+    /**
+     * Calibration Reason
+     */
+    calibration_reason?: string | null;
     metadata?: ImageMetadata;
     equipment?: EquipmentApplication;
     /**
@@ -5007,6 +4836,29 @@ export type ImportDefaultsSnapshot = {
 };
 
 /**
+ * ImportDestinationReport
+ */
+export type ImportDestinationReport = {
+    /**
+     * Mode
+     */
+    mode: 'standalone' | 'new_dataset' | 'append_dataset';
+    /**
+     * Project Id
+     */
+    project_id?: string | null;
+    /**
+     * Project Base Revision
+     */
+    project_base_revision?: number | null;
+    /**
+     * Project Name
+     */
+    project_name?: string | null;
+    project_link: ImportProjectLink;
+};
+
+/**
  * ImportPreviewProgress
  */
 export type ImportPreviewProgress = {
@@ -5036,9 +4888,47 @@ export type ImportPreviewProgress = {
  * ImportProgressSummary
  */
 export type ImportProgressSummary = {
+    destination?: ImportDestinationReport | null;
+    dataset_publish_error?: DatasetPublicationError | null;
+    /**
+     * Dataset Exclusions
+     */
+    dataset_exclusions?: Array<DatasetImportExclusion>;
     registration?: ImportRegistrationProgress | null;
     content?: ImportContentProgress | null;
     preview?: ImportPreviewProgress | null;
+};
+
+/**
+ * ImportProjectLink
+ */
+export type ImportProjectLink = {
+    /**
+     * State
+     */
+    state: 'not_requested' | 'pending' | 'linked' | 'failed';
+    /**
+     * Code
+     */
+    code?: string | null;
+    /**
+     * Message
+     */
+    message?: string | null;
+    /**
+     * Fields
+     */
+    fields?: Array<{
+        [key: string]: string;
+    }>;
+    /**
+     * Reference Ids
+     */
+    reference_ids?: Array<string>;
+    /**
+     * Project Revision
+     */
+    project_revision?: number | null;
 };
 
 /**
@@ -5046,10 +4936,20 @@ export type ImportProgressSummary = {
  */
 export type ImportProvenance = {
     /**
+     * Calibration Status
+     */
+    calibration_status?: 'UnCalibrated' | 'Calibrated' | 'Unknown';
+    /**
+     * Calibration Evidence
+     */
+    calibration_evidence?: {
+        [key: string]: JsonValue;
+    };
+    /**
      * Value Sources
      */
     value_sources?: {
-        [key: string]: 'manual' | 'file' | 'unknown';
+        [key: string]: 'manual' | 'file' | 'equipment' | 'unknown';
     };
     /**
      * Observed Parameters
@@ -5058,6 +4958,48 @@ export type ImportProvenance = {
         [key: string]: JsonValue;
     };
     defaults_snapshot?: ImportDefaultsSnapshot;
+};
+
+/**
+ * ImportRecovery
+ */
+export type ImportRecovery = {
+    /**
+     * Accept Unknown
+     */
+    accept_unknown?: boolean;
+    /**
+     * Request Id
+     */
+    request_id: string;
+    /**
+     * Mode
+     */
+    mode: 'new_dataset' | 'append_dataset' | 'link_project';
+    /**
+     * Asset Ids
+     */
+    asset_ids?: Array<string>;
+    /**
+     * Name
+     */
+    name?: string | null;
+    /**
+     * Dataset Id
+     */
+    dataset_id?: string | null;
+    /**
+     * Expected Revision
+     */
+    expected_revision?: number | null;
+    /**
+     * Project Id
+     */
+    project_id?: string | null;
+    /**
+     * Project Base Revision
+     */
+    project_base_revision?: number | null;
 };
 
 /**
@@ -5096,10 +5038,16 @@ export type ImportRegistrationStage = {
  * ImportReport
  */
 export type ImportReport = {
+    destination?: ImportDestinationReport | null;
+    dataset_publish_error?: DatasetPublicationError | null;
     registration?: ImportRegistrationProgress | null;
     content?: ImportContentProgress | null;
     preview?: ImportPreviewProgress | null;
-    [key: string]: JsonValue | ImportRegistrationProgress | null | ImportContentProgress | null | ImportPreviewProgress | null | undefined;
+    /**
+     * Dataset Exclusions
+     */
+    dataset_exclusions?: Array<DatasetImportExclusion>;
+    [key: string]: JsonValue | ImportDestinationReport | null | DatasetPublicationError | null | ImportRegistrationProgress | null | ImportContentProgress | null | ImportPreviewProgress | null | Array<DatasetImportExclusion> | undefined;
 };
 
 /**
@@ -5403,6 +5351,18 @@ export type JsonValue = string | number | boolean | null | Array<JsonValue> | {
  */
 export type LibraryAssetSummary = {
     /**
+     * Calibration Status
+     */
+    calibration_status: 'UnCalibrated' | 'Calibrated' | 'Unknown';
+    /**
+     * Calibration Counts
+     */
+    calibration_counts: {
+        UnCalibrated?: number;
+        Calibrated?: number;
+        Unknown?: number;
+    };
+    /**
      * Entry Type
      */
     entry_type: 'asset';
@@ -5430,14 +5390,6 @@ export type LibraryAssetSummary = {
      * Created At
      */
     created_at: string;
-    /**
-     * Version Id
-     */
-    version_id: string | null;
-    /**
-     * Version Number
-     */
-    version_number: number | null;
     /**
      * Member Count
      */
@@ -5498,10 +5450,6 @@ export type LibraryCalibrationProjection = {
         flat?: LibraryCalibrationSlot;
         dark_flat?: LibraryCalibrationSlot;
     };
-    /**
-     * Binding Version Id
-     */
-    binding_version_id?: string | null;
 };
 
 /**
@@ -5521,11 +5469,11 @@ export type LibraryCalibrationSlot = {
     /**
      * Source
      */
-    source: 'standalone' | 'dataset_default' | 'member_override' | 'mixed';
+    source: 'standalone' | 'dataset';
     /**
      * Status
      */
-    status: 'unconfigured' | 'disabled' | 'target' | 'not_applicable' | 'mixed';
+    status: 'unconfigured' | 'disabled' | 'target' | 'not_applicable';
     target_detail?: LibraryCalibrationTarget | null;
     /**
      * Check State
@@ -5546,10 +5494,6 @@ export type LibraryCalibrationTarget = {
      * Name
      */
     name: string;
-    /**
-     * Version Number
-     */
-    version_number: number;
     /**
      * Target Kind
      */
@@ -5587,6 +5531,18 @@ export type LibraryClassificationSummary = {
  */
 export type LibraryDatasetSummary = {
     /**
+     * Calibration Status
+     */
+    calibration_status: 'UnCalibrated' | 'Calibrated' | 'Unknown';
+    /**
+     * Calibration Counts
+     */
+    calibration_counts: {
+        UnCalibrated?: number;
+        Calibrated?: number;
+        Unknown?: number;
+    };
+    /**
      * Entry Type
      */
     entry_type: 'dataset';
@@ -5615,14 +5571,6 @@ export type LibraryDatasetSummary = {
      */
     created_at: string;
     /**
-     * Version Id
-     */
-    version_id: string | null;
-    /**
-     * Version Number
-     */
-    version_number: number | null;
-    /**
      * Member Count
      */
     member_count: number;
@@ -5642,6 +5590,16 @@ export type LibraryDatasetSummary = {
      * Import Issue
      */
     import_issue: string | null;
+};
+
+/**
+ * LibraryDirectoryOpened
+ */
+export type LibraryDirectoryOpened = {
+    /**
+     * Directory
+     */
+    directory: string;
 };
 
 /**
@@ -5680,10 +5638,6 @@ export type LibraryEntryRemove = {
      * Revision
      */
     revision: number;
-    /**
-     * Current Version Id
-     */
-    current_version_id: string | null;
 };
 
 /**
@@ -5698,6 +5652,92 @@ export type LibraryEquipmentLabel = {
      * Name
      */
     name: string;
+};
+
+/**
+ * LibraryFileLocation
+ */
+export type LibraryFileLocation = {
+    /**
+     * Calibration Status
+     */
+    calibration_status: 'UnCalibrated' | 'Calibrated' | 'Unknown';
+    /**
+     * Calibration Evidence
+     */
+    calibration_evidence?: {
+        [key: string]: JsonValue;
+    };
+    /**
+     * Asset Id
+     */
+    asset_id: string;
+    /**
+     * Storage Mode
+     */
+    storage_mode: 'managed' | 'reference';
+    /**
+     * Availability
+     */
+    availability: 'unknown' | 'available' | 'changed' | 'missing';
+    /**
+     * Path
+     */
+    path: string;
+    /**
+     * Library Relative Path
+     */
+    library_relative_path: string | null;
+    /**
+     * Processing Calibration
+     */
+    processing_calibration?: {
+        [key: string]: JsonValue;
+    } | null;
+    /**
+     * Processing Provenance
+     */
+    processing_provenance?: {
+        [key: string]: JsonValue;
+    } | null;
+};
+
+/**
+ * LibraryFileMove
+ */
+export type LibraryFileMove = {
+    /**
+     * Asset Id
+     */
+    asset_id: string;
+    /**
+     * Revision
+     */
+    revision: number;
+    /**
+     * Content Hash
+     */
+    content_hash: string | null;
+    /**
+     * Byte Size
+     */
+    byte_size: number | null;
+    /**
+     * Source
+     */
+    source: string;
+    /**
+     * Destination
+     */
+    destination: string;
+    /**
+     * State
+     */
+    state?: 'pending' | 'completed' | 'failed' | 'cleanup_pending';
+    /**
+     * Error
+     */
+    error?: string | null;
 };
 
 /**
@@ -5761,6 +5801,44 @@ export type LibraryItemPage = {
 };
 
 /**
+ * LibraryLocationOut
+ */
+export type LibraryLocationOut = {
+    /**
+     * Entry Type
+     */
+    entry_type: 'asset' | 'dataset';
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Revision
+     */
+    revision: number;
+    /**
+     * Directory
+     */
+    directory: string | null;
+    /**
+     * Files
+     */
+    files: Array<LibraryFileLocation>;
+    /**
+     * Manifest Path
+     */
+    manifest_path: string | null;
+    /**
+     * Manifest Status
+     */
+    manifest_status: 'pending' | 'ready' | 'failed' | null;
+    /**
+     * Manifest Error
+     */
+    manifest_error: string | null;
+};
+
+/**
  * LibraryMetadataSummary
  */
 export type LibraryMetadataSummary = {
@@ -5771,6 +5849,111 @@ export type LibraryMetadataSummary = {
     filter: LibraryValueSummaryLibraryEquipmentLabel;
     storage_mode: LibraryValueSummaryLiteralManagedReference;
     availability: LibraryValueSummaryLiteralUnknownAvailableChangedMissing;
+};
+
+/**
+ * LibraryOrganizeExecute
+ */
+export type LibraryOrganizeExecute = {
+    /**
+     * Base Revision
+     */
+    base_revision: number;
+    /**
+     * Entry Type
+     */
+    entry_type: 'asset' | 'dataset';
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Request Id
+     */
+    request_id: string;
+    /**
+     * Plan Token
+     */
+    plan_token: string;
+};
+
+/**
+ * LibraryOrganizePlan
+ */
+export type LibraryOrganizePlan = {
+    /**
+     * Entry Type
+     */
+    entry_type: 'asset' | 'dataset';
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Base Revision
+     */
+    base_revision: number;
+    /**
+     * Source Directory
+     */
+    source_directory: string | null;
+    /**
+     * Destination Directory
+     */
+    destination_directory: string;
+    /**
+     * Moves
+     */
+    moves: Array<LibraryFileMove>;
+    /**
+     * Blockers
+     */
+    blockers: Array<string>;
+    /**
+     * Token
+     */
+    token: string;
+};
+
+/**
+ * LibraryOrganizeReceipt
+ */
+export type LibraryOrganizeReceipt = {
+    /**
+     * Request Id
+     */
+    request_id: string;
+    /**
+     * Operation
+     */
+    operation?: 'organize_library';
+    /**
+     * State
+     */
+    state: 'running' | 'completed' | 'partial' | 'interrupted';
+    plan: LibraryOrganizePlan;
+    /**
+     * Error
+     */
+    error?: string | null;
+};
+
+/**
+ * LibraryOrganizeRequest
+ */
+export type LibraryOrganizeRequest = {
+    /**
+     * Base Revision
+     */
+    base_revision: number;
+    /**
+     * Entry Type
+     */
+    entry_type: 'asset' | 'dataset';
+    /**
+     * Id
+     */
+    id: string;
 };
 
 /**
@@ -5797,10 +5980,6 @@ export type LibraryThumbnailReference = {
      * Asset Id
      */
     asset_id: string;
-    /**
-     * Asset Version Id
-     */
-    asset_version_id: string;
     /**
      * View Base
      */
@@ -5912,10 +6091,6 @@ export type LibraryTrashItemOut = {
      */
     revision: number;
     /**
-     * Current Version Id
-     */
-    current_version_id: string | null;
-    /**
      * Cleanup Status
      */
     cleanup_status: 'trash' | 'partial' | 'failed';
@@ -5968,6 +6143,10 @@ export type LibraryTrashPage = {
  */
 export type LibraryTrashPreviewOut = {
     /**
+     * Blockers
+     */
+    blockers?: Array<string>;
+    /**
      * Items
      */
     items: Array<LibraryTrashItemOut>;
@@ -6013,10 +6192,6 @@ export type LibraryTrashReferenceOut = {
      * Name
      */
     name: string;
-    /**
-     * Version
-     */
-    version: number;
 };
 
 /**
@@ -6059,10 +6234,6 @@ export type LibraryTrashSelectionItem = {
      * Revision
      */
     revision: number;
-    /**
-     * Current Version Id
-     */
-    current_version_id: string | null;
     /**
      * Source Dataset Id
      */
@@ -6429,6 +6600,16 @@ export type ManagementTrashSelectionItem = {
 };
 
 /**
+ * ManifestRebuildRequest
+ */
+export type ManifestRebuildRequest = {
+    /**
+     * Base Revision
+     */
+    base_revision: number;
+};
+
+/**
  * MasterProvenanceChanges
  */
 export type MasterProvenanceChanges = {
@@ -6474,17 +6655,9 @@ export type MasterProvenanceOut = {
      */
     asset_id: string;
     /**
-     * Asset Version Id
-     */
-    asset_version_id: string;
-    /**
      * Asset Revision
      */
     asset_revision: number;
-    /**
-     * Provenance Version Id
-     */
-    provenance_version_id: string | null;
     /**
      * Revision
      */
@@ -6571,13 +6744,27 @@ export type MediaHdu = {
 };
 
 /**
+ * MediaPosition
+ */
+export type MediaPosition = {
+    /**
+     * Member Index
+     */
+    member_index: number;
+    /**
+     * Frame Index
+     */
+    frame_index?: number | null;
+};
+
+/**
  * MediaSelection
  */
 export type MediaSelection = {
     /**
-     * Dataset Version Id
+     * Dataset Id
      */
-    dataset_version_id?: string | null;
+    dataset_id?: string | null;
     /**
      * Prefetch
      */
@@ -6647,6 +6834,10 @@ export type MediaSelection = {
      * Preview Max Edge
      */
     preview_max_edge?: 512 | 1024 | 2048 | null;
+    /**
+     * Channel
+     */
+    channel?: 'composite' | 'red' | 'green' | 'blue';
 };
 
 /**
@@ -6745,17 +6936,10 @@ export type MediaState = {
         [key: string]: unknown;
     } | null;
     error: PreviewIssue | null;
-};
-
-/**
- * MemberCalibrationChange
- */
-export type MemberCalibrationChange = {
     /**
-     * Asset Version Id
+     * Channels
      */
-    asset_version_id: string;
-    changes: CalibrationPatch;
+    channels?: Array<'composite' | 'red' | 'green' | 'blue'>;
 };
 
 /**
@@ -6910,9 +7094,9 @@ export type NativeDataExecute = {
      * Reference
      */
     reference?: ({
-        kind: 'asset_version';
+        kind: 'asset';
     } & AssetInputReference) | ({
-        kind: 'dataset_version';
+        kind: 'dataset';
     } & DatasetInputReference) | OutputLocator | null;
     /**
      * Image Count
@@ -7050,6 +7234,67 @@ export type NodeDefinition = {
      */
     parameters: Array<ParameterDefinition>;
     execution: SoftwareBinding;
+    /**
+     * Localizations
+     */
+    localizations?: {
+        en?: NodeLocalization;
+        zh?: NodeLocalization;
+    };
+};
+
+/**
+ * NodeDisplayLabel
+ */
+export type NodeDisplayLabel = {
+    /**
+     * Label
+     */
+    label?: string;
+    /**
+     * Description
+     */
+    description?: string;
+};
+
+/**
+ * NodeLocalization
+ */
+export type NodeLocalization = {
+    /**
+     * Name
+     */
+    name?: string;
+    /**
+     * Description
+     */
+    description?: string;
+    /**
+     * Help
+     */
+    help?: string;
+    /**
+     * Category
+     */
+    category?: Array<string>;
+    /**
+     * Inputs
+     */
+    inputs?: {
+        [key: string]: NodeDisplayLabel;
+    };
+    /**
+     * Outputs
+     */
+    outputs?: {
+        [key: string]: NodeDisplayLabel;
+    };
+    /**
+     * Parameters
+     */
+    parameters?: {
+        [key: string]: NodeDisplayLabel;
+    };
 };
 
 /**
@@ -7159,10 +7404,6 @@ export type OutputRegistration = {
      */
     asset_id: string | null;
     /**
-     * Asset Version Id
-     */
-    asset_version_id: string | null;
-    /**
      * Content Status
      */
     content_status: 'pending' | 'available' | 'failed';
@@ -7173,7 +7414,7 @@ export type OutputRegistration = {
     /**
      * Preview Status
      */
-    preview_status: 'pending' | 'available' | 'unsupported' | 'failed';
+    preview_status: 'pending' | 'available' | 'unsupported' | 'failed' | 'not_requested';
     error: ErrorDetail | null;
 };
 
@@ -7230,6 +7471,25 @@ export type ParameterDefinition = {
      * Nullable
      */
     nullable?: boolean;
+    /**
+     * Unit
+     */
+    unit?: string | null;
+    editor?: ParameterEditor | null;
+};
+
+/**
+ * ParameterEditor
+ */
+export type ParameterEditor = {
+    /**
+     * Kind
+     */
+    kind: 'points' | 'region' | 'line' | 'curve';
+    /**
+     * Input
+     */
+    input?: string | null;
 };
 
 /**
@@ -7250,6 +7510,43 @@ export type PendingSoftwareAction = {
      */
     confirmation_url: string;
     error: ErrorDetail | null;
+};
+
+/**
+ * PixelSelection
+ */
+export type PixelSelection = {
+    /**
+     * Member Index
+     */
+    member_index: number;
+    /**
+     * Frame Index
+     */
+    frame_index?: number | null;
+    /**
+     * Source Token
+     */
+    source_token: string;
+    /**
+     * Hdu Index
+     */
+    hdu_index?: number | null;
+    /**
+     * Width
+     */
+    width: number;
+    /**
+     * Height
+     */
+    height: number;
+    /**
+     * Points
+     */
+    points: Array<[
+        number,
+        number
+    ]>;
 };
 
 /**
@@ -7303,9 +7600,9 @@ export type ProjectAssetReferenceOut = {
      */
     project_id: string;
     /**
-     * Asset Version Id
+     * Asset Id
      */
-    asset_version_id: string;
+    asset_id: string;
     /**
      * View Base
      */
@@ -7315,7 +7612,6 @@ export type ProjectAssetReferenceOut = {
      */
     added_at: string;
     asset: AssetOut;
-    version: AssetVersionOut;
 };
 
 /**
@@ -7370,10 +7666,6 @@ export type ProjectDatasetReferenceCreate = {
      * Dataset Id
      */
     dataset_id: string;
-    /**
-     * Dataset Version Id
-     */
-    dataset_version_id: string;
 };
 
 /**
@@ -7402,10 +7694,6 @@ export type ProjectDatasetReferenceOut = {
      */
     dataset_id: string;
     /**
-     * Dataset Version Id
-     */
-    dataset_version_id: string;
-    /**
      * Base Revision
      */
     base_revision: number;
@@ -7414,7 +7702,6 @@ export type ProjectDatasetReferenceOut = {
      */
     added_at: string;
     dataset: DatasetOut;
-    version: DatasetVersionSummary;
 };
 
 /**
@@ -7534,9 +7821,9 @@ export type ProjectReferenceCreate = {
      */
     base_revision: number;
     /**
-     * Asset Version Id
+     * Asset Id
      */
-    asset_version_id: string;
+    asset_id: string;
 };
 
 /**
@@ -7575,10 +7862,20 @@ export type PublicationRetryBody = {
      * Expected Revision
      */
     expected_revision: number;
+};
+
+/**
+ * ReferencingProject
+ */
+export type ReferencingProject = {
     /**
-     * Base Version Id
+     * Id
      */
-    base_version_id: string;
+    id: string;
+    /**
+     * Name
+     */
+    name: string;
 };
 
 /**
@@ -7669,6 +7966,30 @@ export type RunOutputMember = {
      * File Url
      */
     file_url: string;
+    /**
+     * Width
+     */
+    width?: number | null;
+    /**
+     * Height
+     */
+    height?: number | null;
+    /**
+     * Frame Count
+     */
+    frame_count?: number | null;
+    /**
+     * Hdu Index
+     */
+    hdu_index?: number | null;
+    /**
+     * Content Hash
+     */
+    content_hash?: string | null;
+    /**
+     * Position Token
+     */
+    position_token?: string | null;
 };
 
 /**
@@ -7687,6 +8008,18 @@ export type RunOutputPort = {
      * Members
      */
     members: Array<RunOutputMember>;
+    /**
+     * Data Kind
+     */
+    data_kind?: 'image' | 'sequence' | 'video' | 'analysis' | 'file' | null;
+    /**
+     * Role
+     */
+    role?: string | null;
+    /**
+     * Operation Output
+     */
+    operation_output?: string | null;
 };
 
 /**
@@ -7713,9 +8046,9 @@ export type ScannedCalibrationCheckItem = {
      */
     file_id: string;
     /**
-     * Dependency Asset Version Id
+     * Dependency Asset Id
      */
-    dependency_asset_version_id?: string | null;
+    dependency_asset_id?: string | null;
     /**
      * Slot
      */
@@ -7724,7 +8057,7 @@ export type ScannedCalibrationCheckItem = {
     /**
      * State
      */
-    state: 'compatible' | 'unknown' | 'conflict';
+    state: 'compatible' | 'warning' | 'unknown' | 'conflict';
     /**
      * Master Required
      */
@@ -7758,9 +8091,13 @@ export type ScannedCalibrationCheckPage = {
      */
     offset: number;
     /**
+     * Warning Count
+     */
+    warning_count?: number;
+    /**
      * State
      */
-    state: 'compatible' | 'unknown' | 'conflict';
+    state: 'compatible' | 'warning' | 'unknown' | 'conflict';
     /**
      * Checked Files
      */
@@ -7800,7 +8137,17 @@ export type ScannedCalibrationCheckRequest = {
      */
     files: Array<ConfirmedFile>;
     defaults?: ImportDefaults | null;
-    calibration_defaults?: CalibrationPatch | null;
+    calibration?: CalibrationPatch | null;
+    /**
+     * Destination
+     */
+    destination?: ({
+        mode: 'standalone';
+    } & StandaloneDestination) | ({
+        mode: 'new_dataset';
+    } & NewDatasetDestination) | ({
+        mode: 'append_dataset';
+    } & AppendDatasetDestination) | null;
     /**
      * Limit
      */
@@ -8058,6 +8405,19 @@ export type SoftwareCallResult = {
     preview_error: string | null;
     observation: SoftwareObservation | null;
     error: ErrorDetail | null;
+    /**
+     * Input Token
+     */
+    input_token?: string | null;
+    /**
+     * Editor Values
+     */
+    editor_values?: {
+        [key: string]: PixelSelection | Array<[
+            number,
+            number
+        ]>;
+    };
 };
 
 /**
@@ -8131,7 +8491,7 @@ export type SoftwareInputDefinition = {
     /**
      * Data Kind
      */
-    data_kind?: 'image' | 'sequence' | 'file';
+    data_kind?: 'image' | 'sequence' | 'video' | 'analysis' | 'file';
     /**
      * Colour Layout
      */
@@ -8217,6 +8577,7 @@ export type SoftwareObservation = {
  * SoftwareOperation
  */
 export type SoftwareOperation = {
+    calibration_effect?: CalibrationEffect;
     /**
      * Package Id
      */
@@ -8309,6 +8670,14 @@ export type SoftwareOutputDefinition = {
      * Colour Layout
      */
     colour_layout?: 'planar' | 'interleaved' | null;
+    /**
+     * Data Kind
+     */
+    data_kind?: 'image' | 'sequence' | 'video' | 'analysis' | 'file' | null;
+    /**
+     * Role
+     */
+    role?: string | null;
 };
 
 /**
@@ -8625,6 +8994,14 @@ export type StandaloneDestination = {
  */
 export type TaskItemOut = {
     /**
+     * Dataset Id
+     */
+    dataset_id?: string | null;
+    /**
+     * Dataset Name
+     */
+    dataset_name?: string | null;
+    /**
      * Id
      */
     id: string;
@@ -8672,10 +9049,6 @@ export type TaskItemOut = {
      * Asset Id
      */
     asset_id: string | null;
-    /**
-     * Asset Version Id
-     */
-    asset_version_id: string | null;
     /**
      * Error
      */
@@ -8875,10 +9248,6 @@ export type ThumbnailAssetTarget = {
      * Asset Id
      */
     asset_id: string;
-    /**
-     * Asset Version Id
-     */
-    asset_version_id: string;
 };
 
 /**
@@ -8914,13 +9283,13 @@ export type ThumbnailBatchItemOut = {
      */
     id: string;
     /**
-     * Asset Version Id
+     * Asset Id
      */
-    asset_version_id: string | null;
+    asset_id: string | null;
     /**
-     * Dataset Version Id
+     * Dataset Id
      */
-    dataset_version_id: string | null;
+    dataset_id: string | null;
     /**
      * Position
      */
@@ -9015,10 +9384,6 @@ export type ThumbnailDatasetTarget = {
      * Dataset Id
      */
     dataset_id: string;
-    /**
-     * Dataset Version Id
-     */
-    dataset_version_id: string;
 };
 
 /**
@@ -9026,13 +9391,13 @@ export type ThumbnailDatasetTarget = {
  */
 export type ThumbnailGroupFailure = {
     /**
-     * Dataset Version Id
+     * Dataset Id
      */
-    dataset_version_id: string;
+    dataset_id: string;
     /**
-     * Reference Asset Version Id
+     * Reference Asset Id
      */
-    reference_asset_version_id: string;
+    reference_asset_id: string;
     /**
      * Code
      */
@@ -9082,6 +9447,38 @@ export type UploadFile = {
  */
 export type UploadImportCreate = {
     /**
+     * Calibration Status
+     */
+    calibration_status?: 'UnCalibrated' | 'Calibrated' | 'Unknown';
+    /**
+     * Calibration Reason
+     */
+    calibration_reason?: string | null;
+    /**
+     * Request Id
+     */
+    request_id?: string | null;
+    /**
+     * Mode
+     */
+    mode?: 'standalone' | 'new_dataset' | 'append_dataset';
+    /**
+     * Target Dataset Id
+     */
+    target_dataset_id?: string | null;
+    /**
+     * Dataset Base Revision
+     */
+    dataset_base_revision?: number | null;
+    /**
+     * Project Id
+     */
+    project_id?: string | null;
+    /**
+     * Project Base Revision
+     */
+    project_base_revision?: number | null;
+    /**
      * Files
      */
     files: Array<UploadFile>;
@@ -9095,10 +9492,6 @@ export type UploadImportCreate = {
      * Dataset Name
      */
     dataset_name?: string | null;
-    /**
-     * Create Dataset
-     */
-    create_dataset?: boolean;
     equipment?: EquipmentApplication | null;
 };
 
@@ -9110,22 +9503,6 @@ export type UploadReceipt = {
      * Received
      */
     received: number;
-};
-
-/**
- * VersionCaptureSnapshot
- */
-export type VersionCaptureSnapshot = {
-    /**
-     * Image Metadata
-     */
-    image_metadata?: {
-        [key: string]: JsonValue;
-    } | null;
-    parameters?: AssetParametersPatch;
-    classification?: AssetClassification;
-    equipment_snapshot?: EquipmentSnapshots;
-    import_provenance?: ImportProvenance | null;
 };
 
 /**
@@ -9496,6 +9873,10 @@ export type SearchLibraryData = {
     path?: never;
     query?: {
         /**
+         * Calibration Status
+         */
+        calibration_status?: Array<'UnCalibrated' | 'Calibrated' | 'Unknown'>;
+        /**
          * Role
          */
         role?: Array<'raw' | 'calibration' | 'intermediate' | 'final'>;
@@ -9719,6 +10100,10 @@ export type ListLibraryAssetsData = {
     path?: never;
     query?: {
         /**
+         * Calibration Status
+         */
+        calibration_status?: 'UnCalibrated' | 'Calibrated' | 'Unknown' | null;
+        /**
          * Text
          */
         text?: string | null;
@@ -9913,6 +10298,400 @@ export type ListLibraryAssetsResponses = {
 };
 
 export type ListLibraryAssetsResponse = ListLibraryAssetsResponses[keyof ListLibraryAssetsResponses];
+
+export type GetLibraryLocationData = {
+    body?: never;
+    path: {
+        /**
+         * Entry Type
+         */
+        entry_type: 'asset' | 'dataset';
+        /**
+         * Entry Id
+         */
+        entry_id: string;
+    };
+    query?: never;
+    url: '/api/v1/library/locations/{entry_type}/{entry_id}';
+};
+
+export type GetLibraryLocationErrors = {
+    /**
+     * Authentication required
+     */
+    401: ErrorEnvelope;
+    /**
+     * Origin not allowed by the ComfyUI proxy
+     */
+    403: ErrorEnvelope;
+    /**
+     * Resource not found or outside the requested scope
+     */
+    404: ErrorEnvelope;
+    /**
+     * Method not allowed
+     */
+    405: ErrorEnvelope;
+    /**
+     * Revision conflict
+     */
+    409: ErrorEnvelope;
+    /**
+     * Validation error or invalid reference
+     */
+    422: ErrorEnvelope;
+    /**
+     * Internal error
+     */
+    500: ErrorEnvelope;
+    /**
+     * Service not configured or unavailable
+     */
+    503: ErrorEnvelope;
+    /**
+     * Service timeout
+     */
+    504: ErrorEnvelope;
+    /**
+     * Default Response
+     */
+    default: ErrorEnvelope;
+};
+
+export type GetLibraryLocationError = GetLibraryLocationErrors[keyof GetLibraryLocationErrors];
+
+export type GetLibraryLocationResponses = {
+    /**
+     * Successful Response
+     */
+    200: LibraryLocationOut;
+};
+
+export type GetLibraryLocationResponse = GetLibraryLocationResponses[keyof GetLibraryLocationResponses];
+
+export type RebuildDatasetManifestData = {
+    body: ManifestRebuildRequest;
+    path: {
+        /**
+         * Dataset Id
+         */
+        dataset_id: string;
+    };
+    query?: never;
+    url: '/api/v1/datasets/{dataset_id}/manifest';
+};
+
+export type RebuildDatasetManifestErrors = {
+    /**
+     * Authentication required
+     */
+    401: ErrorEnvelope;
+    /**
+     * Origin not allowed by the ComfyUI proxy
+     */
+    403: ErrorEnvelope;
+    /**
+     * Resource not found or outside the requested scope
+     */
+    404: ErrorEnvelope;
+    /**
+     * Method not allowed
+     */
+    405: ErrorEnvelope;
+    /**
+     * Revision conflict
+     */
+    409: ErrorEnvelope;
+    /**
+     * Validation error or invalid reference
+     */
+    422: ErrorEnvelope;
+    /**
+     * Internal error
+     */
+    500: ErrorEnvelope;
+    /**
+     * Service not configured or unavailable
+     */
+    503: ErrorEnvelope;
+    /**
+     * Service timeout
+     */
+    504: ErrorEnvelope;
+    /**
+     * Default Response
+     */
+    default: ErrorEnvelope;
+};
+
+export type RebuildDatasetManifestError = RebuildDatasetManifestErrors[keyof RebuildDatasetManifestErrors];
+
+export type RebuildDatasetManifestResponses = {
+    /**
+     * Successful Response
+     */
+    200: LibraryLocationOut;
+};
+
+export type RebuildDatasetManifestResponse = RebuildDatasetManifestResponses[keyof RebuildDatasetManifestResponses];
+
+export type OpenLibraryDirectoryData = {
+    body?: never;
+    path: {
+        /**
+         * Entry Type
+         */
+        entry_type: 'asset' | 'dataset';
+        /**
+         * Entry Id
+         */
+        entry_id: string;
+    };
+    query?: never;
+    url: '/api/v1/library/locations/{entry_type}/{entry_id}/open';
+};
+
+export type OpenLibraryDirectoryErrors = {
+    /**
+     * Authentication required
+     */
+    401: ErrorEnvelope;
+    /**
+     * Origin not allowed by the ComfyUI proxy
+     */
+    403: ErrorEnvelope;
+    /**
+     * Resource not found or outside the requested scope
+     */
+    404: ErrorEnvelope;
+    /**
+     * Method not allowed
+     */
+    405: ErrorEnvelope;
+    /**
+     * Revision conflict
+     */
+    409: ErrorEnvelope;
+    /**
+     * Validation error or invalid reference
+     */
+    422: ErrorEnvelope;
+    /**
+     * Internal error
+     */
+    500: ErrorEnvelope;
+    /**
+     * Service not configured or unavailable
+     */
+    503: ErrorEnvelope;
+    /**
+     * Service timeout
+     */
+    504: ErrorEnvelope;
+    /**
+     * Default Response
+     */
+    default: ErrorEnvelope;
+};
+
+export type OpenLibraryDirectoryError = OpenLibraryDirectoryErrors[keyof OpenLibraryDirectoryErrors];
+
+export type OpenLibraryDirectoryResponses = {
+    /**
+     * Successful Response
+     */
+    200: LibraryDirectoryOpened;
+};
+
+export type OpenLibraryDirectoryResponse = OpenLibraryDirectoryResponses[keyof OpenLibraryDirectoryResponses];
+
+export type PlanLibraryOrganizationData = {
+    body: LibraryOrganizeRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/library/organization/plan';
+};
+
+export type PlanLibraryOrganizationErrors = {
+    /**
+     * Authentication required
+     */
+    401: ErrorEnvelope;
+    /**
+     * Origin not allowed by the ComfyUI proxy
+     */
+    403: ErrorEnvelope;
+    /**
+     * Resource not found or outside the requested scope
+     */
+    404: ErrorEnvelope;
+    /**
+     * Method not allowed
+     */
+    405: ErrorEnvelope;
+    /**
+     * Revision conflict
+     */
+    409: ErrorEnvelope;
+    /**
+     * Validation error or invalid reference
+     */
+    422: ErrorEnvelope;
+    /**
+     * Internal error
+     */
+    500: ErrorEnvelope;
+    /**
+     * Service not configured or unavailable
+     */
+    503: ErrorEnvelope;
+    /**
+     * Service timeout
+     */
+    504: ErrorEnvelope;
+    /**
+     * Default Response
+     */
+    default: ErrorEnvelope;
+};
+
+export type PlanLibraryOrganizationError = PlanLibraryOrganizationErrors[keyof PlanLibraryOrganizationErrors];
+
+export type PlanLibraryOrganizationResponses = {
+    /**
+     * Successful Response
+     */
+    200: LibraryOrganizePlan;
+};
+
+export type PlanLibraryOrganizationResponse = PlanLibraryOrganizationResponses[keyof PlanLibraryOrganizationResponses];
+
+export type OrganizeLibraryData = {
+    body: LibraryOrganizeExecute;
+    path?: never;
+    query?: never;
+    url: '/api/v1/library/organization';
+};
+
+export type OrganizeLibraryErrors = {
+    /**
+     * Authentication required
+     */
+    401: ErrorEnvelope;
+    /**
+     * Origin not allowed by the ComfyUI proxy
+     */
+    403: ErrorEnvelope;
+    /**
+     * Resource not found or outside the requested scope
+     */
+    404: ErrorEnvelope;
+    /**
+     * Method not allowed
+     */
+    405: ErrorEnvelope;
+    /**
+     * Revision conflict
+     */
+    409: ErrorEnvelope;
+    /**
+     * Validation error or invalid reference
+     */
+    422: ErrorEnvelope;
+    /**
+     * Internal error
+     */
+    500: ErrorEnvelope;
+    /**
+     * Service not configured or unavailable
+     */
+    503: ErrorEnvelope;
+    /**
+     * Service timeout
+     */
+    504: ErrorEnvelope;
+    /**
+     * Default Response
+     */
+    default: ErrorEnvelope;
+};
+
+export type OrganizeLibraryError = OrganizeLibraryErrors[keyof OrganizeLibraryErrors];
+
+export type OrganizeLibraryResponses = {
+    /**
+     * Successful Response
+     */
+    200: LibraryOrganizeReceipt;
+};
+
+export type OrganizeLibraryResponse = OrganizeLibraryResponses[keyof OrganizeLibraryResponses];
+
+export type GetLibraryOrganizationData = {
+    body?: never;
+    path: {
+        /**
+         * Request Id
+         */
+        request_id: string;
+    };
+    query?: never;
+    url: '/api/v1/library/organization/{request_id}';
+};
+
+export type GetLibraryOrganizationErrors = {
+    /**
+     * Authentication required
+     */
+    401: ErrorEnvelope;
+    /**
+     * Origin not allowed by the ComfyUI proxy
+     */
+    403: ErrorEnvelope;
+    /**
+     * Resource not found or outside the requested scope
+     */
+    404: ErrorEnvelope;
+    /**
+     * Method not allowed
+     */
+    405: ErrorEnvelope;
+    /**
+     * Revision conflict
+     */
+    409: ErrorEnvelope;
+    /**
+     * Validation error or invalid reference
+     */
+    422: ErrorEnvelope;
+    /**
+     * Internal error
+     */
+    500: ErrorEnvelope;
+    /**
+     * Service not configured or unavailable
+     */
+    503: ErrorEnvelope;
+    /**
+     * Service timeout
+     */
+    504: ErrorEnvelope;
+    /**
+     * Default Response
+     */
+    default: ErrorEnvelope;
+};
+
+export type GetLibraryOrganizationError = GetLibraryOrganizationErrors[keyof GetLibraryOrganizationErrors];
+
+export type GetLibraryOrganizationResponses = {
+    /**
+     * Successful Response
+     */
+    200: LibraryOrganizeReceipt;
+};
+
+export type GetLibraryOrganizationResponse = GetLibraryOrganizationResponses[keyof GetLibraryOrganizationResponses];
 
 export type CanvasDataApiV1LibraryCanvasDataPostData = {
     body: CanvasDataRequest;
@@ -11686,12 +12465,7 @@ export type GetImageDetailData = {
          */
         asset_id: string;
     };
-    query?: {
-        /**
-         * Version Id
-         */
-        version_id?: string | null;
-    };
+    query?: never;
     url: '/api/v1/library/assets/{asset_id}/detail';
 };
 
@@ -11878,18 +12652,9 @@ export type GetMasterProvenanceData = {
          * Asset Id
          */
         asset_id: string;
-        /**
-         * Version Id
-         */
-        version_id: string;
     };
-    query?: {
-        /**
-         * Provenance Version Id
-         */
-        provenance_version_id?: string | null;
-    };
-    url: '/api/v1/library/assets/{asset_id}/versions/{version_id}/master-provenance';
+    query?: never;
+    url: '/api/v1/library/assets/{asset_id}/master-provenance';
 };
 
 export type GetMasterProvenanceErrors = {
@@ -11953,13 +12718,9 @@ export type UpdateMasterProvenanceData = {
          * Asset Id
          */
         asset_id: string;
-        /**
-         * Version Id
-         */
-        version_id: string;
     };
     query?: never;
-    url: '/api/v1/library/assets/{asset_id}/versions/{version_id}/master-provenance';
+    url: '/api/v1/library/assets/{asset_id}/master-provenance';
 };
 
 export type UpdateMasterProvenanceErrors = {
@@ -12024,12 +12785,7 @@ export type GetImageDatasetDetailData = {
          */
         dataset_id: string;
     };
-    query?: {
-        /**
-         * Version Id
-         */
-        version_id?: string | null;
-    };
+    query?: never;
     url: '/api/v1/datasets/{dataset_id}/detail';
 };
 
@@ -12343,18 +13099,9 @@ export type GetImageCalibrationData = {
          * Asset Id
          */
         asset_id: string;
-        /**
-         * Asset Version Id
-         */
-        asset_version_id: string;
     };
-    query?: {
-        /**
-         * Binding Version Id
-         */
-        binding_version_id?: string | null;
-    };
-    url: '/api/v1/library/assets/{asset_id}/versions/{asset_version_id}/calibration';
+    query?: never;
+    url: '/api/v1/library/assets/{asset_id}/calibration';
 };
 
 export type GetImageCalibrationErrors = {
@@ -12418,13 +13165,9 @@ export type UpdateImageCalibrationData = {
          * Asset Id
          */
         asset_id: string;
-        /**
-         * Asset Version Id
-         */
-        asset_version_id: string;
     };
     query?: never;
-    url: '/api/v1/library/assets/{asset_id}/versions/{asset_version_id}/calibration';
+    url: '/api/v1/library/assets/{asset_id}/calibration';
 };
 
 export type UpdateImageCalibrationErrors = {
@@ -12488,30 +13231,9 @@ export type GetDatasetCalibrationData = {
          * Dataset Id
          */
         dataset_id: string;
-        /**
-         * Version Id
-         */
-        version_id: string;
     };
-    query?: {
-        /**
-         * Member Asset Version Ids
-         */
-        member_asset_version_ids?: Array<string> | null;
-        /**
-         * Limit
-         */
-        limit?: number;
-        /**
-         * Offset
-         */
-        offset?: number;
-        /**
-         * Combination Key
-         */
-        combination_key?: string | null;
-    };
-    url: '/api/v1/datasets/{dataset_id}/versions/{version_id}/calibration';
+    query?: never;
+    url: '/api/v1/datasets/{dataset_id}/calibration';
 };
 
 export type GetDatasetCalibrationErrors = {
@@ -12563,12 +13285,12 @@ export type GetDatasetCalibrationResponses = {
     /**
      * Successful Response
      */
-    200: DatasetCalibrationPage;
+    200: DatasetCalibrationOut;
 };
 
 export type GetDatasetCalibrationResponse = GetDatasetCalibrationResponses[keyof GetDatasetCalibrationResponses];
 
-export type UpdateDatasetCalibrationDefaultsData = {
+export type UpdateDatasetCalibrationData = {
     body: DatasetCalibrationUpdate;
     path: {
         /**
@@ -12577,10 +13299,10 @@ export type UpdateDatasetCalibrationDefaultsData = {
         dataset_id: string;
     };
     query?: never;
-    url: '/api/v1/datasets/{dataset_id}/calibration/defaults';
+    url: '/api/v1/datasets/{dataset_id}/calibration';
 };
 
-export type UpdateDatasetCalibrationDefaultsErrors = {
+export type UpdateDatasetCalibrationErrors = {
     /**
      * Authentication required
      */
@@ -12623,82 +13345,16 @@ export type UpdateDatasetCalibrationDefaultsErrors = {
     default: ErrorEnvelope;
 };
 
-export type UpdateDatasetCalibrationDefaultsError = UpdateDatasetCalibrationDefaultsErrors[keyof UpdateDatasetCalibrationDefaultsErrors];
+export type UpdateDatasetCalibrationError = UpdateDatasetCalibrationErrors[keyof UpdateDatasetCalibrationErrors];
 
-export type UpdateDatasetCalibrationDefaultsResponses = {
+export type UpdateDatasetCalibrationResponses = {
     /**
      * Successful Response
      */
     200: ImageOperationOut;
 };
 
-export type UpdateDatasetCalibrationDefaultsResponse = UpdateDatasetCalibrationDefaultsResponses[keyof UpdateDatasetCalibrationDefaultsResponses];
-
-export type UpdateDatasetCalibrationMembersData = {
-    body: DatasetMemberCalibrationUpdate;
-    path: {
-        /**
-         * Dataset Id
-         */
-        dataset_id: string;
-    };
-    query?: never;
-    url: '/api/v1/datasets/{dataset_id}/calibration/members';
-};
-
-export type UpdateDatasetCalibrationMembersErrors = {
-    /**
-     * Authentication required
-     */
-    401: ErrorEnvelope;
-    /**
-     * Origin not allowed by the ComfyUI proxy
-     */
-    403: ErrorEnvelope;
-    /**
-     * Resource not found or outside the requested scope
-     */
-    404: ErrorEnvelope;
-    /**
-     * Method not allowed
-     */
-    405: ErrorEnvelope;
-    /**
-     * Revision conflict
-     */
-    409: ErrorEnvelope;
-    /**
-     * Validation error or invalid reference
-     */
-    422: ErrorEnvelope;
-    /**
-     * Internal error
-     */
-    500: ErrorEnvelope;
-    /**
-     * Service not configured or unavailable
-     */
-    503: ErrorEnvelope;
-    /**
-     * Service timeout
-     */
-    504: ErrorEnvelope;
-    /**
-     * Default Response
-     */
-    default: ErrorEnvelope;
-};
-
-export type UpdateDatasetCalibrationMembersError = UpdateDatasetCalibrationMembersErrors[keyof UpdateDatasetCalibrationMembersErrors];
-
-export type UpdateDatasetCalibrationMembersResponses = {
-    /**
-     * Successful Response
-     */
-    200: ImageOperationOut;
-};
-
-export type UpdateDatasetCalibrationMembersResponse = UpdateDatasetCalibrationMembersResponses[keyof UpdateDatasetCalibrationMembersResponses];
+export type UpdateDatasetCalibrationResponse = UpdateDatasetCalibrationResponses[keyof UpdateDatasetCalibrationResponses];
 
 export type GetCalibrationOperationData = {
     body?: never;
@@ -12787,10 +13443,6 @@ export type CancelMediaConsumerApiV1ProjectsProjectIdAssetReferencesReferenceIdP
          * Asset Id
          */
         asset_id?: string | null;
-        /**
-         * Version Id
-         */
-        version_id?: string | null;
     };
     url: '/api/v1/projects/{project_id}/asset-references/{reference_id}/previews/viewer/consumer/{consumer_id}';
 };
@@ -12849,7 +13501,7 @@ export type CancelMediaConsumerApiV1ProjectsProjectIdAssetReferencesReferenceIdP
 
 export type CancelMediaConsumerApiV1ProjectsProjectIdAssetReferencesReferenceIdPreviewsViewerConsumerConsumerIdDeleteResponse = CancelMediaConsumerApiV1ProjectsProjectIdAssetReferencesReferenceIdPreviewsViewerConsumerConsumerIdDeleteResponses[keyof CancelMediaConsumerApiV1ProjectsProjectIdAssetReferencesReferenceIdPreviewsViewerConsumerConsumerIdDeleteResponses];
 
-export type CancelMediaConsumerApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsViewerConsumerConsumerIdDeleteData = {
+export type CancelMediaConsumerApiV1LibraryAssetsAssetIdPreviewsViewerConsumerConsumerIdDeleteData = {
     body?: never;
     path: {
         /**
@@ -12860,10 +13512,6 @@ export type CancelMediaConsumerApiV1LibraryAssetsAssetIdVersionsVersionIdPreview
          * Asset Id
          */
         asset_id: string | null;
-        /**
-         * Version Id
-         */
-        version_id: string | null;
     };
     query?: {
         /**
@@ -12875,10 +13523,10 @@ export type CancelMediaConsumerApiV1LibraryAssetsAssetIdVersionsVersionIdPreview
          */
         reference_id?: string | null;
     };
-    url: '/api/v1/library/assets/{asset_id}/versions/{version_id}/previews/viewer/consumer/{consumer_id}';
+    url: '/api/v1/library/assets/{asset_id}/previews/viewer/consumer/{consumer_id}';
 };
 
-export type CancelMediaConsumerApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsViewerConsumerConsumerIdDeleteErrors = {
+export type CancelMediaConsumerApiV1LibraryAssetsAssetIdPreviewsViewerConsumerConsumerIdDeleteErrors = {
     /**
      * Authentication required
      */
@@ -12921,16 +13569,16 @@ export type CancelMediaConsumerApiV1LibraryAssetsAssetIdVersionsVersionIdPreview
     default: ErrorEnvelope;
 };
 
-export type CancelMediaConsumerApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsViewerConsumerConsumerIdDeleteError = CancelMediaConsumerApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsViewerConsumerConsumerIdDeleteErrors[keyof CancelMediaConsumerApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsViewerConsumerConsumerIdDeleteErrors];
+export type CancelMediaConsumerApiV1LibraryAssetsAssetIdPreviewsViewerConsumerConsumerIdDeleteError = CancelMediaConsumerApiV1LibraryAssetsAssetIdPreviewsViewerConsumerConsumerIdDeleteErrors[keyof CancelMediaConsumerApiV1LibraryAssetsAssetIdPreviewsViewerConsumerConsumerIdDeleteErrors];
 
-export type CancelMediaConsumerApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsViewerConsumerConsumerIdDeleteResponses = {
+export type CancelMediaConsumerApiV1LibraryAssetsAssetIdPreviewsViewerConsumerConsumerIdDeleteResponses = {
     /**
      * Successful Response
      */
     204: void;
 };
 
-export type CancelMediaConsumerApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsViewerConsumerConsumerIdDeleteResponse = CancelMediaConsumerApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsViewerConsumerConsumerIdDeleteResponses[keyof CancelMediaConsumerApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsViewerConsumerConsumerIdDeleteResponses];
+export type CancelMediaConsumerApiV1LibraryAssetsAssetIdPreviewsViewerConsumerConsumerIdDeleteResponse = CancelMediaConsumerApiV1LibraryAssetsAssetIdPreviewsViewerConsumerConsumerIdDeleteResponses[keyof CancelMediaConsumerApiV1LibraryAssetsAssetIdPreviewsViewerConsumerConsumerIdDeleteResponses];
 
 export type PrepareMediaApiV1ProjectsProjectIdAssetReferencesReferenceIdPreviewsViewerPostData = {
     body: MediaSelection;
@@ -12949,10 +13597,6 @@ export type PrepareMediaApiV1ProjectsProjectIdAssetReferencesReferenceIdPreviews
          * Asset Id
          */
         asset_id?: string | null;
-        /**
-         * Version Id
-         */
-        version_id?: string | null;
     };
     url: '/api/v1/projects/{project_id}/asset-references/{reference_id}/previews/viewer';
 };
@@ -13011,17 +13655,13 @@ export type PrepareMediaApiV1ProjectsProjectIdAssetReferencesReferenceIdPreviews
 
 export type PrepareMediaApiV1ProjectsProjectIdAssetReferencesReferenceIdPreviewsViewerPostResponse = PrepareMediaApiV1ProjectsProjectIdAssetReferencesReferenceIdPreviewsViewerPostResponses[keyof PrepareMediaApiV1ProjectsProjectIdAssetReferencesReferenceIdPreviewsViewerPostResponses];
 
-export type PrepareMediaApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsViewerPostData = {
+export type PrepareMediaApiV1LibraryAssetsAssetIdPreviewsViewerPostData = {
     body: MediaSelection;
     path: {
         /**
          * Asset Id
          */
         asset_id: string | null;
-        /**
-         * Version Id
-         */
-        version_id: string | null;
     };
     query?: {
         /**
@@ -13033,10 +13673,10 @@ export type PrepareMediaApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsViewer
          */
         reference_id?: string | null;
     };
-    url: '/api/v1/library/assets/{asset_id}/versions/{version_id}/previews/viewer';
+    url: '/api/v1/library/assets/{asset_id}/previews/viewer';
 };
 
-export type PrepareMediaApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsViewerPostErrors = {
+export type PrepareMediaApiV1LibraryAssetsAssetIdPreviewsViewerPostErrors = {
     /**
      * Authentication required
      */
@@ -13079,16 +13719,16 @@ export type PrepareMediaApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsViewer
     default: ErrorEnvelope;
 };
 
-export type PrepareMediaApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsViewerPostError = PrepareMediaApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsViewerPostErrors[keyof PrepareMediaApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsViewerPostErrors];
+export type PrepareMediaApiV1LibraryAssetsAssetIdPreviewsViewerPostError = PrepareMediaApiV1LibraryAssetsAssetIdPreviewsViewerPostErrors[keyof PrepareMediaApiV1LibraryAssetsAssetIdPreviewsViewerPostErrors];
 
-export type PrepareMediaApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsViewerPostResponses = {
+export type PrepareMediaApiV1LibraryAssetsAssetIdPreviewsViewerPostResponses = {
     /**
      * Successful Response
      */
     200: MediaState;
 };
 
-export type PrepareMediaApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsViewerPostResponse = PrepareMediaApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsViewerPostResponses[keyof PrepareMediaApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsViewerPostResponses];
+export type PrepareMediaApiV1LibraryAssetsAssetIdPreviewsViewerPostResponse = PrepareMediaApiV1LibraryAssetsAssetIdPreviewsViewerPostResponses[keyof PrepareMediaApiV1LibraryAssetsAssetIdPreviewsViewerPostResponses];
 
 export type MediaStatusApiV1ProjectsProjectIdAssetReferencesReferenceIdPreviewsViewerKeyStatusGetData = {
     body?: never;
@@ -13111,10 +13751,6 @@ export type MediaStatusApiV1ProjectsProjectIdAssetReferencesReferenceIdPreviewsV
          * Asset Id
          */
         asset_id?: string | null;
-        /**
-         * Version Id
-         */
-        version_id?: string | null;
     };
     url: '/api/v1/projects/{project_id}/asset-references/{reference_id}/previews/viewer/{key}/status';
 };
@@ -13173,7 +13809,7 @@ export type MediaStatusApiV1ProjectsProjectIdAssetReferencesReferenceIdPreviewsV
 
 export type MediaStatusApiV1ProjectsProjectIdAssetReferencesReferenceIdPreviewsViewerKeyStatusGetResponse = MediaStatusApiV1ProjectsProjectIdAssetReferencesReferenceIdPreviewsViewerKeyStatusGetResponses[keyof MediaStatusApiV1ProjectsProjectIdAssetReferencesReferenceIdPreviewsViewerKeyStatusGetResponses];
 
-export type MediaStatusApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsViewerKeyStatusGetData = {
+export type MediaStatusApiV1LibraryAssetsAssetIdPreviewsViewerKeyStatusGetData = {
     body?: never;
     path: {
         /**
@@ -13184,10 +13820,6 @@ export type MediaStatusApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsViewerK
          * Asset Id
          */
         asset_id: string | null;
-        /**
-         * Version Id
-         */
-        version_id: string | null;
     };
     query?: {
         /**
@@ -13199,10 +13831,10 @@ export type MediaStatusApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsViewerK
          */
         reference_id?: string | null;
     };
-    url: '/api/v1/library/assets/{asset_id}/versions/{version_id}/previews/viewer/{key}/status';
+    url: '/api/v1/library/assets/{asset_id}/previews/viewer/{key}/status';
 };
 
-export type MediaStatusApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsViewerKeyStatusGetErrors = {
+export type MediaStatusApiV1LibraryAssetsAssetIdPreviewsViewerKeyStatusGetErrors = {
     /**
      * Authentication required
      */
@@ -13245,16 +13877,16 @@ export type MediaStatusApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsViewerK
     default: ErrorEnvelope;
 };
 
-export type MediaStatusApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsViewerKeyStatusGetError = MediaStatusApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsViewerKeyStatusGetErrors[keyof MediaStatusApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsViewerKeyStatusGetErrors];
+export type MediaStatusApiV1LibraryAssetsAssetIdPreviewsViewerKeyStatusGetError = MediaStatusApiV1LibraryAssetsAssetIdPreviewsViewerKeyStatusGetErrors[keyof MediaStatusApiV1LibraryAssetsAssetIdPreviewsViewerKeyStatusGetErrors];
 
-export type MediaStatusApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsViewerKeyStatusGetResponses = {
+export type MediaStatusApiV1LibraryAssetsAssetIdPreviewsViewerKeyStatusGetResponses = {
     /**
      * Successful Response
      */
     200: MediaState;
 };
 
-export type MediaStatusApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsViewerKeyStatusGetResponse = MediaStatusApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsViewerKeyStatusGetResponses[keyof MediaStatusApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsViewerKeyStatusGetResponses];
+export type MediaStatusApiV1LibraryAssetsAssetIdPreviewsViewerKeyStatusGetResponse = MediaStatusApiV1LibraryAssetsAssetIdPreviewsViewerKeyStatusGetResponses[keyof MediaStatusApiV1LibraryAssetsAssetIdPreviewsViewerKeyStatusGetResponses];
 
 export type MediaTileApiV1ProjectsProjectIdAssetReferencesReferenceIdPreviewsViewerKeyTilesLevelXyGetData = {
     body?: never;
@@ -13289,10 +13921,6 @@ export type MediaTileApiV1ProjectsProjectIdAssetReferencesReferenceIdPreviewsVie
          * Asset Id
          */
         asset_id?: string | null;
-        /**
-         * Version Id
-         */
-        version_id?: string | null;
     };
     url: '/api/v1/projects/{project_id}/asset-references/{reference_id}/previews/viewer/{key}/tiles/{level}/{x}/{y}';
 };
@@ -13351,7 +13979,7 @@ export type MediaTileApiV1ProjectsProjectIdAssetReferencesReferenceIdPreviewsVie
 
 export type MediaTileApiV1ProjectsProjectIdAssetReferencesReferenceIdPreviewsViewerKeyTilesLevelXyGetResponse = MediaTileApiV1ProjectsProjectIdAssetReferencesReferenceIdPreviewsViewerKeyTilesLevelXyGetResponses[keyof MediaTileApiV1ProjectsProjectIdAssetReferencesReferenceIdPreviewsViewerKeyTilesLevelXyGetResponses];
 
-export type MediaTileApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsViewerKeyTilesLevelXyGetData = {
+export type MediaTileApiV1LibraryAssetsAssetIdPreviewsViewerKeyTilesLevelXyGetData = {
     body?: never;
     path: {
         /**
@@ -13374,10 +14002,6 @@ export type MediaTileApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsViewerKey
          * Asset Id
          */
         asset_id: string | null;
-        /**
-         * Version Id
-         */
-        version_id: string | null;
     };
     query?: {
         /**
@@ -13389,10 +14013,10 @@ export type MediaTileApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsViewerKey
          */
         reference_id?: string | null;
     };
-    url: '/api/v1/library/assets/{asset_id}/versions/{version_id}/previews/viewer/{key}/tiles/{level}/{x}/{y}';
+    url: '/api/v1/library/assets/{asset_id}/previews/viewer/{key}/tiles/{level}/{x}/{y}';
 };
 
-export type MediaTileApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsViewerKeyTilesLevelXyGetErrors = {
+export type MediaTileApiV1LibraryAssetsAssetIdPreviewsViewerKeyTilesLevelXyGetErrors = {
     /**
      * Authentication required
      */
@@ -13435,16 +14059,16 @@ export type MediaTileApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsViewerKey
     default: ErrorEnvelope;
 };
 
-export type MediaTileApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsViewerKeyTilesLevelXyGetError = MediaTileApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsViewerKeyTilesLevelXyGetErrors[keyof MediaTileApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsViewerKeyTilesLevelXyGetErrors];
+export type MediaTileApiV1LibraryAssetsAssetIdPreviewsViewerKeyTilesLevelXyGetError = MediaTileApiV1LibraryAssetsAssetIdPreviewsViewerKeyTilesLevelXyGetErrors[keyof MediaTileApiV1LibraryAssetsAssetIdPreviewsViewerKeyTilesLevelXyGetErrors];
 
-export type MediaTileApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsViewerKeyTilesLevelXyGetResponses = {
+export type MediaTileApiV1LibraryAssetsAssetIdPreviewsViewerKeyTilesLevelXyGetResponses = {
     /**
      * Successful Response
      */
     200: Blob | File;
 };
 
-export type MediaTileApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsViewerKeyTilesLevelXyGetResponse = MediaTileApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsViewerKeyTilesLevelXyGetResponses[keyof MediaTileApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsViewerKeyTilesLevelXyGetResponses];
+export type MediaTileApiV1LibraryAssetsAssetIdPreviewsViewerKeyTilesLevelXyGetResponse = MediaTileApiV1LibraryAssetsAssetIdPreviewsViewerKeyTilesLevelXyGetResponses[keyof MediaTileApiV1LibraryAssetsAssetIdPreviewsViewerKeyTilesLevelXyGetResponses];
 
 export type MediaFileApiV1ProjectsProjectIdAssetReferencesReferenceIdPreviewsViewerKeyFileGetData = {
     body?: never;
@@ -13471,10 +14095,6 @@ export type MediaFileApiV1ProjectsProjectIdAssetReferencesReferenceIdPreviewsVie
          * Asset Id
          */
         asset_id?: string | null;
-        /**
-         * Version Id
-         */
-        version_id?: string | null;
     };
     url: '/api/v1/projects/{project_id}/asset-references/{reference_id}/previews/viewer/{key}/{file}';
 };
@@ -13533,7 +14153,7 @@ export type MediaFileApiV1ProjectsProjectIdAssetReferencesReferenceIdPreviewsVie
 
 export type MediaFileApiV1ProjectsProjectIdAssetReferencesReferenceIdPreviewsViewerKeyFileGetResponse = MediaFileApiV1ProjectsProjectIdAssetReferencesReferenceIdPreviewsViewerKeyFileGetResponses[keyof MediaFileApiV1ProjectsProjectIdAssetReferencesReferenceIdPreviewsViewerKeyFileGetResponses];
 
-export type MediaFileApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsViewerKeyFileGetData = {
+export type MediaFileApiV1LibraryAssetsAssetIdPreviewsViewerKeyFileGetData = {
     body?: never;
     path: {
         /**
@@ -13548,10 +14168,6 @@ export type MediaFileApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsViewerKey
          * Asset Id
          */
         asset_id: string | null;
-        /**
-         * Version Id
-         */
-        version_id: string | null;
     };
     query?: {
         /**
@@ -13563,10 +14179,10 @@ export type MediaFileApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsViewerKey
          */
         reference_id?: string | null;
     };
-    url: '/api/v1/library/assets/{asset_id}/versions/{version_id}/previews/viewer/{key}/{file}';
+    url: '/api/v1/library/assets/{asset_id}/previews/viewer/{key}/{file}';
 };
 
-export type MediaFileApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsViewerKeyFileGetErrors = {
+export type MediaFileApiV1LibraryAssetsAssetIdPreviewsViewerKeyFileGetErrors = {
     /**
      * Authentication required
      */
@@ -13609,16 +14225,16 @@ export type MediaFileApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsViewerKey
     default: ErrorEnvelope;
 };
 
-export type MediaFileApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsViewerKeyFileGetError = MediaFileApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsViewerKeyFileGetErrors[keyof MediaFileApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsViewerKeyFileGetErrors];
+export type MediaFileApiV1LibraryAssetsAssetIdPreviewsViewerKeyFileGetError = MediaFileApiV1LibraryAssetsAssetIdPreviewsViewerKeyFileGetErrors[keyof MediaFileApiV1LibraryAssetsAssetIdPreviewsViewerKeyFileGetErrors];
 
-export type MediaFileApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsViewerKeyFileGetResponses = {
+export type MediaFileApiV1LibraryAssetsAssetIdPreviewsViewerKeyFileGetResponses = {
     /**
      * Successful Response
      */
     200: Blob | File;
 };
 
-export type MediaFileApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsViewerKeyFileGetResponse = MediaFileApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsViewerKeyFileGetResponses[keyof MediaFileApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsViewerKeyFileGetResponses];
+export type MediaFileApiV1LibraryAssetsAssetIdPreviewsViewerKeyFileGetResponse = MediaFileApiV1LibraryAssetsAssetIdPreviewsViewerKeyFileGetResponses[keyof MediaFileApiV1LibraryAssetsAssetIdPreviewsViewerKeyFileGetResponses];
 
 export type CreateThumbnailBatchApiV1ThumbnailBatchesPostData = {
     body: ThumbnailBatchCreate;
@@ -13822,7 +14438,7 @@ export type RetryThumbnailBatchApiV1ThumbnailBatchesRequestIdRetryPostResponses 
 
 export type RetryThumbnailBatchApiV1ThumbnailBatchesRequestIdRetryPostResponse = RetryThumbnailBatchApiV1ThumbnailBatchesRequestIdRetryPostResponses[keyof RetryThumbnailBatchApiV1ThumbnailBatchesRequestIdRetryPostResponses];
 
-export type GetDatasetMemberThumbnailApiV1DatasetsVersionsMembersThumbnailGetData = {
+export type GetDatasetMemberThumbnailApiV1DatasetsMembersThumbnailGetData = {
     body?: never;
     path: {
         /**
@@ -13830,19 +14446,15 @@ export type GetDatasetMemberThumbnailApiV1DatasetsVersionsMembersThumbnailGetDat
          */
         dataset_id: string;
         /**
-         * Dataset Version Id
+         * Asset Id
          */
-        dataset_version_id: string;
-        /**
-         * Asset Version Id
-         */
-        asset_version_id: string;
+        asset_id: string;
     };
     query?: never;
-    url: '/api/v1/datasets/{dataset_id}/versions/{dataset_version_id}/members/{asset_version_id}/thumbnail';
+    url: '/api/v1/datasets/{dataset_id}/members/{asset_id}/thumbnail';
 };
 
-export type GetDatasetMemberThumbnailApiV1DatasetsVersionsMembersThumbnailGetErrors = {
+export type GetDatasetMemberThumbnailApiV1DatasetsMembersThumbnailGetErrors = {
     /**
      * Authentication required
      */
@@ -13885,34 +14497,30 @@ export type GetDatasetMemberThumbnailApiV1DatasetsVersionsMembersThumbnailGetErr
     default: ErrorEnvelope;
 };
 
-export type GetDatasetMemberThumbnailApiV1DatasetsVersionsMembersThumbnailGetError = GetDatasetMemberThumbnailApiV1DatasetsVersionsMembersThumbnailGetErrors[keyof GetDatasetMemberThumbnailApiV1DatasetsVersionsMembersThumbnailGetErrors];
+export type GetDatasetMemberThumbnailApiV1DatasetsMembersThumbnailGetError = GetDatasetMemberThumbnailApiV1DatasetsMembersThumbnailGetErrors[keyof GetDatasetMemberThumbnailApiV1DatasetsMembersThumbnailGetErrors];
 
-export type GetDatasetMemberThumbnailApiV1DatasetsVersionsMembersThumbnailGetResponses = {
+export type GetDatasetMemberThumbnailApiV1DatasetsMembersThumbnailGetResponses = {
     /**
      * Successful Response
      */
     200: Blob | File;
 };
 
-export type GetDatasetMemberThumbnailApiV1DatasetsVersionsMembersThumbnailGetResponse = GetDatasetMemberThumbnailApiV1DatasetsVersionsMembersThumbnailGetResponses[keyof GetDatasetMemberThumbnailApiV1DatasetsVersionsMembersThumbnailGetResponses];
+export type GetDatasetMemberThumbnailApiV1DatasetsMembersThumbnailGetResponse = GetDatasetMemberThumbnailApiV1DatasetsMembersThumbnailGetResponses[keyof GetDatasetMemberThumbnailApiV1DatasetsMembersThumbnailGetResponses];
 
-export type RequestDisplayApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsDisplayPostData = {
+export type RequestDisplayApiV1LibraryAssetsAssetIdPreviewsDisplayPostData = {
     body?: never;
     path: {
         /**
          * Asset Id
          */
         asset_id: string;
-        /**
-         * Version Id
-         */
-        version_id: string;
     };
     query?: never;
-    url: '/api/v1/library/assets/{asset_id}/versions/{version_id}/previews/display';
+    url: '/api/v1/library/assets/{asset_id}/previews/display';
 };
 
-export type RequestDisplayApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsDisplayPostErrors = {
+export type RequestDisplayApiV1LibraryAssetsAssetIdPreviewsDisplayPostErrors = {
     /**
      * Authentication required
      */
@@ -13955,9 +14563,9 @@ export type RequestDisplayApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsDisp
     default: ErrorEnvelope;
 };
 
-export type RequestDisplayApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsDisplayPostError = RequestDisplayApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsDisplayPostErrors[keyof RequestDisplayApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsDisplayPostErrors];
+export type RequestDisplayApiV1LibraryAssetsAssetIdPreviewsDisplayPostError = RequestDisplayApiV1LibraryAssetsAssetIdPreviewsDisplayPostErrors[keyof RequestDisplayApiV1LibraryAssetsAssetIdPreviewsDisplayPostErrors];
 
-export type RequestDisplayApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsDisplayPostResponses = {
+export type RequestDisplayApiV1LibraryAssetsAssetIdPreviewsDisplayPostResponses = {
     /**
      * Successful Response
      */
@@ -13968,25 +14576,21 @@ export type RequestDisplayApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsDisp
     202: DisplayPreviewState;
 };
 
-export type RequestDisplayApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsDisplayPostResponse = RequestDisplayApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsDisplayPostResponses[keyof RequestDisplayApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsDisplayPostResponses];
+export type RequestDisplayApiV1LibraryAssetsAssetIdPreviewsDisplayPostResponse = RequestDisplayApiV1LibraryAssetsAssetIdPreviewsDisplayPostResponses[keyof RequestDisplayApiV1LibraryAssetsAssetIdPreviewsDisplayPostResponses];
 
-export type DisplayStatusApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsDisplayStatusGetData = {
+export type DisplayStatusApiV1LibraryAssetsAssetIdPreviewsDisplayStatusGetData = {
     body?: never;
     path: {
         /**
          * Asset Id
          */
         asset_id: string;
-        /**
-         * Version Id
-         */
-        version_id: string;
     };
     query?: never;
-    url: '/api/v1/library/assets/{asset_id}/versions/{version_id}/previews/display/status';
+    url: '/api/v1/library/assets/{asset_id}/previews/display/status';
 };
 
-export type DisplayStatusApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsDisplayStatusGetErrors = {
+export type DisplayStatusApiV1LibraryAssetsAssetIdPreviewsDisplayStatusGetErrors = {
     /**
      * Authentication required
      */
@@ -14029,34 +14633,30 @@ export type DisplayStatusApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsDispl
     default: ErrorEnvelope;
 };
 
-export type DisplayStatusApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsDisplayStatusGetError = DisplayStatusApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsDisplayStatusGetErrors[keyof DisplayStatusApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsDisplayStatusGetErrors];
+export type DisplayStatusApiV1LibraryAssetsAssetIdPreviewsDisplayStatusGetError = DisplayStatusApiV1LibraryAssetsAssetIdPreviewsDisplayStatusGetErrors[keyof DisplayStatusApiV1LibraryAssetsAssetIdPreviewsDisplayStatusGetErrors];
 
-export type DisplayStatusApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsDisplayStatusGetResponses = {
+export type DisplayStatusApiV1LibraryAssetsAssetIdPreviewsDisplayStatusGetResponses = {
     /**
      * Successful Response
      */
     200: DisplayPreviewState;
 };
 
-export type DisplayStatusApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsDisplayStatusGetResponse = DisplayStatusApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsDisplayStatusGetResponses[keyof DisplayStatusApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsDisplayStatusGetResponses];
+export type DisplayStatusApiV1LibraryAssetsAssetIdPreviewsDisplayStatusGetResponse = DisplayStatusApiV1LibraryAssetsAssetIdPreviewsDisplayStatusGetResponses[keyof DisplayStatusApiV1LibraryAssetsAssetIdPreviewsDisplayStatusGetResponses];
 
-export type AutoStretchApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsDisplayAutoStretchPostData = {
+export type AutoStretchApiV1LibraryAssetsAssetIdPreviewsDisplayAutoStretchPostData = {
     body?: never;
     path: {
         /**
          * Asset Id
          */
         asset_id: string;
-        /**
-         * Version Id
-         */
-        version_id: string;
     };
     query?: never;
-    url: '/api/v1/library/assets/{asset_id}/versions/{version_id}/previews/display/auto-stretch';
+    url: '/api/v1/library/assets/{asset_id}/previews/display/auto-stretch';
 };
 
-export type AutoStretchApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsDisplayAutoStretchPostErrors = {
+export type AutoStretchApiV1LibraryAssetsAssetIdPreviewsDisplayAutoStretchPostErrors = {
     /**
      * Authentication required
      */
@@ -14099,9 +14699,9 @@ export type AutoStretchApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsDisplay
     default: ErrorEnvelope;
 };
 
-export type AutoStretchApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsDisplayAutoStretchPostError = AutoStretchApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsDisplayAutoStretchPostErrors[keyof AutoStretchApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsDisplayAutoStretchPostErrors];
+export type AutoStretchApiV1LibraryAssetsAssetIdPreviewsDisplayAutoStretchPostError = AutoStretchApiV1LibraryAssetsAssetIdPreviewsDisplayAutoStretchPostErrors[keyof AutoStretchApiV1LibraryAssetsAssetIdPreviewsDisplayAutoStretchPostErrors];
 
-export type AutoStretchApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsDisplayAutoStretchPostResponses = {
+export type AutoStretchApiV1LibraryAssetsAssetIdPreviewsDisplayAutoStretchPostResponses = {
     /**
      * Successful Response
      */
@@ -14112,7 +14712,7 @@ export type AutoStretchApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsDisplay
     202: DisplayPreviewState;
 };
 
-export type AutoStretchApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsDisplayAutoStretchPostResponse = AutoStretchApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsDisplayAutoStretchPostResponses[keyof AutoStretchApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsDisplayAutoStretchPostResponses];
+export type AutoStretchApiV1LibraryAssetsAssetIdPreviewsDisplayAutoStretchPostResponse = AutoStretchApiV1LibraryAssetsAssetIdPreviewsDisplayAutoStretchPostResponses[keyof AutoStretchApiV1LibraryAssetsAssetIdPreviewsDisplayAutoStretchPostResponses];
 
 export type RequestProjectDisplayApiV1ProjectsProjectIdAssetReferencesReferenceIdPreviewsDisplayPostData = {
     body?: never;
@@ -14899,72 +15499,6 @@ export type ObserveContentApiV1LibraryAssetsAssetIdContentObservationPostRespons
 };
 
 export type ObserveContentApiV1LibraryAssetsAssetIdContentObservationPostResponse = ObserveContentApiV1LibraryAssetsAssetIdContentObservationPostResponses[keyof ObserveContentApiV1LibraryAssetsAssetIdContentObservationPostResponses];
-
-export type AcceptContentApiV1LibraryAssetsAssetIdContentAcceptPostData = {
-    body: AssetContentAccept;
-    path: {
-        /**
-         * Asset Id
-         */
-        asset_id: string;
-    };
-    query?: never;
-    url: '/api/v1/library/assets/{asset_id}/content-accept';
-};
-
-export type AcceptContentApiV1LibraryAssetsAssetIdContentAcceptPostErrors = {
-    /**
-     * Authentication required
-     */
-    401: ErrorEnvelope;
-    /**
-     * Origin not allowed by the ComfyUI proxy
-     */
-    403: ErrorEnvelope;
-    /**
-     * Resource not found or outside the requested scope
-     */
-    404: ErrorEnvelope;
-    /**
-     * Method not allowed
-     */
-    405: ErrorEnvelope;
-    /**
-     * Revision conflict
-     */
-    409: ErrorEnvelope;
-    /**
-     * Validation error or invalid reference
-     */
-    422: ErrorEnvelope;
-    /**
-     * Internal error
-     */
-    500: ErrorEnvelope;
-    /**
-     * Service not configured or unavailable
-     */
-    503: ErrorEnvelope;
-    /**
-     * Service timeout
-     */
-    504: ErrorEnvelope;
-    /**
-     * Default Response
-     */
-    default: ErrorEnvelope;
-};
-
-export type AcceptContentApiV1LibraryAssetsAssetIdContentAcceptPostError = AcceptContentApiV1LibraryAssetsAssetIdContentAcceptPostErrors[keyof AcceptContentApiV1LibraryAssetsAssetIdContentAcceptPostErrors];
-
-export type AcceptContentApiV1LibraryAssetsAssetIdContentAcceptPostResponses = {
-    /**
-     * Successful Response
-     */
-    201: AssetOut;
-};
-
-export type AcceptContentApiV1LibraryAssetsAssetIdContentAcceptPostResponse = AcceptContentApiV1LibraryAssetsAssetIdContentAcceptPostResponses[keyof AcceptContentApiV1LibraryAssetsAssetIdContentAcceptPostResponses];
 
 export type GetWorkspaceLocaleApiV1SettingsLocaleGetData = {
     body?: never;
@@ -16353,7 +16887,7 @@ export type GetImageImportRequestResponses = {
      *
      * Successful Response
      */
-    200: ImageImportReceipt | BatchOut;
+    200: ImageImportReceipt | BatchOut | AssetTaskOut;
 };
 
 export type GetImageImportRequestResponse = GetImageImportRequestResponses[keyof GetImageImportRequestResponses];
@@ -16421,7 +16955,7 @@ export type WaitImageImportRequestResponses = {
      *
      * Successful Response
      */
-    200: ImageImportReceipt | BatchOut;
+    200: ImageImportReceipt | BatchOut | AssetTaskOut;
 };
 
 export type WaitImageImportRequestResponse = WaitImageImportRequestResponses[keyof WaitImageImportRequestResponses];
@@ -17249,6 +17783,72 @@ export type ImportRootEntriesApiV1ImportRootsRootIdEntriesGetResponses = {
 
 export type ImportRootEntriesApiV1ImportRootsRootIdEntriesGetResponse = ImportRootEntriesApiV1ImportRootsRootIdEntriesGetResponses[keyof ImportRootEntriesApiV1ImportRootsRootIdEntriesGetResponses];
 
+export type RecoverImportOrganizationData = {
+    body: ImportRecovery;
+    path: {
+        /**
+         * Task Id
+         */
+        task_id: string;
+    };
+    query?: never;
+    url: '/api/v1/asset-tasks/{task_id}/organization';
+};
+
+export type RecoverImportOrganizationErrors = {
+    /**
+     * Authentication required
+     */
+    401: ErrorEnvelope;
+    /**
+     * Origin not allowed by the ComfyUI proxy
+     */
+    403: ErrorEnvelope;
+    /**
+     * Resource not found or outside the requested scope
+     */
+    404: ErrorEnvelope;
+    /**
+     * Method not allowed
+     */
+    405: ErrorEnvelope;
+    /**
+     * Revision conflict
+     */
+    409: ErrorEnvelope;
+    /**
+     * Validation error or invalid reference
+     */
+    422: ErrorEnvelope;
+    /**
+     * Internal error
+     */
+    500: ErrorEnvelope;
+    /**
+     * Service not configured or unavailable
+     */
+    503: ErrorEnvelope;
+    /**
+     * Service timeout
+     */
+    504: ErrorEnvelope;
+    /**
+     * Default Response
+     */
+    default: ErrorEnvelope;
+};
+
+export type RecoverImportOrganizationError = RecoverImportOrganizationErrors[keyof RecoverImportOrganizationErrors];
+
+export type RecoverImportOrganizationResponses = {
+    /**
+     * Successful Response
+     */
+    200: ImageOperationOut;
+};
+
+export type RecoverImportOrganizationResponse = RecoverImportOrganizationResponses[keyof RecoverImportOrganizationResponses];
+
 export type GetAssetApiV1LibraryAssetsAssetIdGetData = {
     body?: never;
     path: {
@@ -17386,7 +17986,7 @@ export type PatchAssetApiV1LibraryAssetsAssetIdPatchResponses = {
 
 export type PatchAssetApiV1LibraryAssetsAssetIdPatchResponse = PatchAssetApiV1LibraryAssetsAssetIdPatchResponses[keyof PatchAssetApiV1LibraryAssetsAssetIdPatchResponses];
 
-export type ListAssetVersionsApiV1LibraryAssetsAssetIdVersionsGetData = {
+export type ListAssetHdusApiV1LibraryAssetsAssetIdHdusGetData = {
     body?: never;
     path: {
         /**
@@ -17404,10 +18004,10 @@ export type ListAssetVersionsApiV1LibraryAssetsAssetIdVersionsGetData = {
          */
         offset?: number;
     };
-    url: '/api/v1/library/assets/{asset_id}/versions';
+    url: '/api/v1/library/assets/{asset_id}/hdus';
 };
 
-export type ListAssetVersionsApiV1LibraryAssetsAssetIdVersionsGetErrors = {
+export type ListAssetHdusApiV1LibraryAssetsAssetIdHdusGetErrors = {
     /**
      * Authentication required
      */
@@ -17450,177 +18050,24 @@ export type ListAssetVersionsApiV1LibraryAssetsAssetIdVersionsGetErrors = {
     default: ErrorEnvelope;
 };
 
-export type ListAssetVersionsApiV1LibraryAssetsAssetIdVersionsGetError = ListAssetVersionsApiV1LibraryAssetsAssetIdVersionsGetErrors[keyof ListAssetVersionsApiV1LibraryAssetsAssetIdVersionsGetErrors];
+export type ListAssetHdusApiV1LibraryAssetsAssetIdHdusGetError = ListAssetHdusApiV1LibraryAssetsAssetIdHdusGetErrors[keyof ListAssetHdusApiV1LibraryAssetsAssetIdHdusGetErrors];
 
-export type ListAssetVersionsApiV1LibraryAssetsAssetIdVersionsGetResponses = {
-    /**
-     * Successful Response
-     */
-    200: AssetVersionPage;
-};
-
-export type ListAssetVersionsApiV1LibraryAssetsAssetIdVersionsGetResponse = ListAssetVersionsApiV1LibraryAssetsAssetIdVersionsGetResponses[keyof ListAssetVersionsApiV1LibraryAssetsAssetIdVersionsGetResponses];
-
-export type GetAssetVersionApiV1LibraryAssetsAssetIdVersionsVersionIdGetData = {
-    body?: never;
-    path: {
-        /**
-         * Asset Id
-         */
-        asset_id: string;
-        /**
-         * Version Id
-         */
-        version_id: string;
-    };
-    query?: never;
-    url: '/api/v1/library/assets/{asset_id}/versions/{version_id}';
-};
-
-export type GetAssetVersionApiV1LibraryAssetsAssetIdVersionsVersionIdGetErrors = {
-    /**
-     * Authentication required
-     */
-    401: ErrorEnvelope;
-    /**
-     * Origin not allowed by the ComfyUI proxy
-     */
-    403: ErrorEnvelope;
-    /**
-     * Resource not found or outside the requested scope
-     */
-    404: ErrorEnvelope;
-    /**
-     * Method not allowed
-     */
-    405: ErrorEnvelope;
-    /**
-     * Revision conflict
-     */
-    409: ErrorEnvelope;
-    /**
-     * Validation error or invalid reference
-     */
-    422: ErrorEnvelope;
-    /**
-     * Internal error
-     */
-    500: ErrorEnvelope;
-    /**
-     * Service not configured or unavailable
-     */
-    503: ErrorEnvelope;
-    /**
-     * Service timeout
-     */
-    504: ErrorEnvelope;
-    /**
-     * Default Response
-     */
-    default: ErrorEnvelope;
-};
-
-export type GetAssetVersionApiV1LibraryAssetsAssetIdVersionsVersionIdGetError = GetAssetVersionApiV1LibraryAssetsAssetIdVersionsVersionIdGetErrors[keyof GetAssetVersionApiV1LibraryAssetsAssetIdVersionsVersionIdGetErrors];
-
-export type GetAssetVersionApiV1LibraryAssetsAssetIdVersionsVersionIdGetResponses = {
-    /**
-     * Successful Response
-     */
-    200: AssetVersionOut;
-};
-
-export type GetAssetVersionApiV1LibraryAssetsAssetIdVersionsVersionIdGetResponse = GetAssetVersionApiV1LibraryAssetsAssetIdVersionsVersionIdGetResponses[keyof GetAssetVersionApiV1LibraryAssetsAssetIdVersionsVersionIdGetResponses];
-
-export type ListVersionHdusApiV1LibraryAssetsAssetIdVersionsVersionIdHdusGetData = {
-    body?: never;
-    path: {
-        /**
-         * Asset Id
-         */
-        asset_id: string;
-        /**
-         * Version Id
-         */
-        version_id: string;
-    };
-    query?: {
-        /**
-         * Limit
-         */
-        limit?: number;
-        /**
-         * Offset
-         */
-        offset?: number;
-    };
-    url: '/api/v1/library/assets/{asset_id}/versions/{version_id}/hdus';
-};
-
-export type ListVersionHdusApiV1LibraryAssetsAssetIdVersionsVersionIdHdusGetErrors = {
-    /**
-     * Authentication required
-     */
-    401: ErrorEnvelope;
-    /**
-     * Origin not allowed by the ComfyUI proxy
-     */
-    403: ErrorEnvelope;
-    /**
-     * Resource not found or outside the requested scope
-     */
-    404: ErrorEnvelope;
-    /**
-     * Method not allowed
-     */
-    405: ErrorEnvelope;
-    /**
-     * Revision conflict
-     */
-    409: ErrorEnvelope;
-    /**
-     * Validation error or invalid reference
-     */
-    422: ErrorEnvelope;
-    /**
-     * Internal error
-     */
-    500: ErrorEnvelope;
-    /**
-     * Service not configured or unavailable
-     */
-    503: ErrorEnvelope;
-    /**
-     * Service timeout
-     */
-    504: ErrorEnvelope;
-    /**
-     * Default Response
-     */
-    default: ErrorEnvelope;
-};
-
-export type ListVersionHdusApiV1LibraryAssetsAssetIdVersionsVersionIdHdusGetError = ListVersionHdusApiV1LibraryAssetsAssetIdVersionsVersionIdHdusGetErrors[keyof ListVersionHdusApiV1LibraryAssetsAssetIdVersionsVersionIdHdusGetErrors];
-
-export type ListVersionHdusApiV1LibraryAssetsAssetIdVersionsVersionIdHdusGetResponses = {
+export type ListAssetHdusApiV1LibraryAssetsAssetIdHdusGetResponses = {
     /**
      * Successful Response
      */
     200: FitsHduPage;
 };
 
-export type ListVersionHdusApiV1LibraryAssetsAssetIdVersionsVersionIdHdusGetResponse = ListVersionHdusApiV1LibraryAssetsAssetIdVersionsVersionIdHdusGetResponses[keyof ListVersionHdusApiV1LibraryAssetsAssetIdVersionsVersionIdHdusGetResponses];
+export type ListAssetHdusApiV1LibraryAssetsAssetIdHdusGetResponse = ListAssetHdusApiV1LibraryAssetsAssetIdHdusGetResponses[keyof ListAssetHdusApiV1LibraryAssetsAssetIdHdusGetResponses];
 
-export type GetVersionHeaderApiV1LibraryAssetsAssetIdVersionsVersionIdHdusHduIndexHeaderGetData = {
+export type GetAssetHeaderApiV1LibraryAssetsAssetIdHdusHduIndexHeaderGetData = {
     body?: never;
     path: {
         /**
          * Asset Id
          */
         asset_id: string;
-        /**
-         * Version Id
-         */
-        version_id: string;
         /**
          * Hdu Index
          */
@@ -17644,10 +18091,10 @@ export type GetVersionHeaderApiV1LibraryAssetsAssetIdVersionsVersionIdHdusHduInd
          */
         paged?: boolean;
     };
-    url: '/api/v1/library/assets/{asset_id}/versions/{version_id}/hdus/{hdu_index}/header';
+    url: '/api/v1/library/assets/{asset_id}/hdus/{hdu_index}/header';
 };
 
-export type GetVersionHeaderApiV1LibraryAssetsAssetIdVersionsVersionIdHdusHduIndexHeaderGetErrors = {
+export type GetAssetHeaderApiV1LibraryAssetsAssetIdHdusHduIndexHeaderGetErrors = {
     /**
      * Authentication required
      */
@@ -17690,20 +18137,20 @@ export type GetVersionHeaderApiV1LibraryAssetsAssetIdVersionsVersionIdHdusHduInd
     default: ErrorEnvelope;
 };
 
-export type GetVersionHeaderApiV1LibraryAssetsAssetIdVersionsVersionIdHdusHduIndexHeaderGetError = GetVersionHeaderApiV1LibraryAssetsAssetIdVersionsVersionIdHdusHduIndexHeaderGetErrors[keyof GetVersionHeaderApiV1LibraryAssetsAssetIdVersionsVersionIdHdusHduIndexHeaderGetErrors];
+export type GetAssetHeaderApiV1LibraryAssetsAssetIdHdusHduIndexHeaderGetError = GetAssetHeaderApiV1LibraryAssetsAssetIdHdusHduIndexHeaderGetErrors[keyof GetAssetHeaderApiV1LibraryAssetsAssetIdHdusHduIndexHeaderGetErrors];
 
-export type GetVersionHeaderApiV1LibraryAssetsAssetIdVersionsVersionIdHdusHduIndexHeaderGetResponses = {
+export type GetAssetHeaderApiV1LibraryAssetsAssetIdHdusHduIndexHeaderGetResponses = {
     /**
-     * Response Get Version Header Api V1 Library Assets  Asset Id  Versions  Version Id  Hdus  Hdu Index  Header Get
+     * Response Get Asset Header Api V1 Library Assets  Asset Id  Hdus  Hdu Index  Header Get
      *
      * Successful Response
      */
     200: ImageHeaderPage | FitsHeaderOut;
 };
 
-export type GetVersionHeaderApiV1LibraryAssetsAssetIdVersionsVersionIdHdusHduIndexHeaderGetResponse = GetVersionHeaderApiV1LibraryAssetsAssetIdVersionsVersionIdHdusHduIndexHeaderGetResponses[keyof GetVersionHeaderApiV1LibraryAssetsAssetIdVersionsVersionIdHdusHduIndexHeaderGetResponses];
+export type GetAssetHeaderApiV1LibraryAssetsAssetIdHdusHduIndexHeaderGetResponse = GetAssetHeaderApiV1LibraryAssetsAssetIdHdusHduIndexHeaderGetResponses[keyof GetAssetHeaderApiV1LibraryAssetsAssetIdHdusHduIndexHeaderGetResponses];
 
-export type GetVersionPreviewApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsSizeGetData = {
+export type GetAssetPreviewApiV1LibraryAssetsAssetIdPreviewsSizeGetData = {
     body?: never;
     path: {
         /**
@@ -17711,19 +18158,15 @@ export type GetVersionPreviewApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsS
          */
         asset_id: string;
         /**
-         * Version Id
-         */
-        version_id: string;
-        /**
          * Size
          */
         size: string;
     };
     query?: never;
-    url: '/api/v1/library/assets/{asset_id}/versions/{version_id}/previews/{size}';
+    url: '/api/v1/library/assets/{asset_id}/previews/{size}';
 };
 
-export type GetVersionPreviewApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsSizeGetErrors = {
+export type GetAssetPreviewApiV1LibraryAssetsAssetIdPreviewsSizeGetErrors = {
     /**
      * Authentication required
      */
@@ -17766,16 +18209,16 @@ export type GetVersionPreviewApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsS
     default: ErrorEnvelope;
 };
 
-export type GetVersionPreviewApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsSizeGetError = GetVersionPreviewApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsSizeGetErrors[keyof GetVersionPreviewApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsSizeGetErrors];
+export type GetAssetPreviewApiV1LibraryAssetsAssetIdPreviewsSizeGetError = GetAssetPreviewApiV1LibraryAssetsAssetIdPreviewsSizeGetErrors[keyof GetAssetPreviewApiV1LibraryAssetsAssetIdPreviewsSizeGetErrors];
 
-export type GetVersionPreviewApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsSizeGetResponses = {
+export type GetAssetPreviewApiV1LibraryAssetsAssetIdPreviewsSizeGetResponses = {
     /**
      * Successful Response
      */
     200: Blob | File;
 };
 
-export type GetVersionPreviewApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsSizeGetResponse = GetVersionPreviewApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsSizeGetResponses[keyof GetVersionPreviewApiV1LibraryAssetsAssetIdVersionsVersionIdPreviewsSizeGetResponses];
+export type GetAssetPreviewApiV1LibraryAssetsAssetIdPreviewsSizeGetResponse = GetAssetPreviewApiV1LibraryAssetsAssetIdPreviewsSizeGetResponses[keyof GetAssetPreviewApiV1LibraryAssetsAssetIdPreviewsSizeGetResponses];
 
 export type ListProjectsApiV1ProjectsGetData = {
     body?: never;
@@ -18113,6 +18556,10 @@ export type ListProjectAssetsApiV1ProjectsProjectIdAssetsGetData = {
          * Filter Id
          */
         filter_id?: string | null;
+        /**
+         * Frame Class
+         */
+        frame_class?: 'subframe' | 'masterframe' | 'video' | null;
     };
     url: '/api/v1/projects/{project_id}/assets';
 };
@@ -18741,7 +19188,7 @@ export type AddProjectAssetReferenceApiV1ProjectsProjectIdAssetReferencesPostRes
 
 export type AddProjectAssetReferenceApiV1ProjectsProjectIdAssetReferencesPostResponse = AddProjectAssetReferenceApiV1ProjectsProjectIdAssetReferencesPostResponses[keyof AddProjectAssetReferenceApiV1ProjectsProjectIdAssetReferencesPostResponses];
 
-export type ListProjectReferenceHdusApiV1ProjectsProjectIdAssetReferencesReferenceIdVersionsVersionIdHdusGetData = {
+export type ListProjectReferenceHdusApiV1ProjectsProjectIdAssetReferencesReferenceIdHdusGetData = {
     body?: never;
     path: {
         /**
@@ -18752,10 +19199,6 @@ export type ListProjectReferenceHdusApiV1ProjectsProjectIdAssetReferencesReferen
          * Reference Id
          */
         reference_id: string;
-        /**
-         * Version Id
-         */
-        version_id: string;
     };
     query?: {
         /**
@@ -18767,10 +19210,10 @@ export type ListProjectReferenceHdusApiV1ProjectsProjectIdAssetReferencesReferen
          */
         offset?: number;
     };
-    url: '/api/v1/projects/{project_id}/asset-references/{reference_id}/versions/{version_id}/hdus';
+    url: '/api/v1/projects/{project_id}/asset-references/{reference_id}/hdus';
 };
 
-export type ListProjectReferenceHdusApiV1ProjectsProjectIdAssetReferencesReferenceIdVersionsVersionIdHdusGetErrors = {
+export type ListProjectReferenceHdusApiV1ProjectsProjectIdAssetReferencesReferenceIdHdusGetErrors = {
     /**
      * Authentication required
      */
@@ -18813,18 +19256,18 @@ export type ListProjectReferenceHdusApiV1ProjectsProjectIdAssetReferencesReferen
     default: ErrorEnvelope;
 };
 
-export type ListProjectReferenceHdusApiV1ProjectsProjectIdAssetReferencesReferenceIdVersionsVersionIdHdusGetError = ListProjectReferenceHdusApiV1ProjectsProjectIdAssetReferencesReferenceIdVersionsVersionIdHdusGetErrors[keyof ListProjectReferenceHdusApiV1ProjectsProjectIdAssetReferencesReferenceIdVersionsVersionIdHdusGetErrors];
+export type ListProjectReferenceHdusApiV1ProjectsProjectIdAssetReferencesReferenceIdHdusGetError = ListProjectReferenceHdusApiV1ProjectsProjectIdAssetReferencesReferenceIdHdusGetErrors[keyof ListProjectReferenceHdusApiV1ProjectsProjectIdAssetReferencesReferenceIdHdusGetErrors];
 
-export type ListProjectReferenceHdusApiV1ProjectsProjectIdAssetReferencesReferenceIdVersionsVersionIdHdusGetResponses = {
+export type ListProjectReferenceHdusApiV1ProjectsProjectIdAssetReferencesReferenceIdHdusGetResponses = {
     /**
      * Successful Response
      */
     200: FitsHduPage;
 };
 
-export type ListProjectReferenceHdusApiV1ProjectsProjectIdAssetReferencesReferenceIdVersionsVersionIdHdusGetResponse = ListProjectReferenceHdusApiV1ProjectsProjectIdAssetReferencesReferenceIdVersionsVersionIdHdusGetResponses[keyof ListProjectReferenceHdusApiV1ProjectsProjectIdAssetReferencesReferenceIdVersionsVersionIdHdusGetResponses];
+export type ListProjectReferenceHdusApiV1ProjectsProjectIdAssetReferencesReferenceIdHdusGetResponse = ListProjectReferenceHdusApiV1ProjectsProjectIdAssetReferencesReferenceIdHdusGetResponses[keyof ListProjectReferenceHdusApiV1ProjectsProjectIdAssetReferencesReferenceIdHdusGetResponses];
 
-export type GetProjectReferenceHeaderApiV1ProjectsProjectIdAssetReferencesReferenceIdVersionsVersionIdHdusHduIndexHeaderGetData = {
+export type GetProjectReferenceHeaderApiV1ProjectsProjectIdAssetReferencesReferenceIdHdusHduIndexHeaderGetData = {
     body?: never;
     path: {
         /**
@@ -18836,19 +19279,15 @@ export type GetProjectReferenceHeaderApiV1ProjectsProjectIdAssetReferencesRefere
          */
         reference_id: string;
         /**
-         * Version Id
-         */
-        version_id: string;
-        /**
          * Hdu Index
          */
         hdu_index: number;
     };
     query?: never;
-    url: '/api/v1/projects/{project_id}/asset-references/{reference_id}/versions/{version_id}/hdus/{hdu_index}/header';
+    url: '/api/v1/projects/{project_id}/asset-references/{reference_id}/hdus/{hdu_index}/header';
 };
 
-export type GetProjectReferenceHeaderApiV1ProjectsProjectIdAssetReferencesReferenceIdVersionsVersionIdHdusHduIndexHeaderGetErrors = {
+export type GetProjectReferenceHeaderApiV1ProjectsProjectIdAssetReferencesReferenceIdHdusHduIndexHeaderGetErrors = {
     /**
      * Authentication required
      */
@@ -18891,16 +19330,16 @@ export type GetProjectReferenceHeaderApiV1ProjectsProjectIdAssetReferencesRefere
     default: ErrorEnvelope;
 };
 
-export type GetProjectReferenceHeaderApiV1ProjectsProjectIdAssetReferencesReferenceIdVersionsVersionIdHdusHduIndexHeaderGetError = GetProjectReferenceHeaderApiV1ProjectsProjectIdAssetReferencesReferenceIdVersionsVersionIdHdusHduIndexHeaderGetErrors[keyof GetProjectReferenceHeaderApiV1ProjectsProjectIdAssetReferencesReferenceIdVersionsVersionIdHdusHduIndexHeaderGetErrors];
+export type GetProjectReferenceHeaderApiV1ProjectsProjectIdAssetReferencesReferenceIdHdusHduIndexHeaderGetError = GetProjectReferenceHeaderApiV1ProjectsProjectIdAssetReferencesReferenceIdHdusHduIndexHeaderGetErrors[keyof GetProjectReferenceHeaderApiV1ProjectsProjectIdAssetReferencesReferenceIdHdusHduIndexHeaderGetErrors];
 
-export type GetProjectReferenceHeaderApiV1ProjectsProjectIdAssetReferencesReferenceIdVersionsVersionIdHdusHduIndexHeaderGetResponses = {
+export type GetProjectReferenceHeaderApiV1ProjectsProjectIdAssetReferencesReferenceIdHdusHduIndexHeaderGetResponses = {
     /**
      * Successful Response
      */
     200: FitsHeaderOut;
 };
 
-export type GetProjectReferenceHeaderApiV1ProjectsProjectIdAssetReferencesReferenceIdVersionsVersionIdHdusHduIndexHeaderGetResponse = GetProjectReferenceHeaderApiV1ProjectsProjectIdAssetReferencesReferenceIdVersionsVersionIdHdusHduIndexHeaderGetResponses[keyof GetProjectReferenceHeaderApiV1ProjectsProjectIdAssetReferencesReferenceIdVersionsVersionIdHdusHduIndexHeaderGetResponses];
+export type GetProjectReferenceHeaderApiV1ProjectsProjectIdAssetReferencesReferenceIdHdusHduIndexHeaderGetResponse = GetProjectReferenceHeaderApiV1ProjectsProjectIdAssetReferencesReferenceIdHdusHduIndexHeaderGetResponses[keyof GetProjectReferenceHeaderApiV1ProjectsProjectIdAssetReferencesReferenceIdHdusHduIndexHeaderGetResponses];
 
 export type GetProjectReferencePreviewApiV1ProjectsProjectIdAssetReferencesReferenceIdPreviewsSizeGetData = {
     body?: never;
@@ -19601,12 +20040,12 @@ export type ListDatasetMemberSummariesData = {
          * Dataset Id
          */
         dataset_id: string;
-        /**
-         * Version Id
-         */
-        version_id: string;
     };
     query?: {
+        /**
+         * Calibration Status
+         */
+        calibration_status?: Array<'UnCalibrated' | 'Calibrated' | 'Unknown'>;
         /**
          * Role
          */
@@ -19708,7 +20147,7 @@ export type ListDatasetMemberSummariesData = {
          */
         offset?: number;
     };
-    url: '/api/v1/datasets/{dataset_id}/versions/{version_id}/member-summaries';
+    url: '/api/v1/datasets/{dataset_id}/member-summaries';
 };
 
 export type ListDatasetMemberSummariesErrors = {
@@ -19769,6 +20208,10 @@ export type ListDatasetsApiV1DatasetsGetData = {
     body?: never;
     path?: never;
     query?: {
+        /**
+         * Calibration Status
+         */
+        calibration_status?: 'UnCalibrated' | 'Calibrated' | 'Unknown' | null;
         /**
          * Text
          */
@@ -20160,217 +20603,6 @@ export type PatchDatasetApiV1DatasetsDatasetIdPatchResponses = {
 
 export type PatchDatasetApiV1DatasetsDatasetIdPatchResponse = PatchDatasetApiV1DatasetsDatasetIdPatchResponses[keyof PatchDatasetApiV1DatasetsDatasetIdPatchResponses];
 
-export type ListDatasetVersionsApiV1DatasetsDatasetIdVersionsGetData = {
-    body?: never;
-    path: {
-        /**
-         * Dataset Id
-         */
-        dataset_id: string;
-    };
-    query?: {
-        /**
-         * Limit
-         */
-        limit?: number;
-        /**
-         * Offset
-         */
-        offset?: number;
-    };
-    url: '/api/v1/datasets/{dataset_id}/versions';
-};
-
-export type ListDatasetVersionsApiV1DatasetsDatasetIdVersionsGetErrors = {
-    /**
-     * Authentication required
-     */
-    401: ErrorEnvelope;
-    /**
-     * Origin not allowed by the ComfyUI proxy
-     */
-    403: ErrorEnvelope;
-    /**
-     * Resource not found or outside the requested scope
-     */
-    404: ErrorEnvelope;
-    /**
-     * Method not allowed
-     */
-    405: ErrorEnvelope;
-    /**
-     * Revision conflict
-     */
-    409: ErrorEnvelope;
-    /**
-     * Validation error or invalid reference
-     */
-    422: ErrorEnvelope;
-    /**
-     * Internal error
-     */
-    500: ErrorEnvelope;
-    /**
-     * Service not configured or unavailable
-     */
-    503: ErrorEnvelope;
-    /**
-     * Service timeout
-     */
-    504: ErrorEnvelope;
-    /**
-     * Default Response
-     */
-    default: ErrorEnvelope;
-};
-
-export type ListDatasetVersionsApiV1DatasetsDatasetIdVersionsGetError = ListDatasetVersionsApiV1DatasetsDatasetIdVersionsGetErrors[keyof ListDatasetVersionsApiV1DatasetsDatasetIdVersionsGetErrors];
-
-export type ListDatasetVersionsApiV1DatasetsDatasetIdVersionsGetResponses = {
-    /**
-     * Successful Response
-     */
-    200: DatasetVersionPage;
-};
-
-export type ListDatasetVersionsApiV1DatasetsDatasetIdVersionsGetResponse = ListDatasetVersionsApiV1DatasetsDatasetIdVersionsGetResponses[keyof ListDatasetVersionsApiV1DatasetsDatasetIdVersionsGetResponses];
-
-export type CreateDatasetVersionApiV1DatasetsDatasetIdVersionsPostData = {
-    body: DatasetMembersCreate;
-    path: {
-        /**
-         * Dataset Id
-         */
-        dataset_id: string;
-    };
-    query?: never;
-    url: '/api/v1/datasets/{dataset_id}/versions';
-};
-
-export type CreateDatasetVersionApiV1DatasetsDatasetIdVersionsPostErrors = {
-    /**
-     * Authentication required
-     */
-    401: ErrorEnvelope;
-    /**
-     * Origin not allowed by the ComfyUI proxy
-     */
-    403: ErrorEnvelope;
-    /**
-     * Resource not found or outside the requested scope
-     */
-    404: ErrorEnvelope;
-    /**
-     * Method not allowed
-     */
-    405: ErrorEnvelope;
-    /**
-     * Revision conflict
-     */
-    409: ErrorEnvelope;
-    /**
-     * Validation error or invalid reference
-     */
-    422: ErrorEnvelope;
-    /**
-     * Internal error
-     */
-    500: ErrorEnvelope;
-    /**
-     * Service not configured or unavailable
-     */
-    503: ErrorEnvelope;
-    /**
-     * Service timeout
-     */
-    504: ErrorEnvelope;
-    /**
-     * Default Response
-     */
-    default: ErrorEnvelope;
-};
-
-export type CreateDatasetVersionApiV1DatasetsDatasetIdVersionsPostError = CreateDatasetVersionApiV1DatasetsDatasetIdVersionsPostErrors[keyof CreateDatasetVersionApiV1DatasetsDatasetIdVersionsPostErrors];
-
-export type CreateDatasetVersionApiV1DatasetsDatasetIdVersionsPostResponses = {
-    /**
-     * Successful Response
-     */
-    201: DatasetVersionOut;
-};
-
-export type CreateDatasetVersionApiV1DatasetsDatasetIdVersionsPostResponse = CreateDatasetVersionApiV1DatasetsDatasetIdVersionsPostResponses[keyof CreateDatasetVersionApiV1DatasetsDatasetIdVersionsPostResponses];
-
-export type GetDatasetVersionApiV1DatasetsDatasetIdVersionsVersionIdGetData = {
-    body?: never;
-    path: {
-        /**
-         * Dataset Id
-         */
-        dataset_id: string;
-        /**
-         * Version Id
-         */
-        version_id: string;
-    };
-    query?: never;
-    url: '/api/v1/datasets/{dataset_id}/versions/{version_id}';
-};
-
-export type GetDatasetVersionApiV1DatasetsDatasetIdVersionsVersionIdGetErrors = {
-    /**
-     * Authentication required
-     */
-    401: ErrorEnvelope;
-    /**
-     * Origin not allowed by the ComfyUI proxy
-     */
-    403: ErrorEnvelope;
-    /**
-     * Resource not found or outside the requested scope
-     */
-    404: ErrorEnvelope;
-    /**
-     * Method not allowed
-     */
-    405: ErrorEnvelope;
-    /**
-     * Revision conflict
-     */
-    409: ErrorEnvelope;
-    /**
-     * Validation error or invalid reference
-     */
-    422: ErrorEnvelope;
-    /**
-     * Internal error
-     */
-    500: ErrorEnvelope;
-    /**
-     * Service not configured or unavailable
-     */
-    503: ErrorEnvelope;
-    /**
-     * Service timeout
-     */
-    504: ErrorEnvelope;
-    /**
-     * Default Response
-     */
-    default: ErrorEnvelope;
-};
-
-export type GetDatasetVersionApiV1DatasetsDatasetIdVersionsVersionIdGetError = GetDatasetVersionApiV1DatasetsDatasetIdVersionsVersionIdGetErrors[keyof GetDatasetVersionApiV1DatasetsDatasetIdVersionsVersionIdGetErrors];
-
-export type GetDatasetVersionApiV1DatasetsDatasetIdVersionsVersionIdGetResponses = {
-    /**
-     * Successful Response
-     */
-    200: DatasetVersionOut;
-};
-
-export type GetDatasetVersionApiV1DatasetsDatasetIdVersionsVersionIdGetResponse = GetDatasetVersionApiV1DatasetsDatasetIdVersionsVersionIdGetResponses[keyof GetDatasetVersionApiV1DatasetsDatasetIdVersionsVersionIdGetResponses];
-
 export type UpdateDatasetMemberParametersApiV1DatasetsDatasetIdMemberParametersPatchData = {
     body: DatasetMemberParametersUpdate;
     path: {
@@ -20444,12 +20676,12 @@ export type ListDatasetMembersData = {
          * Dataset Id
          */
         dataset_id: string;
-        /**
-         * Version Id
-         */
-        version_id: string;
     };
     query?: {
+        /**
+         * Calibration Status
+         */
+        calibration_status?: Array<'UnCalibrated' | 'Calibrated' | 'Unknown'>;
         /**
          * Text
          */
@@ -20595,7 +20827,7 @@ export type ListDatasetMembersData = {
          */
         image_query?: boolean;
     };
-    url: '/api/v1/datasets/{dataset_id}/versions/{version_id}/members';
+    url: '/api/v1/datasets/{dataset_id}/members';
 };
 
 export type ListDatasetMembersErrors = {
@@ -20653,6 +20885,72 @@ export type ListDatasetMembersResponses = {
 };
 
 export type ListDatasetMembersResponse = ListDatasetMembersResponses[keyof ListDatasetMembersResponses];
+
+export type ReplaceDatasetMembersData = {
+    body: DatasetMembersCreate;
+    path: {
+        /**
+         * Dataset Id
+         */
+        dataset_id: string;
+    };
+    query?: never;
+    url: '/api/v1/datasets/{dataset_id}/members';
+};
+
+export type ReplaceDatasetMembersErrors = {
+    /**
+     * Authentication required
+     */
+    401: ErrorEnvelope;
+    /**
+     * Origin not allowed by the ComfyUI proxy
+     */
+    403: ErrorEnvelope;
+    /**
+     * Resource not found or outside the requested scope
+     */
+    404: ErrorEnvelope;
+    /**
+     * Method not allowed
+     */
+    405: ErrorEnvelope;
+    /**
+     * Revision conflict
+     */
+    409: ErrorEnvelope;
+    /**
+     * Validation error or invalid reference
+     */
+    422: ErrorEnvelope;
+    /**
+     * Internal error
+     */
+    500: ErrorEnvelope;
+    /**
+     * Service not configured or unavailable
+     */
+    503: ErrorEnvelope;
+    /**
+     * Service timeout
+     */
+    504: ErrorEnvelope;
+    /**
+     * Default Response
+     */
+    default: ErrorEnvelope;
+};
+
+export type ReplaceDatasetMembersError = ReplaceDatasetMembersErrors[keyof ReplaceDatasetMembersErrors];
+
+export type ReplaceDatasetMembersResponses = {
+    /**
+     * Successful Response
+     */
+    200: DatasetOut;
+};
+
+export type ReplaceDatasetMembersResponse = ReplaceDatasetMembersResponses[keyof ReplaceDatasetMembersResponses];
 
 export type ListCalibrationTargetsApiV1CalibrationTargetsGetData = {
     body?: never;

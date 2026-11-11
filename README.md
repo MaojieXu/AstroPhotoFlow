@@ -6,21 +6,24 @@ AstroPhotoFlow 是本地运行的天文图像工作台：把拍摄的 FITS 整�
 
 ## Quickstart
 
-需要 Windows x64、Git 与 PowerShell。入口复用 PATH 中符合版本的本机工具，缺失时下载固定归档到项目 `.artifacts` 并校验，不修改全局 PATH、Python 注册或默认 workspace。
+准备 Git、uv、Node.js 和 pnpm，版本见[开发环境](docs/development.md)。在一个检出目录安装依赖。
 
-```powershell
+```sh
 git clone --branch dev --depth 1 https://github.com/MaojieXu/AstroPhotoFlow.git
 cd AstroPhotoFlow
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/bootstrap.ps1 --workspace .artifacts/workspaces/dev --build --start
+uv sync --locked --extra dev
+pnpm --dir frontend install --frozen-lockfile --ignore-scripts
 ```
 
-首次运行安装依赖并构建前端，完成后按回执中的实际地址打开工作台。同一源码基点再次运行可省略 `--build` 复用产物。
+首次打开工作台时构建网页、初始化开发 workspace，再启动服务。
 
-前端热更新使用同一入口：
-
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/bootstrap.ps1 --watch --workspace .artifacts/workspaces/dev --port 32589 --strictPort
+```sh
+pnpm build
+uv run --locked --no-sync apf init --workspace .artifacts/workspaces/dev --frontend-assets .artifacts/build/frontend --no-activate
+uv run --locked --no-sync apf start --workspace .artifacts/workspaces/dev
 ```
+
+工作台就绪后，`start` 在交互式终端显示实际前端地址。加 `--open` 可在默认浏览器打开。脚本仍可从标准输出的 JSON 读取 `web_url`。更新工作台网页时先停止该实例，再构建和初始化。
 
 ## 文档入口
 

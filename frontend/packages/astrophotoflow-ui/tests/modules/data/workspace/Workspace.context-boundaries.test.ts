@@ -1,4 +1,5 @@
-import { libraryAsset, libraryDataset } from '../../../fixtures/library-summary'
+import { assetFixture } from '../../../fixtures/library-members'
+import { libraryAsset } from '../../../fixtures/library-summary'
 import {flushPromises,mount} from '@vue/test-utils'
 import {createPinia} from 'pinia'
 import {afterEach,beforeEach,describe,expect,it,vi} from 'vitest'
@@ -11,8 +12,8 @@ const timestamp='2026-10-25T06:00:00Z'
 const cap={stage:'ingestion',shared_library_read:true,project_assets_read:true,project_management:true,equipment_management:true,asset_import:true,asset_reference_write:true,asset_preview:false,asset_metadata_edit:true,dataset_management:true,asset_task_management:true,calibration_matching:false,asset_publish:false}
 const camera={id:id(1),kind:'camera',name:'Camera',model:null,notes:null,specs:{},status:'active',revision:1,created_at:timestamp,updated_at:timestamp}
 const setup={id:id(2),name:'Saved rig',components:[],notes:null,status:'active',revision:1,created_at:timestamp,updated_at:timestamp}
-const assetVersion={view_base: `/astrophotoflow/api/v1/library/assets/${id(9)}/versions/${id(10)}/previews`, id:id(10),asset_id:id(9),version_number:1,storage_mode:'reference',storage_location:'root/photo.png',byte_size:10,content_hash:null,availability:'available',camera_id:null,optical_system_id:null,filter_id:null,frame_type:'light',calibration_level:'individual',capture_snapshot:{},scientific_metadata:{},created_at:timestamp}
-const asset={id:id(9),name:'Photo.png',scope:'shared',owner_project_id:null,role:'raw',calibration_level:'individual',current_version_id:assetVersion.id,classification:{frame_class:'subframe',frame_type:'light'},parameters:{parameter_mode:'standard'},equipment_snapshot:{},value_sources:{},notes:null,status:'active',revision:1,created_at:timestamp,current_version:assetVersion}
+const original={view_base: `/astrophotoflow/api/v1/library/assets/${id(9)}/previews`, id: id(9), storage_mode:'reference', storage_location:'root/photo.png', byte_size:10, content_hash:null, availability:'available', calibration_level:'individual', capture_snapshot:{}, scientific_metadata:{}, created_at:timestamp}
+const asset=assetFixture({...original, id:id(9), name:'Photo.png', scope:'shared', owner_project_id:null, role:'raw', calibration_level:'individual', classification:{frame_class:'subframe',frame_type:'light'}, parameters:{parameter_mode:'standard'}, equipment_snapshot:{}, value_sources:{}, notes:null, status:'active', revision:1, created_at:timestamp})
 const page=(items:unknown[])=>({items,total:items.length,limit:200,offset:0})
 let wrapper:ReturnType<typeof mount>
 async function click(text:string){await wrapper.findAll('button').find(button=>button.text()===text)!.trigger('click');await flushPromises()}
@@ -54,7 +55,7 @@ describe('workspace async view boundaries',()=>{
   const vm=wrapper.getComponent(Workspace).vm as unknown as {refreshRecords:()=>Promise<void>;activeArea:string}
   await vm.refreshRecords();await flushPromises()
   let resolveSave!:(value:unknown)=>void
-  send.mockImplementationOnce(()=>new Promise(resolve=>{resolveSave=resolve})).mockResolvedValue({asset_version_id:assetVersion.id,size:'display',status:'not_ready',error:{code:'NOT_READY',message:'not ready'},width:null,height:null})
+  send.mockImplementationOnce(()=>new Promise(resolve=>{resolveSave=resolve})).mockResolvedValue({asset_id:original.id, size:'display', status:'not_ready', error:{code:'NOT_READY',message:'not ready'}, width:null, height:null})
   const row=wrapper.get('.apf-assets-table tbody tr')
   await row.get('.apf-inline-value').trigger('dblclick')
   await row.get('input').setValue('Renamed.png');await row.get('input').trigger('keydown',{key:'Enter'});await flushPromises()
@@ -122,32 +123,5 @@ describe('workspace async view boundaries',()=>{
   vm.applyFilters({roles:['raw']});await flushPromises()
   expect(vm.activeFilters).toEqual({roles:['raw']})
   expect(wrapper.findAll('.apf-assets-table tbody tr')).toHaveLength(0)
- })
- it('does not navigate back to a calibration group created after leaving its view',async()=>{
-  const dark={...asset,name:'Master dark',role:'calibration',classification:{frame_class:'masterframe',frame_type:'dark'}}
-  const group={id:id(20),name:'New calibration',notes:null,status:'active',revision:1,current_version_id:id(21),member_count:1,created_at:timestamp,updated_at:timestamp}
-  const version={id:id(21),dataset_id:group.id,version_number:1,created_at:timestamp,calibration_defaults:{},members:[{
-   id:id(22),dataset_version_id:id(21),asset_version_id:assetVersion.id,position:0,relative_path:null,calibration_overrides:{},asset:dark,version:assetVersion
-  }]}
-  let persisted=false
-  get.mockImplementation(async(path:string)=>{
-   if(path.endsWith('/capabilities'))return cap
-   if(path.includes('/library/assets'))return page([dark])
-   if(path.includes('/library/items'))return page(persisted?[libraryDataset(group,version)]:[])
-   if(path.endsWith('/versions/'+version.id))return version
-   return page([])
-  })
-  await flushPromises();await click('校准库');await click('从已有校准照片创建组')
-  const form=wrapper.get('form[aria-label="创建校准组"]')
-  await form.get('input[required]').setValue(group.name)
-  await form.get('input[type="checkbox"]').setValue(true)
-  let resolveCreate!:(value:unknown)=>void
-  send.mockImplementationOnce(()=>new Promise(resolve=>{resolveCreate=resolve}))
-  await form.trigger('submit');await flushPromises()
-  await click('全部素材')
-  persisted=true;resolveCreate(group);await flushPromises()
-  expect(wrapper.get('h1').text()).toBe('素材库')
-  const vm=wrapper.getComponent(Workspace).vm as unknown as {activeDataset:unknown}
-  expect(vm.activeDataset).toBeUndefined()
  })
 })

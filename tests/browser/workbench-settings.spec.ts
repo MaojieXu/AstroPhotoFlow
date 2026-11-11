@@ -12,16 +12,28 @@ test('native settings stay searchable, reject non-loopback host and keep the can
       await request.get('/astrophotoflow/api/v1/settings/workbench')
     ).json()
   )
-  await panel.locator('summary').click()
-  for (const name of ['host', 'data_dir']) {
-    const input = panel.locator('input[name="' + name + '"]')
-    await expect(input).toBeVisible()
-    expect((await input.boundingBox())!.width).toBeGreaterThan(0)
-  }
+  const workspaceSettings = panel.getByRole('region', {
+    name: '工作区、端口和目录'
+  })
+  const workspacePath = workspaceSettings.getByRole('textbox', {
+    name: '默认工作区'
+  })
+  const host = workspaceSettings.getByRole('textbox', { name: '服务主机' })
+  await expect(workspacePath).toBeVisible()
+  await expect(
+    workspaceSettings.getByRole('textbox', { name: '数据目录' })
+  ).toBeVisible()
+  await expect(host).toBeVisible()
+  await expect(
+    workspaceSettings.getByRole('spinbutton', { name: '首选服务端口' })
+  ).toBeVisible()
+  expect((await workspacePath.boundingBox())!.width).toBeGreaterThan(
+    (await host.boundingBox())!.width
+  )
   expect(await panel.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(
     false
   )
-  await panel.locator('input[name="host"]').fill('0.0.0.0')
+  await host.fill('0.0.0.0')
   await panel.getByRole('button', { name: '保存配置', exact: true }).click()
   await expect(panel.getByRole('alert')).toBeVisible()
   const unchanged = zConfigState.parse(

@@ -30,15 +30,6 @@ export function useSaveDatasetDescription() {
   })
 }
 
-export function usePublishCalibration() {
-  const cache = useQueryClient()
-  return useMutation({
-    mutationFn: ({ datasetId, body }: { workspaceId: string; datasetId: string; body: Parameters<typeof datasetApi.publish>[1] }) => datasetApi.publish(datasetId, body),
-    retry: false,
-    onSettled: (_data, _error, { workspaceId, datasetId }) => invalidateLibraryData(cache, workspaceId, {datasetIds:[datasetId]})
-  })
-}
-
 export function useUpdateDatasetMembers() {
   const cache = useQueryClient()
   const connectionReady = useQueryAvailability()
@@ -52,7 +43,7 @@ export function useUpdateDatasetMembers() {
   }
   return useMutation({
     mutationFn: async (request: {
-      workspaceId: string; datasetId: string; versionId: string; revision: number;
+      workspaceId: string; datasetId: string; revision: number;
       changes: Pick<Parameters<typeof mutationApi.patchMembers>[1], 'parameters' | 'classification'>
     }) => {
       const expectedGeneration = connectionGeneration
@@ -60,7 +51,7 @@ export function useUpdateDatasetMembers() {
       const revisions = new Map<string, number>()
       let offset = 0
       for (;;) {
-        const page = await libraryApi.members(request.datasetId, request.versionId, {limit:200, offset, sort_by:'position', order:'asc'})
+        const page = await libraryApi.members(request.datasetId, {limit:200, offset, sort_by:'position', order:'asc'})
         requireCurrentConnection(expectedGeneration)
         for (const member of page.items) {
           const previous = revisions.get(member.asset.id)
@@ -73,7 +64,7 @@ export function useUpdateDatasetMembers() {
         if (!page.items.length) throw new ApiClientError('Fixed member page ended before its total', 'contract')
       }
       return mutationApi.patchMembers(request.datasetId, {
-        base_revision:request.revision, base_version_id:request.versionId,
+        base_revision:request.revision,
         members:[...revisions].map(([asset_id,revision])=>({asset_id,revision})), ...request.changes
       })
     },

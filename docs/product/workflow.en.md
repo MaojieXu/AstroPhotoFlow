@@ -10,13 +10,13 @@ This page explains how users organize processing on the canvas, run it, and view
 - The platform does not build a separate workflow library, project-graph association, complete run library or second graph editor.
 - Important schemes are saved with native Save As; the platform does not additionally keep a version per edit, server drafts or a permanent receipt store.
 - External workflow JSON opens through native mechanisms; graphs with missing dependencies can stay for repair and are not installed or replaced automatically.
-- Project metadata and fixed asset and collection references belong to data and are not associated with graph files.
+- Project metadata and asset and dataset references belong to data and are not associated with graph files.
 
 ## Putting assets on the canvas
 
-- Selection brings a fixed asset or collection version and its ordered members onto the canvas; member order is not re-picked on the canvas.
+- The canvas references assets by asset_id and datasets by dataset_id; dataset members and calibration follow the currently saved content.
 - Users click an asset name and then choose a canvas drop point, or drag the whole row in; the node keeps the image, member switching and parameters.
-- Switching members of a fixed collection does not change the fixed version.
+- Switching members changes the display selection only. When a call starts, it fixes the actual members in current order, original hashes, metadata and calibration.
 - Viewing an asset does not write the canvas and does not take over the Agent's editing.
 - External image references on the canvas keep source and format information, and keep a hint when the source is disconnected.
 
@@ -37,7 +37,7 @@ This page explains how users organize processing on the canvas, run it, and view
 - Manual runs and node automatic result previews reuse native conversion, validation, queue, progress and cancel; unnamed drafts are submitted through native mechanisms.
 - After content or parameter changes, automatic results are submitted after a 500-millisecond merge window, without additionally saving a self-built project or a separate compute snapshot.
 - Result ownership is decided by a content-match signature; each concrete call fixes the actual science inputs and parameters.
-- Reproducible by default: use verified fixed content, or finish preparation first; when the user explicitly chooses "reference only", a weaker guarantee applies.
+- Reproducible by default: use verified registered originals, or finish preparation first; when the user explicitly chooses "reference only", a weaker guarantee applies.
 - Preparation failure never downgrades automatically; a specified target includes necessary dependencies and the request is not narrowed silently; science processing is not reused across runs automatically by default.
 - Graph and prompt records use native execution history.
 - A concrete call records fixed inputs and metadata, parameters, node definition content, software and Bundle versions, prompt and node association, status, errors and logs; later edits do not change existing call facts.
@@ -50,8 +50,8 @@ This page explains how users organize processing on the canvas, run it, and view
 - A background result belongs to its source run and does not leak to other workflows or steal the view.
 - Old previews do not guarantee a complete file or environment can be restored; continuing from fixed results reads real complete files.
 - The viewer shows an overview first, then tiles by current member and viewport; video playback and pause, and original-frame zoom, are separate.
-- Fast sample previews are collapsed by default and debounced by about 350 milliseconds, only for operations declared supported; real results and fast samples both offer 512, 1024, 2048 pixels or the original size.
-- Comparison states whether registration, size, ROI and stretch are the same; metrics state algorithm, unit, sample and unavailability reason; missing is not 0.
+- Bundle nodes show all parameters and their own outputs. The thumbnail and viewer use the same checked member, frame, and channel with direct pixel mapping. The thumbnail size setting affects display.
+- When comparable histograms exist, the grey trace shows the result before adjustment and the coloured trace shows the current result. Metrics carry source, unit, sample, and unavailability information. Frame tables can select a declared member and frame.
 
 ## Saving results and export
 
@@ -64,7 +64,7 @@ This page explains how users organize processing on the canvas, run it, and view
 
 ## Continuing work
 
-- Project metadata and fixed references belong to data and are not associated with graph files.
+- Project metadata and current references belong to data and are not associated with graph files.
 - Work can continue from a saved graph, run or result; when the Agent changes, it reads the background summary.
 - Unknown results are checked first, and restoring never changes old runs.
 - Local memory can be viewed, edited, disabled and deleted; explicit user statements win over Agent analysis; analysis names its source project and does not change run facts; deletion includes historical text; full chats, model state and credentials are not stored.

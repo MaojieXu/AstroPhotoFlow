@@ -14,7 +14,7 @@ from astrophotoflow.core.database.schema import (
     database_lock,
     database_status,
     ensure_schema_for_serve,
-    upgrade_database,
+    initialize_database,
 )
 from astrophotoflow.interfaces.http.app import create_app
 from astrophotoflow.modules.data.public import backfill_missing_previews
@@ -36,7 +36,7 @@ def main() -> None:
     db = commands.add_parser("db")
     db_commands = db.add_subparsers(dest="db_command", required=True)
     db_commands.add_parser("status")
-    db_commands.add_parser("upgrade")
+    db_commands.add_parser("init")
     previews = commands.add_parser("previews")
     previews.add_subparsers(dest="preview_command", required=True).add_parser("backfill")
     args = parser.parse_args()
@@ -47,9 +47,9 @@ def main() -> None:
             for key, value in result.items():
                 print(f"{key}: {value}")
             return
-        if args.command == "db" and args.db_command == "upgrade":
+        if args.command == "db" and args.db_command == "init":
             with hold_database_lock(settings):
-                upgrade_database(settings)
+                initialize_database(settings)
             print(f"schema_revision: {SCHEMA_REVISION}")
             return
         if args.command == "previews" and args.preview_command == "backfill":

@@ -1,3 +1,4 @@
+import { assetFixture } from '../../../fixtures/library-members'
 import { libraryAsset, libraryDataset } from '../../../fixtures/library-summary'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia } from 'pinia'
@@ -31,11 +32,25 @@ describe('workspace import registration progress', () => {
       if (path.endsWith('/health')) return {status:'ok',api_version:'v1',database:'ready',schema_revision:'0001',workspace:'/isolated-test-workspace'}
       if (path.endsWith('/capabilities')) return capabilities
       if (path.includes('/asset-tasks?')) return { ...emptyPage, items: [{ ...baseTask, status: 'completed_with_errors', error: null, report: {} }], total: 1 }
-      if (path.includes('/library/items?')) return { ...emptyPage, total: 1, items: [{...libraryAsset({
-        id: baseTask.id, name: 'invalid.fit', scope: 'shared', owner_project_id: null, role: 'raw', calibration_level: null,
-        current_version_id: null, classification: {}, parameters: {}, equipment_snapshot: {}, value_sources: {}, notes: null,
-        status: 'active', revision: 1, created_at: baseTask.created_at, current_version: null
-      }), import_issue: '解析失败；预览不可用'}] }
+      if (path.includes('/library/items?')) return { ...emptyPage, total: 1, items: [{...libraryAsset(assetFixture({
+                                                                                                        id: baseTask.id,
+                                                                                                        name: 'invalid.fit',
+                                                                                                        scope: 'shared',
+                                                                                                        owner_project_id: null,
+                                                                                                        role: 'raw',
+                                                                                                        calibration_level: null,
+                                                                                                        classification: {},
+                                                                                                        parameters: {},
+                                                                                                        equipment_snapshot: {},
+                                                                                                        value_sources: {},
+                                                                                                        notes: null,
+                                                                                                        status: 'active',
+                                                                                                        revision: 1,
+                                                                                                        created_at: baseTask.created_at,
+                                                                                                        availability: 'unknown',
+                                                                                                        content_hash: null,
+                                                                                                        byte_size: null
+                                                                                                      })), import_issue: '解析失败；预览不可用'}] }
       return emptyPage
     })
     wrapper = mount(App, { global: { plugins: [createPinia()] } })

@@ -3,20 +3,20 @@
 # Re-record: python scripts/verify_docs.py pairing --write <source>.
 # Keys are heading-slug paths from the primary (Chinese) document.
 /开发环境:
-  en: 13eaacdbb8eb2ec8
-  zh: 0c8dce129b8deab2
-/开发环境/环境与版本:
-  en: d0a482c3e670780c
-  zh: d18d646264c23166
-/开发环境/固定入口:
-  en: 449d1e59088b1166
-  zh: 07ceec5159dff028
+  en: b736f0d11f099499
+  zh: 7be8e86fa39fa490
+/开发环境/工具和依赖:
+  en: 35bd16449dc7db57
+  zh: 2554a79265e07088
+/开发环境/目录:
+  en: 51f765f5e368aeb0
+  zh: 1494155e81152a2d
 /开发环境/常用命令:
-  en: f44e33e877324660
-  zh: 1ce28a6d321ab306
-/开发环境/产物与回执:
-  en: 0b1396d36d2e9dc0
-  zh: b41155cd252eda4d
-/开发环境/调试入口:
-  en: 850fbdac41adb4ad
-  zh: 4c1e9e754689cdfb
+  en: d1c8270fd6716b01
+  zh: bb7003f13fa17bcc
+/开发环境/bundle-源码联调:
+  en: 43987214a5efd596
+  zh: 0cc0ccc3103edc4a
+/开发环境/调试:
+  en: 1725996232cf914c
+  zh: 23f9ed990f14001d

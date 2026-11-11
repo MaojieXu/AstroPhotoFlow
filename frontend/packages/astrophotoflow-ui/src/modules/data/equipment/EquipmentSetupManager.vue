@@ -22,7 +22,6 @@ import { useSetupEditor } from './useSetupEditor'
 const props = defineProps<{
   workspace: string
   selectedSetup?: EquipmentSetup
-  recordsLoading: boolean
   viewKey: string
   changeToken: number
 }>()
@@ -131,9 +130,6 @@ defineExpose({ beginSetup })
 <template>
   <section class="apf-setup-manager" :aria-label="$t('apfUi.equipment_setups')">
     <slot name="records" />
-    <div v-if="selectedSetup" class="flex flex-wrap gap-2" role="group" :aria-label="$t('apfUi.setup_actions')">
-      <LibraryButton type="button" :disabled="saving||dirty||recordsLoading" @click="beginSetup(selectedSetup)">{{ $t('apfUi.edit_equipment_setup') }}</LibraryButton>
-    </div>
     <LibraryDialog :open="editingSetup!==undefined" :title="deviceEditor?(deviceEditor.source==='new'?$t('apfUi.new')+equipmentKindLabels[deviceEditor.equipment.kind]:$t('apfUi.edit_equipment_in_setup')):(editingSetup?$t('apfUi.edit'):$t('apfUi.new'))+$t('apfUi.equipment_setup')" :label="deviceEditor?$t('apfUi.equipment_form'):$t('apfUi.equipment_setup_form')" :busy="saving" @close="closeSetup">
       <form v-if="editingSetup!==undefined" class="apf-editor" :aria-label="deviceEditor?$t('apfUi.new_equipment_form'):$t('apfUi.equipment_setup_form')" @submit.prevent="deviceEditor?saveEquipment():saveSetup()">
         <div class="apf-equipment-dialog-body">

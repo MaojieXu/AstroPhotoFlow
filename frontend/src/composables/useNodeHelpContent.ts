@@ -6,6 +6,8 @@ import { nodeHelpService } from '@/services/nodeHelpService'
 import type { ComfyNodeDefImpl } from '@/stores/nodeDefStore'
 import { renderMarkdownToHtml } from '@/utils/markdownRendererUtil'
 import { getNodeHelpBaseUrl } from '@/workbench/utils/nodeHelpUtil'
+import { resolveNodeDefText, te } from '@/i18n'
+import { normalizeI18nKey } from '@/utils/formatUtil'
 
 /**
  * Composable for fetching and rendering node help content.
@@ -35,13 +37,27 @@ export function useNodeHelpContent(
   const renderedHelpHtml = computed(() => {
     return renderMarkdownToHtml(helpContent.value, baseUrl.value)
   })
+  const inlineHelp = computed(() => {
+    const node = toValue(nodeRef)
+    if (node && te(`nodeDefs.${normalizeI18nKey(node.name)}.help`)) {
+      return resolveNodeDefText('help', node.name, node.help)
+    }
+    return undefined
+  })
 
   // Watch for node changes and fetch help content
   watch(
-    () => toValue(nodeRef),
-    async (node) => {
+    [() => toValue(nodeRef), locale, inlineHelp],
+    async ([node, , inline]) => {
+      currentRequest = null
       helpContent.value = ''
       error.value = null
+      isLoading.value = false
+
+      if (inline !== undefined) {
+        helpContent.value = inline
+        return
+      }
 
       if (node) {
         isLoading.value = true

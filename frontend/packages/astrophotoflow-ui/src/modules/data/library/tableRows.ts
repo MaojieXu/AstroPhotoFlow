@@ -82,12 +82,27 @@ export function createLibraryTableRow(
   const asset = assetRecord(row),
     entity = recordEntity(row),
     issue = recordIssue(row)
-  const version = 'asset' in row ? row.version : asset?.current_version
+  const original = asset
   const availability = hasSummary(row)
     ? row.summary.availability.value
-    : version?.availability
+    : original?.availability
   return {
     ...display,
+    calibrationStatusLabel: displayLabel('calibration_status' in entity ? entity.calibration_status : 'Unknown'),
+    calibrationStatus: isDatasetRecord(row) ? undefined : {
+      value: 'calibration_status' in entity ? entity.calibration_status : 'Unknown',
+      display: displayLabel('calibration_status' in entity ? entity.calibration_status : 'Unknown'),
+      title: uiT('apfUi.calibration_status'),
+      kind: 'select',
+      choices: ['UnCalibrated', 'Calibrated', 'Unknown'].map(value => ({ value, label: displayLabel(value) })),
+      save: value => saveRowField(row, 'calibration_status', value)
+    },
+    calibrationCounts: 'calibration_counts' in entity ? uiT('apfUi.calibration_counts', {
+      uncalibrated: entity.calibration_counts.UnCalibrated,
+      calibrated: entity.calibration_counts.Calibrated,
+      unknown: entity.calibration_counts.Unknown
+    }) : undefined,
+    calibrationEvidence: asset?.calibration_evidence ? JSON.stringify(asset.calibration_evidence, null, 2) : undefined,
     dataset: isDatasetRecord(row),
     video: rowClassification(row).frame_class === 'video',
     memberCount: isDatasetRecord(row) ? datasetRecord(row).member_count : 0,
@@ -119,7 +134,7 @@ export function createLibraryTableRow(
       : undefined,
     storage: isDatasetRecord(row)
       ? datasetFieldDisplay(row, 'storage_mode', displayLabel)
-      : displayLabel(version?.storage_mode),
+      : displayLabel(original?.storage_mode),
     availability: issue
       ? uiT('apfUi.metadata_processing_issue')
       : displayLabel(availability),

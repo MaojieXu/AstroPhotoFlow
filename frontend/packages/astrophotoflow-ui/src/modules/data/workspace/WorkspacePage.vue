@@ -11,10 +11,10 @@ import { useProjectReferenceActions } from '../projects/useProjectReferenceActio
 import { useInlineSaveState } from '../library/useInlineSaveState'
 import { validatedInput } from '../../../core/api/input'
 import { zPatchProjectApiV1ProjectsProjectIdPatchBody, zArchiveManagementEntriesApiV1SettingsTrashArchivePostBody } from '../../../generated/api/zod.gen'
-import { type WorkspaceRecord, type AssetRecord, type DatasetRecord, isMemberRecord, isAssetRecord, isDatasetRecord, isProjectAssetReference, isProjectDatasetReference, isEquipmentRecord, isSetupRecord, isProjectRecord, assetRecord, datasetRecord, recordEntity, recordIssue, recordVersion } from './recordTypes'
+import { type WorkspaceRecord, type AssetRecord, type DatasetRecord, isMemberRecord, isAssetRecord, isDatasetRecord, isProjectAssetReference, isProjectDatasetReference, isEquipmentRecord, isSetupRecord, isProjectRecord, assetRecord, datasetRecord, recordEntity, recordIssue } from './recordTypes'
 import { uiT } from '../../../core/i18n'
 import { managementSelectionEntry, managementArchiveItems, equipmentDeletionItems, type ManagementSelectionEntry, type ManagementArchiveConfirmation } from '../trash/selection'
-import type { ProjectOut, DatasetOut, ServiceCapabilities } from '../../../generated/api/types.gen'
+import type { ProjectOut, ServiceCapabilities } from '../../../generated/api/types.gen'
 import { useThumbnailUrls } from '../media/useThumbnailUrls'
 import { equipmentKinds, equipmentKindLabels, equipmentSubtitle } from '../equipment/fields'
 
@@ -24,7 +24,7 @@ import { ApiClientError } from '../api/client'
 import { useEquipmentChoices } from '../equipment/queries'
 import { useEquipmentManagementView } from '../equipment/useEquipmentManagementView'
 import { useDatasetMembersView } from '../datasets/useDatasetMembersView'
-import { assetApi, datasetApi } from '../api/index'
+import { assetApi } from '../api/index'
 import { libraryError as presentError, libraryErrorText as errorText } from '../library/errors'
 import { useLibraryView, type LibraryFilters } from '../library/useLibraryView'
 import { useRecordSearch } from './useRecordSearch'
@@ -43,7 +43,7 @@ import EquipmentDeleteDialog, { type EquipmentDeleteItem } from '../equipment/Eq
 import LocalImportPicker from '../imports/LocalImportPicker.vue'
 import ImportIssueDialog from '../imports/ImportIssueDialog.vue'
 import type { ImportNotice } from './libraryControls'
-import { resolveMaterialRecord, fixedAssetPreview, fixedAssetContent, materialCanvasSource, materialPreviewBase, materialThumbnailKey, type MaterialRecord } from '../library/materialRecords'
+import { resolveMaterialRecord, assetPreview, assetContent, materialCanvasSource, materialPreviewBase, materialThumbnailKey, type MaterialRecord } from '../library/materialRecords'
 import type { CanvasDataRequest } from '../api/canvas'
 import LibraryPage from '../library/LibraryPage.vue'
 import WorkspaceRecords from '../library/WorkspaceRecords.vue'
@@ -52,7 +52,10 @@ import type { DatasetReferenceRow } from '../datasets/DatasetReferenceTable.vue'
 import { zEquipmentPage, zEquipmentSetupPage, zProjectPage } from '../../../generated/api/zod.gen'
 import SettingsPage, { type SettingsProjectMode, type SettingsRecordDetails } from '../library/SettingsPage.vue'
 import AssetDetails from '../assets/AssetDetails.vue'
+import LibraryLocationPanel from '../library/LibraryLocationPanel.vue'
 import DatasetDetails from '../datasets/DatasetDetails.vue'
+import CalibrationBindingsEditor from '../datasets/CalibrationBindingsEditor.vue'
+import DatasetSubframeEditor from '../datasets/DatasetSubframeEditor.vue'
 import type { AssetDetailField, AssetDetailBindings } from '../assets/detailTypes'
 import { zAssetOut, zDatasetOut } from '../../../generated/api/zod.gen'
 import RecordEditorForm from './RecordEditorForm.vue'
@@ -78,7 +81,6 @@ import './equipmentCompact.css'
 type EditorType = 'project' | 'equipment'
 type WorkspaceArea = 'library' | 'settings'
 type SetupSortField = 'created_at' | 'name' | 'camera' | 'telescope' | 'mount' | 'filter'
-
 type ToolbarPopup = 'import' | 'library-filter' | 'project-filter' | 'equipment-category' | 'library-more' | 'equipment-more' | 'toolbar-search' | 'toolbar-view'
 
 const connectionReady = useQueryAvailability()
@@ -106,6 +108,14 @@ const recordPageSize = computed(() => isEquipmentManagement.value ? 50 : store.p
 const setupManager = ref<InstanceType<typeof EquipmentSetupManager>>()
 const setupViewKey = computed(() => JSON.stringify([importWorkspace.value, store.section, store.query, store.offset, statusFilter.value, setupSort.value]))
 const selectedEquipmentSetup = computed(() => isEquipmentManagement.value && store.section === 'equipment-setups' && selected.value ? equipmentSetupSchema.parse(selected.value) : undefined)
+function openEquipmentSetup(setup: EquipmentSetup | null) {
+  closeToolbarPopup()
+  setupManager.value?.beginSetup(setup)
+}
+function editSelectedSetup(id: string) {
+  const setup = selectedEquipmentSetup.value
+  if (setup?.id === id) openEquipmentSetup(setup)
+}
 async function setupSaved(setup: EquipmentSetup, viewKey: string) {
   if (setupViewKey.value !== viewKey) return
   await nextTick()
@@ -231,9 +241,15 @@ async function projectDetailsAction(action: ProjectDetailsAction, projectId: str
   if (!row || row.id !== projectId || !projectDetails.value) return
   switch (action) {
     case 'assets': return openProjectAssets()
+    case 'masters': return openProjectAssets(true)
+    case 'add-master': return openAvailableAssets(true)
     case 'datasets': return openProjectDatasets()
     case 'add-asset': return openAvailableAssets()
     case 'add-dataset': return openAvailableDatasets()
+    case 'import-dataset':
+      await openAvailableDatasets()
+      if (addingProjectDatasets.value) startImport('folder', true)
+      return
     case 'edit': return editProject(row)
     case 'archive': return requestManagementArchive(projectDetails.value.project)
     case 'restore': return restoreProject(projectDetails.value.project)
@@ -244,17 +260,13 @@ function cancelProjectField(field: 'name' | 'target_name' | 'notes', projectId: 
 }
 const settingsProjectMode = computed<SettingsProjectMode | undefined>(() => store.section === 'projects'
   ? viewingProjectAssets.value ? 'asset-references' : viewingProjectDatasets.value ? 'dataset-references' : 'projects' : undefined)
-const choosingProjectVersion = computed(() => addingProjectAssets.value || addingProjectDatasets.value)
+const choosingProjectReference = computed(() => addingProjectAssets.value || addingProjectDatasets.value)
 const settingsRecordDetails = computed<SettingsRecordDetails | undefined>(() => {
   const row = selected.value
   if (!row || activeArea.value === 'library' || isEquipmentManagement.value) return undefined
   const asset = rowAsset(row)
   return { recordId: row.id, title: itemTitle(row), subtitle: itemSubtitle(row),
-    content: asset ? { assetId: asset.id, hasVersion: Boolean(asset.current_version_id) } : undefined,
-    version: settingsProjectMode.value && settingsProjectMode.value !== 'projects' ? {
-      number: recordVersion(row)?.number ?? '—',
-      id: recordVersion(row)?.id ?? ''
-    } : undefined }
+    content: asset ? { assetId: asset.id, hasOriginal: Boolean(asset.storage_location) } : undefined }
 })
 const assetDetails = computed(() => {
   const row = selected.value
@@ -262,6 +274,7 @@ const assetDetails = computed(() => {
   const asset = zAssetOut.parse(rowAsset(row))
   const save = (field: AssetDetailField) => (value: string | number | null) => saveRowField(row, field, value)
   const bindings: AssetDetailBindings = {
+    calibration_status: save('calibration_status'), calibration_reason: save('calibration_reason'),
     name: save('name'), frame_class: save('frame_class'), frame_type: save('frame_type'),
     camera_id: save('camera_id'), optical_system_id: save('optical_system_id'), filter_id: save('filter_id'),
     exposure_seconds: save('exposure_seconds'), integration_seconds: save('integration_seconds'), sensor_temperature_c: save('sensor_temperature_c'),
@@ -278,6 +291,10 @@ const assetDetails = computed(() => {
     temperatureDisplay: asset.parameters.sensor_temperature_c == null ? uiT('apfUi.not_specified') : displayTemperature(asset.parameters.sensor_temperature_c) + ' °C'
   }
 })
+const selectedProjectDataset = computed(() => {
+  const row = selected.value
+  return row && isProjectDatasetReference(row) ? row.dataset_id : undefined
+})
 const datasetDetails = computed(() => {
   const row = selected.value
   if (!row || !settingsRecordDetails.value || !isDatasetRecord(row)) return undefined
@@ -291,7 +308,7 @@ function cancelRecordField(field: string, recordId: string) {
 }
 
 function projectReferenceAction(recordId: string, mode: 'asset-references' | 'dataset-references', choosing: boolean) {
-  if (projectReferences.pending.value || settingsRecordDetails.value?.recordId !== recordId || settingsProjectMode.value !== mode || choosingProjectVersion.value !== choosing) return
+  if (projectReferences.pending.value || settingsRecordDetails.value?.recordId !== recordId || settingsProjectMode.value !== mode || choosingProjectReference.value !== choosing) return
   if (mode === 'asset-references') return choosing ? addSelectedAsset() : removeSelectedAssetReference()
   return choosing ? addSelectedDataset() : removeSelectedDatasetReference()
 }
@@ -299,8 +316,7 @@ const selectedAssetDetails = computed(() => {
   const row = selected.value
   if (!row || !isAssetRecord(row)) return undefined
   const asset=assetRecord(row)
-  const versionId = recordVersion(row)?.id ?? undefined
-  return {id:asset?.id??row.id,title:itemTitle(row),hasVersion:Boolean(versionId),versionId}
+  return {id:asset?.id??row.id,title:itemTitle(row),hasOriginal:true}
 })
 const total = computed(() => {
   if (isDatasetMembersView.value) return memberRequest.value ? membersQuery.data.value?.total ?? 0 : 0
@@ -336,7 +352,7 @@ const projectTargetFilterDraft = ref('')
 const projectReferences = useProjectReferenceActions({
   workspaceId: () => importWorkspace.value, projectId: toRef(store, 'activeProjectId'),
   revision: toRef(store, 'activeProjectRevision'), selected, mode: settingsProjectMode,
-  choosing: choosingProjectVersion, error,
+  choosing: choosingProjectReference, error,
   onAdded: kind => { if (kind === 'asset') addingProjectAssets.value = false; else addingProjectDatasets.value = false }
 })
 const { addSelectedAsset, removeSelectedAssetReference, addSelectedDataset, removeSelectedDatasetReference } = projectReferences
@@ -354,7 +370,6 @@ function writeViewKey(){
 const managementFilterCount = computed(()=>Number(Boolean(projectTargetFilter.value)))
 const setupDirty = ref(false)
 const setupSaving = ref(false)
-const calibrationDirty = ref(false)
 const libraryCategory = ref<'all'|'light'|'calibration'>('all')
 const roleFilter = ref('')
 const frameTypeFilter = ref('')
@@ -365,6 +380,7 @@ const activeFilterCount = computed(() => Object.values(activeFilters.value).filt
   Array.isArray(value) ? value.length > 0 : value !== ''
 ).length)
 const viewingProjectAssets = ref(false)
+const projectMasters = ref(false)
 const viewingProjectDatasets = ref(false)
 const addingProjectAssets = ref(false)
 const addingProjectDatasets = ref(false)
@@ -416,13 +432,13 @@ const managementChangeToken = ref(0)
 const datasetView = useDatasetView({
   workspaceId: () => importWorkspace.value, paused: () => savingInline.value > 0 || Boolean(inlineSaveFailure.value),
   navigation: store, sort: librarySort, mode: libraryViewMode, filterOpen: filterPanelOpen,
-  records: rows, libraryActive: () => isLibraryItemsView.value, dirty: () => dirty.value, calibrationDirty, waitForInlineSave, error
+  records: rows, libraryActive: () => isLibraryItemsView.value, dirty: () => dirty.value, waitForInlineSave, error
 })
-const { activeDataset, restoringOuterLibraryState, openDataset, closeDataset, leaveDatasetContext, calibrationUpdated } = datasetView
+const { activeDataset, restoringOuterLibraryState, openDataset, closeDataset, leaveDatasetContext } = datasetView
 function thumbnailKey(record: MaterialRecord) {
   const group = activeDataset.value
   return 'member_position' in record && group
-    ? `${group.id}:${group.current_version_id}:${materialThumbnailKey(record)}`
+    ? `${group.id}:${materialThumbnailKey(record)}`
     : materialThumbnailKey(record)
 }
 const { urls: previewUrls, load: loadThumbnailRecords, loadMissing: loadMissingThumbnails, prioritize: prioritizeThumbnails, refresh: refreshThumbnailRecord, clear: clearThumbnails, cancel: cancelThumbnails } = useThumbnailUrls<MaterialRecord>(thumbnailKey, readThumbnail)
@@ -461,11 +477,10 @@ function filterEquipmentKind(value: string | number | null | undefined) {
   equipmentKindFilter.value = String(value ?? '')
 }
 async function refreshEquipment() {
-  closeToolbarPopup()
   await loadRelatedEquipment(true)
   await refreshRecords()
 }
-const dirty = computed(() => setupDirty.value || calibrationDirty.value || recordEditorOwner.dirty.value)
+const dirty = computed(() => setupDirty.value || recordEditorOwner.dirty.value)
 const equipmentCategoryOptions = computed(() => [
   { value: '', name: uiT('apfUi.all_equipment') },
   ...equipmentKinds.map(kind => ({ value: kind, name: equipmentKindLabels[kind] }))
@@ -548,18 +563,18 @@ const areaTitles: Record<WorkspaceArea, string> = {
   get library() { return uiT('apfUi.library') },
   get settings() { return uiT('apfUi.equipment_manager') }
 }
-const search = useRecordSearch(()=>store.query,()=>JSON.stringify([activeArea.value,store.section,activeDataset.value?.id,activeDataset.value?.current_version_id,
-  store.activeProjectId,viewingProjectAssets.value,viewingProjectDatasets.value,addingProjectAssets.value,addingProjectDatasets.value,
+const search = useRecordSearch(()=>store.query,()=>JSON.stringify([activeArea.value,store.section,activeDataset.value?.id,
+  store.activeProjectId,viewingProjectAssets.value,projectMasters.value,viewingProjectDatasets.value,addingProjectAssets.value,addingProjectDatasets.value,
   store.offset,store.pageSize,statusFilter.value,roleFilter.value,frameTypeFilter.value,equipmentKindFilter.value,projectTargetFilter.value,
   libraryCategory.value,activeFilters.value,librarySort.value,setupSort.value]))
 const listInput = () => ({workspaceId:importWorkspace.value,pageSize:recordPageSize.value,offset:store.offset,search:search.query.value})
 const editorReadPaused = () => dirty.value || savingInline.value>0 || Boolean(inlineSaveFailure.value) || removalBlocksCurrentView.value
 const {request:projectRequest,query:projectQuery} = useProjectRecordsView(()=>({...listInput(),active:isProjectRecordsView.value,
   kind:viewingProjectAssets.value?'assets':viewingProjectDatasets.value?'datasets':'projects',projectId:store.activeProjectId,
-  status:statusFilter.value,targetName:projectTargetFilter.value,role:roleFilter.value,frameType:frameTypeFilter.value}),
+  status:statusFilter.value,targetName:projectTargetFilter.value,role:projectMasters.value ? "" : roleFilter.value,frameType:frameTypeFilter.value,masters:projectMasters.value}),
   ()=>!isProjectRecordsView.value||editorReadPaused())
 const {request:selectionRequest,query:selectionQuery} = useMaterialSelectionView(()=>({...listInput(),active:isSelectionRecordsView.value,
-  kind:addingProjectDatasets.value?'datasets':'assets',status:statusFilter.value,role:store.section==='calibration'?'calibration':roleFilter.value,frameType:frameTypeFilter.value}),
+  kind:addingProjectDatasets.value?'datasets':'assets',status:statusFilter.value,role:projectMasters.value ? '' : store.section==='calibration'?'calibration':roleFilter.value,frameType:frameTypeFilter.value,masters:addingProjectAssets.value && projectMasters.value}),
   ()=>!isSelectionRecordsView.value||editorReadPaused())
 watch([projectQuery.data, projectQuery.fetchStatus], ([page, status]) => {
   if (!page || status !== 'idle' || projectQuery.isError.value || !isProjectRecordsView.value) return
@@ -593,7 +608,7 @@ watch([libraryQuery.data, libraryQuery.fetchStatus], ([page, status]) => {
   void loadThumbnails(rows.value)
 })
 const {request:memberRequest,query:membersQuery} = useDatasetMembersView(()=>({...listInput(),active:isDatasetMembersView.value,
-  dataset:activeDataset.value?{id:activeDataset.value.id,versionId:activeDataset.value.current_version_id}:undefined,sort:librarySort.value}),
+  dataset:activeDataset.value?{id:activeDataset.value.id}:undefined,sort:librarySort.value}),
   ()=>!isDatasetMembersView.value||libraryReadPaused())
 watch([membersQuery.data, membersQuery.fetchStatus], ([page, status]) => {
   if (!page || status !== 'idle' || membersQuery.isError.value || !isDatasetMembersView.value) return
@@ -645,24 +660,24 @@ async function refreshRecords() {
 async function readThumbnail(record: MaterialRecord, signal: AbortSignal): Promise<Blob | undefined> {
   if ('thumbnail_status' in record && (record.thumbnail_status === 'failed' || record.thumbnail_status === 'unsupported')) return
   if ('member_position' in record && 'dataset_id' in record) {
-    return assetApi.getBlob(`/astrophotoflow/api/v1/datasets/${record.dataset_id}/versions/${record.dataset_version_id}/members/${record.version_id}/thumbnail`, signal)
+    return assetApi.getBlob(`/astrophotoflow/api/v1/datasets/${record.dataset_id}/members/${record.id}/thumbnail`, signal)
   }
   let base: string
-  if ('version_id' in record) {
+  if ('entry_type' in record) {
     const thumbnail=record.thumbnail
     if (record.entry_type === 'dataset') {
-      if (!thumbnail || !record.version_id) return
-      return assetApi.getBlob(`/astrophotoflow/api/v1/datasets/${record.id}/versions/${record.version_id}/members/${thumbnail.asset_version_id}/thumbnail`, signal)
+      if (!thumbnail) return
+      return assetApi.getBlob(`/astrophotoflow/api/v1/datasets/${record.id}/members/${thumbnail.asset_id}/thumbnail`, signal)
     }
     if (!record.view_base) return
     base=record.view_base
   } else if ('summary' in record) return
   else {
-    const member=fixedAssetPreview(record)
+    const member=assetPreview(record)
     if (!member) return
     if ('member_position' in record && activeDataset.value) {
       const group=activeDataset.value
-      return assetApi.getBlob(`/astrophotoflow/api/v1/datasets/${group.id}/versions/${group.current_version_id}/members/${member.version.id}/thumbnail`, signal)
+      return assetApi.getBlob(`/astrophotoflow/api/v1/datasets/${group.id}/members/${member.id}/thumbnail`, signal)
     }
     base=materialPreviewBase(record,member)
   }
@@ -670,15 +685,15 @@ async function readThumbnail(record: MaterialRecord, signal: AbortSignal): Promi
 }
 async function refreshPhotoThumbnails(photo: PreviewPhoto) {
   const aliases=rows.value.flatMap(value=>{const record=resolveMaterialRecord(value);return record?[record]:[]}).filter(record=>{
-    if('version_id' in record)return record.thumbnail?.asset_id===photo.assetId&&record.thumbnail.asset_version_id===photo.versionId
-    const fixed=fixedAssetPreview(record)
-    return fixed?.asset.id===photo.assetId&&fixed.version.id===photo.versionId
+    if('entry_type' in record)return record.thumbnail?.asset_id===photo.assetId
+    const fixed=assetPreview(record)
+    return fixed?.id===photo.assetId
   })
   try {if(aliases[0])await refreshThumbnailRecord(aliases[0],aliases)}
   catch(cause){error.value=presentError(cause)}
 }
 watch(() => JSON.stringify([
-  activeArea.value, store.section, libraryCategory.value, activeDataset.value?.id, activeDataset.value?.current_version_id,
+  activeArea.value, store.section, libraryCategory.value, activeDataset.value?.id,
   store.activeProjectId, viewingProjectAssets.value, viewingProjectDatasets.value, addingProjectAssets.value, addingProjectDatasets.value,
   store.query, store.offset, store.pageSize, librarySort.value, libraryViewMode.value, activeFilters.value, selected.value?.id
 ]), closePhotoPreview, {flush:'sync'})
@@ -761,11 +776,11 @@ async function selectSection(section: WorkspaceSection) {
   closeToolbarPopup()
   leaveDatasetContext()
   recordEditorOwner.close()
+  projectMasters.value = false
   viewingProjectAssets.value = false
   viewingProjectDatasets.value = false
   addingProjectAssets.value = false
   addingProjectDatasets.value = false
-  managementFilterOpen.value=false
   managementSelectMode.value=false
   managementSelection.value=new Map()
   equipmentKindFilter.value='';projectTargetFilter.value=''
@@ -794,13 +809,12 @@ async function selectArea(area: WorkspaceArea, managementSection: WorkspaceSecti
   closeToolbarPopup()
   leaveDatasetContext()
   recordEditorOwner.close()
+  projectMasters.value = false
   viewingProjectAssets.value = false
   viewingProjectDatasets.value = false
   addingProjectAssets.value = false
   addingProjectDatasets.value = false
   selected.value = undefined
-  filterPanelOpen.value = false
-  managementFilterOpen.value=false
   managementSelectMode.value=false
   managementSelection.value=new Map()
   store.query = ''
@@ -826,8 +840,10 @@ async function selectArea(area: WorkspaceArea, managementSection: WorkspaceSecti
 }
 
 async function leavePage() {
+  if (dirty.value) return selectArea(activeArea.value, store.section)
+  if (!await waitForInlineSave()) return false
   closeToolbarPopup()
-  return dirty.value ? selectArea(activeArea.value, store.section) : waitForInlineSave()
+  return true
 }
 
 defineExpose({ selectArea, activeArea, leavePage, showImportIssue })
@@ -849,10 +865,10 @@ function materialReadiness(value: unknown) {
     if (!row.input_ready) return issue ? uiT('apfUi.original_error') : uiT('apfUi.importing_originals')
     return uiT('apfUi.original_ready')
   }
-  const version = fixedAssetContent(row)?.version
-  if (!version) return uiT('apfUi.no_original_yet')
-  if (version.availability === 'changed' || version.availability === 'missing') return uiT('apfUi.original_error')
-  if (version.availability !== 'available') return issue ? uiT('apfUi.original_error') : uiT('apfUi.importing_originals')
+  const original = assetContent(row)
+  if (!original) return uiT('apfUi.no_original_yet')
+  if (original.availability === 'changed' || original.availability === 'missing') return uiT('apfUi.original_error')
+  if (original.availability !== 'available') return issue ? uiT('apfUi.original_error') : uiT('apfUi.importing_originals')
   return uiT('apfUi.original_ready')
 }
 function refreshLibrary() {
@@ -862,15 +878,6 @@ function refreshLibrary() {
   importFlow.refresh()
   void refreshRecords()
 }
-
-async function calibrationCreated(dataset: DatasetOut) {
-  await nextTick()
-  if (activeArea.value !== 'library' || libraryCategory.value !== 'calibration' || activeDataset.value || calibrationDirty.value) return
-  const row = rows.value.find(item => item.id === dataset.id)
-  if (row) await openDataset(row)
-}
-
-
 
 function setQuery(event: Event) {
   store.setQuery((event.target as HTMLInputElement).value)
@@ -913,7 +920,6 @@ async function enterBulkSelectMode(){
   selection.enterSelection()
   bulkDeleteNotice.value=''
   error.value=undefined
-  filterPanelOpen.value=false
 }
 function leaveBulkSelectMode(){
   selection.leaveSelection()
@@ -945,9 +951,10 @@ async function selectRow(row: WorkspaceRecord) {
 
 
 
-async function openProjectAssets() {
+async function openProjectAssets(masters = false) {
   if(!await waitForInlineSave())return
   if (!store.activeProjectId) return
+  projectMasters.value = masters
   viewingProjectAssets.value = true
   viewingProjectDatasets.value = false
   addingProjectAssets.value = false
@@ -959,6 +966,7 @@ async function openProjectAssets() {
 async function openProjectDatasets() {
   if(!await waitForInlineSave())return
   if (!store.activeProjectId) return
+  projectMasters.value = false
   viewingProjectAssets.value = false
   viewingProjectDatasets.value = true
   addingProjectAssets.value = false
@@ -967,8 +975,9 @@ async function openProjectDatasets() {
   selected.value = undefined
 }
 
-async function openAvailableAssets() {
+async function openAvailableAssets(masters = false) {
   if(!await waitForInlineSave())return
+  projectMasters.value = masters
   viewingProjectAssets.value = true
   addingProjectAssets.value = true
   addingProjectDatasets.value = false
@@ -979,7 +988,7 @@ async function openAvailableAssets() {
 async function toggleProjectAssetMode(){
   if(!await waitForInlineSave())return
   if(addingProjectAssets.value)addingProjectAssets.value=false
-  else await openAvailableAssets()
+  else await openAvailableAssets(projectMasters.value)
 }
 
 async function openAvailableDatasets() {
@@ -999,6 +1008,7 @@ async function toggleProjectDatasetMode(){
 
 async function leaveProjectAssets() {
   if(!await waitForInlineSave())return
+  projectMasters.value = false
   viewingProjectAssets.value = false
   viewingProjectDatasets.value = false
   bulkSelectMode.value=false
@@ -1057,8 +1067,7 @@ const itemTitle = (row: WorkspaceRecord) => recordEntity(row).name ?? uiT('apfUi
 const itemSubtitle = (row: WorkspaceRecord) => {
   if (isProjectRecord(row)) return row.target_name || ''
   if (isDatasetRecord(row)) return datasetClassification(row) + ' · ' + (isDatasetRecord(row)?datasetRecord(row).member_count:0) + uiT('apfUi.members')
-  if ('version' in row) return uiT('apfUi.fixed_version_f7e42b') + frameTypeLabel(rowClassification(row).frame_type)
-  if ('current_version' in row && row.current_version) return frameTypeLabel(rowClassification(row).frame_type)
+  if (isAssetRecord(row)) return frameTypeLabel(rowClassification(row).frame_type)
   if (isEquipmentRecord(row)) {
     return equipmentSubtitle({kind:row.kind,name:row.name,model:row.model})
   }
@@ -1071,7 +1080,7 @@ const rowAsset = assetRecord
 function materialEquipmentValue(row: WorkspaceRecord, key: 'camera_id' | 'optical_system_id' | 'filter_id', fixed = false): string | undefined {
   if (hasSummary(row)) return summaryEquipment(row, key)
   const material=resolveMaterialRecord(row)
-  const snapshot = fixed || isProjectAssetReference(row) ? material&&fixedAssetContent(material)?.version.capture_snapshot?.equipment_snapshot : rowAsset(row)?.equipment_snapshot
+  const snapshot = fixed || isProjectAssetReference(row) ? material&&assetContent(material)?.capture_snapshot?.equipment_snapshot : rowAsset(row)?.equipment_snapshot
   return snapshot?.[key]?.name
 }
 function materialEquipmentName(row:WorkspaceRecord,key:'camera_id'|'optical_system_id'|'filter_id') {
@@ -1121,11 +1130,10 @@ const libraryRows = computed(() => isAssetTable.value ? rows.value
   }), thumbnailUrl: () => thumbnailUrl(row), prioritizeThumbnail: () => {
     const record = resolveMaterialRecord(row)
     if (record) prioritizeThumbnails([record])
-  }, calibration: rowCalibration(row, {workspaceId:importWorkspace.value,dataset:activeDataset.value,
+  }, calibration: rowCalibration(row, {workspaceId:importWorkspace.value,
     cancel:clearInlineSaveFailure,
     runSave:async(key,operation)=>{inlineState.beginInlineSave();try{await operation();clearInlineSaveFailure(key)}catch(cause){inlineState.setInlineSaveFailure(key,errorText(presentError(cause)));throw cause}finally{inlineState.finishInlineSave()}},
-    saved:async(datasetId)=>{if(datasetId)await calibrationUpdated(await datasetApi.get(datasetId));await invalidateLibraryData(calibrationCache,importWorkspace.value,
-      datasetId?{datasetIds:[datasetId]}:{assetIds:[recordEntity(row).id]})}
+    saved:async()=>{await invalidateLibraryData(calibrationCache,importWorkspace.value,{assetIds:[recordEntity(row).id]})}
   })})) : [])
 function libraryClick(key:string,event:MouseEvent) { const row=rows.value.find(item=>libraryRowKey(item)===key); if(row)return onLibraryRowClick(row,event) }
 function libraryPreview(key:string) { const row=rows.value.find(item=>libraryRowKey(item)===key); if(row)return openPhotoPreview(row) }
@@ -1147,7 +1155,7 @@ const datasetReferenceRows = computed<DatasetReferenceRow[]>(() => isDatasetTabl
     temperature:datasetFieldDisplay(row,'sensor_temperature_c',value=>captureValue(value)+' °C'),
     opticalSystem:materialEquipmentName(row,'optical_system_id'),filter:materialEquipmentName(row,'filter_id'),
     storage:datasetFieldDisplay(row,'storage_mode',displayLabel),status:displayLabel(entity.status),notes:entity.notes??'—',
-    datasetId:entity.id,versionId:recordVersion(row)?.id??null,memberCount:row.member_count }
+    datasetId:entity.id,memberCount:row.member_count }
 }) : [])
 const equipmentRows = computed(() => store.section === 'equipment' ? zEquipmentPage.shape.items.parse(rows.value) : [])
 const selectedEquipmentIds = computed(() => new Set([...managementSelection.value.values()]
@@ -1182,7 +1190,7 @@ return computed<RecordsPresentation>(() => {
       equipment:relatedEquipment.value, equipmentReady:relatedEquipmentReady.value, equipmentLoading:relatedEquipmentLoading.value, equipmentError:relatedEquipmentError.value,
       sort:setupSort.value, blocked:managementFilterBlocked.value, selectMode:managementSelectMode.value, selectedIds:selectedSetupIds.value,
       allSelected:managementPageAllSelected.value, partiallySelected:managementPagePartiallySelected.value,
-      onSort:toggleSetupSort, onSelect:selectRecord, 'onToggle-row':toggleRecordSelection, 'onToggle-page':toggleManagementPage, 'onRetry-equipment':()=>loadRelatedEquipment(true) } }
+      onSort:toggleSetupSort, onSelect:selectRecord, onEdit:editSelectedSetup, 'onToggle-row':toggleRecordSelection, 'onToggle-page':toggleManagementPage, 'onRetry-equipment':()=>loadRelatedEquipment(true) } }
   } else if ((rows.value.length||activeArea.value==='library')&&isAssetTable.value) {
     body = { kind:'library', props:{ rows:libraryRows.value, library:activeArea.value==='library', viewMode:libraryViewMode.value,
       sortable:isLibraryTableView.value, sort:librarySort.value, selectMode:bulkSelectMode.value, selectionAllowed:isLibraryItemsView.value,
@@ -1260,7 +1268,7 @@ v-for="(title, area) in areaTitles" :key="area" type="button"
               <button v-if="activeDataset" type="button" @click="closeDataset">{{ $t('apfUi.back_to_library') }}</button>
               <button v-else-if="viewingProjectAssets || viewingProjectDatasets" type="button" @click="leaveProjectAssets">{{ $t('apfUi.back_to_project') }}</button>
               <LibraryButton v-else-if="props.native && activeArea === 'settings' && store.section !== 'projects'" type="button" class="apf-equipment-back" :aria-label="$t('apfUi.back_to_library_8979db')" :tooltip="$t('apfUi.back_to_library_8979db')" @click="emit('back-to-library')"><i class="pi pi-arrow-left" aria-hidden="true"></i></LibraryButton>
-              <h1 v-if="!props.sidebar || activeDataset || activeArea !== 'library'">{{ activeDataset ? $t('apfUi.library_968e00')+activeDataset.name : activeArea === 'library' ? $t('apfUi.library') : (viewingProjectAssets ? $t('apfUi.project_assets') : viewingProjectDatasets ? $t('apfUi.project_image_groups') : store.section === 'projects' ? $t('apfUi.project') : $t('apfUi.equipment_manager')) }}</h1>
+              <h1 v-if="!props.sidebar || activeDataset || activeArea !== 'library'">{{ activeDataset ? $t('apfUi.library_968e00')+activeDataset.name : activeArea === 'library' ? $t('apfUi.library') : (viewingProjectAssets ? $t(projectMasters ? 'apfUi.project_masterframes' : 'apfUi.project_assets') : viewingProjectDatasets ? $t('apfUi.project_subframe_datasets') : store.section === 'projects' ? $t('apfUi.project') : $t('apfUi.equipment_manager')) }}</h1>
               <span v-if="activeDataset" class="apf-state">{{ $t('apfUi.image_group_photos_value', { p0: (activeDataset.member_count??0) }) }}</span>
             </div>
           <div ref="toolbar" class="apf-toolbar" :class="{
@@ -1333,7 +1341,7 @@ v-if="activeArea !== 'settings' && (store.section === 'projects' || store.sectio
                 </LibraryButton>
                 <LibraryButton type="button" :disabled="managementArchiveBusy" @click="leaveManagementSelectMode">{{ $t('apfUi.done') }}</LibraryButton>
               </template>
-              <LibraryButton v-else-if="statusFilter!=='archived'" type="button" variant="primary" :class="{ 'apf-toolbar-icon': foldViewTabs }" :aria-label="newEquipmentLabel" :tooltip="foldViewTabs ? newEquipmentLabel : undefined" :disabled="managementFilterBlocked||loading" @click="store.section==='equipment-setups'?setupManager?.beginSetup(null):openCreate('equipment')">
+              <LibraryButton v-else-if="statusFilter!=='archived'" type="button" variant="primary" :class="{ 'apf-toolbar-icon': foldViewTabs }" :aria-label="newEquipmentLabel" :tooltip="foldViewTabs ? newEquipmentLabel : undefined" :disabled="managementFilterBlocked||loading" @click="store.section==='equipment-setups'?openEquipmentSetup(null):openCreate('equipment')">
                 <i class="pi pi-plus" aria-hidden="true"></i><span v-if="!foldViewTabs">{{ newEquipmentLabel }}</span>
               </LibraryButton>
               <LibraryMenu v-model:open="equipmentMenuOpen" data-apf-popup="equipment-more" :class="{ 'apf-toolbar-active': foldSecondaryActions && store.section==='equipment' && equipmentKindFilter }" :aria-description="foldSecondaryActions && store.section==='equipment' ? equipmentCategoryOptions.find(option => option.value === equipmentKindFilter && equipmentKindFilter)?.name : undefined" :items="equipmentMenuItems" @close-auto-focus="preserveToolbarFocus('equipment-more', $event)" />
@@ -1352,34 +1360,44 @@ v-if="activeArea !== 'settings' && (store.section === 'projects' || store.sectio
             <button v-if="store.section==='projects' && viewingProjectDatasets" type="button" @click="toggleProjectDatasetMode">{{addingProjectDatasets?$t('apfUi.view_selected_image_group'):$t('apfUi.add_image_group')}}</button>
           </div>
         <LibraryPage
-v-if="activeArea === 'library'" :workspace="importWorkspace" :records-loading="loading" :filters="activeFilters"
+v-if="activeArea === 'library'" :workspace="importWorkspace" :filters="activeFilters"
           :filter-open="filterPanelOpen && isLibraryItemsView" :filter-anchor="filterButton"
-          :calibration-library="libraryCategory === 'calibration' && !activeDataset" :dataset-id="activeDataset?.id" :dataset-version-id="activeDataset?.current_version_id" :dataset-name="activeDataset?.name" :selected-asset="selectedAssetDetails"
-          @apply-filters="applyFilters" @close-filters="filterPanelOpen=false"
-          @calibration-updated="calibrationUpdated" @calibration-dirty="calibrationDirty=$event" @calibration-created="calibrationCreated">
+          :selected-asset="selectedAssetDetails"
+          @apply-filters="applyFilters" @close-filters="filterPanelOpen=false">
           <template #records><RecordsPanel /></template>
         </LibraryPage>
         <EquipmentSetupManager
 v-else-if="store.section==='equipment-setups'" ref="setupManager"
-          :workspace="importWorkspace" :selected-setup="selectedEquipmentSetup" :records-loading="loading" :view-key="setupViewKey" :change-token="managementChangeToken"
+          :workspace="importWorkspace" :selected-setup="selectedEquipmentSetup" :view-key="setupViewKey" :change-token="managementChangeToken"
           @dirty="setupDirty=$event" @saving="setupSaving=$event" @saved="setupSaved" @delete="requestEquipmentDeleteSelection">
           <template #records><RecordsPanel /></template>
         </EquipmentSetupManager>
         <SettingsPage
-v-else :workspace-id="importWorkspace" :reference-busy="projectReferences.pending.value" :project-mode="settingsProjectMode" :choosing="choosingProjectVersion" :details="settingsRecordDetails"
+v-else :workspace-id="importWorkspace" :reference-busy="projectReferences.pending.value" :project-mode="settingsProjectMode" :choosing="choosingProjectReference" :details="settingsRecordDetails"
           @reference-action="projectReferenceAction">
           <template #records><RecordsPanel /></template>
           <template #asset-details>
             <AssetDetails v-if="assetDetails" :key="assetDetails.recordId" v-bind="assetDetails" @cancel-field="cancelRecordField" />
+            <LibraryLocationPanel v-if="assetDetails" :key="importWorkspace + ':' + assetDetails.asset.id" :workspace-id="importWorkspace" entry-type="asset" :entry-id="assetDetails.asset.id" :revision="assetDetails.asset.revision" />
           </template>
           <template #dataset-details>
             <DatasetDetails v-if="datasetDetails" :key="datasetDetails.recordId" v-bind="datasetDetails" @cancel-field="cancelRecordField" />
+            <LibraryLocationPanel v-if="datasetDetails" :key="importWorkspace + ':' + datasetDetails.dataset.id" :workspace-id="importWorkspace" entry-type="dataset" :entry-id="datasetDetails.dataset.id" :revision="datasetDetails.dataset.revision" />
+            <CalibrationBindingsEditor v-if="datasetDetails && selectedProjectDataset"
+              :key="datasetDetails.recordId" :workspace-id="importWorkspace" :dataset-id="datasetDetails.dataset.id"
+              @saving="$event ? inlineState.beginInlineSave() : inlineState.finishInlineSave()" />
+            <DatasetSubframeEditor v-if="datasetDetails && selectedProjectDataset"
+              :key="datasetDetails.recordId" :workspace-id="importWorkspace" :dataset-id="datasetDetails.dataset.id"
+              @saving="$event ? inlineState.beginInlineSave() : inlineState.finishInlineSave()" />
           </template>
           <template #project-details>
             <ProjectDetails
 v-if="projectDetails" :key="projectDetails.project.id" :project="projectDetails.project"
               :blocked="managementArchiveBusy||dirty||savingInline>0" :save-name="projectDetails.saveName" :save-target="projectDetails.saveTarget" :save-notes="projectDetails.saveNotes"
               @action="projectDetailsAction" @cancel-field="cancelProjectField" />
+            <DatasetSubframeEditor v-if="projectDetails" :key="importWorkspace + ':create:' + projectDetails.project.id"
+              :workspace-id="importWorkspace" :project-id="projectDetails.project.id" :project-revision="projectDetails.project.revision"
+              @saving="$event ? inlineState.beginInlineSave() : inlineState.finishInlineSave()" />
           </template>
           <template #editor>
         <RecordEditorForm
@@ -1412,7 +1430,7 @@ v-if="recordEditor" v-model="recordEditor" :saving="saving" :saving-inline="savi
       </div>
       <LocalImportPicker :open="!!localPickerMode" :mode="localPickerMode??'files'" @close="localPickerMode=undefined" @selected="localFilesSelected" />
       <ImportIssueDialog :workspace-id="importWorkspace" :issue="importIssue" @close="importIssue=undefined" @retried="importSubmitted" />
-      <ImportDialog :workspace-id="importWorkspace" :open="importDialogOpen" :files="importFiles" :create-dataset="importCreatesDataset" :dataset-name="importDatasetName" @close="importDialogOpen=false" @submitted="importSubmitted" />
+      <ImportDialog :project-id="store.section === 'projects' ? store.activeProjectId ?? undefined : undefined" :project-revision="store.section === 'projects' ? store.activeProjectRevision ?? undefined : undefined" :workspace-id="importWorkspace" :open="importDialogOpen" :files="importFiles" :create-dataset="importCreatesDataset" :dataset-name="importDatasetName" @close="importDialogOpen=false" @submitted="importSubmitted" />
   </section>
 </template>
 
@@ -1538,7 +1556,7 @@ v-if="recordEditor" v-model="recordEditor" :saving="saving" :saving-inline="savi
 .apf-classification-separator { margin:0 5px; color:var(--descrip-text,#999); font-size:.8em; opacity:.6; }
 .apf-details { flex:none; min-width:0; padding:10px; overflow:visible; border:1px solid var(--border-color,#4e4e4e); border-radius:8px; background:var(--comfy-menu-bg,#353535); }
 .apf-details pre { white-space:pre-wrap; overflow-wrap:anywhere; font-size:11px; }
-.apf-project-intro{flex:none;margin:0 10px}.apf-project-intro h2,.apf-project-intro p{margin:4px 0}.apf-binding-select{display:flex;min-width:0;align-items:center}.apf-binding-select select{min-width:0;max-width:100%;flex:1}
+.apf-project-intro{flex:none;margin:4px 10px}.apf-binding-select{display:flex;min-width:0;align-items:center}.apf-binding-select select{min-width:0;max-width:100%;flex:1}
 .apf-detail-fields { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:8px 12px; }
 .apf-detail-fields label { display:flex; min-width:0; flex-direction:column; gap:4px; color:var(--descrip-text,#999); font-size:12px; }
 .apf-profile-links { display:grid; grid-template-columns:1fr; gap:6px; border:1px solid var(--border-color,#555); border-radius:6px; padding:8px; }

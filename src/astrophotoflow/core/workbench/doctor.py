@@ -26,11 +26,11 @@ def _entry(name: str, status: str, detail: str) -> dict[str, str]:
 
 def _python_checks() -> list[dict[str, str]]:
     checks = [_entry("python", OK, f"{sys.version.split()[0]}（{sys.executable}）")]
-    base = Path(os.environ.get("ASTROPHOTOFLOW_DEV_PYTHON", sys._base_executable))
+    base = Path(sys._base_executable)
     if base.is_file():
         checks.append(_entry("python-base", OK, str(base)))
     else:
-        checks.append(_entry("python-base", FAIL, f"开发入口解释器不存在：{base}；请重新运行 scripts/bootstrap.ps1"))
+        checks.append(_entry("python-base", FAIL, f"当前环境的基础解释器不存在：{base}"))
     return checks
 
 
@@ -62,8 +62,8 @@ def _satisfies(version: tuple[int, ...], requirement: str) -> bool:
     return True
 
 
-def _pinned_tools() -> dict[str, str]:
-    package = paths.package_directory().parents[1] / "package.json"
+def _pinned_tools(checkout: Path) -> dict[str, str]:
+    package = checkout / "package.json"
     try:
         data = json.loads(package.read_text(encoding="utf-8"))
     except (OSError, ValueError):
@@ -79,7 +79,10 @@ def _pinned_tools() -> dict[str, str]:
 
 
 def _tool_checks() -> list[dict[str, str]]:
-    pinned = _pinned_tools()
+    checkout = paths.checkout_root()
+    if checkout is None:
+        return []
+    pinned = _pinned_tools(checkout)
     checks = []
     for name in ("uv", "node", "pnpm"):
         executable = shutil.which(name)
@@ -99,31 +102,18 @@ def _tool_checks() -> list[dict[str, str]]:
         parsed = _version_tuple(version)
         if requirement and parsed is not None and not _satisfies(parsed, requirement):
             checks.append(_entry(f"tool:{name}", WARN,
-                                 f"{version}（{executable}）；项目固定 {requirement}，请通过 scripts/bootstrap.ps1 准备"))
+                                 f"{version}（{executable}）；项目要求 {requirement}"))
             continue
         checks.append(_entry(f"tool:{name}", OK, f"{version}（{executable}）"))
     return checks
 
 
-def _runtime_directory() -> tuple[Path, bool]:
-    if os.environ.get("ASTROPHOTOFLOW_RUNTIME"):
-        return paths.runtime_dir(), False
-    default = paths.runtime_dir()
-    if default.is_dir():
-        return default, False
-    repo = paths.package_directory().parents[1]
-    dev = repo / ".artifacts/local-app-data/AstroPhotoFlow/runtime/native-web-0.1.0"
-    if dev.is_dir():
-        return dev, True
-    return default, False
-
-
 def _runtime_checks() -> list[dict[str, str]]:
-    directory, from_checkout = _runtime_directory()
+    directory = paths.runtime_dir()
     package = paths.package_directory()
     comfy_python = directory / "comfyui-env" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
     receipt = directory / ".apf-runtime.json"
-    where = f"{directory}（开发目录）" if from_checkout else str(directory)
+    where = str(directory)
     if not directory.is_dir():
         return [_entry("runtime", WARN, f"尚未准备：{where}；运行 apf runtime prepare")]
     checks = []
@@ -159,7 +149,7 @@ def _workspace_checks(workspace: Path | None) -> list[dict[str, str]]:
         settings = load_settings(resolved)
     except (ConfigurationError, OSError) as exc:
         # Without an explicit --workspace the default pointer may simply be unset on a
-        # freshly bootstrapped machine; that is advisory, not a broken environment.
+        # fresh installation; the missing pointer is advisory.
         return [_entry("workspace", FAIL if workspace is not None else WARN, str(exc))]
     preferred_web = urlsplit(settings.allowed_origins[0]).port
     checks = [_entry("workspace", OK, f"{settings.workspace}（{resolved}）")]

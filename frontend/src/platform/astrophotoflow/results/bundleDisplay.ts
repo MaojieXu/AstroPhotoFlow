@@ -1,5 +1,6 @@
 import { markRaw } from 'vue'
 
+import { t } from '@/i18n'
 import type { LGraphNode } from '@/lib/litegraph/src/litegraph'
 import { ComponentWidgetImpl } from '@/scripts/domWidget'
 import { useExtensionStore } from '@/stores/extensionStore'
@@ -25,8 +26,8 @@ export function attachBundleResult(node: LGraphNode) {
     options: {
       serialize: false,
       surfaces: { canvas: 'never', vueNode: 'shown', panel: 'never' },
-      getMinHeight: () => 150,
-      getMaxHeight: () => 420
+      getMinHeight: () => 60,
+      getMaxHeight: () => 650
     }
   })
   widget.serialize = false
@@ -43,6 +44,14 @@ export function registerBundleResultDisplay(app: ComfyApp) {
   }
   const extension = {
     name: 'AstroPhotoFlow.BundleResults',
+    settings: [{
+      id: 'AstroPhotoFlow.ResultThumbnailSize' as const,
+      name: t('astrophotoflow.bundle.thumbnailSize'),
+      category: ['AstroPhotoFlow', t('astrophotoflow.results.title'), t('astrophotoflow.bundle.thumbnailSize')],
+      type: 'combo' as const,
+      defaultValue: 1024,
+      options: [512, 1024, 2048].map(value => ({ text: value + ' px', value }))
+    }],
     nodeCreated: attachBundleResult,
     afterConfigureGraph: hydrate
   }

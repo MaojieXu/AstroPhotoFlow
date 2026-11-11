@@ -1,14 +1,12 @@
-import base64
 import json
 import subprocess
+import sys
+from pathlib import Path
 from threading import Event
 from types import SimpleNamespace
 from unittest.mock import Mock
-
 import pytest
-
-from astrophotoflow.modules.data import local_selection
-
+from astrophotoflow.modules.data import local_selection, windows_picker
 
 @pytest.fixture
 def chooser(tmp_path, monkeypatch):
@@ -24,25 +22,26 @@ def chooser(tmp_path, monkeypatch):
     monkeypatch.setattr(local_selection.subprocess, "CREATE_NO_WINDOW", 0x08000000, raising=False)
     return selected, process, desktop, launch
 
-
-@pytest.mark.parametrize("mode", ["files", "folder"])
-def test_file_and_folder_choosers_bind_owner_and_activate_only_their_own_dialog(tmp_path, chooser, mode):
+@pytest.mark.parametrize('mode', ['files', 'folder', 'save'])
+def test_native_chooser_binds_owner_and_runs_in_its_own_process(tmp_path, chooser, mode):
     selected, process, desktop, launch = chooser
-    assert local_selection.select_local_paths(mode, tmp_path) == [selected.resolve()]
+    assert local_selection.select_local_paths(mode, tmp_path, suggested_name='target.fits') == [selected.resolve()]
     args = launch.call_args.args[0]
-    script = base64.b64decode(args[-1]).decode("utf-16-le")
-    assert "-STA" in args and launch.call_args.kwargs["stdin"] == subprocess.DEVNULL
-    assert "$owner = New-Object SelectionOwner ([IntPtr]4242)" in script
-    assert "$dialog.ShowDialog($owner)" in script
-    assert "$timer.Stop()" in script and "$timer.Dispose()" in script
-    assert "processId != GetCurrentProcessId()" in script
-    assert "new IntPtr(-1)" in script and "new IntPtr(-2)" in script
-    assert "[SelectionOwner]::RestoreFocus($owner.Handle)" in script
-    assert ("$dialog = New-Object Windows.Forms.OpenFileDialog" if mode == "files" else "$dialog = New-Object ModernFolderDialog") in script
-    assert base64.b64encode(str(tmp_path).encode("utf-8")).decode("ascii") in script
+    worker = Path(local_selection.__file__).with_name('windows_picker.py')
+    assert args[:6] == [sys._base_executable, '-I', str(worker), mode, str(tmp_path), '4242']
+    assert '*.fits' in args[6].split(';')
+    assert args[7] == 'target.fits'
+    assert launch.call_args.kwargs['stdin'] == subprocess.DEVNULL
     process.terminate.assert_not_called()
     desktop.close.assert_not_called()
 
+@pytest.mark.parametrize('result,owners', [(0, [4242]), (-2147023673, [4242]), (-2147467259, [4242, None])])
+def test_retries_without_owner_only_when_windows_rejects_the_owned_dialog(monkeypatch, result, owners):
+    dialog = object()
+    show = Mock(side_effect=[result, 0])
+    monkeypatch.setattr(windows_picker, '_method', Mock(return_value=show))
+    assert windows_picker._show_dialog(dialog, 4242) == (0 if len(owners) == 2 else result)
+    assert [call.args for call in show.call_args_list] == [(dialog, owner) for owner in owners]
 
 def test_cancel_before_launch_does_not_create_a_native_process(tmp_path, chooser):
     _, _, _, launch = chooser
@@ -51,7 +50,6 @@ def test_cancel_before_launch_does_not_create_a_native_process(tmp_path, chooser
     assert local_selection.select_local_paths("files", tmp_path, cancelled) == []
     launch.assert_not_called()
 
-
 @pytest.mark.parametrize("mode", ["files", "folder"])
 def test_system_dialog_cancel_returns_no_paths(tmp_path, chooser, mode):
     _, process, desktop, _ = chooser
@@ -59,7 +57,6 @@ def test_system_dialog_cancel_returns_no_paths(tmp_path, chooser, mode):
     assert local_selection.select_local_paths(mode, tmp_path) == []
     process.terminate.assert_not_called()
     desktop.close.assert_not_called()
-
 
 def test_cancel_closes_native_window_and_collects_the_child_process(tmp_path, chooser):
     _, process, desktop, _ = chooser
@@ -74,7 +71,6 @@ def test_cancel_closes_native_window_and_collects_the_child_process(tmp_path, ch
     desktop.close.assert_called_once_with(process)
     process.terminate.assert_not_called()
     assert process.communicate.call_count == 2
-
 
 def test_unresponsive_cancel_terminates_only_the_owned_child_and_restores_owner(tmp_path, chooser):
     _, process, desktop, _ = chooser
@@ -95,7 +91,6 @@ def test_unresponsive_cancel_terminates_only_the_owned_child_and_restores_owner(
     process.terminate.assert_called_once_with()
     desktop.restore_owner.assert_called_once_with()
 
-
 def test_simultaneous_selection_is_rejected_without_creating_another_window(tmp_path, chooser):
     _, _, _, launch = chooser
     local_selection._selection_lock.acquire()
@@ -105,7 +100,6 @@ def test_simultaneous_selection_is_rejected_without_creating_another_window(tmp_
     finally:
         local_selection._selection_lock.release()
     launch.assert_not_called()
-
 
 def test_failed_native_process_releases_selection_for_the_next_request(tmp_path, chooser):
     selected, process, _, launch = chooser

@@ -109,6 +109,7 @@ target/
 
 # Local development environments, workspaces and reports
 /.artifacts/
+/bundles/
 
 # Local environment and secrets
 .env

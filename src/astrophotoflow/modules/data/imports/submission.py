@@ -1,15 +1,12 @@
 from __future__ import annotations
-
 from datetime import UTC, datetime
+import hashlib
+import json
 from pathlib import Path
 from uuid import UUID, uuid4
-
+from sqlalchemy import select
 from sqlalchemy.orm import Session
-
-from astrophotoflow.contracts.imports import (
-    ImportAccepted,
-    ImportCreate,
-)
+from astrophotoflow.contracts.imports import ImportAccepted, ImportCreate
 from astrophotoflow.core.config import Settings
 from astrophotoflow.core.errors import ApiError
 from astrophotoflow.modules.data.equipment.references import validate_import_equipment
@@ -17,11 +14,16 @@ from astrophotoflow.modules.data.equipment.snapshots import capture_defaults_sna
 from astrophotoflow.modules.data.files import enumerate_local, enumerate_source, find_root, resolve_relative
 from astrophotoflow.modules.data.imports.models import AssetTask
 
-
 def create_import(session: Session, settings: Settings, body: ImportCreate) -> ImportAccepted:
+    fingerprint = import_fingerprint(body)
+    previous = existing_import(session, body.request_id, fingerprint)
+    if previous is not None:
+        return previous
     validate_import_equipment(session, body.parameters.model_dump(mode='json'))
+    from .project_links import import_destination
+    destination, context = import_destination(session, body)
     sources = []
-    is_dataset = len(body.sources) > 1 or body.dataset_name is not None
+    is_dataset = body.mode != 'standalone'
     for source in body.sources:
         if source.root_id is None:
             selected = Path(source.path)
@@ -42,16 +44,29 @@ def create_import(session: Session, settings: Settings, body: ImportCreate) -> I
             entries = list(enumerate_source(settings, source.root_id, source.path, lambda: False, lambda: None))
             source_path = source.path
         kind = 'directory' if selected.is_dir() else 'file'
-        if kind == 'directory':
-            is_dataset = True
         sources.append({'root_id': source.root_id or '', 'path': source_path, 'kind': kind, 'enumeration_completed': False, 'error': None, 'entries': entries})
     task_id = str(uuid4())
-    target_dataset_id = str(uuid4()) if is_dataset else None
+    target_dataset_id = destination.id if destination else str(uuid4()) if is_dataset else None
     dataset_name = body.dataset_name
     if is_dataset and (not dataset_name):
         primary = sources[0]
         dataset_name = Path(primary['path'].rstrip('/')).name or next((root.path.name for root in settings.import_roots if root.id == primary['root_id']), '素材集')
-    task = AssetTask(id=task_id, status='queued', sources=sources, storage_mode=body.storage_mode, classification=body.classification.model_dump(mode='json', exclude_unset=True), parameters=body.parameters.model_dump(mode='json', exclude_unset=True), notes=body.notes, dataset_name=dataset_name, import_defaults_snapshot=capture_defaults_snapshot(session, body.parameters, body.equipment).model_dump(mode='json', exclude_unset=True), target_dataset_id=target_dataset_id, dataset_base_revision=None, dataset_id=None, enumeration_completed=False, retry_of_task_id=None, report={}, error=None, created_at=datetime.now(UTC), updated_at=datetime.now(UTC))
+    task = AssetTask(request_id=str(body.request_id) if body.request_id else None, request_fingerprint=fingerprint, id=task_id, status='queued', sources=sources, storage_mode=body.storage_mode, classification=body.classification.model_dump(mode='json', exclude_unset=True), parameters=body.parameters.model_dump(mode='json', exclude_unset=True), notes=body.notes, dataset_name=dataset_name, import_defaults_snapshot=capture_defaults_snapshot(session, body.parameters, body.equipment).model_dump(mode='json', exclude_unset=True), target_dataset_id=target_dataset_id, dataset_base_revision=destination.revision if destination else None, dataset_id=None, enumeration_completed=False, retry_of_task_id=None, report={'destination': context, 'calibration_status': body.calibration_status, 'calibration_reason': body.calibration_reason}, error=None, created_at=datetime.now(UTC), updated_at=datetime.now(UTC))
     session.add(task)
     session.flush()
     return ImportAccepted.model_validate({'task_id': UUID(task_id), 'status': 'queued'})
+
+
+def import_fingerprint(body):
+    return hashlib.sha256(json.dumps(body.model_dump(mode='json'), sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+
+
+def existing_import(session, request_id, fingerprint):
+    if request_id is None:
+        return None
+    task = session.scalar(select(AssetTask).where(AssetTask.request_id == str(request_id)))
+    if task is None:
+        return None
+    if task.request_fingerprint != fingerprint:
+        raise ApiError(409, 'IMPORT_REQUEST_CONFLICT', 'This request ID belongs to a different import.')
+    return ImportAccepted(task_id=UUID(task.id), status='queued')

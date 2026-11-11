@@ -13,11 +13,7 @@
             v-if="!props.dotOnly && !hasNoLabel"
             class="truncate text-node-component-slot-text"
           >
-            {{
-              slotData.label ||
-              slotData.localized_name ||
-              (slotData.name ?? `Output ${index}`)
-            }}
+            {{ displayName }}
           </span>
         </div>
         <!-- Connection Dot -->
@@ -35,6 +31,7 @@
 
 <script setup lang="ts">
 import { computed, onErrorCaptured, ref } from 'vue'
+import { resolveNodeDefSlotText } from '@/i18n'
 
 import Tooltip from '@/components/ui/tooltip/Tooltip.vue'
 import TooltipContent from '@/components/ui/tooltip/TooltipContent.vue'
@@ -62,6 +59,9 @@ interface OutputSlotProps {
 }
 
 const props = defineProps<OutputSlotProps>()
+const displayName = computed(() => props.slotData.label ||
+  resolveNodeDefSlotText('name', props.nodeType || '', props.index,
+    undefined, props.slotData.localized_name || props.slotData.name || `Output ${props.index}`))
 
 const hasNoLabel = computed(
   () => !props.slotData.localized_name && props.slotData.name === ''

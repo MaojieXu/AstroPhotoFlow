@@ -15,7 +15,8 @@ Fixed software packages, installation and readiness, actual invocations and stop
 - Only Bundle SDK v2 is supported; inputs, outputs, commands and assessment material are declared in the Bundle, and the platform generates no empty nodes.
 - The host owns fixed-asset inputs, the actual process, cancellation and output range checks; analysis schemas and scientific outputs go through data's public capability checks.
 - Process exit does not mean a node result is ready; after the main process exits the platform observes the known process tree for at most 5 seconds, and keeps unknown without rerunning when it is still active or cannot be verified.
-- Display previews are declared by an operation's `preview.input` and `preview.output`; a sampling parameter change invalidates the cache, new caches are marked `bundle-sample`, and old caches are not migrated.
+- The explicit sample interface uses an operation's `preview.input` and `preview.output`. Node results use checked run outputs and choose components from the declared media kind, role, and structured analysis.
+- Spatial parameters bind to the declared input port, member, and original pixel coordinates. Nodes, result HTTP routes, and MCP use the same public contracts.
 - `automatic_result_preview` defaults to false; when enabled the operation can become an automatic-result target and dependency, and the whole dependency chain must allow automatic execution.
 
 ## Versions and installation
@@ -27,14 +28,17 @@ Fixed software packages, installation and readiness, actual invocations and stop
 
 ## Inputs and outputs
 
-- Inputs: package and operation identifiers, parameters, fixed asset or dataset versions, and a development binding directory.
+- Inputs: package and operation identifiers, parameters, asset or dataset references, and a development binding directory.
 - Outputs: invocation records, process observations, output members and actual files; accepted cancellation, observed stop and unknown results are distinct states.
 - The platform reads declarations from development or installed Bundles and from the release catalogue snapshot, and platform unit tests use synthetic Bundles.
+- Operation definitions record calibration-state semantics. Siril 1.4.4 Auto Stretch explicitly preserves status. calibrate/calibrate_single record used Masters from actual inputs and bias mode. Status is registered after a successful receipt and complete-output checks. Missing processing semantics use Unknown, and result facts are saved through the public data entry point.
 
 ## Failure modes
 
 - A missing program or environment reports the readiness reason instead of assuming availability.
 - When a process stop cannot be observed, unknown is kept and a query is required; nothing is replayed automatically.
+- The headless Siril Bundle disables automatic D-Bus sessions so communication helpers do not extend an invocation's lifetime. The native page distinguishes execution failure, unknown state and a call blocked by software use. The latter two require checking the original call first.
+- When loading the primary image input, if its Windows path exceeds Siril's limit, the Bundle prepares a copy with a short name inside the invocation directory, preserving the original input and its provenance record.
 - A visible preview sample does not mean a complete result is available, and formal runs keep using full scientific inputs.
 
 ## External contracts

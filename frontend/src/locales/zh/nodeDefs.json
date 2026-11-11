@@ -21747,7 +21747,7 @@
       },
       "r": {
         "name": "r",
-        "tooltip": "Relative step size for the intermediate stage (c2 node)"
+        "tooltip": "中间阶段（c2 节点）的相对步长。"
       },
       "s_noise": {
         "name": "s_noise",
@@ -22311,7 +22311,7 @@
       },
       "shard_size": {
         "name": "shard_size",
-        "tooltip": "Number of samples per shard file."
+        "tooltip": "每个分片文件包含的样本数。"
       }
     }
   },

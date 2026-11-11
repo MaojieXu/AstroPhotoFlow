@@ -27,7 +27,6 @@ import {
   assetRecord,
   datasetRecord,
   recordEntity,
-  recordVersion,
   isAssetRecord,
   isDatasetRecord,
   isProjectRecord,
@@ -160,7 +159,7 @@ export function useRecordFieldEditing(options: FieldEditingOptions) {
     if (isDatasetRecord(row) && ['frame_class', 'frame_type'].includes(field))
       return saveDatasetClassification(row, field, value)
     if (isAssetRecord(row)) {
-      const asset = recordEntity(row)
+      const asset = 'asset' in row ? row.asset : row
       const updated = await assetEditor.saveField(asset, field, value)
       if (origin === options.contextKey()) acceptAssetUpdate(row, updated)
     } else if (isDatasetRecord(row)) {
@@ -291,9 +290,8 @@ export function useRecordFieldEditing(options: FieldEditingOptions) {
   ) {
     if (!isDatasetRecord(row))
       throw new ApiClientError('Dataset record required', 'contract')
-    const dataset = datasetRecord(row),
-      versionId = recordVersion(row)?.id
-    if (!versionId || !row.member_count)
+    const dataset = datasetRecord(row)
+    if (!row.member_count)
       throw new Error(uiT('apfUi.this_image_group_has_no_editable_members'))
     if (
       !datasetOpen.value &&
@@ -308,7 +306,6 @@ export function useRecordFieldEditing(options: FieldEditingOptions) {
     await memberWrite.mutateAsync({
       workspaceId: workspaceId.value,
       datasetId: dataset.id,
-      versionId,
       revision: dataset.revision,
       changes
     })

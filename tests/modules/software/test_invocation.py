@@ -37,7 +37,7 @@ def invocation(settings, count=2):
         path = settings.workspace / "sources" / str(call_id) / f"original {index}.fit"
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(bytes([index + 1]) * 32)
-        inputs.append(ResolvedOutputInput(
+        inputs.append(ResolvedOutputInput(calibration_status='Unknown', 
             kind="run_output", reference_index=0,
             locator={"kind": "run_output", "run_id": run_id, "execution_id": uuid4(), "output_index": 0, "member_index": index},
             read_path=path, format="fits", selection={"kind": "whole_file"},

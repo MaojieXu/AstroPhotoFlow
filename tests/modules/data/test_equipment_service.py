@@ -7,14 +7,14 @@ import pytest
 from astrophotoflow.contracts.equipment import CameraCreate, CameraOut, CameraPatch, CameraSpecs, EquipmentQuery
 from astrophotoflow.core.config import Settings
 from astrophotoflow.core.database.db import Database
-from astrophotoflow.core.database.schema import upgrade_database
+from astrophotoflow.core.database.schema import initialize_database
 from astrophotoflow.core.errors import ApiError
 from astrophotoflow.modules.data.public import create_equipment, get_equipment, list_equipment, update_equipment
 
 
 def test_equipment_service_does_not_commit_the_callers_transaction(tmp_path):
     settings = Settings("127.0.0.1", 8190, tmp_path / "data", (), workspace=tmp_path)
-    upgrade_database(settings)
+    initialize_database(settings)
     with closing(Database(settings.database_path)) as database:
         with pytest.raises(RuntimeError, match="rollback"), database.write_session() as session:
             created = create_equipment(session, CameraCreate(kind="camera", name="temporary"))
@@ -26,7 +26,7 @@ def test_equipment_service_does_not_commit_the_callers_transaction(tmp_path):
 
 def test_typed_equipment_update_preserves_omitted_specs_and_checks_revision(tmp_path):
     settings = Settings("127.0.0.1", 8190, tmp_path / "data", (), workspace=tmp_path)
-    upgrade_database(settings)
+    initialize_database(settings)
     with closing(Database(settings.database_path)) as database:
         with database.write_session() as session:
             created = create_equipment(session, CameraCreate(kind="camera", name="camera",

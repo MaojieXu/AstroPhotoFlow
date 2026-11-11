@@ -1,15 +1,11 @@
 from typing import Literal
-
 from pydantic import Field, field_validator, model_validator
-
 from astrophotoflow.contracts.assets import OutputRegistration
 from astrophotoflow.contracts.common import StrictModel, UuidInput, check_name
 from astrophotoflow.contracts.inputs import InputReference, OutputLocator
 from astrophotoflow.contracts.media import MediaSelection
 from astrophotoflow.contracts.previews import AutoStretch
-
 ScienceReference = InputReference | OutputLocator
-
 
 class NativeDataExecute(StrictModel):
     run_id: UuidInput
@@ -29,11 +25,9 @@ class NativeDataExecute(StrictModel):
             raise ValueError('IMAGE batch requires its input dtype.')
         return self
 
-
 class DataNodeIdentity(StrictModel):
     run_id: UuidInput
     execution_id: UuidInput
-
 
 class ExportSettings(StrictModel):
     format: Literal['original', 'fits', 'xisf', 'tiff', 'png', 'jpeg'] = 'original'
@@ -52,19 +46,14 @@ class ExportSettings(StrictModel):
     @model_validator(mode='after')
     def supported(self):
         import math
-        allowed = {
-            'fits': {'uint8','uint16','uint32','int16','int32','float32','float64'},
-            'xisf': {'uint8','uint16','uint32','float32','float64'},
-            'tiff': {'uint8','uint16','uint32','int16','int32','float32','float64'},
-            'png': {'uint8','uint16'}, 'jpeg': {'uint8'},
-        }
+        allowed = {'fits': {'uint8', 'uint16', 'uint32', 'int16', 'int32', 'float32', 'float64'}, 'xisf': {'uint8', 'uint16', 'uint32', 'float32', 'float64'}, 'tiff': {'uint8', 'uint16', 'uint32', 'int16', 'int32', 'float32', 'float64'}, 'png': {'uint8', 'uint16'}, 'jpeg': {'uint8'}}
         if self.format == 'original':
             if self.precision != 'original' or self.conversion != 'preserve':
                 raise ValueError('Original copy does not convert precision or values.')
         elif self.precision not in allowed[self.format]:
             raise ValueError('Choose an explicitly supported format/precision combination.')
         for bounds in (self.value_range, self.display_range):
-            if bounds is not None and (not all(math.isfinite(value) for value in bounds) or not bounds[0] < bounds[1]):
+            if bounds is not None and (not all((math.isfinite(value) for value in bounds)) or not bounds[0] < bounds[1]):
                 raise ValueError('Ranges must be finite and increasing.')
         if self.conversion == 'normalize' and self.value_range is None:
             raise ValueError('Normalization requires an explicit value_range.')
@@ -75,10 +64,9 @@ class ExportSettings(StrictModel):
         if self.auto_stretch is not None:
             recipe = self.auto_stretch
             values = [recipe.input_offset, recipe.shadows, recipe.highlights, recipe.midtones, *recipe.white_balance]
-            if not all(math.isfinite(value) for value in values) or not recipe.highlights > recipe.shadows or not 0 < recipe.midtones < 1 or any(value <= 0 for value in recipe.white_balance):
+            if not all((math.isfinite(value) for value in values)) or not recipe.highlights > recipe.shadows or (not 0 < recipe.midtones < 1) or any((value <= 0 for value in recipe.white_balance)):
                 raise ValueError('Invalid finite display stretch recipe.')
         return self
-
 
 class ExportRequest(StrictModel):
     request_id: UuidInput
@@ -107,11 +95,9 @@ class ExportRequest(StrictModel):
             raise ValueError('Only a local export requires a destination.')
         return self
 
-
 class ExportSelection(StrictModel):
     mode: Literal['file', 'folder']
     suggested_name: str = Field(default='image.fits', min_length=1)
-
 
 class DataNodeMember(StrictModel):
     name: str
@@ -120,7 +106,8 @@ class DataNodeMember(StrictModel):
     format: str
     metadata: dict | None
     byte_size: int
-
+    content_hash: str | None = None
+    position_token: str | None = None
 
 class DataNodeResult(StrictModel):
     run_id: UuidInput
@@ -134,7 +121,6 @@ class DataNodeResult(StrictModel):
     input_bindings: dict[str, list[str | int]]
     members: list[DataNodeMember]
 
-
 class ExportMemberResult(StrictModel):
     member_index: int
     state: Literal['running', 'completed', 'failed', 'cancelled']
@@ -147,7 +133,6 @@ class ExportMemberResult(StrictModel):
     verification: dict | None = None
     settings: ExportSettings | None = None
     selection: MediaSelection | None = None
-
 
 class ExportReceipt(StrictModel):
     request_id: UuidInput

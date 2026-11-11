@@ -9,7 +9,7 @@ import { isWidgetVisibleOnSurface } from '@/types/widgetVisibility'
 
 import { attachDataReferenceDisplay, registerDataReferenceDisplay } from './dataReferenceDisplay'
 
-const value = JSON.stringify({ kind: 'asset_version', asset_version_id: '00000000-0000-4000-8000-000000000001', selection: { kind: 'whole_file' } })
+const value = JSON.stringify({ kind: 'asset', asset_id: '00000000-0000-4000-8000-000000000001', selection: { kind: 'whole_file' } })
 
 function dataNode() {
   const node = new LGraphNode('Scientific image')
@@ -50,7 +50,7 @@ describe('Nodes 2.0 data reference display', () => {
     expect(store.widgetStates.has(display.id)).toBe(false)
     graph.add(node)
     expect(store.widgetStates.get(display.id)?.widget).toBe(display)
-    expect(node.size[1]).toBeGreaterThanOrEqual(480)
+    expect(node.size[1]).toBeLessThan(300)
     expect(node.serialize().widgets_values).toEqual([value])
     graph.remove(node)
     expect(store.widgetStates.has(display.id)).toBe(false)

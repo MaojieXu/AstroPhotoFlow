@@ -523,6 +523,7 @@ watch(
         'Somehow the Locale setting was changed while the settings or i18n had a setup error'
       )
     }
+    workflowStore.activeWorkflow?.changeTracker.captureCanvasState()
     await useCommandStore().execute('Comfy.RefreshNodeDefinitions')
     await useWorkflowService().reloadCurrentWorkflow()
   }

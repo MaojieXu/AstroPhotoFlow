@@ -3,6 +3,7 @@ from fastmcp.dependencies import Depends
 
 from astrophotoflow.client import AssetClient
 from astrophotoflow.contracts.import_batches import BatchOut, ImportBatchProjectRetry
+from astrophotoflow.contracts.metadata import FrameClass
 from astrophotoflow.contracts.projects import (
     ProjectAssetReferenceOut,
     ProjectAssetReferencePage,
@@ -69,33 +70,33 @@ def build_server() -> FastMCP:
 
     @mcp.tool(
         name="list_assets",
-        description="List project references pinned to fixed asset versions.\n列出项目中固定素材版本的引用。\n关键词: 项目 资料 引用 关联 列表 分页 查询",
+        description="List project references associated with assets.\n列出项目中素材的引用。\n关键词: 项目 资料 引用 关联 列表 分页 查询",
     )
     @service_errors
     def list_project_assets(
-        project_id: str, limit: int = 50, offset: int = 0, *, client: AssetClient = Depends(service_client)
+        project_id: str, limit: int = 50, offset: int = 0, frame_class: FrameClass | None = None, *, client: AssetClient = Depends(service_client)
     ) -> ProjectAssetReferencePage:
-        """List project references pinned to fixed asset versions."""
-        return client.list_project_assets(project_id, limit, offset)
+        """List project references associated with assets."""
+        return client.list_project_assets(project_id, limit, offset, frame_class)
 
     @mcp.tool(
         name="get_asset",
-        description="Read one project asset reference and its pinned version.\n读取项目素材引用及其固定版本。\n关键词: 项目 资料 引用 关联 读取 查询",
+        description="Read one project asset reference and its current asset.\n读取项目素材引用及其当前状态。\n关键词: 项目 资料 引用 关联 读取 查询",
     )
     @service_errors
     def get_project_asset(project_id: str, reference_id: str, *, client: AssetClient = Depends(service_client)) -> ProjectAssetReferenceOut:
-        """Read one project asset reference and its pinned version."""
+        """Read one project asset reference and its current asset."""
         return client.get_project_asset(project_id, reference_id)
 
     @mcp.tool(
         name="add_asset",
-        description="Pin an existing asset version to a project without copying the original. Requires current project revision.\n在项目当前 revision 上加入已有素材固定版本，不复制原件。\n关键词: 项目 资料 引用 关联 ",
+        description="Pin an existing asset to a project without copying the original. Requires current project revision.\n在项目当前 revision 上加入已有素材当前状态，不复制原件。\n关键词: 项目 资料 引用 关联 ",
     )
     @service_errors
     def add_project_asset(
         project_id: str, body: ProjectReferenceCreate, *, client: AssetClient = Depends(service_client)
     ) -> ProjectAssetReferenceOut:
-        """Pin an existing asset version to a project without copying the original. Requires current project revision."""
+        """Pin an existing asset to a project without copying the original. Requires current project revision."""
         return client.add_project_asset(project_id, body)
 
     @mcp.tool(
@@ -111,13 +112,13 @@ def build_server() -> FastMCP:
 
     @mcp.tool(
         name="list_datasets",
-        description="List project references pinned to fixed dataset versions.\n列出项目中固定图像组版本的引用。\n关键词: 项目 资料 引用 关联 列表 分页 查询",
+        description="List project references pinned to datasets.\n列出项目中图像组的引用。\n关键词: 项目 资料 引用 关联 列表 分页 查询",
     )
     @service_errors
     def list_project_datasets(
         project_id: str, limit: int = 50, offset: int = 0, *, client: AssetClient = Depends(service_client)
     ) -> ProjectDatasetReferencePage:
-        """List project references pinned to fixed dataset versions."""
+        """List project references pinned to datasets."""
         return client.list_project_datasets(project_id, limit, offset)
 
     @mcp.tool(
@@ -133,13 +134,13 @@ def build_server() -> FastMCP:
 
     @mcp.tool(
         name="add_dataset",
-        description="Pin a fixed dataset version to a project at the current project revision.\n在项目当前 revision 上加入固定图像组版本。\n关键词: 项目 资料 引用 关联 ",
+        description="Pin a dataset to a project at the current project revision.\n在项目当前 revision 上加入图像组。\n关键词: 项目 资料 引用 关联 ",
     )
     @service_errors
     def add_project_dataset(
         project_id: str, body: ProjectDatasetReferenceCreate, *, client: AssetClient = Depends(service_client)
     ) -> ProjectDatasetReferenceOut:
-        """Pin a fixed dataset version to a project at the current project revision."""
+        """Pin a dataset to a project at the current project revision."""
         return client.add_project_dataset(project_id, body)
 
     @mcp.tool(

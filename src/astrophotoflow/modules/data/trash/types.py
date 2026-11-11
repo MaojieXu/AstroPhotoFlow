@@ -1,17 +1,13 @@
 """Finite per-asset cleanup scope and filesystem facts; no ORM objects."""
-
 from dataclasses import dataclass, field
 from pathlib import Path
-
 
 @dataclass(frozen=True)
 class CleanupPlan:
     asset_id: str
-    version_ids: frozenset[str]
     paths: tuple[Path, ...]
     cleaned_paths: frozenset[str]
     selected_group_ids: frozenset[str]
-
 
 @dataclass
 class FileCleanupResult:

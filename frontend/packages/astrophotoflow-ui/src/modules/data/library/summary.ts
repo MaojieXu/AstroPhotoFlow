@@ -71,5 +71,5 @@ export function summaryEquipment(row: MetadataRow, key: 'camera_id' | 'optical_s
 }
 
 export function isLibrarySummary(value: unknown): value is LibrarySummary {
-  return hasSummary(value) && 'entry_type' in value && (value.entry_type === 'asset' || value.entry_type === 'dataset') && 'version_id' in value && 'thumbnail' in value
+  return hasSummary(value) && 'entry_type' in value && (value.entry_type === 'asset' || value.entry_type === 'dataset') && 'thumbnail' in value
 }

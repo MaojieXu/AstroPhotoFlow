@@ -1,4 +1,4 @@
-import { t } from '@/i18n'
+import { resolveNodeDefSlotText, t } from '@/i18n'
 import { drawTextInArea } from '@/lib/litegraph/src/draw'
 import { cachedMeasureText } from '@/lib/litegraph/src/utils/textMeasureCache'
 import { Rectangle } from '@/lib/litegraph/src/infrastructure/Rectangle'
@@ -303,6 +303,10 @@ export abstract class BaseWidget<TWidget extends IBaseWidget = IBaseWidget>
     Partial<Pick<BaseWidgetState<TWidget>, 'nodeId'>>
 
   get label(): string | undefined {
+    const type = this._node?.comfyClass
+    if (type?.startsWith('APF_')) {
+      return resolveNodeDefSlotText('name', type, this.name, undefined, this._state.label ?? this.name)
+    }
     return this._state.label
   }
   set label(value: string | undefined) {

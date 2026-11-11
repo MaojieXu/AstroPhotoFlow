@@ -10,10 +10,9 @@ function item(index = 0): CanvasInspect {
   return {
     title: 'Night',
     name: 'Frame ' + index,
-    total: 2,
+    member_count: 2,
     member_index: index,
     asset_id: id(index + 10),
-    asset_version_id: id(index + 2),
     view_base: '/server/member/' + index,
     availability: 'available',
     parameters: { gain: 0 },
@@ -39,13 +38,10 @@ async function setup() {
   const request = ref<CanvasInspectionRequest>({
     workspaceId: '/one',
     reference: {
-      kind: 'dataset_version',
-      dataset_version_id: id(1),
-      members: [0, 1].map((index) => ({
-        member_index: index,
-        asset_version_id: id(index + 2),
-        selection: { kind: 'whole_file' }
-      }))
+      kind: 'dataset',
+      dataset_id: id(1),
+      asset_ids: [id(10), id(11)],
+      selection: { kind: 'whole_file' }
     },
     memberIndex: 0
   })
@@ -99,9 +95,9 @@ it('aborts the old member read and never uses its late metadata in another works
   expect(query.data.value?.view_base).toBe('/server/member/1')
   expect(query.error.value).toBeNull()
 })
-it('rejects metadata that names another fixed asset version', async () => {
+it('rejects metadata that names another asset', async () => {
   const { query, request, client } = await setup()
-  client.inspect.mockResolvedValue({ ...item(1), asset_version_id: id(99) })
+  client.inspect.mockResolvedValue({ ...item(1), asset_id: id(99) })
   request.value = { ...request.value, memberIndex: 1 }
   await flushPromises()
   expect(query.error.value).toMatchObject({ kind: 'contract' })

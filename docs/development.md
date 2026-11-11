@@ -2,75 +2,58 @@
 
 [English](development.en.md) | 中文
 
-开发在 Windows x64 上通过 `scripts/bootstrap.ps1` 固定入口准备：它选择并校验工具，把参数转给 `scripts/dev_prepare.py`（`--watch` 转给 `scripts/dev_frontend.py`），不修改全局 PATH、Python 注册或默认 workspace。其他平台没有验收路径。
+在单个 Git 检出目录开发。安装和启动见 [Quickstart](../README.md#quickstart)。完整工作台在 Windows x64 验收。
 
-## 环境与版本
+## 工具和依赖
 
 | 依赖 | 版本 | 说明 |
 | --- | --- | --- |
-| Python | 3.12 | `pyproject.toml` 要求 `>=3.12`；bootstrap 固定安装并使用 uv 托管的 3.12.15，不借用系统 Python |
-| uv | 0.13.5 | Python 依赖与工具链入口 |
+| Python | 3.12.15 | 由 uv 按 `.python-version` 管理 |
+| uv | 0.13.5 | 安装 Python 依赖并在项目环境中运行命令 |
 | Node.js | `>=26.8.2 <27` | 前端构建与测试 |
-| pnpm | 11.13.1 | 由 `package.json` 的 `packageManager` 固定 |
+| pnpm | 11.13.1 | 由根 `package.json` 的 `packageManager` 固定 |
 
-锁文件是根 `uv.lock` 与 `frontend/pnpm-lock.yaml`。根 `package.json` 是任务入口；前端依赖与锁文件在 `frontend`，不在仓库根执行 `pnpm install`。
+`uv.lock` 对应仓库内的 `.venv`，`frontend/pnpm-lock.yaml` 对应 `frontend/node_modules`。pnpm 使用平铺布局，让 Windows 终端在缺少目录符号链接权限时也能解析依赖。包下载缓存由包管理器管理。
 
-## 固定入口
+## 目录
 
-Windows x64 用 `scripts/bootstrap.ps1` 作为唯一启动入口：
+- `.artifacts/build/frontend` 是网页构建产物，`.artifacts/dist` 是发行物。`frontend/build` 是源码。
+- `.artifacts/runtime` 是源码 checkout 的固定 CPU 引擎目录，首次 `apf init` 准备，后续校验并复用。需要隔离引擎时用 `ASTROPHOTOFLOW_RUNTIME` 指定绝对路径。
+- `.artifacts/workspaces/dev` 保存日常工作台的配置、数据库、素材和工作流。`apf init` 将网页复制到该 workspace 的 `web`，`--no-activate` 保留默认 workspace 指针。清理构建产物时保留工作台目录。
 
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/bootstrap.ps1 --workspace .artifacts/workspaces/dev --build --start
-```
+当前处于数据库 v1 开发期，现有 workspace 内容均为可替换的测试数据。schema 调整直接更新单一初始化基线，按需替换或重建测试 workspace，无需保留旧测试内容或编写旧开发版本的迁移。正式进入数据库 v2 开发时，开始保留 v1 数据并设计、验证升级迁移。这里的 v1／v2 指数据库开发阶段。
 
-| 参数 | 作用 |
-| --- | --- |
-| `--workspace` | 必填；独立 workspace 目录 |
-| `--build` | 构建当前源码的前端产物 |
-| `--frontend-assets` | 复用已核对的网页产物目录 |
-| `--start`、`--stop` | 启动两个服务；只停止该 workspace |
-| `--watch --port <端口> --strictPort` | 运行 Vite 热更新 |
-| `--service-port`、`--comfyui-port` | 领域服务与 ComfyUI 端口；新 workspace 默认 8190 / 8188，已有 `config.toml` 时以配置为准，显式值不一致会报错 |
-| `--runtime-dir`、`--cache-dir` | 私有 runtime 与工具、包缓存目录 |
-| `--offline` | 只使用本地缓存，不联网 |
-| `--bundle-source`、`--clear-bundle-source` | 绑定或解除开发 Bundle 源码 |
-
-工具缺失时下载固定归档到 `.artifacts/toolchains` 并校验；缓存默认存放在主仓库 `.artifacts/cache`，可用 `--cache-dir` 或环境变量 `ASTROPHOTOFLOW_DEV_CACHE` 覆盖。回执写 `.artifacts/dev-prepare.json`，日志写 `.artifacts/logs/dev-prepare/<run_id>`。
-
-开发 venv 的基解释器固定为 uv 托管的 3.12.15；bootstrap 发现已有 venv 的 `pyvenv.cfg` 指向其他解释器时会重建它。`apf env doctor` 逐项检查解释器、工具、runtime 与 workspace 端口。
+修改 ORM 后运行 `pnpm generate:database-baseline`，审查生成的约束，并用 `tests/core/test_image_management_migration.py` 验证新建数据库与 ORM 一致。原地重建前，经 core 控制入口停止目标实例，核实目标绝对路径与清理范围。已确认的 v1 测试 workspace 可按开发任务直接替换；workspace 外部的原始素材仍按原件保护约定处理。
 
 ## 常用命令
 
 | 任务 | 命令 |
 | --- | --- |
-| 安装开发依赖 | `uv sync --locked --extra dev` |
-| 准备依赖与 workspace | `pnpm dev:prepare --workspace .artifacts/workspaces/<name> --start` |
-| 构建前端产物 | `pnpm build` |
-| 前端热更新 | `pnpm build:watch --workspace .artifacts/workspaces/<name> --port 32589 --strictPort` |
-| MCP 开发热加载 | `pnpm dev:mcp --workspace .artifacts/workspaces/<name> --port 8765` |
+| 停止开发工作台 | `uv run --locked --no-sync apf stop --workspace .artifacts/workspaces/dev` |
+| 前端热更新 | `pnpm build:watch --workspace .artifacts/workspaces/dev --port 32589 --strictPort` |
+| MCP 开发热加载 | `pnpm dev:mcp --workspace .artifacts/workspaces/<test> --port 8765` |
+| 开发 Bundle 源码 | `uv run --locked --no-sync python scripts/dev_bundle_sources.py --help` |
 | Python 测试 | `uv run --locked --no-sync pytest -q --basetemp=.artifacts/pytest-<task>` |
 | 前端单元测试 | `pnpm test` |
-| 浏览器测试 | `pnpm test:browser` |
 | 架构边界检查 | `pnpm check:boundaries` |
 | 文档门禁 | `pnpm check:docs` |
 | 接口生成物 | `pnpm docs:api` |
-| 检查开发环境 | `apf env doctor` |
-| 清理过期临时产物 | `python scripts/prune_artifacts.py`（加 `--apply` 才删除） |
+| 检查开发环境 | `uv run --locked --no-sync apf env doctor --workspace .artifacts/workspaces/dev` |
+| 清理过期临时产物 | `uv run --locked --no-sync python scripts/prune_artifacts.py`（加 `--apply` 才删除） |
 
-## 产物与回执
+## Bundle 源码联调
 
-- `.artifacts/build`：前端、引擎与 Python 构建产物；`frontend/build` 是源码，不是产物。
-- `.artifacts/dist`：发行物。
-- `.artifacts/venvs/dev`、`.artifacts/toolchains`、`.artifacts/managed-python`、`.artifacts/cache`：开发环境与缓存。
-- `.artifacts/workspaces/<name>`：独立 workspace，含配置、数据库、对象、预览与运行记录。
-- `.artifacts/dev-prepare.json`：最近一次准备的参数、阶段与结果。
-- `.artifacts/logs/dev-prepare/<run_id>`：bootstrap 与准备阶段的分阶段日志。
+在仓库根目录为已准备的测试 workspace 启用源码发现，再把开发仓库检出到 `bundles/` 的一级子目录。各 checkout 单独管理。
 
-## 调试入口
+```powershell
+uv run --locked --no-sync python scripts/dev_bundle_sources.py --workspace .artifacts/workspaces/bundle-test --repo-bundles
+git clone --branch dev https://github.com/MaojieXu/AstroPhotoFlow-Siril.git bundles/siril
+```
 
-- 回执的 `completed` 表示准备请求完成，`ready` 表示服务就绪，都不表示页面已展示；页面地址以回执的 `web_url` 为准。
-- 启动不再把实际端口写回 `config.toml`；实际地址以回执与 `workspace/run/processes.json` 的 `actual_ports` 为准。
-- 浏览器验证用 `APF_WEB_URL` 指向自己的回执地址，用 `APF_TEST_WORKSPACE` 指定自己的 workspace。
-- 原生队列与重启场景必须显式设置 `APF_ALLOW_NATIVE_QUEUE=1`、`APF_ALLOW_WORKBENCH_RESTART=1`，未启用记为 skip。
-- 并行 pytest 必须各自指定不同的 `--basetemp=.artifacts/pytest-<task>`。
-- Python 或服务代码改动后显式重启自己的实例；MCP 热加载不会重启领域服务。
+保存适配器后，下一次执行或预览使用新代码。声明更新后，已打开的页面刷新节点目录。参数或端口定义已变的旧实例显示不可用，从目录重新添加新版。用 `--clear-repo-bundles` 解除目录绑定，或用 `--bundle-source <id>=<路径>` 绑定指定目录。
+
+## 调试
+
+- 实际地址以 `apf start` 或 `apf status` 返回的 `web_url` 为准。实际端口见 workspace 的 `run/processes.json`，首选端口保存在 `config.toml`。
+- 浏览器与 MCP 验证使用仓库内独立的测试 workspace。浏览器和并行测试的设置见[测试说明](testing.md)。
+- 更新依赖、引擎或工作台网页前先停止自己的实例。Python 服务代码修改后显式重启，MCP 热加载只刷新 MCP 进程。

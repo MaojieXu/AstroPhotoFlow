@@ -10,7 +10,7 @@ The platform builds on a pinned ComfyUI engine and the native web workbench; dom
 | --- | --- | --- |
 | `contracts` | Cross-module types, enums, and validation; depends only on the standard library and Pydantic | `src/astrophotoflow/contracts` |
 | `core` | Configuration, authentication, database connection and migration, workspace lifecycle, and local process control | `src/astrophotoflow/core` |
-| `data` | Asset identity, fixed collection versions, equipment snapshots, calibration relations, user-selected results, and trash in SQLite; scientific files stored separately | `src/astrophotoflow/modules/data` |
+| `data` | Asset identity, current ordered dataset members, equipment snapshots, calibration relations, user-selected results, and trash in SQLite; scientific files stored separately | `src/astrophotoflow/modules/data` |
 | `software` | Pinned software packages and bundles, installation and readiness state, actual calls, and stop observation | `src/astrophotoflow/modules/software` |
 | `nodes` | Editable node definitions in workspace JSON, update diffs, and derived catalogs | `src/astrophotoflow/modules/nodes` |
 | `interfaces` | HTTP, CLI, MCP, native bridge, and cross-module use-case assembly | `src/astrophotoflow/interfaces` |

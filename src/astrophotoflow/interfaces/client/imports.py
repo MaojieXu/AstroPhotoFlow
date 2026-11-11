@@ -16,6 +16,7 @@ from astrophotoflow.contracts.imports import (
     AssetTaskPage,
     ImportAccepted,
     ImportCreate,
+    ImportRecovery,
     ImportRootEntryPage,
     ImportRootOut,
     ImportTaskStateOut,
@@ -28,6 +29,13 @@ from astrophotoflow.contracts.imports import (
 
 
 class ImportOperations:
+    def get_import_request(self, request_id: str) -> AssetTaskOut:
+        return self.request('GET', f'/imports/requests/{request_id}', adapter=TypeAdapter(AssetTaskOut))
+
+    def recover_import_organization(self, task_id: str, body: ImportRecovery):
+        from astrophotoflow.contracts.image_calibration import ImageOperationOut
+        return self.request('POST', f'/asset-tasks/{task_id}/organization', json=body, adapter=TypeAdapter(ImageOperationOut))
+
     def inspect_import_sources(self, body: SourceInspection) -> InspectionOut:
         return self._result(self.client.post('/import-inspections', json=body.model_dump(mode='json'), timeout=None), adapter=TypeAdapter(InspectionOut))
 

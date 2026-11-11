@@ -10,7 +10,7 @@ import json
 import psutil
 
 from astrophotoflow.contracts.bundles import BundleManifest
-from astrophotoflow.contracts.software import SoftwareCommand, SoftwarePackage, SoftwarePackageState, SoftwarePreparation
+from astrophotoflow.contracts.software import SoftwareCommand, SoftwarePackage, SoftwarePackageState, SoftwarePreparation, SoftwareReleaseListing
 from astrophotoflow.core.config import Settings
 from astrophotoflow.core.errors import ApiError
 from astrophotoflow.core.localization import error_message, workspace_locale
@@ -21,24 +21,32 @@ from astrophotoflow.modules.software.packages.state import state_from_package, s
 
 def get_package(settings: Settings, package_id: str) -> SoftwarePackage:
     from astrophotoflow.modules.software.releases import version_key
-    release = bundles.release(package_id)
+    binding = development.bindings(settings.workspace).get(package_id)
+    try:
+        release = bundles.release(package_id)
+    except ApiError as exc:
+        if exc.code != 'RESOURCE_NOT_FOUND' or binding is None:
+            raise
+        release = None
     installed_root = settings.workspace / 'software' / package_id / 'bundle'
-    manifest = read_bundle(installed_root)[0] if installed_root.is_dir() else BundleManifest.model_validate(release['manifest'])
+    manifest = None
+    if release is not None:
+        manifest = read_bundle(installed_root)[0] if installed_root.is_dir() else BundleManifest.model_validate(release['manifest'])
     path = state_path(settings, package_id)
-    state = SoftwarePackageState.model_validate_json(path.read_text(encoding="utf-8")) if path.is_file() else SoftwarePackageState(
+    state = SoftwarePackageState.model_validate_json(path.read_text(encoding="utf-8")) if release is not None and path.is_file() else SoftwarePackageState(
         installed_version=None, install_path=None, availability="not_installed", reason="尚未安装 Bundle。",
         operation=None, operation_state="idle", phase=None, progress=None, last_error=None, node_definition_ids=[])
     root = path.parent / "bundle"
     reason_key = 'bundle_not_installed' if state.availability == 'not_installed' else None
     lock_path = path.parent / "bundle-lock.json"
-    lock = json.loads(lock_path.read_text(encoding="utf-8")) if lock_path.is_file() else {}
+    lock = json.loads(lock_path.read_text(encoding="utf-8")) if release is not None and lock_path.is_file() else {}
     restart_required = False
     active_lock = PACKAGE_LOCKS.get(package_id)
     if state.operation_state == 'running' and (active_lock is None or not active_lock.locked()):
         reason_key = 'bundle_interrupted'
         state = state.model_copy(update={'operation_state': 'unknown', 'availability': 'unknown',
                                         'reason': '上次安装或卸载被中断，无法确认结果。'})
-    if state.installed_version is not None:
+    if manifest is not None and state.installed_version is not None:
         if not root.is_dir():
             reason_key = 'bundle_migration_needed'
             state = state.model_copy(update={"availability": "not_ready", "reason": "现有安装尚未迁移到独立 Bundle，请安装 Bundle；保留原程序。"})
@@ -78,16 +86,25 @@ def get_package(settings: Settings, package_id: str) -> SoftwarePackage:
             diagnostic = loaded.get('reason') if alive and matches else None
             source = source.model_copy(update={'state': 'failed' if diagnostic else 'building',
                 'error': diagnostic or 'Waiting for development nodes to load.'})
-    return SoftwarePackage(package_id=package_id, name=manifest.name, development_source=source,
-        available_versions=[release["manifest"]["software_version"]], package_token=token,
+    name = manifest.name if manifest is not None else (binding or {}).get('name', package_id)
+    return SoftwarePackage(package_id=package_id, name=name, development_source=source,
+        available_versions=[release["manifest"]["software_version"]] if release is not None else [], package_token=token,
         bundle_version=lock.get("bundle_version"), bundle_commit=lock.get("commit"), restart_required=restart_required,
-        update_available=state.installed_version is not None and root.is_dir()
+        update_available=release is not None and manifest is not None and state.installed_version is not None and root.is_dir()
             and version_key(release['manifest']['bundle_version']) > version_key(manifest.bundle_version),
         migration_required=state.installed_version is not None and not root.is_dir(), **display_state)
 
 
 def list_packages(settings: Settings):
-    return [get_package(settings, key) for key in maintained_bundle_catalog()]
+    packages = []
+    for package_id in list_package_ids(settings.workspace):
+        try:
+            packages.append(get_package(settings, package_id))
+        except ApiError as exc:
+            # A development checkout can disappear after listing its ID.
+            if exc.code != 'RESOURCE_NOT_FOUND':
+                raise
+    return packages
 
 
 def get_package_source(package_id: str, version: str, *, selected_release=None):
@@ -137,6 +154,8 @@ def set_package_node_definition_ids(settings, package_id, definition_ids):
 
 def list_releases(settings, package_id):
     from astrophotoflow.modules.software.releases import list_releases as discover
+    if package_id not in maintained_bundle_catalog() and package_id in development.bindings(settings.workspace):
+        return SoftwareReleaseListing(package_id=package_id, releases=[], checked_at=None)
     return discover(settings, package_id)
 
 
@@ -186,5 +205,5 @@ def get_command_catalog(package_id: str, version: str, settings=None) -> list[So
     return command_rows(command_bytes, assessment_bytes)
 
 
-def list_package_ids() -> list[str]:
-    return list(maintained_bundle_catalog())
+def list_package_ids(workspace) -> list[str]:
+    return list(dict.fromkeys([*maintained_bundle_catalog(), *development.bindings(workspace)]))

@@ -8,7 +8,7 @@ AstroPhotoFlow is a locally running astronomy image workbench: it turns captured
 
 The first delivery proves one complete path:
 
-1. Select one fixed FITS file or one ordered collection.
+1. Select one registered FITS file or one ordered dataset.
 2. Add the asset to the native ComfyUI canvas.
 3. Process it with Siril 1.4.4 Auto Stretch.
 4. View the real output file.
@@ -18,7 +18,7 @@ Both entries, manual operation and real Agent calls, must work; a UI demo alone 
 
 ## Product rules that must hold
 
-- Asset identity is stable, and assets and collections have fixed versions; members and order are fixed at acceptance, and later appends do not change the order of existing members.
+- Asset identity is stable and each asset has one registered original. A dataset stores its current members and order, the canvas follows current content, and each call fixes its actual inputs when it starts.
 - Editing and running reuse the native ComfyUI canvas, workflows, queue, history and undo; no separate workflow library, run library or second editor is built.
 - Processing results come from actual software execution; previews, thumbnails and automatic results are never treated as science originals or official results.
 - Installing, switching versions, permanent deletion, overwriting, sending data out and payment are confirmed per concrete plan, or explicitly pre-authorized by the user.
@@ -34,7 +34,7 @@ Both entries, manual operation and real Agent calls, must work; a UI demo alone 
 
 | Page | Content |
 | --- | --- |
-| [Assets, equipment and calibration](data.en.md) | Asset identity and fixed versions, import, equipment setups, calibration and asset library display |
+| [Assets, equipment and calibration](data.en.md) | Asset identity and current datasets, import, equipment setups, calibration and asset library display |
 | [Workflows and processing](workflow.en.md) | Canvas editing, Agent editing, runs, previews, saving results and comparison |
 | [Software and nodes](software.en.md) | Software packages, installs and versions, hot reload, node definitions and capability discovery |
 | [Workbench rules](workbench.en.md) | Workbench shape, lifecycle, safety confirmations, data protection and delivery |

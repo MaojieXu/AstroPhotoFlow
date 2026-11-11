@@ -22,7 +22,6 @@ import DialogHeader from '@/components/ui/dialog/DialogHeader.vue'
 import DialogOverlay from '@/components/ui/dialog/DialogOverlay.vue'
 import DialogPortal from '@/components/ui/dialog/DialogPortal.vue'
 import DialogTitle from '@/components/ui/dialog/DialogTitle.vue'
-import ImagePreview from '@/renderer/extensions/vueNodes/components/ImagePreview.vue'
 import type { ComponentWidget } from '@/scripts/domWidget'
 import { api } from '@/scripts/api'
 import { useApp } from '@/scripts/appInstance'
@@ -30,6 +29,9 @@ import MediaViewer from '../media/MediaViewer.vue'
 import { useNativeWorkspace } from '../useNativeWorkspace'
 import PreviewControls from '../media/PreviewControls.vue'
 import DataRunWidget from '../results/DataRunWidget.vue'
+import { useNodeWidgetSize } from './useNodeWidgetSize'
+import { imageSummary } from '../media/imageSummary'
+import { formatSize } from '@/utils/formatUtil'
 import { useNodeOutputStore } from '@/stores/nodeOutputStore'
 import { createExecutableNodeMap } from '@/utils/executionUtil'
 import { getExecutionIdByNode } from '@/utils/graphTraversalUtil'
@@ -39,9 +41,10 @@ const { t } = useI18n()
 const workspace = useNativeWorkspace()
 const client = createCanvasDataClient((path, init) => fetch(path, init))
 const mediaClient = createMediaClient((path, init) => fetch(path, init))
+const importClient = createImportClient((path, init) => fetch(path, init))
 const pathImport = useCanvasPathImport(
   workspace.workspaceId,
-  createImportClient((path, init) => fetch(path, init)),
+  importClient,
   client
 )
 const revision = ref(0)
@@ -106,6 +109,17 @@ const displayFailure = ref('')
 const details = ref(false)
 const mediaRequest = ref<MediaViewerRequest>()
 const importPath = ref('')
+const importedSource = ref<{ reference: string; path: string }>()
+const sourcePath = computed(() => {
+  const source = importedSource.value
+  return source && source.reference === referenceText.value ? source.path : undefined
+})
+const manualPath = ref(false)
+const selecting = ref(false)
+let chooser: AbortController | undefined
+onBeforeUnmount(() => chooser?.abort())
+const content = ref<HTMLElement>()
+useNodeWidgetSize(() => widget, content)
 const importing = pathImport.busy
 const canvasFailure = ref('')
 const importFailure = computed(() => {
@@ -128,9 +142,12 @@ async function importImage() {
   const workspaceId = workspace.workspaceId.value,
     original = reference.value,
     workflowId = useApp().rootGraph.id
+  const originalTitle = node.title
+  const selectedPath = importPath.value.trim()
+  const defaultTitles = ['', node.constructor.title, data.value?.name, data.value?.title]
   canvasFailure.value = ''
   try {
-    const prepared = await pathImport.start(importPath.value.trim())
+    const prepared = await pathImport.start(selectedPath)
     if (!prepared) return
     if (
       node.graph !== graph ||
@@ -147,7 +164,8 @@ async function importImage() {
     graph.beforeChange()
     try {
       reference.value = JSON.stringify(prepared.reference)
-      node.title = prepared.title
+      importedSource.value = { reference: String(reference.value), path: selectedPath }
+      if (node.title === originalTitle && defaultTitles.includes(originalTitle)) node.title = prepared.title
       canvas.setDirty(true, true)
     } finally {
       graph.afterChange()
@@ -156,6 +174,40 @@ async function importImage() {
     revision.value++
   } catch (cause) {
     canvasFailure.value = cause instanceof Error ? cause.message : String(cause)
+  }
+}
+
+async function chooseImage() {
+  if (selecting.value || importing.value || connected.value || !workspace.workspaceId.value) return
+  const controller = new AbortController()
+  chooser = controller
+  selecting.value = true
+  canvasFailure.value = ''
+  const graph = widget.node.graph
+  const node = widget.node
+  const workspaceId = workspace.workspaceId.value
+  const original = referenceText.value
+  try {
+    const selected = await importClient.select({ mode: 'files' }, controller.signal)
+    if (controller.signal.aborted || selected.cancelled) return
+    if (widget.node !== node || node.graph !== graph || workspace.workspaceId.value !== workspaceId || referenceText.value !== original || connected.value) {
+      canvasFailure.value = t('astrophotoflow.canvasChanged')
+      return
+    }
+    if (selected.files.length !== 1) {
+      canvasFailure.value = t('astrophotoflow.nodeUi.selectOneFile')
+      return
+    }
+    importPath.value = selected.files[0]!.path
+    selecting.value = false
+    await importImage()
+  } catch (cause) {
+    if (!controller.signal.aborted) canvasFailure.value = cause instanceof Error ? cause.message : String(cause)
+  } finally {
+    if (chooser === controller) {
+      selecting.value = false
+      chooser = undefined
+    }
   }
 }
 const parsed = computed(() => {
@@ -198,15 +250,12 @@ const mediaView = useMediaView(
       item.availability !== 'available'
     )
       return
-    const member =
-      reference.kind === 'dataset_version'
-        ? reference.members[index.value]
-        : reference
+    const selection = reference.selection
     return {
       workspaceId: workspace.workspaceId.value,
       basePath: item.view_base,
       selection: {
-        hdu_index: member?.selection.hdu_index,
+        hdu_index: selection?.hdu_index,
         ...(item.format === 'video' ? { frame_index: 0 } : {}),
         preview_max_edge: maxEdge.value,
         display_balance: balance.value
@@ -224,7 +273,7 @@ const thumbnail = useMediaOverview(
       item.preview_url
       ? {
           workspaceId: workspace.workspaceId.value,
-          viewKey: item.asset_version_id + '-thumbnail',
+          viewKey: item.asset_id + '-thumbnail',
           url: item.preview_url
         }
       : undefined
@@ -351,6 +400,9 @@ const extra = computed(() => {
   if (fileReference.value)
     return [[t('astrophotoflow.results.contentHash'), text(item.content_hash)]]
   return [
+    [t('astrophotoflow.nodeUi.filename'), text(item.name)],
+    [t('astrophotoflow.results.fileSize'), formatSize(item.byte_size)],
+    [t('astrophotoflow.results.contentHash'), text(item.content_hash)],
     [t('astrophotoflow.camera'), text(item.equipment.camera)],
     ['Offset', text(item.parameters.offset)],
     [
@@ -394,21 +446,18 @@ function openViewer() {
   const reference = parsed.data
   mediaRequest.value = {
     index: index.value,
-    total: reference.kind === 'dataset_version' ? reference.members.length : 1,
+    total: inspection.data.value?.member_count ?? 1,
     member: async (position, signal) => {
       const client = createCanvasDataClient((path, init) =>
         fetch(path, { ...init, signal })
       )
       const current = await client.inspect(reference, position, signal)
-      const selected =
-        reference.kind === 'dataset_version'
-          ? reference.members[position]
-          : reference
+      const selection = reference.selection
       return {
         title: current.name,
         basePath: current.view_base,
         selection: {
-          hdu_index: selected?.selection.hdu_index,
+          hdu_index: selection?.hdu_index,
           preview_max_edge: maxEdge.value,
           display_balance: balance.value
         }
@@ -434,20 +483,30 @@ watch(
 
 <template>
   <div
-    class="flex h-full w-full min-w-0 flex-col gap-2 px-2 py-1"
+    class="w-full min-w-0"
     @pointerdown.stop
     @pointermove.stop
     @pointerup.stop
     @keydown.stop
     @wheel.stop
   >
-    <div class="flex shrink-0 items-center gap-1">
+    <div ref="content" class="flex min-w-0 flex-col gap-2 px-2 py-1">
+    <div v-if="!connected" class="flex items-center justify-between gap-1">
+      <Button size="sm" variant="secondary" :disabled="selecting || importing || !workspace.workspaceId.value" @click="chooseImage">
+        <i class="icon-[lucide--folder-open] mr-1 size-3.5" aria-hidden="true" />
+        {{ t(selecting ? 'astrophotoflow.nodeUi.selecting' : importing ? 'astrophotoflow.importingImage' : referenceText ? 'astrophotoflow.nodeUi.replaceFile' : 'astrophotoflow.importImage') }}
+      </Button>
+      <Button variant="textonly" size="icon-sm" :aria-label="t('astrophotoflow.nodeUi.manualPath')" :title="t('astrophotoflow.nodeUi.manualPath')" :aria-expanded="manualPath" @click="manualPath = !manualPath">
+        <i class="icon-[lucide--text-cursor-input] size-3.5" aria-hidden="true" />
+      </Button>
+    </div>
+    <div v-if="!connected && manualPath" class="flex shrink-0 items-center gap-1">
       <Input
         v-model="importPath"
         class="min-w-0 flex-1"
         :aria-label="t('astrophotoflow.imagePath')"
         :placeholder="t('astrophotoflow.imagePath')"
-        :disabled="importing || connected || !workspace.workspaceId.value"
+        :disabled="selecting || importing || connected || !workspace.workspaceId.value"
         @keydown.enter.prevent="!connected && importImage()"
       />
       <Button
@@ -455,6 +514,7 @@ watch(
         variant="secondary"
         :disabled="
           importing ||
+          selecting ||
           connected ||
           !workspace.workspaceId.value ||
           !importPath.trim()
@@ -477,9 +537,11 @@ watch(
       :widget="widget"
       :reference="referenceText"
       :bindings="bindings"
+      :source-path="connected ? undefined : sourcePath"
     />
-    <template v-else>
+    <template v-else-if="referenceText">
       <strong
+        v-if="data && (data.member_count > 1 || parsed?.reference?.kind === 'dataset')"
         class="shrink-0 truncate text-base-foreground"
         :title="data?.name"
         >{{ data?.name ?? t('astrophotoflow.libraryImage') }}</strong
@@ -493,14 +555,18 @@ watch(
           >{{ failure || t('astrophotoflow.results.fixedFile') }}</span
         >
       </div>
+      <details v-if="!fileReference" class="text-xs text-muted-foreground">
+      <summary class="cursor-pointer">{{ t('astrophotoflow.nodeUi.displaySettings') }}</summary>
       <PreviewControls
-        v-if="!fileReference"
         v-model:max-edge="maxEdge"
         v-model:balance="balance"
+        :media="mediaView.state.value"
       />
+      </details>
       <div
         v-if="!fileReference"
-        class="group relative h-56 min-h-56 w-full overflow-hidden rounded-sm bg-component-node-widget-background"
+        class="group relative max-h-[30rem] min-h-40 w-full shrink-0 overflow-hidden rounded-sm bg-component-node-widget-background"
+        :style="{ aspectRatio: data?.width && data?.height ? `${data.width} / ${data.height}` : '4 / 3' }"
         role="button"
         tabindex="0"
         :aria-label="t('astrophotoflow.media.open')"
@@ -508,11 +574,12 @@ watch(
         @keydown.enter.prevent="openViewer"
         @keydown.space.prevent="openViewer"
       >
-        <ImagePreview
+        <img
           v-if="image"
-          :image-urls="[image]"
-          display-only
-          @load-error="imageFailed"
+          :src="image"
+          :alt="data?.name ?? t('astrophotoflow.libraryImage')"
+          class="size-full object-contain"
+          @error="imageFailed"
         />
         <div
           v-else
@@ -565,7 +632,7 @@ watch(
           ><i class="icon-[lucide--expand] size-4"
         /></Button>
       </div>
-      <div class="flex h-8 shrink-0 items-center justify-between gap-1">
+      <div v-if="data && data.member_count > 1" class="flex h-8 shrink-0 items-center justify-between gap-1">
         <Button
           size="icon"
           variant="textonly"
@@ -575,28 +642,20 @@ watch(
           ><i class="icon-[lucide--chevron-left] size-4"
         /></Button>
         <span class="text-muted-foreground">{{
-          data ? `${index + 1} / ${data.total}` : t('g.loading')
+          data ? `${index + 1} / ${data.member_count}` : t('g.loading')
         }}</span>
         <Button
           size="icon"
           variant="textonly"
           :aria-label="t('g.nextImage')"
-          :disabled="!data || index + 1 >= data.total"
+          :disabled="!data || index + 1 >= data.member_count"
           @click="index++"
           ><i class="icon-[lucide--chevron-right] size-4"
         /></Button>
       </div>
-      <dl class="m-0 grid min-w-0 grid-cols-2 gap-x-2 gap-y-1">
-        <div
-          v-for="[label, value] in summary"
-          :key="label"
-          class="flex min-w-0 gap-1"
-        >
-          <dt class="shrink-0 text-muted-foreground">{{ label }}</dt>
-          <dd class="m-0 truncate" :title="value">{{ value }}</dd>
-        </div>
-      </dl>
-      <div class="mt-auto flex items-center justify-between gap-1">
+      <p v-if="data" class="m-0 text-xs text-muted-foreground">{{ imageSummary(data.format, { width: data.width, height: data.height, pixel_type: data.pixel_type, bitpix: data.bitpix }) }}</p>
+      <p v-if="data?.parameters.exposure_seconds != null" class="m-0 text-xs text-muted-foreground">{{ t('astrophotoflow.exposure') }} {{ data.parameters.exposure_seconds }} s</p>
+      <div class="flex items-center justify-between gap-1">
         <span class="truncate text-muted-foreground" role="status">{{
           data?.availability === 'available'
             ? t('astrophotoflow.originalReady')
@@ -634,6 +693,7 @@ watch(
               }}
             </p>
             <dl class="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-2">
+              <template v-if="sourcePath"><dt>{{ t('astrophotoflow.nodeUi.importedPath') }}</dt><dd class="m-0 break-all">{{ sourcePath }}</dd></template>
               <template
                 v-for="[label, value] in [...summary, ...extra]"
                 :key="label"
@@ -651,5 +711,6 @@ watch(
         @index="index = $event"
       />
     </template>
+    </div>
   </div>
 </template>

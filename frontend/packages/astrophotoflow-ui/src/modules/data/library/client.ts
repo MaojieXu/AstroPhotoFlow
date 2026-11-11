@@ -1,6 +1,12 @@
 import { createPlatformClient } from '../../../core/api/client'
 import type { FetchApi } from '../../../core/api/client'
 import {
+  getLibraryLocation,
+  openLibraryDirectory,
+  rebuildDatasetManifest,
+  planLibraryOrganization,
+  organizeLibrary,
+  getLibraryOrganization,
   searchLibrary,
   getLibraryFilterOptions,
   getLibraryChangeState,
@@ -8,6 +14,9 @@ import {
   listDatasetMemberSummaries
 } from '../../../generated/api/sdk.gen'
 import type {
+  LibraryLocationOut,
+  LibraryOrganizeRequest,
+  LibraryOrganizeExecute,
   SearchLibraryData,
   ListDatasetMembersData,
   ListDatasetMemberSummariesData
@@ -41,11 +50,23 @@ export function createLibraryClient(fetchApi: FetchApi) {
     throwOnError: true
   } as const
   return {
+    location: async (entryType: LibraryLocationOut['entry_type'], entryId: string, signal?: AbortSignal) =>
+      (await getLibraryLocation<true>({ ...options, path: { entry_type: entryType, entry_id: entryId }, signal })).data,
+    openDirectory: async (entryType: LibraryLocationOut['entry_type'], entryId: string) =>
+      (await openLibraryDirectory<true>({ ...options, path: { entry_type: entryType, entry_id: entryId } })).data,
+    rebuildManifest: async (datasetId: string, baseRevision: number) =>
+      (await rebuildDatasetManifest<true>({ ...options, path: { dataset_id: datasetId }, body: { base_revision: baseRevision } })).data,
+    planOrganization: async (body: LibraryOrganizeRequest) =>
+      (await planLibraryOrganization<true>({ ...options, body })).data,
+    organize: async (body: LibraryOrganizeExecute) =>
+      (await organizeLibrary<true>({ ...options, body })).data,
+    organization: async (requestId: string) =>
+      (await getLibraryOrganization<true>({ ...options, path: { request_id: requestId } })).data,
     changeState: async (signal?: AbortSignal) =>
       (await getLibraryChangeState<true>({ ...options, signal })).data,
-    memberSummaries: async (datasetId: string, versionId: string, query: MemberQuery, signal?: AbortSignal) =>
+    memberSummaries: async (datasetId: string, query: MemberQuery, signal?: AbortSignal) =>
       zDatasetMemberSummaryPage.parse((await listDatasetMemberSummaries<true>({
-        ...options, path: { dataset_id: datasetId, version_id: versionId }, query, signal
+        ...options, path: { dataset_id: datasetId }, query, signal
       })).data),
     search: async (query: LibraryQuery, signal?: AbortSignal) =>
       (await searchLibrary<true>({ ...options, query, signal })).data,
@@ -53,14 +74,13 @@ export function createLibraryClient(fetchApi: FetchApi) {
       (await getLibraryFilterOptions<true>({ ...options, signal })).data,
     members: async (
       datasetId: string,
-      versionId: string,
       query: NonNullable<ListDatasetMembersData['query']>,
       signal?: AbortSignal
     ) =>
       zDatasetMemberPage.parse((
         await listDatasetMembers<true>({
           ...options,
-          path: { dataset_id: datasetId, version_id: versionId },
+          path: { dataset_id: datasetId },
           query: { ...query, image_query: false },
           signal
         })

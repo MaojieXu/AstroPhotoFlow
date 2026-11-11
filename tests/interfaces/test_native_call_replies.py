@@ -4,7 +4,9 @@ import pytest
 from pydantic import ValidationError
 
 from astrophotoflow.contracts.software import SoftwareCallResult
-from astrophotoflow.interfaces.native.replies import software_call_reply
+from astrophotoflow.interfaces.native.replies import (
+    SoftwareCallBlocked, SoftwareCallUnknown, software_call_error, software_call_reply,
+)
 
 
 def reply(prompt, call):
@@ -19,6 +21,17 @@ def test_native_publication_uses_the_complete_shared_contract():
     assert parsed.model_dump(mode='json') == value
     assert parsed.ports[0].members[0].view_base == '/checked/view'
     assert parsed.observation is None and parsed.error is None
+
+
+@pytest.mark.parametrize('record, kind', [
+    ({'state': 'failed', 'error': {'code': 'SOFTWARE_BUSY', 'message': 'Software is occupied'}}, SoftwareCallBlocked),
+    ({'state': 'unknown', 'error': None}, SoftwareCallUnknown),
+    ({'state': 'failed', 'result': {'error': {'code': 'PROCESS_FAILED', 'message': 'Process failed'}}}, RuntimeError),
+])
+def test_native_failures_preserve_machine_identity_and_log_location(record, kind):
+    error = software_call_error(record, 'prompt', 'call')
+    assert type(error) is kind
+    assert '/runs/prompt/calls/call/log' in str(error)
 
 
 @pytest.mark.parametrize('change',[{'prompt_id':str(uuid4())},{'call_id':str(uuid4())},{'state':'failed'}])

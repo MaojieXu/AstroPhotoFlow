@@ -1,3 +1,5 @@
+import { getImageImportRequest, recoverImportOrganization } from '../../../generated/api/sdk.gen'
+import type { ImportRecovery } from '../../../generated/api/types.gen'
 import { selectLocalImportApiV1ImportsSelectLocalPost } from '../../../generated/api/sdk.gen'
 import type { SelectLocalImportApiV1ImportsSelectLocalPostData } from '../../../generated/api/types.gen'
 import { createPlatformClient } from '../../../core/api/client'
@@ -23,6 +25,8 @@ export function createImportClient(fetchApi: FetchApi) {
     throwOnError: true
   } as const
   return {
+    request: async (id:string) => zAssetTaskOut.parse((await getImageImportRequest<true>({...options,path:{request_id:id}})).data),
+    recoverOrganization: async (id:string, body:ImportRecovery) => (await recoverImportOrganization<true>({...options, path:{task_id:id}, body})).data,
     select: async (
       body: SelectLocalImportApiV1ImportsSelectLocalPostData['body'],
       signal?: AbortSignal

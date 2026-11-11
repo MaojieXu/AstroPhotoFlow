@@ -11,7 +11,7 @@ let wrapper: ReturnType<typeof mount> | undefined
 beforeEach(() => { vi.useFakeTimers(); getDataset.mockReset(); getChanges.mockReset().mockResolvedValue({revision_token:'one',thumbnail_token:'one'}) })
 afterEach(() => { wrapper?.unmount(); vi.useRealTimers() })
 
-function harness(workspace: string, followsCurrent: boolean) {
+function harness(workspace: string) {
   let view!: ReturnType<typeof useDatasetView>
   const paused = ref(false)
   wrapper = mount(defineComponent({ setup() {
@@ -19,39 +19,31 @@ function harness(workspace: string, followsCurrent: boolean) {
       workspaceId: workspace, paused,
       navigation: {query:'',offset:0,pageSize:50}, sort:ref<{by:string;order:'asc'|'desc'}>({by:'name',order:'asc'}),
       mode:ref<'simple'|'detail'>('simple'), filterOpen:ref(false), records:ref<WorkspaceRecord[]>([]),
-      libraryActive:true, dirty:false, calibrationDirty:false,
+      libraryActive:true, dirty:false,
       waitForInlineSave:async()=>true, error:ref()
     })
     return () => h('div')
   } }))
-  view.activeDataset.value = {id:'group',name:'Group',revision:1,member_count:2,current_version_id:'version-1',followsCurrent}
+  view.activeDataset.value = {id:'group',name:'Group',revision:1,member_count:2}
   return {view,paused}
 }
 
-describe('current and fixed dataset refresh', () => {
-  it('adopts external publications on the next lightweight interval', async () => {
-    getDataset.mockResolvedValue({id:'group',name:'Group',revision:1,member_count:2,current_version_id:'version-1'})
-    const {view,paused} = harness('current-refresh', true)
+describe('current dataset refresh', () => {
+  it('adopts external member changes on the next lightweight interval', async () => {
+    getDataset.mockResolvedValue({id:'group',name:'Group',revision:1,member_count:2})
+    const {view,paused} = harness('current-refresh')
     await flushPromises()
     expect(getDataset).toHaveBeenCalledTimes(1)
-    getDataset.mockResolvedValue({id:'group',name:'Group',revision:2,member_count:4,current_version_id:'version-2'})
+    getDataset.mockResolvedValue({id:'group',name:'Group',revision:2,member_count:4})
     getChanges.mockResolvedValue({revision_token:'two',thumbnail_token:'one'})
     await vi.advanceTimersByTimeAsync(10_000)
     await flushPromises()
-    expect(view.activeDataset.value?.current_version_id).toBe('version-2')
+    expect(view.activeDataset.value?.revision).toBe(2)
     expect(view.activeDataset.value?.member_count).toBe(4)
     paused.value = true
     await flushPromises()
     const reads = getDataset.mock.calls.length
     await vi.advanceTimersByTimeAsync(10_000)
     expect(getDataset).toHaveBeenCalledTimes(reads)
-  })
-
-  it('does not retarget an explicitly fixed historical view', async () => {
-    const {view} = harness('fixed-refresh', false)
-    await flushPromises()
-    await vi.advanceTimersByTimeAsync(20_000)
-    expect(getDataset).not.toHaveBeenCalled()
-    expect(view.activeDataset.value?.current_version_id).toBe('version-1')
   })
 })

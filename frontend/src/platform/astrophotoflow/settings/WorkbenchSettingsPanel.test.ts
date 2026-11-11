@@ -1,11 +1,11 @@
-import { render, screen, waitFor } from '@testing-library/vue'
+import { render, screen, waitFor, within } from '@testing-library/vue'
 import userEvent from '@testing-library/user-event'
 import { expect, it, vi } from 'vitest'
 import { i18n } from '@/i18n'
 import WorkbenchSettingsPanel from './WorkbenchSettingsPanel.vue'
 import { PlatformQueryPlugin } from '@astrophotoflow/ui'
 
-it('saves workbench configuration and exposes directory details in advanced settings', async () => {
+it('shows directory fields immediately and saves workbench configuration', async () => {
   const values = {
     host: '127.0.0.1', service_port: 32690, data_dir: 'data',
     allowed_origins: ['http://127.0.0.1:32688'],
@@ -21,7 +21,19 @@ it('saves workbench configuration and exposes directory details in advanced sett
   render(WorkbenchSettingsPanel, { global: { plugins: [i18n, PlatformQueryPlugin] } })
   const user = userEvent.setup()
   const input = await screen.findByRole('spinbutton', { name: i18n.global.t('apfWorkbench.fileWorkers') })
-  await user.click(screen.getByText(i18n.global.t('apfWorkbench.advanced')))
+  const workspace = screen.getByRole('region', {
+    name: i18n.global.t('apfWorkbench.advanced')
+  })
+  expect(
+    within(workspace).getByRole('textbox', {
+      name: i18n.global.t('apfWorkbench.defaultWorkspace')
+    })
+  ).toBeVisible()
+  expect(
+    within(workspace).getByRole('textbox', {
+      name: i18n.global.t('apfWorkbench.dataDir')
+    })
+  ).toBeVisible()
   const hint = screen.getByTestId('data-directory-hint')
   await user.hover(hint)
   expect(await screen.findByRole('tooltip')).toHaveTextContent(configuration.data_dir_absolute)

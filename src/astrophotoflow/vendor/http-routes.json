@@ -15,6 +15,10 @@
     },
     {
       "method": "POST",
+      "path": "/asset-tasks/{task_id}/organization"
+    },
+    {
+      "method": "POST",
       "path": "/asset-tasks/{task_id}/resume"
     },
     {
@@ -82,16 +86,20 @@
       "path": "/datasets/{dataset_id}"
     },
     {
-      "method": "POST",
-      "path": "/datasets/{dataset_id}/calibration/defaults"
+      "method": "GET",
+      "path": "/datasets/{dataset_id}/calibration"
     },
     {
       "method": "POST",
-      "path": "/datasets/{dataset_id}/calibration/members"
+      "path": "/datasets/{dataset_id}/calibration"
     },
     {
       "method": "GET",
       "path": "/datasets/{dataset_id}/detail"
+    },
+    {
+      "method": "POST",
+      "path": "/datasets/{dataset_id}/manifest"
     },
     {
       "method": "POST",
@@ -103,31 +111,19 @@
     },
     {
       "method": "GET",
-      "path": "/datasets/{dataset_id}/versions"
-    },
-    {
-      "method": "POST",
-      "path": "/datasets/{dataset_id}/versions"
+      "path": "/datasets/{dataset_id}/member-summaries"
     },
     {
       "method": "GET",
-      "path": "/datasets/{dataset_id}/versions/{dataset_version_id}/members/{asset_version_id}/thumbnail"
+      "path": "/datasets/{dataset_id}/members"
+    },
+    {
+      "method": "PUT",
+      "path": "/datasets/{dataset_id}/members"
     },
     {
       "method": "GET",
-      "path": "/datasets/{dataset_id}/versions/{version_id}"
-    },
-    {
-      "method": "GET",
-      "path": "/datasets/{dataset_id}/versions/{version_id}/calibration"
-    },
-    {
-      "method": "GET",
-      "path": "/datasets/{dataset_id}/versions/{version_id}/member-summaries"
-    },
-    {
-      "method": "GET",
-      "path": "/datasets/{dataset_id}/versions/{version_id}/members"
+      "path": "/datasets/{dataset_id}/members/{asset_id}/thumbnail"
     },
     {
       "method": "GET",
@@ -266,8 +262,12 @@
       "path": "/library/assets/{asset_id}"
     },
     {
+      "method": "GET",
+      "path": "/library/assets/{asset_id}/calibration"
+    },
+    {
       "method": "POST",
-      "path": "/library/assets/{asset_id}/content-accept"
+      "path": "/library/assets/{asset_id}/calibration"
     },
     {
       "method": "POST",
@@ -279,71 +279,55 @@
     },
     {
       "method": "GET",
-      "path": "/library/assets/{asset_id}/versions"
+      "path": "/library/assets/{asset_id}/hdus"
     },
     {
       "method": "GET",
-      "path": "/library/assets/{asset_id}/versions/{asset_version_id}/calibration"
-    },
-    {
-      "method": "POST",
-      "path": "/library/assets/{asset_id}/versions/{asset_version_id}/calibration"
+      "path": "/library/assets/{asset_id}/hdus/{hdu_index}/header"
     },
     {
       "method": "GET",
-      "path": "/library/assets/{asset_id}/versions/{version_id}"
-    },
-    {
-      "method": "GET",
-      "path": "/library/assets/{asset_id}/versions/{version_id}/hdus"
-    },
-    {
-      "method": "GET",
-      "path": "/library/assets/{asset_id}/versions/{version_id}/hdus/{hdu_index}/header"
-    },
-    {
-      "method": "GET",
-      "path": "/library/assets/{asset_id}/versions/{version_id}/master-provenance"
+      "path": "/library/assets/{asset_id}/master-provenance"
     },
     {
       "method": "PATCH",
-      "path": "/library/assets/{asset_id}/versions/{version_id}/master-provenance"
+      "path": "/library/assets/{asset_id}/master-provenance"
     },
     {
       "method": "POST",
-      "path": "/library/assets/{asset_id}/versions/{version_id}/previews/display"
+      "path": "/library/assets/{asset_id}/previews/display"
     },
     {
       "method": "POST",
-      "path": "/library/assets/{asset_id}/versions/{version_id}/previews/display/auto-stretch"
+      "path": "/library/assets/{asset_id}/previews/display/auto-stretch"
     },
     {
       "method": "GET",
-      "path": "/library/assets/{asset_id}/versions/{version_id}/previews/display/status"
+      "path": "/library/assets/{asset_id}/previews/display/status"
     },
     {
       "method": "POST",
-      "path": "/library/assets/{asset_id}/versions/{version_id}/previews/viewer"
+      "path": "/library/assets/{asset_id}/previews/viewer"
     },
     {
       "method": "DELETE",
-      "path": "/library/assets/{asset_id}/versions/{version_id}/previews/viewer/consumer/{consumer_id}"
+      "path": "/library/assets/{asset_id}/previews/viewer/consumer/{consumer_id}"
     },
     {
       "method": "GET",
-      "path": "/library/assets/{asset_id}/versions/{version_id}/previews/viewer/{key}/status"
+      "path": "/library/assets/{asset_id}/previews/viewer/{key}/status"
     },
     {
       "method": "GET",
-      "path": "/library/assets/{asset_id}/versions/{version_id}/previews/viewer/{key}/tiles/{level}/{x}/{y}"
+      "path": "/library/assets/{asset_id}/previews/viewer/{key}/tiles/{level}/{x}/{y}"
     },
     {
       "method": "GET",
-      "path": "/library/assets/{asset_id}/versions/{version_id}/previews/viewer/{key}/{file}"
+      "path": "/library/assets/{asset_id}/previews/viewer/{key}/{file}"
     },
     {
       "method": "GET",
-      "path": "/library/assets/{asset_id}/versions/{version_id}/previews/{size}"
+      "path": "/library/assets/{asset_id}/previews/{size}"
     },
     {
       "method": "POST",
@@ -368,6 +352,26 @@
     {
       "method": "GET",
       "path": "/library/items"
+    },
+    {
+      "method": "GET",
+      "path": "/library/locations/{entry_type}/{entry_id}"
+    },
+    {
+      "method": "POST",
+      "path": "/library/locations/{entry_type}/{entry_id}/open"
+    },
+    {
+      "method": "POST",
+      "path": "/library/organization"
+    },
+    {
+      "method": "POST",
+      "path": "/library/organization/plan"
+    },
+    {
+      "method": "GET",
+      "path": "/library/organization/{request_id}"
     },
     {
       "method": "GET",
@@ -422,6 +426,14 @@
       "path": "/projects/{project_id}/asset-references/{reference_id}"
     },
     {
+      "method": "GET",
+      "path": "/projects/{project_id}/asset-references/{reference_id}/hdus"
+    },
+    {
+      "method": "GET",
+      "path": "/projects/{project_id}/asset-references/{reference_id}/hdus/{hdu_index}/header"
+    },
+    {
       "method": "POST",
       "path": "/projects/{project_id}/asset-references/{reference_id}/previews/display"
     },
@@ -456,14 +468,6 @@
     {
       "method": "GET",
       "path": "/projects/{project_id}/asset-references/{reference_id}/previews/{size}"
-    },
-    {
-      "method": "GET",
-      "path": "/projects/{project_id}/asset-references/{reference_id}/versions/{version_id}/hdus"
-    },
-    {
-      "method": "GET",
-      "path": "/projects/{project_id}/asset-references/{reference_id}/versions/{version_id}/hdus/{hdu_index}/header"
     },
     {
       "method": "GET",

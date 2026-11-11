@@ -1,14 +1,10 @@
 from astrophotoflow.contracts.common import PageMetadata
-
-"""Agent source inspection and explicitly confirmed batch imports."""
+'Agent source inspection and explicitly confirmed batch imports.'
 from typing import Literal
-
 from pydantic import Field, field_validator, model_validator
-
 from astrophotoflow.contracts.common import StrictModel, UuidInput, check_name
 from astrophotoflow.contracts.image_management import EquipmentApplication
 from astrophotoflow.contracts.metadata import AssetClassification, AssetParameters
-
 
 class ConfirmedImportOptions(StrictModel):
     classification: AssetClassification = Field(default_factory=AssetClassification)
@@ -16,18 +12,15 @@ class ConfirmedImportOptions(StrictModel):
     notes: str | None = None
     equipment: EquipmentApplication | None = None
 
-
 class SourceInspection(StrictModel):
     paths: list[str] = Field(min_length=1)
     recursive: bool = True
-
 
 class ConfirmedImportGroup(StrictModel):
     name: str
     _name = field_validator('name')(check_name)
     group_id: UuidInput | None = None
     member_ids: list[UuidInput] | None = Field(default=None, min_length=1)
-    # Same import semantics, without accepting another set of sources.
     options: ConfirmedImportOptions = Field(default_factory=ConfirmedImportOptions)
 
     @model_validator(mode='after')
@@ -35,7 +28,6 @@ class ConfirmedImportGroup(StrictModel):
         if (self.group_id is None) == (self.member_ids is None):
             raise ValueError('Choose group_id or an explicit member_ids list, exclusively.')
         return self
-
 
 class ImportBatchSubmit(StrictModel):
     scan_id: UuidInput
@@ -50,19 +42,15 @@ class ImportBatchSubmit(StrictModel):
             raise ValueError('project_id and project_revision must be supplied together.')
         return self
 
-
 class ImportBatchWait(StrictModel):
     request_id: UuidInput
     wait_seconds: float = Field(default=20, ge=0, le=20)
 
-
 class ImportBatchProjectRetry(StrictModel):
     base_revision: int = Field(ge=1)
 
-
 class InspectionPage(PageMetadata):
     items: list[dict]
-
 
 class InspectionOut(StrictModel):
     scan_id: UuidInput
@@ -74,7 +62,6 @@ class InspectionOut(StrictModel):
     groups_total: int
     issues: list[dict]
     issues_total: int
-
 
 class BatchOut(StrictModel):
     request_id: UuidInput

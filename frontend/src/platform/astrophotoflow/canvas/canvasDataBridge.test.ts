@@ -22,8 +22,8 @@ let app: ComfyApp
 let graph: LGraph
 const workflows = { activeWorkflow: { filename: 'Test workflow' } }
 const definitions = { nodeDefsByName: { APF_DATA_REFERENCE: fromPartial<ComfyNodeDefImpl>({ name: 'APF_DATA_REFERENCE' }) } }
-const source: CanvasDataRequest = { entry_type: 'asset', id: '00000000-0000-4000-8000-000000000001', version_id: '00000000-0000-4000-8000-000000000002' }
-const prepared: CanvasData = { native_type: 'APF_DATA_REFERENCE', title: 'Science', reference: { kind: 'asset_version', asset_version_id: source.version_id, selection: { kind: 'whole_file' } } }
+const source: CanvasDataRequest = { entry_type: 'asset', id: '00000000-0000-4000-8000-000000000001' }
+const prepared: CanvasData = { native_type: 'APF_DATA_REFERENCE', title: 'Science', reference: { kind: 'asset', asset_id: source.id, selection: { kind: 'whole_file' } } }
 
 beforeEach(() => {
   vi.clearAllMocks()

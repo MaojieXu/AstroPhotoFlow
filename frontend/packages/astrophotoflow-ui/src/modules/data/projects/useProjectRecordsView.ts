@@ -18,6 +18,7 @@ export interface ProjectRecordsViewInput extends ListViewInput {
   targetName: string
   role: string
   frameType: string
+  masters?: boolean
 }
 export function useProjectRecordsView(
   input: MaybeRefOrGetter<ProjectRecordsViewInput>,
@@ -57,7 +58,8 @@ export function useProjectRecordsView(
             nonEmptyQuery({
               ...common,
               role: state.role,
-              frame_type: state.frameType
+              frame_type: state.frameType,
+              frame_class: state.masters ? "masterframe" : undefined
             })
           )
         }
@@ -75,7 +77,8 @@ export function useProjectRecordsView(
     JSON.stringify([
       state.workspaceId,
       state.kind,
-      state.kind === 'projects' ? null : state.projectId
+      state.kind === 'projects' ? null : state.projectId,
+      state.kind === 'assets' ? state.query.frame_class : null
     ])
   )
   return { request, query: useProjectRecordsQuery(request, paused) }

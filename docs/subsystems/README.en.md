@@ -9,7 +9,7 @@ Each page covers one subsystem's behaviour, inputs and outputs, failure modes an
 | Subsystem | Responsibility |
 | --- | --- |
 | [Import pipeline](import-pipeline.en.md) | Stage orchestration and task reporting for registration, content storage, metadata and previews |
-| [Library](library.en.md) | Fixed versions of assets and datasets, equipment snapshots, calibration relations, result saving and trash |
+| [Library](library.en.md) | Current state of assets and datasets, equipment snapshots, calibration relations, result saving and trash |
 | [Previews](previews.en.md) | Thumbnails, display recipes, tiled viewing and derived caches |
 | [External software](software.en.md) | Software package catalogue, installation and readiness, actual invocations and stop observation |
 | [Nodes](nodes.en.md) | Workspace node definitions, update diffs and the derived node catalogue |

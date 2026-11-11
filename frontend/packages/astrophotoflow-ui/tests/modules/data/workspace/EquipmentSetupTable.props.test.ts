@@ -29,12 +29,14 @@ describe('controlled setup table without a Workspace provider', () => {
       expect(wrapper.emitted('sort')).toEqual([['mount']])
     } finally { wrapper.unmount() }
   })
-  it('renders both device sources and emits navigation and sorting requests', async () => {
+  it('renders both device sources and keeps editing separate from row selection', async () => {
     const wrapper = mount(EquipmentSetupTable, { props: props() })
     try {
       expect(wrapper.text()).toContain('Camera')
       expect(wrapper.text()).toContain('Ha')
       await wrapper.get('tbody tr').trigger('click')
+      await wrapper.get('.apf-setup-action-cell button').trigger('click')
+      expect(wrapper.emitted('edit')).toEqual([[setup.id]])
       expect(wrapper.emitted('select')).toEqual([[setup.id]])
       await wrapper.get('thead button').trigger('click')
       expect(wrapper.emitted('sort')).toEqual([['name']])

@@ -14,6 +14,7 @@ export interface MaterialSelectionViewInput extends ListViewInput {
   status: 'active' | 'archived' | 'all'
   role: string
   frameType: string
+  masters?: boolean
 }
 export function useMaterialSelectionView(
   input: MaybeRefOrGetter<MaterialSelectionViewInput>,
@@ -44,12 +45,13 @@ export function useMaterialSelectionView(
           query: zListLibraryAssetsQuery.parse({
             ...common,
             ...(state.role ? { role: state.role } : {}),
+            ...(state.masters ? { frame_class: "masterframe" } : {}),
             ...(state.frameType ? { frame_type: state.frameType } : {})
           })
         }
   })
   const request = useStableQueryInput(desired, paused, (state) =>
-    JSON.stringify([state.workspaceId, state.kind])
+    JSON.stringify([state.workspaceId, state.kind, state.kind === "assets" ? state.query.frame_class : null])
   )
   return { request, query: useLibrarySelectionQuery(request, paused) }
 }

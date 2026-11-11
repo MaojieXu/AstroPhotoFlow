@@ -4,7 +4,7 @@
 
 ## 入口
 
-- `http/app.py` 的 `create_app(settings, token)` 装配 FastAPI、中间件、错误处理与各模块公开路由；`http/cli.py` 提供 `apf-service`（`serve`、`db status`、`db upgrade`、`previews backfill`）。
+- `http/app.py` 的 `create_app(settings, token)` 装配 FastAPI、中间件、错误处理与各模块公开路由；`http/cli.py` 提供 `apf-service`（`serve`、`db status`、`db init`、`previews backfill`）。
 - `cli/main.py` 是 `apf` 命令（cyclopts），业务命令按模块注册；`client/` 提供 `AssetClient` 类型化 HTTP 客户端，`client/errors.py` 的 `ServiceApiError` 是稳定错误类型。
 - `mcp/server.py` 运行 FastMCP 服务，按 data、graph、software 分组挂载工具；工具清单以运行时输出为准。
 - `native/` 是原生宿主协议适配（节点注册、页面消息、Bundle 加载观察），不承担工作流或调度权威。

@@ -50,13 +50,12 @@ async function openSetups(){
 }
 
 describe('settings organization',()=>{
-  it('edits an available project group through its dataset resource and keeps the chosen version fixed',async()=>{
+  it('edits an available project group through its dataset resource and keeps the project reference identity',async()=>{
     const project={id:id(20),name:'Project',target_name:'M31',notes:null,status:'active',revision:1,created_at:timestamp,updated_at:timestamp}
-    const group={id:id(21),name:'Science group',notes:null,status:'active',revision:3,current_version_id:id(22),member_count:0,created_at:timestamp,updated_at:timestamp}
-    const version={id:id(22),dataset_id:group.id,version_number:1,created_at:timestamp,members:[],calibration_defaults:{}}
-    Object.assign(group,{summary:metadataForMembers([]),exposure_summary:exposureForMembers([]),input_ready:false,current_version_number:1})
+    const group={id:id(21),name:'Science group',notes:null,status:'active',revision:3,calibration_status:'Unknown',calibration_counts:{UnCalibrated:0,Calibrated:0,Unknown:0},member_count:0,created_at:timestamp,updated_at:timestamp}
+    Object.assign(group,{summary:metadataForMembers([]),exposure_summary:exposureForMembers([]),input_ready:false})
     const implementation=get.getMockImplementation()!
-    get.mockImplementation(async(path:string)=>path.includes('/projects?')?page([project]):path.includes('/datasets?')?page([group]):path.endsWith('/versions/'+version.id)?version:implementation(path))
+    get.mockImplementation(async(path:string)=>path.includes('/projects?')?page([project]):path.includes('/datasets?')?page([group]):implementation(path))
     send.mockImplementationOnce(async(_path,_schema,_method,data)=>{
       const {base_revision:_,...patch}=data
       Object.assign(group,patch,{revision:4});return datasetSchema.parse(group)
@@ -74,9 +73,9 @@ describe('settings organization',()=>{
     await details.get('input').trigger('keydown',{key:'Enter'});await flushPromises()
     expect(send.mock.calls[0]).toEqual(['/astrophotoflow/api/v1/datasets/'+group.id,expect.anything(),'PATCH',{base_revision:3,name:'Revised group'}])
     expect(details.text()).toContain('Revised group')
-    send.mockResolvedValueOnce({id:id(23),project_id:project.id,dataset_id:group.id,dataset_version_id:version.id,base_revision:1,added_at:timestamp,dataset:group,version:{id:version.id,dataset_id:group.id,version_number:1,created_at:timestamp,exposure_summary:exposureForMembers([])},summary:metadataForMembers([]),input_ready:false,member_count:0})
-    await click('选用此图像组版本')
-    expect(send.mock.calls[1][3]).toMatchObject({dataset_version_id:version.id,base_revision:1})
+    send.mockResolvedValueOnce({id:id(23),project_id:project.id,dataset_id:group.id,base_revision:1,added_at:timestamp,dataset:group,summary:metadataForMembers([]),input_ready:false,calibration_status:'Unknown',calibration_counts:{UnCalibrated:0,Calibrated:0,Unknown:0},member_count:0})
+    await click('选用此数据集')
+    expect(send.mock.calls[1][3]).toMatchObject({dataset_id:group.id,base_revision:1})
   })
   it.each(['组合'])('preserves a dirty %s and disables refresh until the draft is closed',async(editor)=>{
     await openSetups();await wrapper!.get('button[aria-label="查看组合 Night rig"]').trigger('click');await flushPromises()

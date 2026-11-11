@@ -4,18 +4,23 @@ import {
   useMediaView,
   useMediaOverview
 } from '@astrophotoflow/ui'
-import type { MediaSelection } from '@astrophotoflow/ui'
-import { computed, ref } from 'vue'
+import type { MediaSelection, MediaState } from '@astrophotoflow/ui'
+import { computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import PreviewControls from './PreviewControls.vue'
 import { useNativeWorkspace } from '../useNativeWorkspace'
+import Button from '@/components/ui/button/Button.vue'
 
-const { base, title } = defineProps<{ base: string; title: string }>()
-const emit = defineEmits<{ open: [selection: Partial<MediaSelection>] }>()
+const { base, title, selection } = defineProps<{
+  base: string
+  title: string
+  selection?: Partial<MediaSelection>
+}>()
+const emit = defineEmits<{
+  open: [selection: Partial<MediaSelection>]
+  media: [state: MediaState]
+}>()
 const { t } = useI18n()
-const maxEdge = ref<MediaSelection['preview_max_edge']>(1024)
-const balance = ref<MediaSelection['display_balance']>(null)
 const workspace = useNativeWorkspace()
 const client = createMediaClient((path, init) => fetch(path, init))
 const media = useMediaView(
@@ -25,9 +30,10 @@ const media = useMediaView(
           workspaceId: workspace.workspaceId.value,
           basePath: base,
           selection: {
-            preview_max_edge: maxEdge.value,
-            display_balance: balance.value,
-            frame_index: 0
+            preview_max_edge: 1024,
+            display_balance: 'preserve',
+            frame_index: 0,
+            ...selection
           }
         }
       : undefined
@@ -50,6 +56,9 @@ const overview = useMediaOverview(
   client
 )
 const image = overview.imageUrl
+watch(media.state, (state) => {
+  if (state && (state.status === 'available' || state.channels?.length)) emit('media', state)
+})
 const loading = computed(() => media.loading.value || overview.loading.value)
 const error = computed(() => {
   const cause =
@@ -62,17 +71,21 @@ const error = computed(() => {
     ? t('astrophotoflow.previewUnavailable')
     : ''
 })
+async function retryPreview() {
+  if (media.error.value || media.state.value?.status !== 'available') await media.retry()
+  if (overview.error.value) await overview.retry()
+}
 </script>
 
 <template>
-  <PreviewControls v-model:max-edge="maxEdge" v-model:balance="balance" />
-  <button
+  <slot v-if="image && media.state.value" name="image" :image="image" :state="media.state.value" />
+  <Button variant="textonly" size="unset"
+    v-if="!$slots.image || !image || !media.state.value"
     type="button"
     class="relative h-48 shrink-0 overflow-hidden rounded-sm bg-component-node-widget-background"
     :aria-label="t('astrophotoflow.media.open')"
-    @click="
-      emit('open', { preview_max_edge: maxEdge, display_balance: balance })
-    "
+    :disabled="!image"
+    @click="emit('open', media.state.value?.selection ?? selection ?? {})"
   >
     <img
       v-if="image"
@@ -80,8 +93,12 @@ const error = computed(() => {
       :alt="title"
       class="size-full object-contain"
     />
-    <span v-else :role="error ? 'alert' : 'status'">{{
-      error || (loading ? t('astrophotoflow.media.preparing') : '')
+    <span v-else-if="!error" role="status">{{
+      loading ? t('astrophotoflow.bundle.loadingImage') : ''
     }}</span>
-  </button>
+  </Button>
+  <div v-if="error" role="alert" class="flex items-center gap-1 text-xs text-error">
+    <span>{{ error }}</span>
+    <Button variant="textonly" size="sm" @click="retryPreview">{{ t('astrophotoflow.retryPreview') }}</Button>
+  </div>
 </template>

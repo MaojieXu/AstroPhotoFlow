@@ -12,15 +12,17 @@ import {
 export async function createSyntheticAsset(
   request: APIRequestContext,
   name: string,
-  phase = 0
+  phase = 0,
+  channels: 1 | 3 = 1
 ) {
   const size = 128
   const cards = [
     'SIMPLE  =                    T',
     'BITPIX  =                  -32',
-    'NAXIS   =                    2',
+    `NAXIS   =                    ${channels === 1 ? 2 : 3}`,
     'NAXIS1  =                  128',
     'NAXIS2  =                  128',
+    ...(channels === 3 ? ['NAXIS3  =                    3', "CTYPE3  = 'RGB'"] : []),
     'END'
   ]
   const header = Buffer.from(
@@ -30,14 +32,16 @@ export async function createSyntheticAsset(
       .padEnd(2880),
     'ascii'
   )
-  const pixels = Buffer.alloc(Math.ceil((size * size * 4) / 2880) * 2880)
+  const pixels = Buffer.alloc(Math.ceil((size * size * 4 * channels) / 2880) * 2880)
+  for (let channel = 0; channel < channels; channel++) {
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
       pixels.writeFloatBE(
-        0.1 + x / 256 + y / 512 + 0.02 * Math.sin((x + y + phase) / 5),
-        (y * size + x) * 4
+        0.1 + channel * 0.05 + x / 256 + y / 512 + 0.02 * Math.sin((x + y + phase) / 5),
+        (channel * size * size + y * size + x) * 4
       )
     }
+  }
   }
   const bytes = Buffer.concat([header, pixels])
   return uploadAssetBytes(request, name + '.fits', bytes)

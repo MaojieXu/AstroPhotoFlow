@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 
 from astrophotoflow.core.config import Settings
 from astrophotoflow.core.database.db import Database
-from astrophotoflow.core.database.schema import upgrade_database
+from astrophotoflow.core.database.schema import initialize_database
 from astrophotoflow.interfaces.http.app import create_app
 
 
@@ -26,7 +26,7 @@ def test_openapi_does_not_initialize_serving_resources(tmp_path):
 @pytest.mark.parametrize("fail_startup", [None, "recover_software_calls", "BundlePreviews"])
 def test_serving_closes_resources_even_when_startup_fails(tmp_path, fail_startup):
     settings = Settings("127.0.0.1", 8190, tmp_path / "data", (), workspace=tmp_path)
-    upgrade_database(settings)
+    initialize_database(settings)
     app = create_app(settings, "lifespan-test")
     real_close = Database.close
     with patch("astrophotoflow.interfaces.http.lifespan.Database.close", autospec=True, side_effect=real_close) as close:

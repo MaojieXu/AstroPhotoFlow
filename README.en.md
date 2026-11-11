@@ -6,21 +6,24 @@ AstroPhotoFlow is a local astronomy imaging workbench: it turns captured FITS da
 
 ## Quickstart
 
-Requires Windows x64, Git, and PowerShell. The entry point reuses compatible local tools from PATH; when a tool is missing it downloads a pinned archive into the project's `.artifacts` and verifies it, without changing the global PATH, Python registrations, or the default workspace.
+Have Git, uv, Node.js, and pnpm available. See the [development environment](docs/development.en.md) for versions. Install dependencies in a single checkout.
 
-```powershell
+```sh
 git clone --branch dev --depth 1 https://github.com/MaojieXu/AstroPhotoFlow.git
 cd AstroPhotoFlow
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/bootstrap.ps1 --workspace .artifacts/workspaces/dev --build --start
+uv sync --locked --extra dev
+pnpm --dir frontend install --frozen-lockfile --ignore-scripts
 ```
 
-The first run installs dependencies and builds the frontend; when it finishes, open the workbench at the actual address written to the receipt. A later run from the same source point can omit `--build` and reuse the existing output.
+To open the workbench for the first time, build the web assets, initialize the development workspace, then start the services.
 
-Frontend hot reload uses the same entry point:
-
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/bootstrap.ps1 --watch --workspace .artifacts/workspaces/dev --port 32589 --strictPort
+```sh
+pnpm build
+uv run --locked --no-sync apf init --workspace .artifacts/workspaces/dev --frontend-assets .artifacts/build/frontend --no-activate
+uv run --locked --no-sync apf start --workspace .artifacts/workspaces/dev
 ```
+
+Once the workbench is ready, `start` shows the actual web address in interactive terminals. Add `--open` to launch the default browser. Scripts can still read `web_url` from the JSON on standard output. To update the workbench web assets, stop that instance before building and initializing again.
 
 ## Documentation map
 

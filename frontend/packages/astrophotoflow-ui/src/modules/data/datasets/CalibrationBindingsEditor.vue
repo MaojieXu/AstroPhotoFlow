@@ -1,131 +1,135 @@
 <script setup lang="ts">
+import { useQuery, useQueryClient } from '@tanstack/vue-query'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { ApiClientError } from '../../../core/api/errors'
 import { uiT } from '../../../core/i18n'
-import { computed,nextTick,onBeforeUnmount,ref,shallowRef,watch } from 'vue'
-import type { DatasetOut,DatasetVersionOut } from '../../../generated/api/types.gen'
-import type { CalibrationBinding,CalibrationBindings } from '../api/contracts'
-import { useCalibrationData } from './calibrationQueries'
-import { useSaveDatasetDescription,usePublishCalibration } from './mutations'
-import CalibrationBindingSelect from '../library/CalibrationBindingSelect.vue'
-import LibraryInfo from '../components/LibraryInfo.vue'
+import { useQueryAvailability } from '../../../core/query/availability'
+import { workspaceQueryKey } from '../../../core/query/keys'
+import { calibrationApi } from '../api/calibration'
+import { datasetApi } from '../api'
+import type { CalibrationBinding, CalibrationBindings, CalibrationTargetOption } from '../api/contracts'
+import type { CalibrationPatch } from '../../../generated/api/types.gen'
 import LibraryButton from '../components/LibraryButton.vue'
-import LibraryTextField from '../components/LibraryTextField.vue'
+import CalibrationBindingSelect from '../library/CalibrationBindingSelect.vue'
+import { invalidateLibraryData } from '../library/invalidation'
+import { readPages } from '../library/pagination'
 import { displayLabel } from '../library/presentation'
 
-const props=defineProps<{workspaceId:string;datasetId:string}>()
-const emit=defineEmits<{updated:[dataset:DatasetOut];dirty:[value:boolean]}>()
-const dataset=shallowRef<DatasetOut>(),version=shallowRef<DatasetVersionOut>()
-const defaults=ref<CalibrationBindings>({}),overrides=ref<Record<string,CalibrationBindings>>({})
-const name=ref(''),notes=ref(''),actionError=ref(''),notice=ref(''),original=ref('')
-const saving=ref(false),opened=ref(false),pendingMetadata=ref(false)
-const selectedVersion=ref<string>()
-const session=shallowRef({})
-const frameTypes=['bias','dark','flat','dark_flat'] as const
-const state=()=>JSON.stringify({name:name.value,notes:notes.value,defaults:defaults.value,overrides:overrides.value})
-const dirty=computed(()=>Boolean(version.value)&&state()!==original.value)
-const current=computed(()=>!pendingMetadata.value&&Boolean(version.value)&&version.value?.id===dataset.value?.current_version_id)
-const query=useCalibrationData(()=>({workspaceId:props.workspaceId,datasetId:props.datasetId,versionId:selectedVersion.value}),
-  ()=>!opened.value||dirty.value||saving.value||pendingMetadata.value)
-const versions=computed(()=>query.data.value?.versions??[]),targets=computed(()=>query.data.value?.targets??[])
-const loading=query.isFetching
-const error=computed(()=>actionError.value||(query.error.value instanceof Error?query.error.value.message:query.isError.value?uiT('apfUi.could_not_read_calibration_bindings'):''))
-const saveDescription=useSaveDatasetDescription(),publishCalibration=usePublishCalibration()
-function showVersion(row:DatasetVersionOut){
-  version.value=row;defaults.value=JSON.parse(JSON.stringify(row.calibration_defaults))
-  overrides.value=Object.fromEntries(row.members.map(member=>[member.asset_version_id,JSON.parse(JSON.stringify(member.calibration_overrides))]))
-  original.value=JSON.stringify({name:dataset.value!.name,notes:dataset.value!.notes??'',defaults:defaults.value,overrides:overrides.value})
-}
-function adopt(data:NonNullable<typeof query.data.value>){
-  dataset.value=data.dataset;name.value=data.dataset.name;notes.value=data.dataset.notes??''
-  if(data.version)showVersion(data.version)
-  else{version.value=undefined;defaults.value={};overrides.value={};original.value=state()}
-}
-watch([query.data,query.fetchStatus],([data,status])=>{
-  if(data&&status==='idle'&&!query.isError.value&&!dirty.value&&!saving.value&&!pendingMetadata.value)adopt(data)
+const props = defineProps<{ workspaceId: string; datasetId: string }>()
+const emit = defineEmits<{ saving: [value: boolean] }>()
+const opened = ref(false)
+const changes = ref<CalibrationBindings>({})
+const saving = ref(false)
+const error = ref('')
+const notice = ref('')
+const ready = useQueryAvailability()
+const cache = useQueryClient()
+const slots = ['dark', 'flat', 'bias', 'dark_flat'] as const
+const query = useQuery({
+  queryKey: computed(() => [...workspaceQueryKey(props.workspaceId), 'datasets', props.datasetId, 'calibration']),
+  enabled: computed(() => opened.value && ready.value),
+  queryFn: async ({ signal }) => {
+    const [configuration, targets] = await Promise.all([
+      calibrationApi.dataset(props.datasetId, signal),
+      readPages(offset => datasetApi.calibrationTargets({limit: 200, offset: offset ?? 0}, signal), true, signal)
+    ])
+    return { configuration, targets: targets.items }
+  }
 })
-watch(dirty,value=>emit('dirty',value))
-watch(()=>[props.workspaceId,props.datasetId] as const,()=>{
-  session.value={};dataset.value=undefined;version.value=undefined;selectedVersion.value=undefined
-  name.value='';notes.value='';defaults.value={};overrides.value={};original.value='';saving.value=false;pendingMetadata.value=false;actionError.value='';notice.value=''
-},{flush:'sync'})
-onBeforeUnmount(()=>{session.value={};emit('dirty',false)})
-async function read(){
-  const owner=session.value
-  const description=pendingMetadata.value?{name:name.value,notes:notes.value}:undefined
-  const result=await query.refetch({cancelRefetch:false})
-  if(owner!==session.value||result.isError||!result.data)return
-  const verify=pendingMetadata.value
-  pendingMetadata.value=false;adopt(result.data)
-  if(description){name.value=description.name;notes.value=description.notes}
-  if(verify)emit('updated',result.data.dataset)
+const canEdit = computed(() => ready.value && !!query.data.value)
+const availableSlots = computed(() => slots.filter(slot => query.data.value?.configuration.slots[slot]?.status !== 'not_applicable'))
+const targets = computed(() => {
+  const items = [...(query.data.value?.targets ?? [])]
+  for (const slot of slots) {
+    const detail = query.data.value?.configuration.slots[slot]?.target_detail
+    if (detail && !detail.in_trash && !items.some(item => item.target.id === detail.target.id))
+      items.push({ ...detail, frame_type: slot, member_count: 1 } satisfies CalibrationTargetOption)
+  }
+  return items
+})
+
+function selection(slot: typeof slots[number]): CalibrationBinding {
+  if (slot in changes.value) return changes.value[slot]
+  const choice = query.data.value?.configuration.calibration[slot]
+  if (choice?.mode === 'target') return choice.target
+  if (choice?.mode === 'disabled') return null
+  return undefined
 }
-async function load(){
-  if(dirty.value&&!pendingMetadata.value&&!window.confirm(uiT('apfUi.reading_again_discards_unsaved_group_descriptions_or_calibration_bindi')))return
-  actionError.value='';await read()
-}
-function toggle(event:Event){opened.value=(event.target as HTMLDetailsElement).open}
-async function changeVersion(event:Event){
-  if(dirty.value&&!window.confirm(uiT('apfUi.calibration_bindings_have_unsaved_changes_discard_them'))){(event.target as HTMLSelectElement).value=version.value!.id;return}
-  selectedVersion.value=(event.target as HTMLSelectElement).value
-  actionError.value='';await nextTick();await read()
-}
-function setBinding(map:CalibrationBindings,key:typeof frameTypes[number],value:CalibrationBinding){
-  if(value===undefined)delete map[key];else map[key]=value
-}
-async function saveNotes(){
-  const base=dataset.value,owner=session.value
-  if(!base||saving.value||pendingMetadata.value)return
-  const body={base_revision:base.revision,name:name.value,notes:notes.value||null}
-  saving.value=true;actionError.value='';notice.value=''
-  try{
-    const updated=await saveDescription.mutateAsync({workspaceId:props.workspaceId,datasetId:base.id,body})
-    if(owner!==session.value)return
-    dataset.value=updated
-    original.value=JSON.stringify({...JSON.parse(original.value),name:body.name,notes:body.notes??''})
-    notice.value=uiT('apfUi.group_description_saved');emit('updated',updated)
-  }catch(cause){if(owner===session.value)actionError.value=cause instanceof Error?cause.message:uiT('apfUi.could_not_save_the_group_description')}
-  finally{if(owner===session.value)saving.value=false}
-}
-async function saveBindings(){
-  const base=dataset.value,pinned=version.value,owner=session.value
-  if(!base||!pinned||saving.value||!current.value)return
-  saving.value=true;actionError.value='';notice.value=''
-  try{
-    const saved=await publishCalibration.mutateAsync({workspaceId:props.workspaceId,datasetId:base.id,body:{
-      base_revision:base.revision,asset_version_ids:pinned.members.map(member=>member.asset_version_id),
-      calibration_defaults:JSON.parse(JSON.stringify(defaults.value)),member_calibration_overrides:JSON.parse(JSON.stringify(overrides.value))}})
-    if(owner!==session.value)return
-    pendingMetadata.value=true;version.value=saved;selectedVersion.value=saved.id
-    notice.value=uiT('apfUi.saved_fixed_version_v')+saved.version_number+uiT('apfUi.calibration_bindings')
-    await nextTick();await read()
-  }catch(cause){if(owner===session.value)actionError.value=cause instanceof Error?cause.message:uiT('apfUi.could_not_save_calibration_bindings')}
-  finally{if(owner===session.value)saving.value=false}
+
+let context = {}
+watch(() => [props.workspaceId, props.datasetId], () => {
+  context = {}
+  changes.value = {}
+  notice.value = ''
+  error.value = ''
+}, { flush: 'sync' })
+let mounted = true
+onBeforeUnmount(() => { mounted = false })
+
+async function save() {
+  const source = query.data.value
+  if (!source || !canEdit.value || saving.value) return
+  const { workspaceId, datasetId } = props
+  const requestContext = context
+  const patch: CalibrationPatch = {}
+  for (const slot of slots) {
+    if (!(slot in changes.value)) continue
+    const value = changes.value[slot]
+    patch[slot] = value === null ? {mode: 'disabled'} : value && 'kind' in value
+      ? {mode: 'target', target: value} : {mode: 'unconfigured'}
+  }
+  const body = { request_id: crypto.randomUUID(), expected_revision: source.configuration.revision, changes: patch }
+  const stillHere = () => mounted && context === requestContext && props.workspaceId === workspaceId && props.datasetId === datasetId
+  saving.value = true
+  emit('saving', true)
+  error.value = ''
+  notice.value = ''
+  try {
+    try {
+      await calibrationApi.updateDataset(datasetId, body)
+    } catch (cause) {
+      if (!(cause instanceof ApiClientError) || cause.code !== 'CALIBRATION_UNKNOWN' || !stillHere()) throw cause
+      const details = [...new Set(cause.fields?.map(field => field.message) ?? [cause.message])].join('\n')
+      if (!window.confirm(uiT('apfUi.calibration_confirm_unknown', {details}))) throw cause
+      await calibrationApi.updateDataset(datasetId, { ...body, accept_unknown: true })
+    }
+    if (stillHere()) {
+      changes.value = {}
+      notice.value = uiT('apfUi.dataset_calibration_saved')
+    }
+  } catch (cause) {
+    if (stillHere()) error.value = cause instanceof Error ? cause.message : uiT('apfUi.could_not_save_calibration_bindings')
+  } finally {
+    try {
+      await invalidateLibraryData(cache, workspaceId, { datasetIds: [datasetId] })
+    } finally {
+      saving.value = false
+      emit('saving', false)
+    }
+  }
 }
 </script>
+
 <template>
-  <details class="apf-calibration-editor" @toggle="toggle">
-    <summary>{{ $t('apfUi.group_description_history_and_calibration_bindings') }}</summary>
-    <p v-if="loading" role="status">{{ $t('apfUi.reading_the_full_group_version') }}</p>
-    <p v-if="error" role="alert" class="apf-error">{{error}} <LibraryButton type="button" @click="load">{{ $t('apfUi.read_again') }}</LibraryButton></p>
-    <LibraryButton v-else-if="dataset" type="button" :disabled="saving||loading" @click="load">{{ $t('apfUi.read_again') }}</LibraryButton>
-    <template v-if="dataset&&version">
-      <LibraryTextField id="calibration-group-name" v-model="name" :name="$t('apfUi.group_name')" :disabled="saving||loading" /><label>{{ $t('apfUi.description') }}<textarea v-model="notes" :disabled="saving||loading" /></label>
-      <LibraryButton type="button" :disabled="saving||loading||pendingMetadata" @click="saveNotes">{{ $t('apfUi.save_group_description') }}</LibraryButton>
-      <label><span>{{ $t('apfUi.fixed_group_version') }}<LibraryInfo :label="$t('apfUi.fixed_group_version')" :text="$t('apfUi.current_full_version')+version.id+$t('apfUi.filtering_this_list_does_not_change_the_full_member_selection_calibrat')" /></span><select :value="version.id" :disabled="saving||loading" @change="changeVersion"><option v-for="row in versions" :key="row.id" :value="row.id">v{{row.version_number}}{{row.id===dataset.current_version_id?$t('apfUi.current'):$t('apfUi.read_only_history')}}</option></select></label>
-      <p>{{ $t('apfUi.full_group_value_photos_calibration_changes_apply_to_every_member', { p0: (version.members.length) }) }}</p>
-      <p v-if="!current">{{ $t('apfUi.historical_versions_are_read_only') }}<LibraryInfo :label="$t('apfUi.historical_versions')" :text="$t('apfUi.previously_selected_project_references_remain_unchanged_the_group_name')" /></p>
-      <fieldset :disabled="saving||loading||!current"><legend>{{ $t('apfUi.default_group_calibration') }}<LibraryInfo :label="$t('apfUi.default_group_calibration')" :text="$t('apfUi.members_inherit_group_calibration_by_default_choose_do_not_use_to_disa')" /></legend>
-        <label v-for="frameType in frameTypes" :key="frameType">{{displayLabel(frameType)}}<CalibrationBindingSelect :model-value="defaults[frameType]" :frame-type="frameType" :targets="targets" :label="$t('apfUi.group_default')+displayLabel(frameType)" @update:model-value="setBinding(defaults,frameType,$event)" /></label>
+  <details class="apf-calibration-editor" @toggle="opened = ($event.target as HTMLDetailsElement).open">
+    <summary>{{ $t('apfUi.dataset_calibration') }}</summary>
+    <p v-if="error || query.error.value" role="alert">{{ error || query.error.value?.message }}</p>
+    <template v-if="query.data.value">
+      <ul v-if="query.data.value.configuration.diagnostics?.length" role="status">
+        <li v-for="(item,index) in query.data.value.configuration.diagnostics" :key="index">{{ item.slot }} · {{ item.state }} · {{ item.diagnostics }}</li>
+      </ul>
+      <fieldset :disabled="!canEdit || saving || query.isFetching.value">
+        <legend>{{ $t('apfUi.dataset_calibration') }}</legend>
+        <label v-for="slot in availableSlots" :key="slot">
+          {{ displayLabel(slot) }}
+          <CalibrationBindingSelect :model-value="selection(slot)" :frame-type="slot" :targets="targets"
+            :label="displayLabel(slot)" @update:model-value="changes[slot] = $event" />
+        </label>
       </fieldset>
-      <div class="apf-calibration-members"><table><thead><tr><th>{{ $t('apfUi.full_member_list') }}</th><th v-for="frameType in frameTypes" :key="frameType">{{displayLabel(frameType)}}</th></tr></thead><tbody>
-        <tr v-for="member in version.members" :key="member.asset_version_id"><th>{{member.asset.name}} · v{{member.version.version_number}}<small>{{displayLabel(member.asset.classification?.frame_type)}}</small></th>
-          <td v-for="frameType in frameTypes" :key="frameType"><span>{{displayLabel(frameType)}}</span><CalibrationBindingSelect :model-value="overrides[member.asset_version_id]?.[frameType]" :frame-type="frameType" :targets="targets" inherit :disabled="saving||loading||!current" :label="member.asset.name+' '+displayLabel(frameType)" @update:model-value="setBinding(overrides[member.asset_version_id],frameType,$event)" /></td>
-        </tr>
-      </tbody></table></div>
-      <LibraryButton type="button" :disabled="saving||loading||!current" @click="saveBindings">{{ $t('apfUi.save_calibration_bindings_as_a_new_version') }}</LibraryButton>
-      <p v-if="notice" role="status">{{notice}}</p>
+      <LibraryButton type="button" :disabled="!canEdit || saving || query.isFetching.value || !Object.keys(changes).length" @click="save">
+        {{ $t('apfUi.save_calibration_bindings') }}
+      </LibraryButton>
     </template>
+    <p v-if="notice" role="status">{{ notice }}</p>
   </details>
 </template>
-<style scoped>
-.apf-calibration-editor{flex:none;min-width:0;margin:10px;padding:12px;border:1px solid var(--border-color,#555);border-radius:8px}.apf-calibration-editor label{display:flex;flex-direction:column;gap:4px;margin:8px 0}.apf-calibration-editor fieldset{display:flex;gap:12px;flex-wrap:wrap}.apf-calibration-members{overflow:auto;margin:12px 0}.apf-calibration-members table{border-collapse:collapse;width:100%;min-width:0}.apf-calibration-members td,.apf-calibration-members th{padding:6px;text-align:left;border-bottom:1px solid var(--border-color,#555)}.apf-calibration-members thead{display:none}.apf-calibration-members tbody tr{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;padding:10px 0;border-bottom:1px solid var(--border-color,#555)}.apf-calibration-members th{grid-column:1/-1}.apf-calibration-members td{min-width:0;border:0}.apf-calibration-members td>span{display:block;margin-bottom:4px;font-size:12px}.apf-calibration-members small{display:block;font-weight:normal}
-</style>

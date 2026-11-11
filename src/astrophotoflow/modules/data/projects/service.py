@@ -1,23 +1,14 @@
 from __future__ import annotations
-
 from datetime import UTC, datetime
 from typing import Literal
 from uuid import UUID, uuid4
-
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
-
-from astrophotoflow.contracts.projects import (
-    ProjectCreate,
-    ProjectOut,
-    ProjectPage,
-    ProjectPatch,
-)
+from astrophotoflow.contracts.projects import ProjectCreate, ProjectOut, ProjectPage, ProjectPatch
 from astrophotoflow.core.errors import ApiError, not_found
 from astrophotoflow.modules.data.names import named_changes
 from astrophotoflow.modules.data.projects.mapping import project_out
 from astrophotoflow.modules.data.projects.models import Project
-
 
 def get_project(session: Session, project_id: UUID) -> ProjectOut:
     row = session.get(Project, str(project_id))
@@ -46,24 +37,19 @@ def create_project(session: Session, body: ProjectCreate) -> ProjectOut:
     session.flush()
     return project_out(row)
 
-def advance_project_revision(session: Session, project_id: UUID | str, expected: int, changes: dict | None = None) -> None:
+def advance_project_revision(session: Session, project_id: UUID | str, expected: int, changes: dict | None=None) -> None:
     identity = str(project_id)
-    result = session.execute(update(Project).where(Project.id == identity, Project.revision == expected)
-                             .values(**named_changes(changes or {}), revision=expected + 1, updated_at=datetime.now(UTC)))
+    result = session.execute(update(Project).where(Project.id == identity, Project.revision == expected).values(**named_changes(changes or {}), revision=expected + 1, updated_at=datetime.now(UTC)))
     if result.rowcount != 1:
         if session.get(Project, identity) is None:
             raise not_found()
-        raise ApiError(409, "REVISION_CONFLICT", "The project changed in another window.",
-                       message_key="another_window_changed_the_configuration_read_it_again_before_saving")
-
+        raise ApiError(409, 'REVISION_CONFLICT', 'The project changed in another window.', message_key='another_window_changed_the_configuration_read_it_again_before_saving')
 
 def update_project(session: Session, project_id: UUID, body: ProjectPatch) -> ProjectOut:
-    changes = body.model_dump(exclude_unset=True, exclude={"base_revision"})
-    fields = [name for name in ("name", "status") if name in changes and changes[name] is None]
+    changes = body.model_dump(exclude_unset=True, exclude={'base_revision'})
+    fields = [name for name in ('name', 'status') if name in changes and changes[name] is None]
     if fields:
-        raise ApiError(422, "VALIDATION_ERROR", "These project fields cannot be null.",
-                       [{"path": name, "message": "Cannot be null."} for name in fields],
-                       message_key="invalid_request_fields", field_message_keys={name: "field_not_nullable" for name in fields})
+        raise ApiError(422, 'VALIDATION_ERROR', 'These project fields cannot be null.', [{'path': name, 'message': 'Cannot be null.'} for name in fields], message_key='invalid_request_fields', field_message_keys={name: 'field_not_nullable' for name in fields})
     advance_project_revision(session, project_id, body.base_revision, changes)
     session.flush()
     session.expire_all()

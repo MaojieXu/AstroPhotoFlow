@@ -1,22 +1,18 @@
 """Real ComfyUI interrupt -> Bundle node -> real Siril process cancellation."""
-
 import hashlib
 import json
 import os
 import time
 from pathlib import Path
 from uuid import uuid4
-
 import httpx
 import numpy as np
 import psutil
 import pytest
 from astropy.io import fits
-
 from astrophotoflow.client import AssetClient
 from astrophotoflow.contracts.assets import AssetPatch
 from astrophotoflow.core.config import load_running_settings
-
 
 @pytest.mark.skipif(not os.environ.get('APF_TEST_NATIVE_CANCEL_WORKSPACE'), reason='Explicit isolated native cancellation opt-in')
 def test_native_interrupt_stops_the_owned_real_siril_process():
@@ -43,7 +39,7 @@ def test_native_interrupt_stops_the_owned_real_siril_process():
             time.sleep(0.1)
         assert task.status == 'completed', task
         item = task.items[0]
-        capability = next(node for node in client.list_nodes('gauss') if node.operation.operation_id == 'gauss')
+        capability = next((node for node in client.list_nodes('gauss') if node.operation.operation_id == 'gauss'))
         assert capability.available
         definition = capability.node.definition
         inputs = {parameter.name: parameter.default for parameter in definition.parameters}
@@ -51,20 +47,16 @@ def test_native_interrupt_stops_the_owned_real_siril_process():
         inputs['sigma'] = 20.0
         inputs[definition.execution.inputs['image']] = ['1', 0]
         output_name = definition.execution.outputs['image']
-        output_index = next(index for index, port in enumerate(definition.outputs) if port.name == output_name)
-        reference = {'kind': 'asset_version', 'asset_version_id': str(item.asset_version_id), 'selection': {'kind': 'whole_file'}}
-        graph = {
-            '1': {'class_type': 'APF_DATA_REFERENCE', 'inputs': {'reference': json.dumps(reference)}},
-            '2': {'class_type': capability.node.native_type, 'inputs': inputs},
-            '3': {'class_type': 'APF_DATA_REFERENCE', 'inputs': {'reference': '', 'science': ['2', output_index]}},
-        }
+        output_index = next((index for index, port in enumerate(definition.outputs) if port.name == output_name))
+        reference = {'kind': 'asset', 'asset_id': str(item.asset_id), 'selection': {'kind': 'whole_file'}}
+        graph = {'1': {'class_type': 'APF_DATA_REFERENCE', 'inputs': {'reference': json.dumps(reference)}}, '2': {'class_type': capability.node.native_type, 'inputs': inputs}, '3': {'class_type': 'APF_DATA_REFERENCE', 'inputs': {'reference': '', 'science': ['2', output_index]}}}
         queue = native.get(web + '/queue')
         queue.raise_for_status()
         assert queue.json() == {'queue_running': [], 'queue_pending': []}
         response = native.post(web + '/prompt', json={'prompt': graph, 'client_id': str(uuid4())})
         response.raise_for_status()
         prompt_id = response.json()['prompt_id']
-        report = {'prompt_id': prompt_id, 'source_version': str(item.asset_version_id), 'original_sha256': original_hash}
+        report = {'prompt_id': prompt_id, 'source_asset': str(item.asset_id), 'original_sha256': original_hash}
         evidence.write_text(json.dumps(report, indent=2), encoding='utf-8')
         try:
             deadline = time.monotonic() + 60
@@ -78,10 +70,8 @@ def test_native_interrupt_stops_the_owned_real_siril_process():
                     try:
                         process = psutil.Process(runtime['pid'])
                         if process.create_time() == runtime['create_time'] and Path(process.exe()).resolve() == Path(runtime['executable']).resolve():
-                            # Freeze only this validated owned child so a fast finish cannot
-                            # turn the cancellation test into an already-completed query.
                             process.suspend()
-                            controlled, birth = process, process.create_time()
+                            controlled, birth = (process, process.create_time())
                             break
                     except psutil.NoSuchProcess:
                         pass
@@ -95,7 +85,7 @@ def test_native_interrupt_stops_the_owned_real_siril_process():
             deadline = time.monotonic() + 30
             while time.monotonic() < deadline:
                 current = client.get_run_call(prompt_id, str(call.call_id))
-                if current.state in {'cancelled', 'failed', 'completed', 'unknown'} and current.observation and current.observation.active is False:
+                if current.state in {'cancelled', 'failed', 'completed', 'unknown'} and current.observation and (current.observation.active is False):
                     break
                 time.sleep(0.1)
             assert current.state == 'cancelled', current
@@ -108,7 +98,7 @@ def test_native_interrupt_stops_the_owned_real_siril_process():
                     break
                 time.sleep(0.1)
             assert prompt_id in history
-            assert any(kind == 'execution_interrupted' for kind, _ in history[prompt_id]['status']['messages'])
+            assert any((kind == 'execution_interrupted' for kind, _ in history[prompt_id]['status']['messages']))
             assert hashlib.sha256(original.read_bytes()).hexdigest() == original_hash
             report.update(native_history=history[prompt_id], original_unchanged=True)
             asset = client.get_asset(str(item.asset_id))

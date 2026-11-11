@@ -104,7 +104,7 @@ test('native sidebar ordering, authenticated proxy and close/reopen retain the c
   expect(frame!.x).toBeGreaterThanOrEqual(panel!.x + panel!.width - 2)
   const response = await request.get('/astrophotoflow/api/v1/health')
   expect(zServiceHealth.parse(await response.json()).schema_revision).toBe(
-    '0001_baseline'
+    '0001_subframe_library'
   )
   expect(response.headers()['x-request-id']).toBeTruthy()
   expect(response.headers().authorization).toBeUndefined()
@@ -118,6 +118,104 @@ test('native sidebar ordering, authenticated proxy and close/reopen retain the c
   await page.reload()
   await expect(page.getByTestId('library-sidebar')).toBeVisible()
   await expect(page.locator('#graph-canvas')).toBeVisible()
+
+  const library = page.getByTestId('library-sidebar')
+  const calibrationTab = library.getByText('校准库', { exact: true })
+  await expect(calibrationTab).toHaveCount(1)
+  await calibrationTab.click()
+  await expect(calibrationTab).toHaveCount(1)
+  await expect(
+    library.getByRole('button', { name: '从已有校准照片创建组', exact: true })
+  ).toHaveCount(0)
+
+  await openSidebar(page, 'projects')
+  const projects = page.getByTestId('projects-sidebar')
+  await expect(projects.getByText('项目', { exact: true })).toHaveCount(1)
+  await expect(projects.getByRole('button', { name: '新建项目' })).toBeVisible()
+})
+
+test('equipment dropdowns dismiss before a device or setup editor opens', async ({ page }) => {
+  await page.goto('/')
+  const library = page.getByTestId('library-sidebar')
+  await library.getByRole('button', { name: '设备管理', exact: true }).click()
+  await library.getByRole('tab', { name: '我的设备', exact: true }).click()
+
+  const category = library.getByRole('combobox', { name: '设备类别' })
+  const categories = page.getByRole('listbox', { includeHidden: true }).filter({
+    has: page.getByRole('option', { name: '全部设备', exact: true, includeHidden: true })
+  })
+  const createDevice = library.getByRole('button', { name: '新建设备', exact: true, includeHidden: true })
+  await category.click()
+  await expect(categories).toBeVisible()
+  await createDevice.click()
+  await expect(page.getByRole('heading', { name: '新建设备', exact: true })).toBeVisible()
+  await expect(categories).toBeHidden()
+  await page.getByRole('dialog').getByRole('button', { name: '取消', exact: true }).click()
+  await expect(category).toHaveAttribute('aria-expanded', 'false')
+
+  const menu = page.getByRole('menu', { name: '更多操作', includeHidden: true })
+  const more = library.getByRole('button', { name: '更多操作', exact: true, includeHidden: true })
+  await category.click()
+  await expect(categories).toBeVisible()
+  await more.click()
+  await expect(menu).toBeVisible()
+  await expect(categories).toBeHidden()
+  await category.click()
+  await expect(categories).toBeVisible()
+  await expect(menu).toBeHidden()
+  await expect(more).not.toBeFocused()
+  await page.keyboard.press('Escape')
+  await expect(categories).toBeHidden()
+  await expect(category).toBeFocused()
+  await more.click()
+  await expect(menu).toBeVisible()
+  await createDevice.click()
+  await expect(menu).toBeHidden()
+  await page.getByRole('dialog').getByRole('button', { name: '取消', exact: true }).click()
+
+  await library.getByRole('tab', { name: '设备组合', exact: true }).click()
+  await more.click()
+  await expect(menu).toBeVisible()
+  await library.getByRole('button', { name: '新建设备组合', exact: true, includeHidden: true }).click()
+  await expect(page.getByRole('heading', { name: '新建设备组合', exact: true })).toBeVisible()
+  await expect(menu).toBeHidden()
+})
+
+test('library and project toolbar popups close when their view changes', async ({ page }) => {
+  await page.goto('/')
+  const library = page.getByTestId('library-sidebar')
+  const importButton = library.getByRole('button', { name: '导入', exact: true })
+  const selectFiles = library.getByRole('button', { name: '选择文件', exact: true })
+  await importButton.click()
+  await expect(selectFiles).toBeVisible()
+  await library.getByRole('tab', { name: '亮场', exact: true }).click()
+  await expect(selectFiles).toHaveCount(0)
+
+  const libraryFilters = library.getByRole('region', { name: '素材筛选' })
+  await library.getByRole('button', { name: '筛选', exact: true }).click()
+  await expect(libraryFilters).toBeVisible()
+  await library.getByRole('tab', { name: '校准库', exact: true }).click()
+  await expect(libraryFilters).toHaveCount(0)
+
+  const menu = page.getByRole('menu', { name: '更多操作', includeHidden: true })
+  await library.getByRole('button', { name: '更多操作', exact: true }).click()
+  await expect(menu).toBeVisible()
+  await library.getByRole('tab', { name: '全部素材', exact: true, includeHidden: true }).click()
+  await expect(menu).toBeHidden()
+
+  await importButton.click()
+  await library.getByRole('button', { name: '设备管理', exact: true }).click()
+  await library.getByRole('button', { name: '返回素材库', exact: true }).click()
+  await expect(selectFiles).toHaveCount(0)
+
+  await openSidebar(page, 'projects')
+  const projects = page.getByTestId('projects-sidebar')
+  const targetFilter = projects.getByPlaceholder('按目标筛选')
+  await projects.getByRole('button', { name: '筛选', exact: true }).click()
+  await expect(targetFilter).toBeVisible()
+  await projects.getByRole('button', { name: '新建项目', exact: true }).click()
+  await expect(projects.getByRole('heading', { name: '创建项目', exact: true })).toBeVisible()
+  await expect(targetFilter).toHaveCount(0)
 })
 
 test('project creation and unsaved navigation protect native graph and viewport', async ({

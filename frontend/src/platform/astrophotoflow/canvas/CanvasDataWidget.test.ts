@@ -21,6 +21,7 @@ const graphState = vi.hoisted(() => ({ root: undefined as unknown }))
 const api = vi.hoisted(() => ({
   importSubmit: vi.fn(),
   importGet: vi.fn(),
+  select: vi.fn(),
   mediaRelease: vi.fn(),
   prepare: vi.fn(),
   inspect: vi.fn(),
@@ -57,10 +58,12 @@ vi.mock(import('@astrophotoflow/ui'), async (original) => ({
   ...(await original()),
   createCanvasDataClient: () => api,
   createImportClient: () => ({
+    request: vi.fn(),
+    recoverOrganization: vi.fn(),
     submit: api.importSubmit,
     get: api.importGet,
     list: vi.fn(),
-    select: vi.fn(),
+    select: api.select,
     resume: vi.fn(),
     retry: vi.fn()
   }),
@@ -93,23 +96,19 @@ vi.mock(
 const id = (n: number) =>
   `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`
 const reference = {
-  kind: 'dataset_version',
-  dataset_version_id: id(1),
-  members: [2, 3].map((n, index) => ({
-    member_index: index,
-    asset_version_id: id(n),
-    selection: { kind: 'whole_file' }
-  }))
+  kind: 'dataset',
+  dataset_id: id(1),
+  asset_ids: [id(10), id(11)],
+  selection: { kind: 'whole_file' }
 }
 
 function item(index: number): CanvasInspect {
   return {
     title: 'Night',
-    total: 2,
+    member_count: 2,
     member_index: index,
     asset_id: id(index + 10),
-    asset_version_id: id(index + 2),
-    view_base: `/astrophotoflow/api/v1/library/assets/${id(index + 10)}/versions/${id(index + 2)}/previews`,
+    view_base: `/astrophotoflow/api/v1/library/assets/${id(index + 10)}/previews`,
     name: `Frame ${index + 1}`,
     availability: 'available',
     parameters: {
@@ -163,10 +162,10 @@ beforeEach(() => {
   )
   api.inspect.mockImplementation(async (reference, index: number) => ({
     ...item(index),
-    asset_version_id:
-      reference.kind === 'asset_version'
-        ? reference.asset_version_id
-        : item(index).asset_version_id
+    asset_id:
+      reference.kind === 'asset'
+        ? reference.asset_id
+        : item(index).asset_id
   }))
   api.mediaImage.mockResolvedValue(new Blob(['preview']))
   api.display.mockResolvedValue({ status: 'available' })
@@ -216,13 +215,47 @@ afterEach(() => {
 })
 
 describe('scientific image component widget', () => {
+  it('opens the shared chooser, imports its actual path and preserves an authored title', async () => {
+    const prepared = { native_type: 'APF_DATA_REFERENCE', title: 'Selected file',
+      reference: { kind: 'asset', asset_id: id(49), selection: { kind: 'whole_file' } } }
+    api.select.mockResolvedValue({ cancelled: false, files: [{ path: 'C:/Images/selected.fit', name: 'selected.fit', size: 4096 }] })
+    api.prepare.mockResolvedValue(prepared)
+    api.importSubmit.mockResolvedValue({ task_id: id(90), status: 'queued' })
+    api.importGet.mockResolvedValue({ id: id(90), status: 'running', items_total: 1,
+      items: [{ content_status: 'available', asset_id: id(49) }] })
+    const { node, control } = mountWidget()
+    node.title = 'My authored title'
+    await fireEvent.click(screen.getByRole('button', { name: 'astrophotoflow.nodeUi.replaceFile' }))
+    await waitFor(() => expect(control.value).toBe(JSON.stringify(prepared.reference)))
+    expect(api.select).toHaveBeenCalledWith({ mode: 'files' }, expect.any(AbortSignal))
+    expect(api.importSubmit).toHaveBeenCalledWith({ sources: [{ path: 'C:/Images/selected.fit' }], storage_mode: 'managed' }, expect.any(AbortSignal))
+    expect(node.title).toBe('My authored title')
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
+  })
+
+  it('retains its binding when the chooser is cancelled or returns after a graph edit', async () => {
+    const { control, value } = mountWidget()
+    api.select.mockResolvedValueOnce({ cancelled: true, files: [] })
+    await fireEvent.click(screen.getByRole('button', { name: 'astrophotoflow.nodeUi.replaceFile' }))
+    await waitFor(() => expect(api.select).toHaveBeenCalledTimes(1))
+    expect(control.value).toBe(value)
+    let finish!: (value: unknown) => void
+    api.select.mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))
+    await fireEvent.click(screen.getByRole('button', { name: 'astrophotoflow.nodeUi.replaceFile' }))
+    control.value = JSON.stringify({ kind: 'asset', asset_id: id(3), selection: { kind: 'whole_file' } })
+    nativeApi.dispatchCustomEvent('graphChanged', null)
+    finish({ cancelled: false, files: [{ path: 'C:/late.fit' }] })
+    await screen.findByText('astrophotoflow.canvasChanged')
+    expect(api.importSubmit).not.toHaveBeenCalled()
+  })
+
   it('imports an image path into the current node as a fixed reference', async () => {
     const prepared = {
       native_type: 'APF_DATA_REFERENCE',
       title: 'Imported image',
       reference: {
-        kind: 'asset_version',
-        asset_version_id: id(50),
+        kind: 'asset',
+        asset_id: id(49),
         selection: { kind: 'whole_file' }
       }
     }
@@ -235,12 +268,12 @@ describe('scientific image component widget', () => {
       items: [
         {
           content_status: 'available',
-          asset_id: id(49),
-          asset_version_id: id(50)
+          asset_id: id(49)
         }
       ]
     })
     const { node, control } = mountWidget()
+    await fireEvent.click(screen.getByRole('button', { name: 'astrophotoflow.nodeUi.manualPath' }))
     await fireEvent.update(
       screen.getByRole('textbox', { name: 'astrophotoflow.imagePath' }),
       'C:/Images/source.fit'
@@ -261,7 +294,7 @@ describe('scientific image component widget', () => {
   it('loads only the current member, shows zero and updates metadata while leaving the reference untouched', async () => {
     const user = userEvent.setup()
     const { node, value } = mountWidget()
-    await screen.findByAltText('Scientific preview')
+    await screen.findByAltText('Frame 1')
     expect(api.inspect).toHaveBeenCalledTimes(1)
     await waitFor(() =>
       expect(api.mediaImage).toHaveBeenCalledWith(
@@ -269,15 +302,14 @@ describe('scientific image component widget', () => {
         expect.any(AbortSignal)
       )
     )
-    expect(screen.getByText('0 s')).toBeInTheDocument()
-    expect(screen.getByText('0 °C')).toBeInTheDocument()
-    expect(screen.getByText('6000 × 4000')).toBeInTheDocument()
+    expect(screen.getByText(/0 s/)).toBeInTheDocument()
+    expect(screen.getByText(/6000 × 4000/)).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'g.nextImage' }))
     await screen.findByText('Frame 2')
-    expect(screen.getByText('180 s')).toBeInTheDocument()
+    expect(screen.getByText(/180 s/)).toBeInTheDocument()
     await waitFor(() =>
       expect(api.mediaImage).toHaveBeenCalledWith(
-        expect.stringContaining('/' + id(3) + '/previews/viewer/view/overview'),
+        expect.stringContaining('/' + id(11) + '/previews/viewer/view/overview'),
         expect.any(AbortSignal)
       )
     )
@@ -287,6 +319,7 @@ describe('scientific image component widget', () => {
     expect(await screen.findByRole('dialog')).toBeInTheDocument()
     expect(screen.getByText('Camera')).toBeInTheDocument()
     expect(screen.getByText('Offset')).toBeInTheDocument()
+    expect(screen.getByText('0 °C')).toBeInTheDocument()
     expect(node.serialize().widgets_values).toEqual([value])
   })
 
@@ -301,16 +334,16 @@ describe('scientific image component widget', () => {
     const { control } = mountWidget()
     await waitFor(() => expect(api.inspect).toHaveBeenCalledTimes(1))
     control.value = JSON.stringify({
-      kind: 'asset_version',
-      asset_version_id: id(3),
+      kind: 'asset',
+      asset_id: id(3),
       selection: { kind: 'whole_file' }
     })
-    api.inspect.mockResolvedValueOnce({ ...item(1), total: 1, member_index: 0 })
+    api.inspect.mockResolvedValueOnce({ ...item(1), asset_id: id(3), member_count: 1, member_index: 0 })
     nativeApi.dispatchCustomEvent('graphChanged', null)
-    await screen.findByText('Frame 2')
+    await screen.findByAltText('Frame 2')
     first?.(item(0))
     await waitFor(() =>
-      expect(screen.queryByText('Frame 1')).not.toBeInTheDocument()
+      expect(screen.queryByAltText('Frame 1')).not.toBeInTheDocument()
     )
     expect(api.mediaImage).not.toHaveBeenCalledWith(
       '/preview/0',
@@ -321,7 +354,7 @@ describe('scientific image component widget', () => {
   it('retains the fixed scientific reference when retrying the high resolution overview', async () => {
     const user = userEvent.setup()
     const { node, value } = mountWidget()
-    const image = await screen.findByAltText('Scientific preview')
+    const image = await screen.findByAltText('Frame 1')
     await fireEvent.error(image)
     expect(
       await screen.findByText('astrophotoflow.previewUnavailable')
@@ -330,7 +363,7 @@ describe('scientific image component widget', () => {
       screen.getByRole('button', { name: 'astrophotoflow.retryPreview' })
     )
     await waitFor(() => expect(api.mediaPrepare).toHaveBeenCalledTimes(2))
-    await screen.findByAltText('Scientific preview')
+    await screen.findByAltText('Frame 1')
     expect(node.serialize().widgets_values).toEqual([value])
   })
 
@@ -347,6 +380,7 @@ describe('scientific image component widget', () => {
     })
     mountWidget()
     await screen.findByText('Frame 1')
+    await fireEvent.click(screen.getByRole('button', { name: 'astrophotoflow.imageDetails' }))
     expect(
       screen.getAllByText('astrophotoflow.unspecified').length
     ).toBeGreaterThan(0)
@@ -396,7 +430,7 @@ describe('scientific image component widget', () => {
     }
     const { node, value, unmount } = mountWidget()
     await vi.advanceTimersByTimeAsync(0)
-    expect(screen.getByAltText('Scientific preview')).toBeInTheDocument()
+    expect(screen.getByAltText('Frame 1')).toBeInTheDocument()
     expect(
       screen
         .getAllByRole('status')
@@ -406,7 +440,7 @@ describe('scientific image component widget', () => {
     ).toBe(true)
     await vi.advanceTimersByTimeAsync(1000)
     expect(api.mediaStatus).toHaveBeenCalledTimes(1)
-    expect(screen.getByAltText('Scientific preview')).toBeInTheDocument()
+    expect(screen.getByAltText('Frame 1')).toBeInTheDocument()
     finishStatus(available)
     await vi.advanceTimersByTimeAsync(0)
     expect(api.mediaImage).toHaveBeenCalledWith(
@@ -476,12 +510,13 @@ it('does not replace a reference edited while its import was being observed', as
     native_type: 'APF_DATA_REFERENCE',
     title: 'Imported',
     reference: {
-      kind: 'asset_version',
-      asset_version_id: id(50),
+      kind: 'asset',
+      asset_id: id(49),
       selection: { kind: 'whole_file' }
     }
   })
   const { control, node } = mountWidget()
+  await fireEvent.click(screen.getByRole('button', { name: 'astrophotoflow.nodeUi.manualPath' }))
   await fireEvent.update(
     screen.getByRole('textbox', { name: 'astrophotoflow.imagePath' }),
     'C:/Images/new.fit'
@@ -491,8 +526,8 @@ it('does not replace a reference edited while its import was being observed', as
   )
   await waitFor(() => expect(api.importGet).toHaveBeenCalledTimes(1))
   const changed = JSON.stringify({
-    kind: 'asset_version',
-    asset_version_id: id(3),
+    kind: 'asset',
+    asset_id: id(3),
     selection: { kind: 'whole_file' }
   })
   control.value = changed
@@ -504,8 +539,7 @@ it('does not replace a reference edited while its import was being observed', as
     items: [
       {
         content_status: 'available',
-        asset_id: id(49),
-        asset_version_id: id(50)
+        asset_id: id(49)
       }
     ]
   })
@@ -516,9 +550,9 @@ it('does not replace a reference edited while its import was being observed', as
   expect(node.title).not.toBe('Imported')
 })
 it('rejects mismatched inspected members and never prepares their preview', async () => {
-  api.inspect.mockResolvedValue({ ...item(0), asset_version_id: id(99) })
+  api.inspect.mockResolvedValue({ ...item(0), asset_id: id(99) })
   mountWidget()
-  await screen.findByText('Canvas metadata does not match its fixed member')
+  await screen.findByText('Canvas metadata does not match its selected member')
   expect(api.mediaPrepare).not.toHaveBeenCalled()
 })
 

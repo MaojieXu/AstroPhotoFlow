@@ -3,14 +3,14 @@ import type { ListDatasetMembersData } from '../../../generated/api/types.gen'
 import { ApiClientError } from '../api/client'
 import { uiT } from '../../../core/i18n'
 
-export type FixedDataset = { id: string; versionId: string }
+export type DatasetReference = { id: string }
 type MemberQuery = NonNullable<ListDatasetMembersData['query']>
 
-export function readMemberPage(reference: FixedDataset, query: MemberQuery, signal?: AbortSignal) {
-  return libraryApi.members(reference.id, reference.versionId, query, signal)
+export function readMemberPage(reference: DatasetReference, query: MemberQuery, signal?: AbortSignal) {
+  return libraryApi.members(reference.id, query, signal)
 }
 
-export async function fixedMemberAt(reference: FixedDataset, index: number, signal?: AbortSignal) {
+export async function datasetMemberAt(reference: DatasetReference, index: number, signal?: AbortSignal) {
   if (!Number.isInteger(index) || index < 0) throw new ApiClientError(uiT('apfUi.fixed_member_is_out_of_range'), 'contract')
   const page = await readMemberPage(reference, { limit: 1, offset: index, sort_by: 'position', order: 'asc' }, signal)
   if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')

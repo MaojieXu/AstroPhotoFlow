@@ -46,6 +46,7 @@
             >
               <div class="flex-1 truncate">
                 <EditableText
+                  :title="displayTitle"
                   :model-value="displayTitle"
                   :is-editing="isEditing"
                   :input-attrs="{ 'data-testid': 'node-title-input' }"

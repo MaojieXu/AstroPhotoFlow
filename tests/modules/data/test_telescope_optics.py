@@ -12,7 +12,7 @@ from astrophotoflow.contracts.metadata import AssetParametersPatch
 from astrophotoflow.contracts.setups import EquipmentSetupCreate, EquipmentSetupPatch
 from astrophotoflow.core.config import Settings
 from astrophotoflow.core.database.db import Database
-from astrophotoflow.core.database.schema import upgrade_database
+from astrophotoflow.core.database.schema import initialize_database
 from astrophotoflow.core.errors import ApiError
 from astrophotoflow.modules.data.equipment.service import create_equipment, get_equipment, update_equipment
 from astrophotoflow.modules.data.equipment.setups import create_setup, get_setup, update_setup
@@ -30,7 +30,7 @@ def freeze_setup(session, setup_id):
 @pytest.fixture
 def database(tmp_path):
     settings = Settings("127.0.0.1", 8190, tmp_path / "data", (), workspace=tmp_path)
-    upgrade_database(settings)
+    initialize_database(settings)
     with closing(Database(settings.database_path)) as database:
         yield database
 

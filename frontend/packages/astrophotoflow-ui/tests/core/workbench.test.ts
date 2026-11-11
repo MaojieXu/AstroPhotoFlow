@@ -21,6 +21,11 @@ const controls = {
     props: ['modelValue'],
     emits: ['update:modelValue'],
     template: `<input :value="modelValue" @input="$emit('update:modelValue', $event.target.value)" />`
+  }),
+  number: defineComponent({
+    props: ['modelValue'],
+    emits: ['update:modelValue'],
+    template: `<input type="number" :value="modelValue" @input="$emit('update:modelValue', Number($event.target.value))" />`
   })
 }
 

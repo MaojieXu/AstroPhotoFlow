@@ -25,6 +25,7 @@ import {
 } from '@/lib/litegraph/src/types/globalEnums'
 
 import { NodeInputSlot } from './NodeInputSlot'
+import { resolveNodeDefSlotText } from '@/i18n'
 import { SlotBase } from './SlotBase'
 
 export interface IDrawOptions {
@@ -105,6 +106,11 @@ export abstract class NodeSlot extends SlotBase implements INodeSlot {
    * The label to display in the UI.
    */
   get renderingLabel(): string {
+    const type = this.node.comfyClass
+    if (!this.label && type?.startsWith('APF_')) {
+      const slot = this instanceof NodeInputSlot ? this.name : this.node.outputs.indexOf(this as INodeOutputSlot)
+      return resolveNodeDefSlotText('name', type, slot, undefined, this.localized_name || this.name || '')
+    }
     return this.label || this.localized_name || this.name || ''
   }
 

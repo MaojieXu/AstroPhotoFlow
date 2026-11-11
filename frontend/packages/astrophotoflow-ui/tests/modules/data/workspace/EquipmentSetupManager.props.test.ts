@@ -16,7 +16,7 @@ afterEach(() => { wrapper?.unmount(); wrapper = undefined })
 
 async function open() {
   wrapper = mount(EquipmentSetupManager, {
-    props: { workspace: '/one', recordsLoading: false, viewKey: 'one', changeToken: 0 },
+    props: { workspace: '/one', viewKey: 'one', changeToken: 0 },
     global: { stubs: { WorkspaceRecords: true } }
   })
   await flushPromises()

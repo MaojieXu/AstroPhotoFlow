@@ -64,7 +64,7 @@ function selectionRows() {
     if (selected.value.has(key)) selectedRows.set(key,row)
   }
   return [...selectedRows.values()].map(row => ({entry_type:row.entry_type,id:row.id,removed_at:row.removed_at,
-    revision:row.revision,current_version_id:row.current_version_id,source_dataset_id:row.source_dataset_id??null}))
+    revision:row.revision,source_dataset_id:row.source_dataset_id??null}))
 }
 watch(() => [props.open,props.workspaceId] as const, () => {
   dialogSession.value={};restoreMutation.reset();deleteMutation.reset();previewMutation.reset(); offset.value=0; notice.value=''; actionError.value=''; resetGroup(); clearSelection()
@@ -120,7 +120,7 @@ async function requestPreview() {
     const result=await previewMutation.mutateAsync(selection)
     if (session!==dialogSession.value||!props.open) return
     preview.value=result; previewSelection.value=selection
-    if (!result.tasks.length&&!result.references.some(reference => reference.kind==='calibration')) deleteConfirm.value=true
+    if (!result.tasks.length&&!result.references.length&&!result.blockers?.length) deleteConfirm.value=true
   } catch {
     /* Mutation owns the diagnostic. */
   }
@@ -201,9 +201,10 @@ const bytes = (value:number) => value<1024?`${value} B`:value<1024*1024?`${(valu
         </div>
         <section v-if="preview" class="trash-preview" :aria-label="$t('apfUi.permanent_deletion_preview')">
           <h3>{{ $t('apfUi.deletion_scope') }}</h3><p>{{ $t('apfUi.photos_value_managed_files_value_total_value', { p0: (preview.photo_count), p1: (preview.managed_file_count), p2: (bytes(preview.managed_bytes)) }) }}</p>
+          <p v-for="blocker in preview.blockers" :key="blocker" class="trash-error" role="alert">{{ blocker }}</p>
           <p v-if="preview.tasks.length" class="trash-error">{{ $t('apfUi.import_tasks_still_hold_these_items_value_cancel_them_through_the_impo', { p0: (preview.tasks.join('、')) }) }}</p>
-          <div v-if="preview.references.length"><h4>{{ $t('apfUi.value_project_or_group_references_value', { p0: preview.references.some(reference=>reference.kind==='calibration')?$t('apfUi.project_group_or_calibration_references'):$t('apfUi.included_in_cleanup'), p1: preview.references.length }) }}</h4><p v-for="reference in preview.references" :key="reference.id">{{ $t('apfUi.value_value_version_value', { p0: reference.name, p1: reference.kind==='project_asset'?$t('apfUi.project_photos'):reference.kind==='project_dataset'?$t('apfUi.project_image_groups'):reference.kind==='calibration'?$t('apfUi.retained_calibration_references'):$t('apfUi.image_group_members'), p2: reference.version }) }}</p></div>
-          <p v-if="preview.references.some(reference=>reference.kind==='calibration')" role="alert">{{ $t('apfUi.historical_versions_of_other_groups_still_reference_this_calibration_t') }}</p>
+          <div v-if="preview.references.length"><h4>{{ $t('apfUi.value_project_or_group_references_value', { p0: $t('apfUi.project_group_or_calibration_references'), p1: preview.references.length }) }}</h4><p v-for="reference in preview.references" :key="reference.id">{{ $t('apfUi.named_library_reference', { name: reference.name, kind: reference.kind==='project_asset'?$t('apfUi.project_photos'):reference.kind==='project_dataset'?$t('apfUi.project_image_groups'):reference.kind==='calibration'?$t('apfUi.retained_calibration_references'):$t('apfUi.image_group_members') }) }}</p></div>
+          <p v-if="preview.references.length" role="alert">{{ $t('apfUi.external_references_block_cleanup') }}</p>
         </section>
       </div>
       <footer class="trash-footer">
@@ -223,7 +224,7 @@ const bytes = (value:number) => value<1024?`${value} B`:value<1024*1024?`${(valu
         <p v-if="preview?.references.length">{{[...new Set(preview.references.map(reference=>reference.name))].join('、')}}</p>
         <div class="trash-actions">
           <button type="button" :disabled="busy" @click="deleteConfirm=false">{{ $t('apfUi.cancel') }}</button>
-          <button type="button" class="trash-danger" :disabled="busy" @click="permanentlyDelete">{{ $t('apfUi.confirm_permanent_deletion') }}</button>
+          <button type="button" class="trash-danger" :disabled="busy || !!preview?.references.length || !!preview?.tasks.length || !!preview?.blockers?.length" @click="permanentlyDelete">{{ $t('apfUi.confirm_permanent_deletion') }}</button>
         </div>
       </div>
     </section>

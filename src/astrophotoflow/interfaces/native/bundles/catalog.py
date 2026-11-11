@@ -33,7 +33,7 @@ from .node import BundleNode
 def bundle_fingerprint(workspace):
     paths = {*((workspace / 'nodes').glob('*.json')), bundle_sources_path(workspace)}
     digest = hashlib.sha256()
-    for package_id in list_package_ids():
+    for package_id in list_package_ids(workspace):
         root = bundle_source_root(workspace, package_id, require_ready=False)
         paths.update((bundle_source_receipt_path(workspace, package_id), root / 'bundle.json',
                       workspace / 'software' / package_id / 'bundle-lock.json'))
@@ -56,7 +56,7 @@ def collect_bundle_nodes():
     if not workspace:
         return {}, {}, []
     settings = load_running_settings(Path(workspace))
-    catalog = list_package_ids()
+    catalog = list_package_ids(settings.workspace)
     classes, names, observations = {}, {}, []
     for package_id in catalog:
         observation = {"ready": True, "reason": None, "nodes": {}}
@@ -113,7 +113,7 @@ def collect_bundle_nodes():
                 observation["nodes"][str(definition.definition_id)] = saved.content_token
             classes.update(package_classes)
             names.update(package_names)
-        except (OSError, KeyError, ValueError, ImportError, RuntimeError, ApiError, subprocess.SubprocessError) as exc:
+        except (OSError, KeyError, TypeError, ValueError, ImportError, RuntimeError, ApiError, subprocess.SubprocessError) as exc:
             observation.update(ready=False, reason=error_message(workspace_locale(settings.workspace), '', 'bundle_load_diagnostic', {'diagnostic': str(exc)}))
         observation.update(pid=os.getpid(), create_time=psutil.Process().create_time())
         path = bundle_observation_path(settings.workspace, package_id)

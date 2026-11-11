@@ -8,7 +8,7 @@ from sqlalchemy import select
 from astrophotoflow.interfaces.http.app import create_app
 from astrophotoflow.modules.data.equipment.models import Equipment
 from astrophotoflow.modules.data.imports.models import AssetTask
-from astrophotoflow.core.database.schema import upgrade_database
+from astrophotoflow.core.database.schema import initialize_database
 from astrophotoflow.core.config import Settings
 
 
@@ -24,7 +24,7 @@ def _create_sort_record(client, path, body):
 @pytest.fixture
 def service(tmp_path):
     settings = Settings("127.0.0.1", 8190, tmp_path / "settings-data", (), workspace=tmp_path)
-    upgrade_database(settings)
+    initialize_database(settings)
     app = create_app(settings, "settings-test")
     with TestClient(app) as client:
         yield client, app.state.database

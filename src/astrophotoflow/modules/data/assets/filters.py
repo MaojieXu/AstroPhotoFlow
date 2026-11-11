@@ -1,31 +1,24 @@
 """SQL predicates for current capture metadata; shared by member and library queries."""
-
-from sqlalchemy import and_, func, or_, true
+from sqlalchemy import and_, literal, or_, true
 from sqlalchemy.sql.elements import ColumnElement
-
 from astrophotoflow.contracts.assets import LibraryMemberFilters
 from astrophotoflow.modules.data.assets.models import Asset
 
-
-def member_predicate(query: LibraryMemberFilters) -> ColumnElement[bool]:
+def member_predicate(query: LibraryMemberFilters, *, fixed_dataset: bool=False) -> ColumnElement[bool]:
     conditions = []
-    for field in ("role", "frame_class", "frame_type", "parameter_mode"):
+    for field, column in (('calibration_status', Asset.calibration_status), ('role', Asset.role), ('frame_class', literal('subframe') if fixed_dataset else Asset.frame_class), ('frame_type', Asset.frame_type if fixed_dataset else Asset.frame_type), ('parameter_mode', Asset.parameter_mode)):
         values = getattr(query, field)
         if values:
-            conditions.append(getattr(Asset, field).in_(values))
-    for field in ("camera_id", "optical_system_id", "filter_id"):
+            conditions.append(column.in_(values))
+    for field in ('camera_id', 'optical_system_id', 'filter_id'):
         values = getattr(query, field)
         if values:
             conditions.append(getattr(Asset, field).in_([str(value) for value in values]))
     if query.binning:
-        pairs = [tuple(int(part) for part in value.split("x")) for value in query.binning]
+        pairs = [tuple((int(part) for part in value.split('x'))) for value in query.binning]
         conditions.append(or_(*(and_(Asset.binning_x == x, Asset.binning_y == y) for x, y in pairs)))
-    for prefix, column in (
-        ("exposure", Asset.exposure_seconds), ("integration", Asset.integration_seconds),
-        ("temperature", func.round(Asset.sensor_temperature_c)), ("iso", Asset.iso),
-        ("gain", Asset.gain), ("offset", Asset.offset),
-    ):
-        low, high = getattr(query, prefix + "_min"), getattr(query, prefix + "_max")
+    for prefix, column in (('exposure', Asset.exposure_seconds), ('integration', Asset.integration_seconds), ('temperature', Asset.sensor_temperature_c), ('iso', Asset.iso), ('gain', Asset.gain), ('offset', Asset.offset)):
+        low, high = (getattr(query, prefix + '_min'), getattr(query, prefix + '_max'))
         if low is not None:
             conditions.append(column >= low)
         if high is not None:

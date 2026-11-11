@@ -6,14 +6,14 @@ from fastapi.testclient import TestClient
 
 from astrophotoflow.contracts.projects import ProjectOut
 from astrophotoflow.core.config import Settings
-from astrophotoflow.core.database.schema import upgrade_database
+from astrophotoflow.core.database.schema import initialize_database
 from astrophotoflow.interfaces.http.app import create_app
 from astrophotoflow.modules.data.public import get_project
 
 
 def test_project_public_service_and_http_route_return_the_same_project(tmp_path):
     settings = Settings("127.0.0.1", 8190, tmp_path / "data", (), workspace=tmp_path)
-    upgrade_database(settings)
+    initialize_database(settings)
     app = create_app(settings, "project-test")
     with TestClient(app, headers={"Authorization": "Bearer project-test"}) as client:
         created = client.post("/api/v1/projects", json={"name": "M31"})

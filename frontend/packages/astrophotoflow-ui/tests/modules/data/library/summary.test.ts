@@ -4,7 +4,7 @@ import { metadataForMembers } from '../../../fixtures/library-summary'
 
 describe('server field summaries', () => {
   const asset = {id: 'a', name: 'sample', parameters: {gain: 0, offset: 0}, classification: {frame_class: 'video', frame_type: null}}
-  const row = {summary: metadataForMembers([{asset, version: {id: 'v'}}])}
+  const row = {summary: metadataForMembers([{asset}])}
   it('retains zero and separates unknown from mixed without member arrays', () => {
     expect(summaryRaw(row, 'gain')).toBe(0)
     expect(summaryText(row, 'offset')).toBe('0')

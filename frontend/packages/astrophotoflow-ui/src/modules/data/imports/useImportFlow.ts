@@ -3,7 +3,7 @@ import type { MaybeRefOrGetter } from 'vue'
 import { useQueryClient } from '@tanstack/vue-query'
 import type { LocalImportFile } from '../api/contracts'
 import type { ImportNotice } from '../workspace/libraryControls'
-import { libraryQueryKey } from '../library/queries'
+import { workspaceQueryKey } from '../../../core/query/keys'
 
 export interface ImportFlowOptions {
   workspace: MaybeRefOrGetter<string>
@@ -21,12 +21,12 @@ export function useImportFlow(options: ImportFlowOptions) {
 
   function invalidateLibrary() {
     const workspaceId=toValue(options.workspace)
-    if(workspaceId)return cache.invalidateQueries({queryKey:libraryQueryKey(workspaceId)})
+    if(workspaceId)return cache.invalidateQueries({queryKey:workspaceQueryKey(workspaceId)})
   }
   function changed() { options.clearSelection(); void invalidateLibrary() }
-  function start(kind:'files'|'folder') { pickerMode.value=kind }
+  function start(kind:'files'|'folder', createDataset=false) { createsDataset.value=createDataset; pickerMode.value=kind }
   function selected(selectedFiles:LocalImportFile[],name:string,folder:boolean) {
-    pickerMode.value=undefined;files.value=selectedFiles;createsDataset.value=folder
+    pickerMode.value=undefined;files.value=selectedFiles
     datasetName.value=folder?name:'';dialogOpen.value=true
   }
   function submitted(taskId:string) {

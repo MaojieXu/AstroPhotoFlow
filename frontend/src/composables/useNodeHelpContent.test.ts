@@ -3,6 +3,7 @@ import { render } from '@testing-library/vue'
 import { describe, expect, it, vi } from 'vitest'
 import { defineComponent, nextTick, ref } from 'vue'
 import { createI18n } from 'vue-i18n'
+import { i18n as hostI18n, mergeBundleNodeI18n, setActiveLocale } from '@/i18n'
 
 import { useNodeHelpContent as useNodeHelpContentComposable } from '@/composables/useNodeHelpContent'
 import type { ComfyNodeDefImpl } from '@/stores/nodeDefStore'
@@ -74,6 +75,38 @@ vi.mock<unknown>(import('@/types/nodeSource'), () => ({
 }))
 
 describe('useNodeHelpContent', () => {
+  it('updates inline Bundle help for locale and same-language translation changes', async () => {
+    const type = 'APF_help_fixture'
+    await setActiveLocale('zh')
+    mergeBundleNodeI18n({
+      en: { [type]: { help: 'English help' } },
+      zh: { [type]: { help: '中文帮助' } }
+    })
+    const node = createMockNode({ name: type })
+    let content!: ReturnType<typeof useNodeHelpContentComposable>
+    const view = render(defineComponent({ setup() {
+      content = useNodeHelpContentComposable(() => node)
+      return () => null
+    } }), { global: { plugins: [hostI18n] } })
+    try {
+      expect(content.helpContent.value).toBe('中文帮助')
+      expect(content.error.value).toBeNull()
+      await setActiveLocale('en')
+      await nextTick()
+      expect(content.helpContent.value).toBe('English help')
+      mergeBundleNodeI18n({ en: { [type]: { help: 'Updated help' } } })
+      await nextTick()
+      expect(content.helpContent.value).toBe('Updated help')
+      mergeBundleNodeI18n({ en: { [type]: { help: '' } } })
+      await nextTick()
+      expect(content.helpContent.value).toBe('')
+      expect(content.error.value).toBeNull()
+    } finally {
+      view.unmount()
+      mergeBundleNodeI18n({})
+      await setActiveLocale('en')
+    }
+  })
   const mockCoreNode = createMockNode({
     name: 'TestNode',
     display_name: 'Test Node',

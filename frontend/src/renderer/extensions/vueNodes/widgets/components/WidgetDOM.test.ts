@@ -34,6 +34,24 @@ beforeEach(() => {
 })
 
 describe('WidgetDOM', () => {
+  it('refreshes a component owner when an undo recreates the node with the same ID', async () => {
+    const component = defineComponent({ props: ['widget'], template: '<span>{{ widget.node.title }}</span>' })
+    const first = new LGraphNode('Before undo')
+    const second = new LGraphNode('After undo')
+    const makeWidget = (node: LGraphNode) => fromPartial<ComponentWidget<string>>({
+      node, name: 'display', value: '', component, options: { surfaces: { vueNode: 'shown' } }
+    })
+    isDOMWidgetMock.mockReturnValue(false)
+    isComponentWidgetMock.mockReturnValue(true)
+    resolveMock.mockReturnValue({ node: first, widget: makeWidget(first) })
+    const props = { widget: createMockWidget<undefined>({ value: undefined, name: 'display', type: 'custom' }), nodeId: toNodeId('n1') }
+    const view = render(WidgetDOM, { props })
+    await screen.findByText('Before undo')
+    resolveMock.mockReturnValue({ node: second, widget: makeWidget(second) })
+    await view.rerender({ widget: { ...props.widget } })
+    await screen.findByText('After undo')
+    expect(screen.queryByText('Before undo')).not.toBeInTheDocument()
+  })
   beforeEach(() => {
     isDOMWidgetMock.mockReturnValue(true)
     isComponentWidgetMock.mockReturnValue(false)

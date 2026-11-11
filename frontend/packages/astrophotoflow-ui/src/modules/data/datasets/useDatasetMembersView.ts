@@ -7,7 +7,7 @@ import { useDatasetMembersQuery } from './queries'
 import type { DatasetMembersRequest } from './queries'
 
 export interface DatasetMembersViewInput extends ListViewInput {
-  dataset?: { id: string; versionId: string }
+  dataset?: { id: string }
   sort: { by: string; order: 'asc' | 'desc' }
 }
 export function useDatasetMembersView(
@@ -20,7 +20,6 @@ export function useDatasetMembersView(
     return {
       workspaceId: state.workspaceId,
       datasetId: state.dataset.id,
-      versionId: state.dataset.versionId,
       query: zListDatasetMemberSummariesQuery.parse({
         limit: state.pageSize === 'all' ? 200 : state.pageSize,
         offset: state.pageSize === 'all' ? 0 : state.offset,
@@ -33,7 +32,7 @@ export function useDatasetMembersView(
     }
   })
   const request = useStableQueryInput(desired, paused, (state) =>
-    JSON.stringify([state.workspaceId, state.datasetId, state.versionId])
+    JSON.stringify([state.workspaceId, state.datasetId])
   )
   return { request, query: useDatasetMembersQuery(request, paused) }
 }

@@ -1,26 +1,15 @@
 """Explicit scanned-file imports: the Agent owns grouping and confirmation."""
-
 from typing import Annotated, Literal
-
 from pydantic import MISSING, ConfigDict, Field, field_validator, model_validator
-
 from astrophotoflow.contracts.calibration import CalibrationTarget
 from astrophotoflow.contracts.common import JsonObject, JsonValue, PageMetadata, StrictModel, UuidInput
 from astrophotoflow.contracts.image_calibration import CalibrationCheckState, CalibrationPatch, CalibrationSlot
-from astrophotoflow.contracts.image_management import (
-    EquipmentApplication,
-    ImageMetadata,
-    ImageName,
-    PageLimit,
-    PageOffset,
-    Revision,
-)
-from astrophotoflow.contracts.imports import TaskStatus
+from astrophotoflow.contracts.image_management import EquipmentApplication, ImageMetadata, ImageName, PageLimit, PageOffset, Revision
+from astrophotoflow.contracts.imports import ImportDestinationReport, TaskStatus
 from astrophotoflow.contracts.metadata import FrameClass, FrameType
 
-
 class InspectionQuery(StrictModel):
-    model_config = ConfigDict(extra="forbid", strict=False)
+    model_config = ConfigDict(extra='forbid', strict=False)
     text: str | None = None
     frame_class: FrameClass | None = None
     frame_type: FrameType | None = None
@@ -29,13 +18,13 @@ class InspectionQuery(StrictModel):
     limit: PageLimit = 50
     offset: PageOffset = 0
 
-
 class ImageInspectionRequest(StrictModel):
     paths: list[str] = Field(min_length=1)
     recursive: bool = True
 
+from astrophotoflow.contracts.calibration_status import CalibrationDeclaration, CalibrationState
 
-class ConfirmedFile(StrictModel):
+class ConfirmedFile(CalibrationDeclaration):
     file_id: UuidInput
     name: ImageName | MISSING = MISSING
     metadata: ImageMetadata | MISSING = MISSING
@@ -43,84 +32,63 @@ class ConfirmedFile(StrictModel):
     calibration: CalibrationPatch | MISSING = MISSING
     notes: str | None | MISSING = MISSING
 
-
-class ImportDefaults(StrictModel):
+class ImportDefaults(CalibrationDeclaration):
     metadata: ImageMetadata | MISSING = MISSING
     equipment: EquipmentApplication | MISSING = MISSING
     notes: str | None | MISSING = MISSING
 
-
-
 class StandaloneDestination(StrictModel):
-    mode: Literal["standalone"]
-
+    mode: Literal['standalone']
 
 class NewDatasetDestination(StrictModel):
-    mode: Literal["new_dataset"]
+    mode: Literal['new_dataset']
     name: ImageName
     notes: str | None = None
 
-
 class AppendDatasetDestination(StrictModel):
-    mode: Literal["append_dataset"]
+    mode: Literal['append_dataset']
     dataset_id: UuidInput
     expected_revision: Revision
-    base_version_id: UuidInput
-
-
-ImportDestination = Annotated[
-    StandaloneDestination | NewDatasetDestination | AppendDatasetDestination,
-    Field(discriminator="mode"),
-]
-
+ImportDestination = Annotated[StandaloneDestination | NewDatasetDestination | AppendDatasetDestination, Field(discriminator='mode')]
 
 class ExplicitImportRequest(StrictModel):
+    project_id: UuidInput | None = None
+    project_base_revision: Revision | None = None
     request_id: UuidInput
     scan_id: UuidInput
     files: list[ConfirmedFile] = Field(min_length=1)
     destination: ImportDestination
     defaults: ImportDefaults | MISSING = MISSING
-    calibration_defaults: CalibrationPatch | MISSING = MISSING
-    incoming_calibration: CalibrationPatch | MISSING = MISSING
-    storage_mode: Literal["managed", "reference"] = "managed"
+    calibration: CalibrationPatch | MISSING = MISSING
+    storage_mode: Literal['managed'] = 'managed'
     accept_unknown: bool = False
 
-    @field_validator("files")
+    @field_validator('files')
     @classmethod
     def unique_files(cls, value):
         ids = [item.file_id for item in value]
         if len(ids) != len(set(ids)):
-            raise ValueError("Scanned files must be unique within a submission.")
+            raise ValueError('Scanned files must be unique within a submission.')
         return value
 
-    @model_validator(mode="after")
+    @model_validator(mode='after')
     def destination_options(self):
-        if self.destination.mode == "standalone" and len(self.files) != 1:
-            raise ValueError("A standalone import requires exactly one file.")
-        if self.calibration_defaults is not MISSING:
-            if self.destination.mode != "new_dataset":
-                raise ValueError("calibration_defaults is available only for a new dataset.")
-            self.calibration_defaults.forbid_inherit()
-        if self.incoming_calibration is not MISSING and self.destination.mode != "append_dataset":
-            raise ValueError("incoming_calibration is available only for an append.")
-        if self.destination.mode == "standalone":
-            for file in self.files:
-                if file.calibration is not MISSING:
-                    file.calibration.forbid_inherit()
+        if (self.project_id is None) != (self.project_base_revision is None):
+            raise ValueError('Project ID and revision must be supplied together.')
+        if self.calibration is not MISSING and self.destination.mode != 'new_dataset':
+            raise ValueError('calibration is available only for a new dataset.')
+        if self.destination.mode != 'standalone' and any((file.calibration is not MISSING for file in self.files)):
+            raise ValueError('Individual calibration is available only for standalone imports.')
         return self
-
 
 class ImagePublicationRetry(StrictModel):
     request_id: UuidInput
     task_id: UuidInput
     expected_revision: Revision
-    base_version_id: UuidInput
-
 
 class ImageRequestWait(StrictModel):
     request_id: UuidInput
     wait_seconds: float = Field(default=20, ge=0, le=20, allow_inf_nan=False)
-
 
 class ImageInspectionOut(StrictModel):
     scan_id: UuidInput
@@ -130,7 +98,6 @@ class ImageInspectionOut(StrictModel):
     excluded_count: int = Field(ge=0)
     issues: list[JsonObject]
     issues_total: int = Field(ge=0)
-
 
 class InspectedImageFile(StrictModel):
     file_id: UuidInput
@@ -143,32 +110,26 @@ class InspectedImageFile(StrictModel):
     metadata_status: str
     supported: bool
 
-
 class ImageInspectionPage(PageMetadata):
-    # Excluded paths and source issues are observations, not ingested assets.
     items: list[InspectedImageFile | JsonObject]
-
 
 class ImportRegistrationStage(StrictModel):
     total: int = Field(ge=0)
     registered: int = Field(ge=0)
 
-
 class ImportAvailabilityStage(StrictModel):
     available: int = Field(ge=0)
     total: int = Field(ge=0)
 
-
 class ImagePublicationStage(StrictModel):
-    state: Literal["pending", "published", "blocked", "conflict"]
+    state: Literal['pending', 'published', 'blocked', 'conflict']
     dataset_id: UuidInput | None = None
-    dataset_version_id: UuidInput | None = None
     dataset_revision: int | None = None
     binding: JsonObject | None = None
+    bindings: list[JsonObject] = Field(default_factory=list)
     errors: list[JsonObject] | None = None
     calibration: JsonObject | None = None
     published_file_ids: list[UuidInput] | None = None
-
 
 class ImageImportStages(StrictModel):
     registration: ImportRegistrationStage
@@ -178,28 +139,27 @@ class ImageImportStages(StrictModel):
     calibration: JsonObject
     previews: ImportAvailabilityStage
 
-
-class ImageImportItem(StrictModel):
+class ImageImportItem(CalibrationState):
     file_id: UuidInput | None
     task_item_id: UuidInput
     asset_id: UuidInput | None
-    asset_version_id: UuidInput | None
     status: str
     originals: str
     metadata: str
     previews: str
-    publication_status: Literal["published", "conflict", "excluded", "not_ready", "pending"]
-    calibration_status: Literal["saved", "pending", "blocked", "not_checked"]
+    publication_status: Literal['published', 'conflict', 'excluded', 'not_ready', 'pending']
+    calibration_binding_status: Literal['saved', 'pending', 'blocked', 'not_checked']
     errors: list[JsonObject]
     member_position: int | None
     error: JsonObject | None
 
-
 class ImageImportReceipt(StrictModel):
+    organization_recovery: JsonObject | None = None
+    destination: ImportDestinationReport | None = None
     request_id: UuidInput
     task_id: UuidInput
     status: TaskStatus
-    state: Literal["running", "needs_attention", "completed"]
+    state: Literal['running', 'needs_attention', 'completed']
     stages: ImageImportStages
     items: list[ImageImportItem]
     items_total: int = Field(ge=0)
@@ -208,28 +168,30 @@ class ImageImportReceipt(StrictModel):
     next_poll_seconds: int | None
     error: JsonObject | None
 
-
 class ScannedCalibrationCheckRequest(StrictModel):
     scan_id: UuidInput
     files: list[ConfirmedFile] = Field(min_length=1)
     defaults: ImportDefaults | None = None
-    calibration_defaults: CalibrationPatch | None = None
+    calibration: CalibrationPatch | None = None
+    destination: ImportDestination | None = None
     limit: PageLimit = 50
     offset: PageOffset = 0
 
-    @model_validator(mode="after")
+    @model_validator(mode='after')
     def valid_selection(self):
         ids = [item.file_id for item in self.files]
         if len(ids) != len(set(ids)):
-            raise ValueError("Scanned files must be unique.")
-        if self.calibration_defaults is not None:
-            self.calibration_defaults.forbid_inherit()
+            raise ValueError('Scanned files must be unique.')
+        mode = self.destination.mode if self.destination else None
+        if self.calibration is not None and mode not in {None, 'new_dataset'}:
+            raise ValueError('calibration is available only for a new dataset.')
+        if (mode in {'new_dataset', 'append_dataset'} or self.calibration is not None) and any((file.calibration is not MISSING for file in self.files)):
+            raise ValueError('Individual calibration is available only for standalone imports.')
         return self
-
 
 class ScannedCalibrationCheckItem(StrictModel):
     file_id: UuidInput
-    dependency_asset_version_id: UuidInput | None = None
+    dependency_asset_id: UuidInput | None = None
     slot: CalibrationSlot
     target: CalibrationTarget
     state: CalibrationCheckState
@@ -237,8 +199,8 @@ class ScannedCalibrationCheckItem(StrictModel):
     diagnostics: list[JsonObject]
     dependency_path: list[CalibrationTarget]
 
-
 class ScannedCalibrationCheckPage(PageMetadata):
+    warning_count: int = Field(default=0, ge=0)
     state: CalibrationCheckState
     checked_files: int = Field(ge=0)
     checked_bindings: int = Field(ge=0)

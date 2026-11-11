@@ -14,7 +14,14 @@ import { useNodeOutputStore } from '@/stores/nodeOutputStore'
 import { useApp } from '@/scripts/appInstance'
 import { api } from '@/scripts/api'
 import Button from '@/components/ui/button/Button.vue'
-import ImagePreview from '@/renderer/extensions/vueNodes/components/ImagePreview.vue'
+import Dialog from '@/components/ui/dialog/Dialog.vue'
+import DialogContent from '@/components/ui/dialog/DialogContent.vue'
+import DialogHeader from '@/components/ui/dialog/DialogHeader.vue'
+import DialogTitle from '@/components/ui/dialog/DialogTitle.vue'
+import DialogPortal from '@/components/ui/dialog/DialogPortal.vue'
+import DialogOverlay from '@/components/ui/dialog/DialogOverlay.vue'
+import { imageSummary } from '../media/imageSummary'
+import { formatSize } from '@/utils/formatUtil'
 import MediaViewer from '../media/MediaViewer.vue'
 import DataExportDialog from './DataExportDialog.vue'
 import { useNativeWorkspace } from '../useNativeWorkspace'
@@ -23,6 +30,7 @@ const props = defineProps<{
   widget: ComponentWidget<string | object>
   reference?: unknown
   bindings: Record<string, (string | number)[]>
+  sourcePath?: string
 }>()
 const { t } = useI18n()
 const label = (key: string) => t(`astrophotoflow.dataExport.${key}`)
@@ -100,15 +108,15 @@ const parameterSummary = computed(() => {
   const raw = metadata?.parameters ?? metadata?.observed_parameters
   const parameters =
     raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
+  const temperature = parameters.sensor_temperature_c ?? parameters.sensor_temperature_setpoint_c
   return [
-    [t('astrophotoflow.exposure'), parameters.exposure_seconds],
+    [t('astrophotoflow.exposure'), parameters.exposure_seconds == null ? undefined : `${parameters.exposure_seconds} s`],
     ['Gain', parameters.gain],
     ['ISO', parameters.iso],
     ['Offset', parameters.offset],
     [
       t('astrophotoflow.temperature'),
-      parameters.sensor_temperature_c ??
-        parameters.sensor_temperature_setpoint_c
+      temperature == null ? undefined : `${temperature} °C`
     ]
   ].filter(([, value]) => value !== undefined && value !== null)
 })
@@ -157,8 +165,13 @@ const loading = computed(
     mediaView.loading.value ||
     overview.loading.value
 )
+async function retryPreview() {
+  await mediaView.retry()
+  if (overview.error.value) await overview.retry()
+}
 const viewer = ref<MediaViewerRequest>()
 const exportTarget = ref<'library' | 'local'>()
+const details = ref(false)
 const onStart = (event: CustomEvent<{ prompt_id: string }>) => {
   if (props.widget.node.graph !== useApp().graph) return
   currentRun.value = event.detail.prompt_id
@@ -222,16 +235,10 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="flex min-h-0 min-w-0 flex-1 flex-col gap-2">
-    <p class="m-0 text-xs text-muted-foreground">
+  <div class="flex min-h-0 min-w-0 flex-col gap-2">
+    <p v-if="Object.keys(bindings).length" class="m-0 text-xs text-muted-foreground">
       {{
-        label(
-          bindings.images
-            ? 'sourceImage'
-            : bindings.science
-              ? 'sourceScience'
-              : 'sourceLibrary'
-        )
+        t('astrophotoflow.nodeUi.upstream')
       }}
     </p>
     <p v-if="!result" class="text-sm text-muted-foreground" role="status">
@@ -240,21 +247,25 @@ onBeforeUnmount(() => {
       }}
     </p>
     <template v-else>
-      <strong class="truncate text-sm" :title="member?.name">{{
+      <strong v-if="result.members.length > 1 || result.reference?.kind === 'dataset'" class="truncate text-sm" :title="member?.name">{{
         member?.name
       }}</strong>
-      <button
-        type="button"
-        class="relative h-56 min-h-56 w-full overflow-hidden rounded-sm bg-component-node-widget-background"
+      <Button variant="textonly" size="unset"
+        class="relative max-h-[30rem] min-h-40 w-full shrink-0 overflow-hidden rounded-sm bg-component-node-widget-background"
+        :style="{ aspectRatio: media?.width && media?.height ? `${media.width} / ${media.height}` : '4 / 3' }"
         :aria-label="label('view')"
         @click="openViewer"
       >
-        <ImagePreview v-if="image" :image-urls="[image]" display-only />
+        <img v-if="image" :src="image" :alt="member?.name" class="size-full object-contain" />
         <span v-else class="block p-3 text-xs text-muted-foreground">{{
-          loading ? label('preparing') : failure || label('view')
+          loading ? label('preparing') : label('view')
         }}</span>
-      </button>
-      <div class="flex items-center justify-between">
+      </Button>
+      <div v-if="failure" role="alert" class="flex items-center gap-1 text-error">
+        <span>{{ failure }}</span>
+        <Button variant="textonly" size="sm" @click="retryPreview">{{ t('astrophotoflow.retryPreview') }}</Button>
+      </div>
+      <div v-if="result.members.length > 1" class="flex items-center justify-between">
         <Button
           variant="textonly"
           size="icon"
@@ -273,8 +284,7 @@ onBeforeUnmount(() => {
         >
       </div>
       <p class="m-0 break-words text-xs text-muted-foreground">
-        {{ member?.format }} · {{ member?.metadata?.pixel_type ?? '' }} ·
-        {{ member?.byte_size }} B
+        {{ imageSummary(member?.format, { ...member?.metadata, width: media?.width ?? member?.metadata?.width, height: media?.height ?? member?.metadata?.height }) }}
       </p>
       <dl
         v-if="parameterSummary.length"
@@ -289,7 +299,10 @@ onBeforeUnmount(() => {
           <dd class="m-0">{{ value }}</dd>
         </div>
       </dl>
-      <div class="mt-auto flex flex-wrap gap-1">
+      <div class="flex justify-end">
+        <Button size="sm" variant="textonly" @click="details = true">{{ t('astrophotoflow.imageDetails') }}</Button>
+      </div>
+      <div class="flex flex-wrap gap-1">
         <Button
           size="sm"
           variant="secondary"
@@ -311,6 +324,20 @@ onBeforeUnmount(() => {
         :media="viewerMedia ?? media"
         @close="exportTarget = undefined"
       />
+      <Dialog v-model:open="details">
+        <DialogPortal><DialogOverlay />
+        <DialogContent :aria-describedby="undefined">
+          <DialogHeader><DialogTitle>{{ t('astrophotoflow.imageDetails') }}</DialogTitle></DialogHeader>
+          <dl class="grid grid-cols-[auto_minmax(0,1fr)] gap-2 text-sm">
+            <template v-if="sourcePath"><dt>{{ t('astrophotoflow.nodeUi.importedPath') }}</dt><dd class="m-0 break-all">{{ sourcePath }}</dd></template>
+            <dt>{{ t('astrophotoflow.nodeUi.filename') }}</dt><dd class="m-0 break-all">{{ member?.name }}</dd>
+            <dt>{{ t('astrophotoflow.results.fileSize') }}</dt><dd class="m-0">{{ formatSize(member?.byte_size) }}</dd>
+            <dt>{{ t('astrophotoflow.results.contentHash') }}</dt><dd class="m-0 break-all">{{ member?.content_hash ?? '—' }}</dd>
+            <template v-for="[name, value] in parameterSummary" :key="String(name)"><dt>{{ name }}</dt><dd class="m-0">{{ value }}</dd></template>
+          </dl>
+        </DialogContent>
+        </DialogPortal>
+      </Dialog>
     </template>
     <MediaViewer
       v-if="viewer"

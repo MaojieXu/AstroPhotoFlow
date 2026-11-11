@@ -3,9 +3,11 @@
 import json
 import os
 import sys
+import webbrowser
 from pathlib import Path
+from typing import Annotated
 
-from cyclopts import App
+from cyclopts import App, Parameter
 
 from astrophotoflow.core import workbench
 from astrophotoflow.core.config import resolve_config_path
@@ -73,11 +75,27 @@ def register_local(app: App) -> None:
             raise SystemExit(1)
 
     @app.command(name="start")
-    def start(*, workspace: Path | None = None) -> None:
+    def start(
+        *,
+        workspace: Path | None = None,
+        open_browser: Annotated[
+            bool, Parameter(name="--open", negative=(), help="Open the ready workbench in the default browser.")
+        ] = False,
+    ) -> None:
         result = workbench.start(workspace_config(workspace))
         print(result.model_dump_json(indent=2))
         if result.state != "completed":
             raise SystemExit(1)
+        if result.web_url:
+            if sys.stderr.isatty():
+                print(f"工作台已就绪：{result.web_url}", file=sys.stderr)
+            if open_browser:
+                try:
+                    opened = webbrowser.open(result.web_url)
+                except (webbrowser.Error, OSError):
+                    opened = False
+                if not opened:
+                    print(f"无法自动打开浏览器，请手动访问：{result.web_url}", file=sys.stderr)
 
     @app.command(name="stop")
     def stop(*, workspace: Path | None = None) -> None:

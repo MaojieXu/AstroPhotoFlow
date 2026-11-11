@@ -7,4 +7,5 @@ from .runtime import install_frontend, prepare_runtime
 from .state import update_running_state
 from .workspaces import create_workspace, initialize
 
-__all__ = ['WorkbenchError', 'create_workspace', 'doctor_checks', 'initialize', 'install_frontend', 'prepare_runtime', 'request_restart', 'restart', 'restart_result', 'start', 'status', 'stop', 'update_running_state']
+__all__ = ['WorkbenchError', 'create_workspace', 'doctor_checks', 'initialize', 'install_frontend', 'prepare_runtime',
+           'request_restart', 'restart', 'restart_result', 'start', 'status', 'stop', 'update_running_state']

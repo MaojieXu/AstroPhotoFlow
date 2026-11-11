@@ -14,13 +14,39 @@ from astrophotoflow.modules.software import bundles, development, public
 from astrophotoflow.modules.software.bundles.loader import load_adapter
 
 
+@pytest.mark.parametrize('develop', [False, True])
+def test_installed_and_development_bundle_locales_use_the_same_reader(tmp_path, bundle_install, develop):
+    settings = Settings('127.0.0.1', 0, tmp_path / 'data', (), workspace=tmp_path)
+    installed = bundle_install(settings)
+    manifest = json.loads((installed / 'bundle.json').read_text(encoding='utf-8'))
+    expected = {}
+    for filename in manifest['operations']:
+        operation = json.loads((installed / filename).read_text(encoding='utf-8'))['operation']
+        expected[operation['operation_id']] = {
+            'name': '节点 ' + operation['operation_id'], 'description': '中文说明', 'help': '中文帮助', 'category': [],
+            **{section: {field['name']: {'label': field['name'], 'description': ''} for field in operation[section]}
+               for section in ('inputs', 'outputs', 'parameters')},
+        }
+    manifest['locales'] = {'zh': 'locales/zh.json'}
+    (installed / 'locales').mkdir(exist_ok=True)
+    (installed / 'locales/zh.json').write_text(json.dumps(expected, ensure_ascii=False), encoding='utf-8')
+    (installed / 'bundle.json').write_text(json.dumps(manifest), encoding='utf-8')
+    root = installed
+    if develop:
+        root = tmp_path / 'external-source'
+        shutil.copytree(installed, root)
+        development.configure(tmp_path, ['siril=' + str(root)], [], sys.executable)
+    assert public.get_bundle_display(settings, 'siril')['zh'] == expected
+
+
 def _source(tmp_path, bundle_install, monkeypatch):
     settings = Settings('127.0.0.1', 8190, tmp_path / 'workspace/data', (), workspace=tmp_path / 'workspace')
     installed = bundle_install(settings)
     source = tmp_path / 'source'
     shutil.copytree(installed, source)
+    (source / '.git').mkdir()
     (source / 'authored.json').write_text(json.dumps({'name': 'Source title'}))
-    (source / 'development.json').write_text(json.dumps({'build': 'generate', 'watch': ['authored.json', 'generate.py', 'adapter/*.py']}))
+    (source / 'development.json').write_text(json.dumps({'build': 'generate', 'watch': ['authored.json']}))
     (source / 'generate.py').write_text('''import json
 from pathlib import Path
 root = Path(__file__).parent
@@ -76,13 +102,80 @@ def test_helper_changes_invalidate_adapter_cache_and_source_fingerprint(tmp_path
     development.configure(settings.workspace, ['siril=' + str(source)], [], sys.executable)
     first = development.identity(settings.workspace, 'siril')
     old = load_adapter(source, 'adapter/siril.py', first['fingerprint'])
+    def unexpected_generation(*args, **kwargs):
+        pytest.fail('An adapter-only edit must not run the generator.')
+    monkeypatch.setattr(development_builder.subprocess, 'run', unexpected_generation)
     helper.write_text('VALUE = 2\n')
-    development.refresh_sources(settings.workspace)
     development.refresh_sources(settings.workspace)
     second = development.identity(settings.workspace, 'siril')
     current = load_adapter(source, 'adapter/siril.py', second['fingerprint'])
     assert second['fingerprint'] != first['fingerprint']
     assert old.VALUE == 1 and current.VALUE == 2
+
+    helper.write_text('VALUE =\n')
+    development.refresh_sources(settings.workspace)
+    assert development.source_state(settings.workspace, 'siril').state == 'failed'
+    helper.write_text('VALUE = 3\n')
+    development.refresh_sources(settings.workspace)
+    assert development.source_state(settings.workspace, 'siril').state == 'ready'
+
+
+def test_repository_discovery_adopts_new_ids_and_reports_conflicts(tmp_path, bundle_install):
+    workspace = tmp_path / 'workspace'
+    settings = Settings('127.0.0.1', 8190, workspace / 'data', (), workspace=workspace)
+    installed = bundle_install(settings)
+    repository = tmp_path / 'bundles'
+    assert development.configure(workspace, [], [], sys.executable, repository=repository) == {}
+
+    checkout = repository / 'checkout with spaces'
+    checkout.mkdir()
+    development.refresh_sources(workspace)
+    assert development.bindings(workspace) == {}
+    shutil.copytree(installed, checkout, dirs_exist_ok=True)
+    manifest_path = checkout / 'bundle.json'
+    manifest = json.loads(manifest_path.read_bytes())
+    manifest.update(package_id='sample-tool', name='Sample Tool')
+    manifest_path.write_text(json.dumps(manifest))
+    for relative in manifest['operations']:
+        path = checkout / relative
+        value = json.loads(path.read_bytes())
+        value['operation']['package_id'] = 'sample-tool'
+        path.write_text(json.dumps(value))
+    for relative in manifest['nodes']:
+        path = checkout / relative
+        value = json.loads(path.read_bytes())
+        value['execution']['package_id'] = 'sample-tool'
+        path.write_text(json.dumps(value))
+
+    development.refresh_sources(workspace)
+    assert development.source_state(workspace, 'sample-tool').state == 'ready'
+    package = public.get_package(settings, 'sample-tool')
+    assert (package.name, package.available_versions, package.installed_version) == ('Sample Tool', [], None)
+    assert public.list_releases(settings, 'sample-tool').releases == []
+
+    duplicate = repository / 'duplicate'
+    duplicate.mkdir()
+    duplicate_manifest = duplicate / 'bundle.json'
+    duplicate_manifest.write_bytes(manifest_path.read_bytes())
+    development.refresh_sources(workspace)
+    conflict = development.source_state(workspace, 'sample-tool')
+    assert conflict.state == 'failed'
+    assert str(duplicate) in conflict.error and str(checkout) in conflict.error
+    duplicate_manifest.unlink()
+    duplicate.rmdir()
+    development.refresh_sources(workspace)
+    assert development.source_state(workspace, 'sample-tool').state == 'ready'
+
+    manifest_path.write_text('{broken')
+    development.refresh_sources(workspace)
+    assert development.source_state(workspace, 'sample-tool').state == 'failed'
+    manifest_path.write_text(json.dumps(manifest))
+    development.refresh_sources(workspace)
+    assert development.source_state(workspace, 'sample-tool').state == 'ready'
+
+    development.configure(workspace, [], [], sys.executable, clear_repository=True)
+    assert public.list_package_ids(workspace) == ['siril']
+    assert manifest_path.is_file()
 
 
 def test_only_the_current_source_observation_controls_native_readiness(tmp_path, bundle_install, monkeypatch):

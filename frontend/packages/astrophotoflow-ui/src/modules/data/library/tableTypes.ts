@@ -23,6 +23,10 @@ export interface LibraryTableRow {
   issue?: { label: string; availability: string; text: string }
   storage: string
   availability: string
+  calibrationStatusLabel?: string
+  calibrationStatus?: InlineBinding
+  calibrationCounts?: string
+  calibrationEvidence?: string
   calibration?: InlineCalibrationBinding[]
   exposureSummary?: string
   fields: {

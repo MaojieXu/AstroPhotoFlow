@@ -1,5 +1,4 @@
 from datetime import datetime
-
 from sqlalchemy import (
     JSON,
     Boolean,
@@ -16,7 +15,6 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
-
 from astrophotoflow.core.database.base import Base
 from astrophotoflow.modules.data.names import SearchableName
 
@@ -24,6 +22,10 @@ from astrophotoflow.modules.data.names import SearchableName
 class Asset(SearchableName, Base):
     __tablename__ = "asset"
     __table_args__ = (
+        CheckConstraint("calibration_status IN ('UnCalibrated', 'Calibrated', 'Unknown')", name="ck_asset_calibration_status"),
+        CheckConstraint("storage_mode IN ('reference', 'managed')", name="ck_asset_storage_mode"),
+        CheckConstraint("byte_size IS NULL OR byte_size >= 0", name="ck_asset_byte_size"),
+        CheckConstraint("availability IN ('unknown', 'available', 'changed', 'missing')", name="ck_asset_availability"),
         CheckConstraint("scope IN ('shared', 'project')", name="ck_asset_scope"),
         CheckConstraint("scope = 'shared' OR (scope = 'project' AND owner_project_id IS NOT NULL)", name="ck_asset_owner_scope"),
         CheckConstraint("role IN ('raw', 'calibration', 'intermediate', 'final')", name="ck_asset_role"),
@@ -43,13 +45,11 @@ class Asset(SearchableName, Base):
         Index("ix_asset_optical_system_id_visible", "optical_system_id", "scope", "status", "created_at", "id"),
         Index("ix_asset_filter_id_visible", "filter_id", "scope", "status", "created_at", "id"),
     )
-
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     name: Mapped[str] = mapped_column(String, nullable=False)
     scope: Mapped[str] = mapped_column(String(16), nullable=False)
     owner_project_id: Mapped[str | None] = mapped_column(ForeignKey("project.id"))
     role: Mapped[str] = mapped_column(String(24), nullable=False)
-    current_version_id: Mapped[str | None] = mapped_column(ForeignKey("asset_version.id", use_alter=True, name="fk_asset_current_version"))
     frame_class: Mapped[str | None] = mapped_column(String(16))
     frame_type: Mapped[str | None] = mapped_column(String(16))
     camera_id: Mapped[str | None] = mapped_column(String(36))
@@ -72,44 +72,27 @@ class Asset(SearchableName, Base):
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="active", server_default="active")
     revision: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.current_timestamp())
-
-class AssetVersion(Base):
-    __tablename__ = "asset_version"
-    __table_args__ = (UniqueConstraint("asset_id", "version_number", name="uq_asset_version_number"),
-        CheckConstraint("version_number > 0", name="ck_asset_version_number"),
-        CheckConstraint("storage_mode IN ('reference', 'managed')", name="ck_asset_version_storage_mode"),
-        CheckConstraint("byte_size IS NULL OR byte_size >= 0", name="ck_asset_version_byte_size"),
-        CheckConstraint("availability IN ('unknown', 'available', 'changed', 'missing')", name="ck_asset_version_availability"),
-        CheckConstraint("frame_type IS NULL OR frame_type IN ('light', 'bias', 'dark', 'flat', 'dark_flat')", name="ck_asset_version_frame_type"),
-        CheckConstraint("calibration_level IS NULL OR calibration_level IN ('individual', 'master')", name="ck_asset_version_calibration_level"),
-        Index("ix_asset_version_asset_created", "asset_id", "created_at"),)
-
-    id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    asset_id: Mapped[str] = mapped_column(ForeignKey("asset.id", ondelete="CASCADE"), nullable=False)
-    version_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.current_timestamp())
     storage_mode: Mapped[str] = mapped_column(String(16), nullable=False)
     storage_location: Mapped[str] = mapped_column(String, nullable=False)
     byte_size: Mapped[int | None] = mapped_column(Integer)
     content_hash: Mapped[str | None] = mapped_column(String(71))
     availability: Mapped[str] = mapped_column(String(16), nullable=False, default="unknown")
-    camera_id: Mapped[str | None] = mapped_column(ForeignKey("equipment.id"))
-    optical_system_id: Mapped[str | None] = mapped_column(ForeignKey("equipment.id"))
-    filter_id: Mapped[str | None] = mapped_column(ForeignKey("equipment.id"))
-    frame_type: Mapped[str | None] = mapped_column(String(16))
+    calibration_status: Mapped[str] = mapped_column(String(16), nullable=False, default="Unknown", server_default="Unknown")
+    calibration_evidence: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict, server_default=text("'{}'"))
+    original_filename: Mapped[str | None] = mapped_column(String)
     calibration_level: Mapped[str | None] = mapped_column(String(16))
     capture_snapshot: Mapped[dict | None] = mapped_column(JSON)
     scientific_metadata: Mapped[dict | None] = mapped_column(JSON)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.current_timestamp())
+    calibration: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict, server_default=text("'{}'"))
+    master_provenance: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict, server_default=text("'{}'"))
+
 
 class FitsHduMetadata(Base):
     __tablename__ = "fits_hdu_metadata"
-    __table_args__ = (
-        UniqueConstraint("asset_version_id", "hdu_index", name="uq_fits_hdu_version_index"),
-        Index("ix_fits_hdu_version", "asset_version_id"),
-    )
-
+    __table_args__ = (UniqueConstraint("asset_id", "hdu_index", name="uq_fits_hdu_asset_index"), Index("ix_fits_hdu_asset", "asset_id"))
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    asset_version_id: Mapped[str] = mapped_column(ForeignKey("asset_version.id", ondelete="CASCADE"), nullable=False)
+    asset_id: Mapped[str] = mapped_column(ForeignKey("asset.id", ondelete="CASCADE"), nullable=False)
     hdu_index: Mapped[int] = mapped_column(Integer, nullable=False)
     name: Mapped[str | None] = mapped_column(String)
     hdu_type: Mapped[str] = mapped_column(String(32), nullable=False)
@@ -144,35 +127,10 @@ class ImageMetadataState(Base):
     equipment_context: Mapped[dict | None] = mapped_column(JSON)
 
 
-class MasterProvenanceRevision(Base):
-    """Immutable user declarations, separate from actual platform output facts."""
-
-    __tablename__ = "master_provenance_revision"
-    __table_args__ = (
-        UniqueConstraint("asset_version_id", "revision", name="uq_master_provenance_revision"),
-        CheckConstraint("revision > 0", name="ck_master_provenance_revision"),
-        CheckConstraint("asset_revision > 0", name="ck_master_provenance_asset_revision"),
-        CheckConstraint("source_kind = 'user_declared'", name="ck_master_provenance_source_kind"),
-        Index("ix_master_provenance_asset_version", "asset_version_id"),
-    )
-    id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    asset_version_id: Mapped[str] = mapped_column(ForeignKey("asset_version.id", ondelete="CASCADE"), nullable=False)
-    revision: Mapped[int] = mapped_column(Integer, nullable=False)
-    asset_revision: Mapped[int] = mapped_column(Integer, nullable=False)
-    source_kind: Mapped[str] = mapped_column(String(24), nullable=False, default="user_declared")
-    data: Mapped[dict] = mapped_column(JSON, nullable=False)
-    source_time_range: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict, server_default=text("'{}'"))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.current_timestamp())
-
-
 class MasterProvenanceReference(Base):
     __tablename__ = "master_provenance_reference"
-    __table_args__ = (
-        CheckConstraint("(asset_version_id IS NULL) != (dataset_version_id IS NULL)", name="ck_master_provenance_reference_target"),
-        Index("ix_master_provenance_reference_asset", "asset_version_id"),
-        Index("ix_master_provenance_reference_dataset", "dataset_version_id"),
-    )
+    __table_args__ = (CheckConstraint("(source_asset_id IS NULL) != (dataset_id IS NULL)", name="ck_master_source_target"),)
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    provenance_id: Mapped[str] = mapped_column(ForeignKey("master_provenance_revision.id", ondelete="CASCADE"), nullable=False)
-    asset_version_id: Mapped[str | None] = mapped_column(ForeignKey("asset_version.id"))
-    dataset_version_id: Mapped[str | None] = mapped_column(ForeignKey("dataset_version.id"))
+    asset_id: Mapped[str] = mapped_column(ForeignKey("asset.id", ondelete="CASCADE"), nullable=False)
+    source_asset_id: Mapped[str | None] = mapped_column(ForeignKey("asset.id"))
+    dataset_id: Mapped[str | None] = mapped_column(ForeignKey("dataset.id"))

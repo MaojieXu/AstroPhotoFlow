@@ -35,9 +35,32 @@ def validate_invocation(settings: Settings, invocation: SoftwareInvocation):
         raise ApiError(422, "VALIDATION_ERROR", "Siril 参数与准确操作定义不匹配。", message_key='siril_parameters_do_not_match_the_exact_operation_definition')
     for parameter in operation.parameters:
         try:
-            ParameterDefinition.model_validate({**parameter.model_dump(), "default": invocation.parameters[parameter.name]})
+            value = invocation.parameters[parameter.name]
+            ParameterDefinition.model_validate({**parameter.model_dump(), "default": value})
+            if parameter.editor is not None and parameter.editor.input is not None:
+                selection = parameter.editor_value(value)
+                if selection is not None:
+                    items = invocation.inputs.get(parameter.editor.input, [])
+                    if selection.member_index >= len(items):
+                        raise ValueError("The selected input member is missing.")
+                    item = items[selection.member_index]
+                    metadata = item.scientific_metadata or {}
+                    hdu = item.selection.hdu_index if item.selection.kind == "fits_hdu" else metadata.get("selected_hdu")
+                    frame_count = metadata.get("frame_count")
+                    frame_hdus = metadata.get("frame_hdus", [])
+                    if (item.selection.kind == "whole_file" and selection.frame_index is not None
+                        and selection.frame_index < len(frame_hdus)):
+                        hdu = frame_hdus[selection.frame_index]
+                    source = (item.position_token if item.kind == "run_output" else None) or item.content_hash
+                    if (selection.source_token != source or selection.hdu_index != hdu
+                        or (frame_count is not None and selection.frame_index is not None and selection.frame_index >= frame_count)
+                        or (hdu == metadata.get("selected_hdu") and (
+                            metadata.get("width") not in (None, selection.width) or metadata.get("height") not in (None, selection.height)
+                        ))):
+                        raise ValueError("The selected coordinates belong to a different input image.")
         except ValueError as exc:
-            raise ApiError(422, "VALIDATION_ERROR", f"Siril 参数无效：{parameter.name}", message_key='invalid_siril_parameters_p0', message_params={'p0': parameter.name}) from exc
+            raise ApiError(422, "VALIDATION_ERROR", f"参数无效：{parameter.name}", message_key='invalid_parameters_p0', message_params={'p0': parameter.name},
+                           fields=[{"path": parameter.name, "message": str(exc)}]) from exc
     definitions = {item.name: item for item in operation.inputs}
     required = {name for name, item in definitions.items() if item.required}
     if not set(invocation.inputs).issubset(definitions) or not required.issubset(invocation.inputs):

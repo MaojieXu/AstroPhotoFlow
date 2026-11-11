@@ -6,10 +6,11 @@ from pydantic import Field
 
 from astrophotoflow.client import AssetClient
 from astrophotoflow.contracts.common import UuidInput
+from astrophotoflow.contracts.image_calibration import ImageOperationOut
 from astrophotoflow.contracts.image_imports import ImageImportReceipt
 from astrophotoflow.contracts.image_management import PageLimit, PageOffset
 from astrophotoflow.contracts.import_batches import BatchOut
-from astrophotoflow.contracts.imports import AssetTaskOut, AssetTaskPage, ImportAccepted, ImportTaskStateOut, RetryCreate
+from astrophotoflow.contracts.imports import AssetTaskOut, AssetTaskPage, ImportAccepted, ImportTaskStateOut, RetryCreate, ImportRecovery
 from astrophotoflow.interfaces.mcp.composition import tool_namespace
 from astrophotoflow.interfaces.mcp.errors import service_errors
 from astrophotoflow.interfaces.mcp.lifespan import service_client
@@ -74,9 +75,9 @@ def build_server() -> FastMCP:
         description="Read aggregate batch tasks, independent stage readiness and project links without re-executing anything.\n一次查询整批任务、各阶段和项目关联状态；不重跑。\n关键词: 任务 进度 等待 取消 重试 ",
     )
     @service_errors
-    def batch_status(request_id: UuidInput, *, client: AssetClient = Depends(service_client)) -> ImageImportReceipt | BatchOut:
+    def batch_status(request_id: UuidInput, *, client: AssetClient = Depends(service_client)) -> ImageImportReceipt | BatchOut | AssetTaskOut:
         result = client.image_tasks_status(request_id=request_id)
-        output = ImageImportReceipt if "stages" in result else BatchOut
+        output = ImageImportReceipt if "stages" in result else AssetTaskOut if "sources" in result else BatchOut
         return output.model_validate(result, strict=False)
 
     @mcp.tool(
@@ -84,9 +85,14 @@ def build_server() -> FastMCP:
         description="Wait up to 20 seconds for the whole batch. Timeout returns progress and next_poll_seconds; avoid model-side rapid polling. Interrupted/failed tasks require explicit action.\n整批聚合等待最多20秒；超时返回进度与建议查询间隔，不进行模型端秒级轮询。\n关键词: 任务 进度 等待 取消 重试 等待 进度",
     )
     @service_errors
-    def wait_batch(request_id: UuidInput, wait_seconds: Annotated[float, Field(ge=0, le=20, allow_inf_nan=False)] = 20, *, client: AssetClient = Depends(service_client)) -> ImageImportReceipt | BatchOut:
+    def wait_batch(request_id: UuidInput, wait_seconds: Annotated[float, Field(ge=0, le=20, allow_inf_nan=False)] = 20, *, client: AssetClient = Depends(service_client)) -> ImageImportReceipt | BatchOut | AssetTaskOut:
         result = client.image_tasks_wait(request_id=request_id, wait_seconds=wait_seconds)
-        output = ImageImportReceipt if "stages" in result else BatchOut
+        output = ImageImportReceipt if "stages" in result else AssetTaskOut if "sources" in result else BatchOut
         return output.model_validate(result, strict=False)
+
+    @mcp.tool(name='recover_organization', description='Organize successful imported materials or retry project association using existing originals. Query the operation receipt after an uncertain result. 修复导入分组 项目关联')
+    @service_errors
+    def recover_organization(task_id: UuidInput, body: ImportRecovery, *, client: AssetClient = Depends(service_client)) -> ImageOperationOut:
+        return client.recover_import_organization(str(task_id), body)
 
     return mcp

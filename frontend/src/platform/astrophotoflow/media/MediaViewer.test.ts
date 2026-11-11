@@ -119,13 +119,14 @@ afterEach(() => vi.useRealTimers())
 describe('shared original-resolution media viewer', () => {
   it('requests changed display settings for the same original', async () => {
     const view = setup(1)
+    const user = userEvent.setup()
     await waitFor(() => expect(createImageViewport).toHaveBeenCalled())
-    await fireEvent.update(
+    await user.click(
       screen.getByRole('combobox', {
         name: 'astrophotoflow.media.previewResolution'
-      }),
-      '2048'
+      })
     )
+    await user.click(screen.getByRole('option', { name: '2048 px' }))
     await waitFor(() =>
       expect(view.prepare).toHaveBeenLastCalledWith(
         '/frame/0',
@@ -137,10 +138,8 @@ describe('shared original-resolution media viewer', () => {
       )
     )
     await waitFor(() => expect(view.viewport.replace).toHaveBeenCalledOnce())
-    await fireEvent.update(
-      screen.getByRole('combobox', { name: 'astrophotoflow.media.rgbDisplay' }),
-      'auto'
-    )
+    await user.click(screen.getByRole('combobox', { name: 'astrophotoflow.media.rgbDisplay' }))
+    await user.click(screen.getByRole('option', { name: 'astrophotoflow.media.balanceRgb' }))
     await waitFor(() =>
       expect(view.prepare).toHaveBeenLastCalledWith(
         '/frame/0',

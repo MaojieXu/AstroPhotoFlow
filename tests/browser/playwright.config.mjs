@@ -26,6 +26,9 @@ if (!reportChild || reportChild.startsWith('..') || isAbsolute(reportChild)) {
 export default defineConfig({
   testDir: '.',
   testMatch: [
+    'node-ui.spec.ts',
+    'node-localizations.spec.ts',
+    'bundle-hot-reload.spec.ts',
     'native-web.spec.ts',
     'native-layout.spec.ts',
     'workbench-settings.spec.ts'

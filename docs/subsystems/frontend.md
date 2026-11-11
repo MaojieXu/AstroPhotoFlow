@@ -13,10 +13,25 @@
 ## 原生桥接
 
 - `frontend/src/platform/astrophotoflow` 安装查询插件、注入翻译函数，并把业务控件接入侧栏与画布；保留常驻画布、侧栏顺序与未保存编辑保护。
-- 固定数据引用使用一次原生撤销事务；运行回执按实际 Data 与来源连线核对；导出只写副本。
+- 数据引用使用一次原生撤销事务；运行回执按实际 Data 与来源连线核对；导出只写副本。
 - 原生 Store、画布与转换协调在本目录，UI 包不反向依赖。
 
 本地网页使用 AstroPhotoFlow 的菜单、启动与安装标志，以及项目文档和反馈入口。菜单、快捷键与设置隐藏上游账户、生成模板和模型管理入口。节点目录展示运行时注册的节点。
+
+## 画布节点
+
+- Data 从素材库共用的系统文件选择入口取得单个文件路径并导入，手动路径输入折叠；取消、失败或节点被替换时保留已有绑定。单张名称只在标题显示，集合保留当前成员名称，完整资料在详情中查看。
+- 节点预览按内容适配高度，单张隐藏翻页。保存到素材库与导出到本机继续使用已检查的完整数据；预览分辨率与通道只改变显示。
+- 软件结果卡使用原生通道下拉框，日志和完整文件下载收入更多菜单。重置按钮恢复实例定义的全部参数，包含高级参数，以一次原生撤销事务提交；自动模式合并提交一次，手动模式等待运行。
+- 原生控件在撤销重建同 ID 节点后重新解析实例归属，自动浮点精度能够表示声明默认值，恢复默认值不受编辑回调舍入影响。
+
+## 语言资源
+
+- 网页只发布 English 与简体中文：`frontend/src/locales/localeConfig.ts` 的 `localeDefinitions` 决定可用语言，其他语言的目录不上线。
+- 原生文案在 `frontend/src/locales/{en,zh}` 的 `main`、`settings`、`commands` 与 `nodeDefs` 目录；业务文案由 `@astrophotoflow/ui` 的 `uiMessages` 合并进同一 vue-i18n 实例。
+- 语言存为 workspace 设置的 `Comfy.Locale`，网页切换即时生效；领域错误由服务按同一语言渲染，Bundle 文案按 Bundle 语言边界单独处理。
+- 新增或修改文案必须同时提交英文与中文；`tests/core/test_frontend_locale_coverage.py` 校验两侧键集一致，后端错误目录由 `tests/core/test_error_localization_coverage.py` 校验。
+- 自动翻译入口是 `pnpm locale`（需要 `OPENAI_API_KEY`），离线检查用 `pnpm locale:check`；合入以守卫测试为准。
 
 ## 查询与轮询
 

@@ -1,7 +1,11 @@
 """Native software use cases assembled from public business capabilities."""
 import asyncio
+import hashlib
+import json
 import logging
+from contextlib import nullcontext
 
+from astrophotoflow.contracts.bundles import AnalysisResult, MediaPosition
 from astrophotoflow.contracts.inputs import OutputLocator
 from astrophotoflow.contracts.results import CheckedResult, CheckedResultMember, CheckedResultPort
 from astrophotoflow.contracts.software import (
@@ -10,6 +14,7 @@ from astrophotoflow.contracts.software import (
     RunOutputPort,
     SoftwareCallResult,
     SoftwareInvocation,
+    bundle_data_kind,
 )
 from astrophotoflow.contracts.software_calls import NativeResultImage, SoftwareCallBundle, SoftwareCallRecord
 from astrophotoflow.core.errors import ApiError
@@ -17,10 +22,12 @@ from astrophotoflow.core.localization import error_message, exception_error, wor
 from astrophotoflow.modules.data.public import (
     check_output,
     get_checked_result,
+    checked_output_calibration,
+    calibration_metadata,
     publish_checked_result,
     read_result_analysis,
     render_output_preview,
-    resolve_canvas_inputs,
+    resolve_canvas_input_groups,
     resolve_result_inputs,
     result_member_base,
 )
@@ -32,6 +39,7 @@ from astrophotoflow.modules.software.public import (
     get_package,
     inspect_operation,
     invoke_operation,
+    effective_calibration_effect,
     list_software_call_records,
     read_software_call,
     save_software_call,
@@ -60,14 +68,84 @@ async def observe_software_call(settings, active, prompt_id, call_id):
     return record
 
 
+def _fingerprint(value) -> str:
+    return hashlib.sha256(json.dumps(value, sort_keys=True).encode()).hexdigest()
+
+
+def _input_token(invocation: SoftwareInvocation | None, *, positions: bool = False) -> str | None:
+    if invocation is None:
+        return None
+    groups = [
+        {name: [((item.position_token if positions and item.kind == "run_output" else None) or item.content_hash,
+                 item.selection.model_dump(mode="json"), item.reference_index) for item in members]
+         for name, members in inputs.items()}
+        for inputs in (invocation.inputs, invocation.supporting_inputs)
+    ]
+    return _fingerprint(groups)
+
+
+def _run_output_port(record, port, prompt_id, call_id, index):
+    output_name = record.definition.execution.outputs[port.name]
+    definition = next(output for output in record.operation.outputs if output.name == output_name)
+    members = []
+    for position, member in enumerate(port.members):
+        metadata = member.checked.scientific_metadata or {}
+        width, height = metadata.get("width"), metadata.get("height")
+        shape = metadata.get("shape") or []
+        if len(shape) == 2:
+            height, width = shape
+        elif len(shape) == 3 and metadata.get("colour_layout") == "planar":
+            _, height, width = shape
+        elif len(shape) == 3 and metadata.get("colour_layout") == "interleaved":
+            height, width, _ = shape
+        base = result_member_base(prompt_id, call_id, index, position)
+        members.append(RunOutputMember(
+            name=member.name, format=member.checked.format, view_base=base, file_url=base + '/file',
+            width=width, height=height,
+            frame_count=metadata.get("frame_count"), hdu_index=metadata.get("selected_hdu"),
+            content_hash=member.checked.content_hash, position_token=member.position_token,
+        ))
+    kind = definition.data_kind or bundle_data_kind(port.type, definition.formats)
+    if definition.data_kind is None and kind == "image":
+        if members and all(member.format == "video" for member in members):
+            kind = "video"
+        elif any((member.frame_count or 1) > 1 for member in members) or any(
+            member.name.lower().endswith(".seq") for member in port.supporting
+        ):
+            kind = "sequence"
+    return RunOutputPort(name=port.name, type=port.type, data_kind=kind,
+                         role=definition.role, operation_output=output_name, members=members)
+
+
+def _verify_analysis_positions(analyses: list[AnalysisResult], definition, ports: list[CheckedResultPort]) -> None:
+    outputs = {definition.execution.outputs[port.name]: port.members for port in ports if port.type == "APF_SCIENCE"}
+    for analysis in analyses:
+        if analysis.output is None:
+            continue
+        members = outputs.get(analysis.output)
+        if not members:
+            raise ValueError(f"Analysis refers to an unavailable media output: {analysis.output}.")
+        positions = list(analysis.row_positions or [])
+        if analysis.member_index is not None or analysis.frame_index is not None:
+            positions.append(MediaPosition(member_index=analysis.member_index or 0, frame_index=analysis.frame_index))
+        for position in positions:
+            if position.member_index >= len(members):
+                raise ValueError("Analysis refers to an unavailable result member.")
+            metadata = members[position.member_index].checked.scientific_metadata or {}
+            frames = metadata.get("frame_count")
+            if position.frame_index is not None and frames is not None and position.frame_index >= frames:
+                raise ValueError("Analysis refers to an unavailable result frame.")
+
+
 def _call_summary(settings, record: SoftwareCallRecord, prompt_id, call_id) -> SoftwareCallResult:
     base = f'/astrophotoflow/api/v1/runs/{prompt_id}/calls/{call_id}'
     result = get_checked_result(settings, prompt_id, call_id) if record.result_registered else None
-    ports = [RunOutputPort(name=port.name, type=port.type, members=[
-        RunOutputMember(name=member.name, format=member.checked.format,
-            view_base=result_member_base(prompt_id, call_id, index, position),
-            file_url=result_member_base(prompt_id, call_id, index, position) + '/file')
-        for position, member in enumerate(port.members)]) for index, port in enumerate(result.ports)] if result else []
+    ports = [_run_output_port(record, port, prompt_id, call_id, index)
+             for index, port in enumerate(result.ports)] if result else []
+    editor_values = {
+        parameter.name: value for parameter in record.operation.parameters
+        if parameter.editor is not None and (value := parameter.editor_value(record.parameters.get(parameter.name))) is not None
+    }
     return SoftwareCallResult(prompt_id=prompt_id, call_id=call_id, log_url=base + '/log',
         node_id=record.request.node_id, state=record.state,
         workflow_id=record.request.workflow_id, calculation_signature=record.request.calculation_signature,
@@ -76,7 +154,8 @@ def _call_summary(settings, record: SoftwareCallRecord, prompt_id, call_id) -> S
         operation_id=record.operation.operation_id, definition_token=record.request.definition_token,
         development_source=record.bundle.development_source, ports=ports,
         preview_error=record.preview_error, observation=record.observation,
-        error=record.error or (record.result.error if record.result else None))
+        error=record.error or (record.result.error if record.result else None),
+        input_token=_input_token(record.invocation), editor_values=editor_values)
 
 
 def _binding(settings, body):
@@ -104,40 +183,56 @@ def _references(definition, body, operation):
     return result
 
 
-async def execute_native_call(database, settings, body: NativeBundleCall):
+async def execute_native_call(database, settings, body: NativeBundleCall, *, admission_lock: asyncio.Lock | None = None):
     record = read_software_call(settings, body.prompt_id, body.call_id)
     work = settings.workspace / "runs" / str(body.prompt_id) / "work" / str(body.call_id)
     try:
-        definition = record.definition
-        operation = record.operation
-        parameters = record.parameters
-        inputs, supporting = {}, {}
-        for name, reference_value in _references(definition, body, operation).items():
-            expected = next(item for item in operation.inputs if item.name == name)
-            inputs[name], supporting[name] = [], []
-            for group_index, reference in enumerate(reference_value if isinstance(reference_value, list) else [reference_value]):
-                if reference.kind == 'run_output':
-                    items, supporting_items = await asyncio.to_thread(resolve_result_inputs, settings, body.prompt_id, reference, expected.type)
-                else:
-                    if expected.type not in {'APF_SCIENCE', 'APF_FILE'}:
-                        raise ApiError(422, 'INVALID_REFERENCE', '该端口需要本次运行中已固定的文件输出。', message_key='this_port_requires_a_file_output_fixed_within_this_run')
-                    resolved = await asyncio.to_thread(resolve_canvas_inputs, database, settings, reference,
-                                                       run_directory=work.parent / (str(body.call_id) + '-inputs') / name / str(group_index),
-                                                       colour_layout=expected.colour_layout)
-                    items, supporting_items = resolved.items, []
-                inputs[name].extend(item.model_copy(update={'reference_index': group_index}) for item in items)
-                supporting[name].extend(item.model_copy(update={'reference_index': group_index}) for item in supporting_items)
-        invocation = SoftwareInvocation(
-            run_id=body.prompt_id, node_execution_id=body.node_id, call_id=body.call_id,
-            package_id=operation.package_id, version=operation.version, operation_id=operation.operation_id, operation_content_token=operation.content_token,
-            bundle_commit=record.bundle.commit,
-            development_source=get_package(settings, operation.package_id).development_source,
-            inputs=inputs, supporting_inputs=supporting, parameters=parameters,
-            work_directory=work,
-        )
-        record.invocation = invocation
-        if invocation.development_source is not None:
-            record.bundle.development_source = invocation.development_source
+        async with admission_lock if admission_lock is not None else nullcontext():
+            definition = record.definition
+            operation = record.operation
+            parameters = record.parameters
+            reference_groups = _references(definition, body, operation)
+            current = {}
+            for name, reference_value in reference_groups.items():
+                expected = next(item for item in operation.inputs if item.name == name)
+                for group_index, reference in enumerate(reference_value if isinstance(reference_value, list) else [reference_value]):
+                    if reference.kind != 'run_output':
+                        if expected.type not in {'APF_SCIENCE', 'APF_FILE'}:
+                            raise ApiError(422, 'INVALID_REFERENCE', '该端口需要本次运行中已固定的文件输出。', message_key='this_port_requires_a_file_output_fixed_within_this_run')
+                        current[f'{name}/{group_index}'] = (reference, expected.colour_layout)
+            preparation = asyncio.create_task(asyncio.to_thread(resolve_canvas_input_groups, database, settings, current,
+                                               run_directory=work.parent / (str(body.call_id) + '-inputs')))
+            try:
+                prepared = await asyncio.shield(preparation)
+            except asyncio.CancelledError:
+                # A cancelled coroutine must keep admission until its file reader stops.
+                await asyncio.gather(preparation, return_exceptions=True)
+                raise
+            inputs, supporting = {}, {}
+            for name, reference_value in reference_groups.items():
+                expected = next(item for item in operation.inputs if item.name == name)
+                inputs[name], supporting[name] = [], []
+                for group_index, reference in enumerate(reference_value if isinstance(reference_value, list) else [reference_value]):
+                    if reference.kind == 'run_output':
+                        items, supporting_items = await asyncio.to_thread(resolve_result_inputs, settings, body.prompt_id, reference, expected.type)
+                    else:
+                        resolved = prepared[f'{name}/{group_index}']
+                        items, supporting_items = resolved.items, []
+                    inputs[name].extend(item.model_copy(update={'reference_index': group_index}) for item in items)
+                    supporting[name].extend(item.model_copy(update={'reference_index': group_index}) for item in supporting_items)
+            invocation = SoftwareInvocation(
+                run_id=body.prompt_id, node_execution_id=body.node_id, call_id=body.call_id,
+                package_id=operation.package_id, version=operation.version, operation_id=operation.operation_id, operation_content_token=operation.content_token,
+                bundle_commit=record.bundle.commit,
+                development_source=get_package(settings, operation.package_id).development_source,
+                inputs=inputs, supporting_inputs=supporting, parameters=parameters,
+                work_directory=work,
+            )
+            record.invocation = invocation
+            if invocation.development_source is not None:
+                record.bundle.development_source = invocation.development_source
+
+            save_software_call(settings, body.prompt_id, body.call_id, record)
 
         async def observe(observation):
             record.state = 'running' if observation.state == 'completed' else observation.state
@@ -152,6 +247,15 @@ async def execute_native_call(database, settings, body: NativeBundleCall):
             preview_directory = settings.workspace / "output" / "apf-siril" / str(body.prompt_id) / str(body.call_id)
             preview_directory.mkdir(parents=True, exist_ok=True)
             registered_ports=[]
+            analyses = []
+            # A program may rewrite FITS headers on each run. Bind coordinates
+            # to the same producer, inputs, parameters and checked pixel layout.
+            position_context = _fingerprint([
+                body.workflow_id.hex if body.workflow_id else None, body.node_id,
+                body.definition_token, operation.content_token, record.bundle.commit,
+                invocation.development_source.fingerprint if invocation.development_source else None,
+                _input_token(invocation, positions=True), parameters,
+            ])
             for index, port in enumerate(definition.outputs):
                 output_name = definition.execution.outputs[port.name]
                 output_definition = next(item for item in operation.outputs if item.name == output_name)
@@ -166,9 +270,28 @@ async def execute_native_call(database, settings, body: NativeBundleCall):
                                                           colour_layout=output_definition.colour_layout if produced.format == 'fits' else None)
                         checked_group.append(checked)
                         if checked_group is checked_files and port.type == 'APF_ANALYSIS':
-                            await asyncio.to_thread(read_result_analysis, checked.path)
+                            analyses.extend(await asyncio.to_thread(read_result_analysis, checked.path))
+                effect = effective_calibration_effect(operation, parameters)
+                for position, checked in enumerate(checked_files):
+                    calibration, source = checked_output_calibration(
+                        effect, invocation.inputs, output_name=output_name, position=position,
+                        output_count=len(checked_files),
+                        call={'run_id': str(body.prompt_id), 'call_id': str(body.call_id),
+                              'package_id': operation.package_id, 'version': operation.version,
+                              'operation_id': operation.operation_id, 'content_token': operation.content_token},
+                        parameters=parameters,
+                    )
+                    checked_files[position] = checked.model_copy(update={'scientific_metadata': {
+                        **(checked.scientific_metadata or {}), **calibration_metadata(calibration, source),
+                    }})
                 registered_ports.append(CheckedResultPort(name=port.name,type=port.type,
-                    members=[CheckedResultMember(checked=item, name=item.path.name, display=record.output_display) for item in checked_files],
+                    members=[CheckedResultMember(
+                        checked=item, name=item.path.name, display=record.output_display,
+                        position_token=_fingerprint([position_context, output_name, position,
+                            [(item.scientific_metadata or {}).get(key)
+                             for key in ("width", "height", "shape", "selected_hdu", "frame_hdus", "frame_count", "colour_layout")]])
+                        if port.type == "APF_SCIENCE" else None,
+                    ) for position, item in enumerate(checked_files)],
                     supporting=[CheckedResultMember(checked=item, name=item.path.name, display=record.output_display) for item in checked_supporting]))
                 record.outputs.append(OutputLocator(kind='run_output', run_id=body.prompt_id,
                     execution_id=body.call_id, output_index=index))
@@ -185,6 +308,7 @@ async def execute_native_call(database, settings, body: NativeBundleCall):
                             subfolder=f'apf-siril/{body.prompt_id}/{body.call_id}'))
                     except (ApiError, OSError, ValueError) as exc:
                         record.preview_error = error_message(workspace_locale(settings.workspace), '', 'preview_generation_diagnostic', {'diagnostic': str(exc)})
+            _verify_analysis_positions(analyses, definition, registered_ports)
             await asyncio.to_thread(publish_checked_result,settings,CheckedResult(run_id=body.prompt_id,execution_id=body.call_id,source_kind='software',ports=registered_ports))
             record.result_registered=True
             record.state = "completed"
@@ -211,14 +335,12 @@ def prepare_native_call(settings,body:NativeBundleCall):
             raise ApiError(409,'AUTOMATIC_RESULT_MANUAL_OPERATION','This operation requires manual execution.', message_key='software_manual_execution_required')
     definition,operation,parameters=_binding(settings,body);_references(definition,body,operation)
     if not operation.ready:raise ApiError(503,'SOFTWARE_NOT_READY',operation.reason or 'Software is not ready.', message_key='software_operation_not_ready', fields=[{'path': 'diagnostic', 'message': operation.reason or 'Software is not ready.'}])
-    _,entries,_=get_bundle_metadata(settings,operation.package_id)
-    entry=next(item for item in entries if item['operation']['operation_id']==operation.operation_id)
     package=get_package(settings,operation.package_id)
     record = SoftwareCallRecord(request=body, state='starting', definition=definition,
         operation=operation, parameters=parameters,
         bundle=SoftwareCallBundle(version=package.effective_bundle_version, commit=package.effective_bundle_commit,
                                   development_source=package.development_source),
-        output_display=entry.get('output_display', 'direct'))
+        output_display='direct')
     save_software_call(settings,body.prompt_id,body.call_id,record)
     return record,True
 
@@ -244,6 +366,8 @@ async def cancel_native_call(settings, active, prompt_id, call_id):
     result=await cancel_operation(call_id)
     task=active.get(call_id)
     if task is not None and record.invocation is None:
-        task.cancel();await asyncio.gather(task,return_exceptions=True)
+        if not task.cancelling():
+            task.cancel()
+        await asyncio.shield(asyncio.gather(task, return_exceptions=True))
         record.state='cancelled';save_software_call(settings,prompt_id,call_id,record)
     return result
