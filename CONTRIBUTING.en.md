@@ -16,7 +16,7 @@ Create branches from `dev`, verify changes locally, and merge them into `dev`. R
 
 - Before merging, sync with the latest `dev`, run the checks that apply to the change, and record the results.
 - Once the checks pass, merge the feature branch into `dev` locally. A pull request and independent approval are optional.
-- After merging locally, push `dev` when authorized. The push triggers GitHub Actions.
+- After merging locally, push `dev` when authorized. See [Testing](docs/testing.en.md) for the check workflow.
 
 ## Release pull request review and merge
 

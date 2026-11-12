@@ -17,6 +17,7 @@ Test layers cover documentation, Python, architecture, frontend, browser, and di
 
 ## Gates and CI
 
+- Run applicable checks locally during development. GitHub Actions runs for pull requests targeting `main` and pushes to `main`.
 - The `docs` job runs the documentation gate and `pytest tests/docs` on Ubuntu.
 - The `product` job installs dependencies from the project lockfiles, builds the frontend, discovers browser test cases, runs Python and frontend tests, and builds and verifies the distribution on Ubuntu and Windows.
 - The `product` job's Python tests also include language coverage guards: the web app `en`/`zh` catalogs keep identical key sets, and every platform error renders through the message catalog.

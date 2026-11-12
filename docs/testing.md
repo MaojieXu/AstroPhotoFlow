@@ -17,6 +17,7 @@
 
 ## 门禁与 CI
 
+- 日常开发在本地运行适用检查。GitHub Actions 仅在 PR 的目标分支为 `main` 或推送到 `main` 时运行。
 - `docs` job 在 Ubuntu 上运行文档门禁与 `pytest tests/docs`。
 - `product` job 在 Ubuntu 和 Windows 上按项目锁文件安装依赖、构建前端、发现浏览器用例、运行 Python 与前端测试，并构建和验证发行物。
 - `product` job 的 Python 测试包含语言覆盖守卫：网页 `en`/`zh` 目录键集一致，平台错误全部经消息目录渲染。
