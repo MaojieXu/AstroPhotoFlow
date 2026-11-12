@@ -29,9 +29,10 @@ After changing the ORM, run `pnpm generate:database-baseline`, review the genera
 
 | Task | Command |
 | --- | --- |
-| Stop the development workbench | `uv run --locked --no-sync apf stop --workspace .artifacts/workspaces/dev` |
 | Open the development workbench | `pnpm web` |
-| Start Vite separately | `pnpm build:watch --workspace .artifacts/workspaces/dev --port 32589 --strictPort` |
+| Stop the development workbench services | `pnpm web:stop` |
+| Check the development workbench service status | `pnpm web:status` |
+| Start Vite separately for a running development workbench | `pnpm web:vite` |
 | MCP development reload | `pnpm dev:mcp --workspace .artifacts/workspaces/<test> --port 8765` |
 | Development Bundle sources | `uv run --locked --no-sync python scripts/dev_bundle_sources.py --help` |
 | Python tests | `uv run --locked --no-sync pytest -q --basetemp=.artifacts/pytest-<task>` |
@@ -40,7 +41,7 @@ After changing the ORM, run `pnpm generate:database-baseline`, review the genera
 | Architecture boundary check | `pnpm check:boundaries` |
 | Documentation gate | `pnpm check:docs` |
 | Interface artifacts | `pnpm docs:api` |
-| Check the development environment | `uv run --locked --no-sync apf env doctor --workspace .artifacts/workspaces/dev` |
+| Check the development environment (run `uv sync` first) | `pnpm doctor` |
 | Prune expired temporary artifacts | `uv run --locked --no-sync python scripts/prune_artifacts.py` (`--apply` deletes) |
 
 ## Develop against Bundle sources
@@ -56,7 +57,7 @@ After saving an adapter, the next run or preview uses the new code. After declar
 
 ## Debugging
 
-- Use the actual `web_url` from `apf start` or `apf status`. The workspace's `run/processes.json` records the actual ports, and `config.toml` holds the preferred ports.
+- Use the `web_url` from `pnpm web:status` for the backend-served page. Vite prints its own URL in the terminal. The workspace's `run/processes.json` records the actual backend ports, and `config.toml` holds the preferred ports.
 - Use an isolated test workspace in the checkout for browser and MCP validation. See [Testing](testing.en.md) for browser and parallel test settings.
-- `pnpm web` opens the Vite page and watches platform Python source. When the workbench is busy, the terminal reports what blocked the restart. Save again or restart explicitly once the work finishes. Ctrl+C stops Vite and the watcher. Use the stop command above to shut down the workbench services.
-- Stop your own instance before updating dependencies, the engine, or static web assets. When using `pnpm build:watch` separately, restart the workbench explicitly after Python changes. MCP hot reload only refreshes the MCP process.
+- `pnpm web` opens the Vite page and watches platform Python source. When the workbench is busy, the terminal reports what blocked the restart. Save again or restart explicitly once the work finishes. Ctrl+C stops Vite and the watcher. `pnpm web:stop` shuts down the workbench services.
+- Stop your own instance before updating dependencies, the engine, or static web assets. When using `pnpm web:vite` separately, restart the workbench explicitly after Python changes. MCP hot reload only refreshes the MCP process.

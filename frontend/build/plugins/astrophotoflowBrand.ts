@@ -35,10 +35,10 @@ export function astrophotoflowBrand(): Plugin {
           )
           .replace('href="manifest.json"', 'href="manifest.astrophotoflow.json"')
           .replace(
-            /<div id="splash-loader"[^>]*>[\s\S]*?<\/div>/,
-            `<div id="splash-loader" role="status" aria-label="Loading AstroPhotoFlow">
-              ${mark.replace('<svg ', '<svg aria-hidden="true" style="width:80px" ')}
-            </div>`
+            /(<div id="splash-loader"[^>]*>\s*)<svg\b[\s\S]*?<\/svg>/,
+            (_, opening: string) =>
+              opening.replace('Loading ComfyUI', 'Loading AstroPhotoFlow') +
+              mark.replace('<svg ', '<svg aria-hidden="true" style="width:80px" ')
           )
           .replace(
             "el.style.background = bg",
