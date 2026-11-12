@@ -1,0 +1,37 @@
+{
+  "pairs": [
+    "README.md",
+    "CONTRIBUTING.md",
+    "docs/README.md",
+    "docs/i18n/README.md",
+    "docs/architecture.md",
+    "docs/subsystems/README.md",
+    "docs/subsystems/import-pipeline.md",
+    "docs/subsystems/library.md",
+    "docs/subsystems/previews.md",
+    "docs/scratch/2026-11-08-local-workbench-brand.md",
+    "docs/subsystems/software.md",
+    "docs/subsystems/nodes.md",
+    "docs/subsystems/canvas-agent.md",
+    "docs/subsystems/workbench.md",
+    "docs/subsystems/frontend.md",
+    "docs/subsystems/comfyui.md",
+    "docs/product/README.md",
+    "docs/product/data.md",
+    "docs/product/workflow.md",
+    "docs/product/software.md",
+    "docs/product/workbench.md",
+    "docs/development.md",
+    "docs/testing.md",
+    "docs/release.md",
+    "docs/references.md",
+    "docs/user/workbench.md"
+  ],
+  "exclude": [
+    "docs/api/**",
+    "reference/**",
+    "frontend/**",
+    "engine/**",
+    ".artifacts/**"
+  ]
+}

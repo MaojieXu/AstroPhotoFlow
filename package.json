@@ -1,0 +1,32 @@
+{
+  "name": "astrophotoflow",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.13.1",
+  "engines": {
+    "node": ">=26.8.2 <27",
+    "pnpm": ">=11.3"
+  },
+  "scripts": {
+    "docs:api": "uv run --locked --no-sync python scripts/export_openapi.py",
+    "generate:sdk": "pnpm docs:api && pnpm --dir frontend --filter @astrophotoflow/ui exec openapi-ts -f openapi-ts.config.ts",
+    "generate:database-baseline": "uv run --locked --no-sync python scripts/generate_database_baseline.py",
+    "benchmark:library": "uv run --locked --no-sync python scripts/benchmark_library.py",
+    "typecheck": "pnpm --dir frontend --filter @astrophotoflow/ui typecheck",
+    "build": "uv run --locked --no-sync python scripts/build_frontend.py",
+    "web": "uv run --locked --no-sync python scripts/dev_frontend.py --start-workbench --workspace .artifacts/workspaces/dev --port 32589 --strictPort --open",
+    "web:stop": "uv run --locked --no-sync apf stop --workspace .artifacts/workspaces/dev",
+    "web:status": "uv run --locked --no-sync apf status --workspace .artifacts/workspaces/dev",
+    "web:vite": "pnpm build:watch --workspace .artifacts/workspaces/dev --port 32589 --strictPort",
+    "doctor": "uv run --locked --no-sync apf env doctor --workspace .artifacts/workspaces/dev",
+    "dev:mcp": "uv run --locked --no-sync python scripts/dev_mcp.py",
+    "build:watch": "uv run --locked --no-sync python scripts/dev_frontend.py",
+    "test": "pnpm --dir frontend --filter @astrophotoflow/ui test",
+    "test:browser": "pnpm --dir frontend exec playwright test --config ../tests/browser/playwright.config.mjs",
+    "test:watch": "pnpm --dir frontend --filter @astrophotoflow/ui test:watch",
+    "check:boundaries": "uv run --locked --no-sync pytest tests/architecture -q && pnpm --dir frontend exec depcruise src/platform/astrophotoflow packages/astrophotoflow-ui/src --config .dependency-cruiser.json --do-not-follow \"node_modules|^src/(?!platform/astrophotoflow/)\" --output-type err-long",
+    "check:docs": "uv run --locked --no-sync python scripts/verify_docs.py all",
+    "test:browser:modernization": "pnpm --dir frontend exec playwright test --config ../tests/browser/modernization.config.mjs",
+    "test:browser:native": "pnpm --dir frontend exec playwright test --config ../tests/browser/modernization-native.config.mjs"
+  }
+}

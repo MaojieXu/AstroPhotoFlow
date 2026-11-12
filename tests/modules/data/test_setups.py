@@ -1,0 +1,219 @@
+from copy import deepcopy
+from uuid import uuid4
+
+from fastapi.testclient import TestClient
+import pytest
+from sqlalchemy import select
+
+from astrophotoflow.interfaces.http.app import create_app
+from astrophotoflow.modules.data.equipment.models import Equipment
+from astrophotoflow.modules.data.imports.models import AssetTask
+from astrophotoflow.core.database.schema import initialize_database
+from astrophotoflow.core.config import Settings
+
+
+AUTH = {"Authorization": "Bearer settings-test"}
+
+
+def _create_sort_record(client, path, body):
+    response = client.post("/api/v1/" + path, headers=AUTH, json=body)
+    assert response.status_code == 201, response.text
+    return response.json()
+
+
+@pytest.fixture
+def service(tmp_path):
+    settings = Settings("127.0.0.1", 8190, tmp_path / "settings-data", (), workspace=tmp_path)
+    initialize_database(settings)
+    app = create_app(settings, "settings-test")
+    with TestClient(app) as client:
+        yield client, app.state.database
+
+
+@pytest.mark.parametrize("kind,specs,patch", [
+    ("camera", {"sensor_width_px": 100, "cfa_pattern": "RGGB"}, {"sensor_width_px": 200}),
+    ("telescope", {"native_focal_length_mm": 400, "optical_accessories": []}, {"native_focal_length_mm": 500}),
+    ("filter", {"filter_type": "Ha", "bandwidth_nm": 3}, {"filter_type": "OIII"}),
+])
+def test_equipment_categories_keep_unspecified_specs(service, kind, specs, patch):
+    client, _ = service
+    created = client.post("/api/v1/equipment", headers=AUTH, json={"kind": kind, "name": kind, "specs": specs})
+    assert created.status_code == 201, created.text
+    row = created.json()
+    changed = client.patch("/api/v1/equipment/" + row["id"], headers=AUTH,
+                           json={"base_revision": 1, "kind": kind, "specs": patch})
+    assert changed.status_code == 200
+    assert changed.json()["revision"] == 2
+    for key, value in {**specs, **patch}.items():
+        assert changed.json()["specs"][key] == value
+    assert client.get("/api/v1/equipment", headers=AUTH, params={"kind": kind}).json()["total"] == 1
+
+
+def test_setup_inline_and_registered_edits_do_not_modify_equipment(service):
+    client, database = service
+    equipment = client.post("/api/v1/equipment", headers=AUTH, json={"kind": "camera", "name": "registered"}).json()
+    components = [
+        {"source": "registered", "equipment_id": equipment["id"]},
+        {"source": "inline", "equipment": {"kind": "telescope", "name": "inline", "specs": {"native_focal_length_mm": 400}}},
+    ]
+    created = client.post("/api/v1/equipment-setups", headers=AUTH, json={"name": "Rig", "components": components})
+    assert created.status_code == 201, created.text
+    row = created.json()
+    row["components"][1]["equipment"]["name"] = "edited snapshot"
+    for component in row["components"]:
+        component.pop("effective_focal_length_mm", None)
+    changed = client.patch("/api/v1/equipment-setups/" + row["id"], headers=AUTH,
+                           json={"base_revision": 1, "components": row["components"]})
+    assert changed.status_code == 200, changed.text
+    assert changed.json()["components"][1]["equipment"]["name"] == "edited snapshot"
+    assert client.get("/api/v1/equipment/" + equipment["id"], headers=AUTH).json() == equipment
+    with database.read_session() as session:
+        assert len(session.scalars(select(Equipment)).all()) == 1
+    rejected = client.patch("/api/v1/equipment-setups/" + row["id"], headers=AUTH, json={
+        "base_revision": 2, "name": "must rollback", "components": [{"source": "registered", "equipment_id": str(uuid4())}],
+    })
+    assert rejected.status_code == 422
+    assert rejected.json()["error"]["code"] == "INVALID_REFERENCE"
+    assert client.get("/api/v1/equipment-setups/" + row["id"], headers=AUTH).json()["name"] == "Rig"
+
+
+def test_setup_paging_status_revisions_and_standard_errors(service):
+    client, _ = service
+    assert client.get("/api/v1/equipment-setups").status_code == 401
+    assert client.get("/api/v1/equipment-setups/" + str(uuid4()), headers=AUTH).status_code == 404
+    for name in ("B rig", "A rig"):
+        assert client.post("/api/v1/equipment-setups", headers=AUTH, json={"name": name}).status_code == 201
+    page = client.get("/api/v1/equipment-setups", headers=AUTH,
+                      params={"sort_by": "name", "order": "asc", "limit": 1}).json()
+    assert page["total"] == 2 and page["items"][0]["name"] == "A rig"
+    row = page["items"][0]
+    assert client.patch("/api/v1/equipment-setups/" + row["id"], headers=AUTH,
+                        json={"base_revision": 1, "status": "archived"}).status_code == 200
+    stale = client.patch("/api/v1/equipment-setups/" + row["id"], headers=AUTH, json={"base_revision": 1, "name": "stale"})
+    assert stale.status_code == 409 and stale.json()["error"]["code"] == "REVISION_CONFLICT"
+    assert client.get("/api/v1/equipment-setups", headers=AUTH).json()["total"] == 1
+    assert client.get("/api/v1/equipment-setups", headers=AUTH, params={"status": "archived"}).json()["total"] == 1
+    assert client.patch("/api/v1/equipment-setups/" + row["id"], headers=AUTH,
+                        json={"base_revision": 2, "components": None}).status_code == 422
+
+
+@pytest.mark.parametrize("kind", ["camera", "telescope", "filter"])
+@pytest.mark.parametrize("order", ["asc", "desc"])
+def test_setup_equipment_sorting_precedes_paging_and_keeps_empty_last(service, kind, order):
+    client, _ = service
+    alpha = _create_sort_record(client, "equipment", {"kind": kind, "name": "Alpha"})
+    zulu = _create_sort_record(client, "equipment", {"kind": kind, "name": "Zulu"})
+    first = _create_sort_record(client, "equipment-setups", {
+        "name": "Match Z", "components": [{"source": "registered", "equipment_id": alpha["id"]}],
+    })
+    middle = _create_sort_record(client, "equipment-setups", {
+        "name": "Match Y", "components": [{"source": "inline", "equipment": {"kind": kind, "name": "Beta"}}],
+    })
+    last = _create_sort_record(client, "equipment-setups", {
+        "name": "Match X", "components": [{"source": "registered", "equipment_id": zulu["id"]}],
+    })
+    empty = _create_sort_record(client, "equipment-setups", {"name": "Match Empty"})
+    _create_sort_record(client, "equipment-setups", {"name": "Outside search"})
+    expected = [first, middle, last] if order == "asc" else [last, middle, first]
+    params = {"sort_by": kind, "order": order, "q": "Match"}
+    response = client.get("/api/v1/equipment-setups", headers=AUTH, params=params)
+    assert response.status_code == 200, response.text
+    assert [row["id"] for row in response.json()["items"]] == [row["id"] for row in expected] + [empty["id"]]
+    page = client.get("/api/v1/equipment-setups", headers=AUTH, params={**params, "limit": 2, "offset": 1}).json()
+    assert page["total"] == 4
+    assert [row["id"] for row in page["items"]] == [row["id"] for row in expected[1:3]]
+    filtered = client.get("/api/v1/equipment-setups", headers=AUTH,
+                          params={**params, "component_kind": kind, "limit": 1, "offset": 1}).json()
+    assert filtered["total"] == 3
+    assert filtered["items"][0]["id"] == middle["id"]
+
+
+@pytest.mark.parametrize("order", ["asc", "desc"])
+def test_setup_equipment_sort_ties_use_setup_name_then_id(service, order):
+    client, _ = service
+    camera = _create_sort_record(client, "equipment", {"kind": "camera", "name": "Same camera"})
+    components = [{"source": "registered", "equipment_id": camera["id"]}]
+    beta = _create_sort_record(client, "equipment-setups", {"name": "Beta", "components": components})
+    alpha = _create_sort_record(client, "equipment-setups", {"name": "Alpha", "components": components})
+    duplicate = [_create_sort_record(client, "equipment-setups", {"name": "Same", "components": components}) for _ in range(2)]
+    result = client.get("/api/v1/equipment-setups", headers=AUTH,
+                        params={"sort_by": "camera", "order": order}).json()
+    assert [row["id"] for row in result["items"]] == [alpha["id"], beta["id"]] + sorted(row["id"] for row in duplicate)
+
+
+@pytest.mark.parametrize("order,indices", [("asc", [1, 0, 2]), ("desc", [2, 0, 1])])
+def test_setup_equipment_sort_uses_all_names_in_component_order(service, order, indices):
+    client, _ = service
+    rows = []
+    for index, names in enumerate([("Alpha", "Zulu"), ("Alpha", "Beta"), ("Zulu", "Alpha")]):
+        rows.append(_create_sort_record(client, "equipment-setups", {
+            "name": "Rig " + str(index),
+            "components": [{"source": "inline", "equipment": {"kind": "filter", "name": name}} for name in names],
+        }))
+    result = client.get("/api/v1/equipment-setups", headers=AUTH, params={"sort_by": "filter", "order": order}).json()
+    assert [row["id"] for row in result["items"]] == [rows[index]["id"] for index in indices]
+
+
+def test_setup_telescope_sort_includes_registered_and_inline_telescopes(service):
+    client, _ = service
+    optics = _create_sort_record(client, "equipment", {"kind": "telescope", "name": "Zulu registered"})
+    registered = _create_sort_record(client, "equipment-setups", {
+        "name": "Registered", "components": [{"source": "registered", "equipment_id": optics["id"]}],
+    })
+    inline = _create_sort_record(client, "equipment-setups", {
+        "name": "Inline", "components": [{"source": "inline", "equipment": {"kind": "telescope", "name": "Alpha inline"}}],
+    })
+    telescope = _create_sort_record(client, "equipment-setups", {
+        "name": "Telescope", "components": [{"source": "inline", "equipment": {"kind": "telescope", "name": "Beta telescope"}}],
+    })
+    params = {"sort_by": "telescope", "order": "asc"}
+    result = client.get("/api/v1/equipment-setups", headers=AUTH, params=params).json()
+    assert [row["id"] for row in result["items"]] == [inline["id"], telescope["id"], registered["id"]]
+    legacy = client.get("/api/v1/equipment-setups", headers=AUTH,
+                        params={**params, "component_kind": "telescope"}).json()
+    assert [row["id"] for row in legacy["items"]] == [inline["id"], telescope["id"], registered["id"]]
+
+
+def test_setup_name_sort_descending_and_sort_scope(service):
+    client, _ = service
+    for name in ["Alpha", "Zulu"]:
+        _create_sort_record(client, "equipment-setups", {"name": name})
+    result = client.get("/api/v1/equipment-setups", headers=AUTH, params={"sort_by": "name", "order": "desc"}).json()
+    assert [row["name"] for row in result["items"]] == ["Zulu", "Alpha"]
+    assert client.get("/api/v1/equipment-setups", headers=AUTH, params={"sort_by": "unknown"}).status_code == 422
+    for path in ["/equipment"]:
+        assert client.get("/api/v1" + path, headers=AUTH, params={"sort_by": "camera"}).status_code == 422
+
+
+def test_accepted_import_and_retry_keep_configuration_snapshot(service, monkeypatch):
+    client, database = service
+    camera = client.post("/api/v1/equipment", headers=AUTH, json={"kind": "camera", "name": "original camera"}).json()
+    setup = client.post("/api/v1/equipment-setups", headers=AUTH, json={"name": "original rig", "components": [
+        {"source": "registered", "equipment_id": camera["id"]},
+        {"source": "inline", "equipment": {"kind": "telescope", "name": "inline scope"}},
+    ]}).json()
+    accepted = client.post("/api/v1/uploads", headers=AUTH, json={
+        "files": [{"name": "small.fits", "size": 0}],
+        "parameters": {"parameter_mode": "gain", "gain": 0},
+        "equipment": {"choice": {"source": "setup", "setup_id": setup["id"], "expected_revision": setup["revision"]}, "fields": ["camera", "telescope"]},
+    })
+    assert accepted.status_code == 202, accepted.text
+    task_id = accepted.json()["task_id"]
+    task = client.get("/api/v1/asset-tasks/" + task_id, headers=AUTH).json()
+    with database.read_session() as session:
+        frozen = deepcopy(session.get(AssetTask, task_id).import_defaults_snapshot)
+    assert frozen["parameters"]["gain"] == 0 and frozen["parameters"]["camera_id"] == camera["id"]
+    assert frozen["equipment_setup"]["components"][1]["equipment"]["name"] == "inline scope"
+    assert client.patch("/api/v1/equipment/" + camera["id"], headers=AUTH,
+                        json={"base_revision": 1, "kind": "camera", "name": "changed camera"}).status_code == 200
+    assert client.patch("/api/v1/equipment-setups/" + setup["id"], headers=AUTH,
+                        json={"base_revision": 1, "name": "changed rig", "components": []}).status_code == 200
+    with database.write_session() as session:
+        session.get(AssetTask, task_id).status = "failed"
+    monkeypatch.setattr("astrophotoflow.modules.data.public.run_import_task", lambda *args: None)
+    retried = client.post("/api/v1/asset-tasks/" + task_id + "/retry", headers=AUTH,
+                          json={"item_ids": [task["items"][0]["id"]]})
+    assert retried.status_code == 202, retried.text
+    with database.read_session() as session:
+        assert session.get(AssetTask, retried.json()["task_id"]).import_defaults_snapshot == frozen
+        assert session.get(AssetTask, task_id).import_defaults_snapshot == frozen

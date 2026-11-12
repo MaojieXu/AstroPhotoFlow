@@ -1,0 +1,3 @@
+# Vendored upstream trees keep exact bytes, including line endings.
+engine/** -text
+frontend/** -text

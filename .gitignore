@@ -95,11 +95,6 @@ docs/_build/
 # PyBuilder
 target/
 
-# Cookiecutter
-output/
-python_boilerplate/
-cookiecutter-pypackage-env/
-
 # vscode settings
 /.vscode/
 .history/
@@ -107,6 +102,14 @@ cookiecutter-pypackage-env/
 
 # Local reference checkouts
 /reference/
+
+# Local astronomy test images
+/tests/data/Astro_Dataset/
+/tests/data/reference-samples/
+
+# Local development environments, workspaces and reports
+/.artifacts/
+/bundles/
 
 # Local environment and secrets
 .env
@@ -119,11 +122,15 @@ node_modules/
 .npm/
 .pnpm-store/
 .vite/
-/web/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
+
+!frontend/build/
+!frontend/build/**
+!frontend/**/lib/
+!frontend/**/lib/**
 
 # Windows
 Thumbs.db

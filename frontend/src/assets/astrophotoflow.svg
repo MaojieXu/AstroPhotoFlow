@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="currentColor">
+  <style>
+    svg { color: #202832; }
+    @media (prefers-color-scheme: dark) { svg { color: #f5f8ff; } }
+  </style>
+  <polygon points="7,34 18,34 18,81 73,81 73,92 7,92"/>
+  <polygon points="26,9 54,9 54,20 37,20 37,62 83,62 83,49 94,49 94,73 26,73"/>
+  <polygon points="77,5 83,19 97,25 83,31 77,45 71,31 57,25 71,19"/>
+</svg>

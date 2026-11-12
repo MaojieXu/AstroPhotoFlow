@@ -1,0 +1,69 @@
+import json
+import sqlite3
+from uuid import uuid4
+from fastapi.testclient import TestClient
+from pydantic import TypeAdapter
+from sqlalchemy import select
+from astrophotoflow.contracts.calibration import CalibrationBindings
+from astrophotoflow.contracts.image_management import EquipmentApplication
+from astrophotoflow.contracts.metadata import AssetParametersPatch
+from astrophotoflow.contracts.setups import EquipmentSetupCreate
+from astrophotoflow.core.config import Settings
+from astrophotoflow.core.database.db import Database
+from astrophotoflow.core.database.schema import SCHEMA_REVISION, initialize_database
+from astrophotoflow.interfaces.http.app import create_app
+from astrophotoflow.modules.data.equipment.models import Equipment
+from astrophotoflow.modules.data.equipment.snapshots import capture_defaults_snapshot
+from astrophotoflow.modules.data.imports.models import AssetTask
+from astrophotoflow.modules.data.public import create_setup
+
+def test_fresh_baseline_contains_member_relations_without_legacy_profiles(tmp_path):
+    settings = Settings('127.0.0.1', 8190, tmp_path, (), workspace=tmp_path)
+    initialize_database(settings)
+    with sqlite3.connect(settings.database_path) as connection:
+        tables = {row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+        assert 'equipment_setup_member' in tables
+        assert 'capture_profile' not in tables
+        assert 'capture_preset' not in tables and 'capture_preset_selection' not in tables
+        assert connection.execute('SELECT version_num FROM alembic_version').fetchone()[0] == SCHEMA_REVISION
+        assert connection.execute('PRAGMA foreign_key_check').fetchall() == []
+
+def test_import_snapshot_freezes_registered_and_inline_components(tmp_path):
+    settings = Settings('127.0.0.1', 8190, tmp_path, (), workspace=tmp_path)
+    initialize_database(settings)
+    database = Database(settings.database_path)
+    camera = str(uuid4())
+    components = EquipmentSetupCreate.model_validate({'name': 'night rig', 'components': [{'source': 'registered', 'equipment_id': camera}, {'source': 'inline', 'equipment': {'kind': 'telescope', 'name': 'hand-filled scope', 'specs': {'native_focal_length_mm': 400}}}]}).model_dump(mode='json')['components']
+    with database.write_session() as session:
+        session.add(Equipment(id=camera, kind='camera', name='camera', specs={'cfa_pattern': 'RGGB'}, status='active', revision=1))
+        session.flush()
+        setup = str(create_setup(session, EquipmentSetupCreate.model_validate({'name': 'night rig', 'components': components})).id)
+        session.flush()
+    equipment = EquipmentApplication.model_validate({'choice': {'source': 'setup', 'setup_id': setup, 'expected_revision': 1}, 'fields': ['camera', 'telescope']})
+    parameters = AssetParametersPatch.model_validate({'parameter_mode': 'gain', 'gain': 0, 'exposure_seconds': 30})
+    with database.read_session() as session:
+        snapshot = capture_defaults_snapshot(session, parameters, equipment).model_dump(mode='json', exclude_unset=True)
+        assert {key: snapshot['parameters'][key] for key in ('gain', 'exposure_seconds', 'camera_id')} == {'gain': 0, 'exposure_seconds': 30, 'camera_id': camera}
+        assert len(session.scalars(select(Equipment)).all()) == 1
+    app = create_app(settings, 'test-token')
+    with TestClient(app) as client:
+        response = client.post('/api/v1/uploads', headers={'Authorization': 'Bearer test-token'}, json={'files': [{'name': 'light.fits', 'size': 100}], 'parameters': parameters.model_dump(mode='json', exclude_unset=True), 'equipment': equipment.model_dump(mode='json')})
+        assert response.status_code == 202, response.text
+        task_id = response.json()['task_id']
+    with database.read_session() as session:
+        assert session.get(AssetTask, task_id).import_defaults_snapshot == snapshot
+    frozen = json.dumps(snapshot, sort_keys=True)
+    with database.write_session() as session:
+        session.get(Equipment, camera).name = 'changed camera'
+    assert json.dumps(snapshot, sort_keys=True) == frozen
+    assert snapshot['equipment_setup']['components'][0]['equipment']['name'] == 'camera'
+    assert snapshot['equipment_setup']['components'][1]['equipment']['name'] == 'hand-filled scope'
+    database.close()
+
+def test_calibration_contract_distinguishes_unconfigured_disabled_and_fixed_master():
+    adapter = TypeAdapter(CalibrationBindings)
+    version_id = str(uuid4())
+    bindings = {'bias': None, 'flat': {'kind': 'asset', 'id': version_id}, 'dark_flat': {'mode': 'unconfigured'}}
+    parsed = adapter.validate_python(bindings)
+    assert adapter.dump_python(parsed, mode='json') == bindings
+    assert 'dark' not in parsed

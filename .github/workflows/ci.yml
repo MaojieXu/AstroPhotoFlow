@@ -1,0 +1,91 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  docs:
+    name: docs
+    runs-on: ubuntu-latest
+    env:
+      PYTHONIOENCODING: utf-8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: '0.13.5'
+          enable-cache: false
+      - name: Prepare Python project
+        run: uv sync --locked --extra dev
+      - name: Prepare report directories
+        run: mkdir -p .artifacts/reports
+      - name: Documentation gates
+        run: uv run --locked --no-sync python scripts/verify_docs.py all
+      - name: Documentation gate tests
+        run: uv run --locked --no-sync python -m pytest tests/docs -q --basetemp=.artifacts/pytest-docs
+
+  product:
+    name: product (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      PYTHONIOENCODING: utf-8
+      UV_PYTHON_INSTALL_REGISTRY: '0'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '26.8.2'
+      - uses: pnpm/action-setup@v4
+        with:
+          version: '11.13.1'
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: '0.13.5'
+          enable-cache: false
+      - name: Prepare Python project
+        run: uv sync --locked --extra dev
+      - name: Install frontend dependencies
+        run: pnpm --dir frontend install --frozen-lockfile --ignore-scripts
+      - name: Build frontend
+        run: pnpm build
+      - name: Discover browser tests (no services)
+        run: pnpm test:browser --list
+      - name: Python product tests
+        run: uv run --locked --no-sync pytest -q --junitxml=.artifacts/reports/python.xml
+      - name: Frontend product tests
+        run: pnpm test
+      - name: Build and verify distributions
+        run: |
+          uv run --locked --no-sync python -m build --installer uv --outdir .artifacts/dist
+          uv run --locked --no-sync python scripts/verify_distribution.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: results-${{ matrix.os }}
+          path: .artifacts/reports/
+
+  checks:
+    name: all checks passed
+    needs: [docs, product]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify required jobs
+        run: |
+          if [ "${{ needs.docs.result }}" != "success" ] || [ "${{ needs.product.result }}" != "success" ]; then
+            echo "docs: ${{ needs.docs.result }}"
+            echo "product: ${{ needs.product.result }}"
+            exit 1
+          fi
+          echo "all checks passed"

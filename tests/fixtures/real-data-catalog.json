@@ -1,0 +1,3605 @@
+{
+  "source_folders": {
+    "IC443_RGB_P0": 93,
+    "IC443_RGB_P1": 94,
+    "IC443_SHO_P1": 158,
+    "IC443_SHO_P2": 159,
+    "2023-10-01_Calibration": 10
+  },
+  "total_files": 514,
+  "grouping_author": "Agent-authored explicit member lists. Filter labels, camera names and exact temperatures remain distinct. Missing readout mode and Offset stay unknown.",
+  "groups": [
+    {
+      "name": "IC443_RGB_P0_Blue__T-20.0__EXP120.0__Group01",
+      "source_folder": "IC443_RGB_P0",
+      "classification": {
+        "frame_class": "subframe",
+        "frame_type": "light"
+      },
+      "accept_unknown": true,
+      "header": {
+        "CCD-TEMP": -20.0,
+        "EXPTIME": 120.0,
+        "FILTER": "Blue",
+        "GAIN": 90,
+        "INSTRUME": "ASI Camera (1) (ASCOM)",
+        "ISO": null,
+        "ISOSPEED": null,
+        "NAXIS1": 4656,
+        "NAXIS2": 3520,
+        "OFFSET": null,
+        "READMODE": null,
+        "READOUTM": null,
+        "TELESCOP": "Moana",
+        "XBINNING": 1,
+        "YBINNING": 1
+      },
+      "members": [
+        {
+          "path": "IC443_RGB_P0/2023-10-16_06-04-50_B_IC 443_120.00s_0000.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-16_06-07-21_B_IC 443_120.00s_0001.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-16_06-09-23_B_IC 443_120.00s_0002.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-16_06-11-24_B_IC 443_120.00s_0003.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-16_06-13-46_B_IC 443_120.00s_0004.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-16_06-15-47_B_IC 443_120.00s_0005.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-17_05-28-57_B_IC 443_120.00s_0006.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-17_05-30-59_B_IC 443_120.00s_0007.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-17_05-33-20_B_IC 443_120.00s_0008.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-17_05-35-21_B_IC 443_120.00s_0009.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-17_05-37-23_B_IC 443_120.00s_0010.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-17_05-39-45_B_IC 443_120.00s_0011.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-17_07-04-31_B_IC 443_120.00s_0012.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-19_05-19-22_B_IC 443_120.00s_0006.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-19_05-21-23_B_IC 443_120.00s_0007.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-19_05-23-48_B_IC 443_120.00s_0008.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-19_05-25-50_B_IC 443_120.00s_0009.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-19_05-27-52_B_IC 443_120.00s_0010.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-19_05-30-13_B_IC 443_120.00s_0011.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-19_06-02-01_B_IC 443_120.00s_0012.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-19_06-04-03_B_IC 443_120.00s_0013.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-19_06-06-25_B_IC 443_120.00s_0014.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-19_06-08-27_B_IC 443_120.00s_0015.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-19_06-10-28_B_IC 443_120.00s_0016.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-19_06-16-32_B_IC 443_120.00s_0017.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-19_06-47-45_B_IC 443_120.00s_0018.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-19_06-49-47_B_IC 443_120.00s_0019.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-19_06-55-54_B_IC 443_120.00s_0020.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-19_06-57-56_B_IC 443_120.00s_0021.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-19_06-59-57_B_IC 443_120.00s_0022.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-19_07-02-21_B_IC 443_120.00s_0023.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        }
+      ]
+    },
+    {
+      "name": "IC443_RGB_P0_Green__T-20.0__EXP120.0__Group02",
+      "source_folder": "IC443_RGB_P0",
+      "classification": {
+        "frame_class": "subframe",
+        "frame_type": "light"
+      },
+      "accept_unknown": true,
+      "header": {
+        "CCD-TEMP": -20.0,
+        "EXPTIME": 120.0,
+        "FILTER": "Green",
+        "GAIN": 90,
+        "INSTRUME": "ASI Camera (1) (ASCOM)",
+        "ISO": null,
+        "ISOSPEED": null,
+        "NAXIS1": 4656,
+        "NAXIS2": 3520,
+        "OFFSET": null,
+        "READMODE": null,
+        "READOUTM": null,
+        "TELESCOP": "Moana",
+        "XBINNING": 1,
+        "YBINNING": 1
+      },
+      "members": [
+        {
+          "path": "IC443_RGB_P0/2023-10-16_05-48-09_G_IC 443_120.00s_0000.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-16_05-50-31_G_IC 443_120.00s_0001.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-16_05-56-16_G_IC 443_120.00s_0002.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-16_05-58-18_G_IC 443_120.00s_0003.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-16_06-00-43_G_IC 443_120.00s_0004.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-16_06-02-45_G_IC 443_120.00s_0005.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-17_05-17-59_G_IC 443_120.00s_0007.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-17_05-20-23_G_IC 443_120.00s_0008.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-17_05-22-25_G_IC 443_120.00s_0009.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-17_05-26-51_G_IC 443_120.00s_0011.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-17_06-47-41_G_IC 443_120.00s_0012.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-17_06-49-43_G_IC 443_120.00s_0013.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-17_06-51-45_G_IC 443_120.00s_0014.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-17_06-58-01_G_IC 443_120.00s_0015.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-17_07-00-03_G_IC 443_120.00s_0016.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-17_07-02-05_G_IC 443_120.00s_0017.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-19_05-06-27_G_IC 443_120.00s_0006.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-19_05-08-29_G_IC 443_120.00s_0007.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-19_05-10-51_G_IC 443_120.00s_0008.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-19_05-12-53_G_IC 443_120.00s_0009.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-19_05-14-54_G_IC 443_120.00s_0010.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-19_05-17-15_G_IC 443_120.00s_0011.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-19_05-48-57_G_IC 443_120.00s_0012.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-19_05-50-59_G_IC 443_120.00s_0013.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-19_05-53-30_G_IC 443_120.00s_0014.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-19_05-55-33_G_IC 443_120.00s_0015.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-19_05-57-34_G_IC 443_120.00s_0016.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-19_05-59-55_G_IC 443_120.00s_0017.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-19_06-34-52_G_IC 443_120.00s_0018.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-19_06-36-54_G_IC 443_120.00s_0019.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-19_06-39-14_G_IC 443_120.00s_0020.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-19_06-41-16_G_IC 443_120.00s_0021.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-19_06-43-17_G_IC 443_120.00s_0022.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-19_06-45-39_G_IC 443_120.00s_0023.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-20_05-13-20_G_IC 443_120.00s_0024.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        }
+      ]
+    },
+    {
+      "name": "IC443_RGB_P0_Red__T-20.0__EXP120.0__Group03",
+      "source_folder": "IC443_RGB_P0",
+      "classification": {
+        "frame_class": "subframe",
+        "frame_type": "light"
+      },
+      "accept_unknown": true,
+      "header": {
+        "CCD-TEMP": -20.0,
+        "EXPTIME": 120.0,
+        "FILTER": "Red",
+        "GAIN": 90,
+        "INSTRUME": "ASI Camera (1) (ASCOM)",
+        "ISO": null,
+        "ISOSPEED": null,
+        "NAXIS1": 4656,
+        "NAXIS2": 3520,
+        "OFFSET": null,
+        "READMODE": null,
+        "READOUTM": null,
+        "TELESCOP": "Moana",
+        "XBINNING": 1,
+        "YBINNING": 1
+      },
+      "members": [
+        {
+          "path": "IC443_RGB_P0/2023-10-16_06-17-54_R_IC 443_120.00s_0000.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-16_06-20-15_R_IC 443_120.00s_0001.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-16_06-22-17_R_IC 443_120.00s_0002.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-16_06-24-19_R_IC 443_120.00s_0003.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-16_06-26-40_R_IC 443_120.00s_0004.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-16_06-28-42_R_IC 443_120.00s_0005.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-17_05-43-53_R_IC 443_120.00s_0007.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-17_05-46-15_R_IC 443_120.00s_0008.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-17_05-56-22_R_IC 443_120.00s_0011.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-19_05-32-19_R_IC 443_120.00s_0006.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-19_05-34-20_R_IC 443_120.00s_0007.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-19_05-36-40_R_IC 443_120.00s_0008.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-19_05-38-42_R_IC 443_120.00s_0009.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-19_05-40-44_R_IC 443_120.00s_0010.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-19_05-43-05_R_IC 443_120.00s_0011.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-19_06-18-38_R_IC 443_120.00s_0012.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-19_06-20-40_R_IC 443_120.00s_0013.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-19_06-23-02_R_IC 443_120.00s_0014.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-19_06-25-04_R_IC 443_120.00s_0015.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-19_06-27-06_R_IC 443_120.00s_0016.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-19_06-29-30_R_IC 443_120.00s_0017.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-19_07-04-29_R_IC 443_120.00s_0018.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-19_07-06-30_R_IC 443_120.00s_0019.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-20_05-04-48_R_IC 443_120.00s_0020.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-20_05-06-50_R_IC 443_120.00s_0021.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-20_05-08-52_R_IC 443_120.00s_0022.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P0/2023-10-20_05-11-14_R_IC 443_120.00s_0023.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        }
+      ]
+    },
+    {
+      "name": "IC443_RGB_P1_B__T-20.0__EXP120.0__Group01",
+      "source_folder": "IC443_RGB_P1",
+      "classification": {
+        "frame_class": "subframe",
+        "frame_type": "light"
+      },
+      "accept_unknown": true,
+      "header": {
+        "CCD-TEMP": -20.0,
+        "EXPTIME": 120.0,
+        "FILTER": "B",
+        "GAIN": 90,
+        "INSTRUME": "ASI Camera (1) (ASCOM)",
+        "ISO": null,
+        "ISOSPEED": null,
+        "NAXIS1": 4656,
+        "NAXIS2": 3520,
+        "OFFSET": null,
+        "READMODE": null,
+        "READOUTM": null,
+        "TELESCOP": "Moana",
+        "XBINNING": 1,
+        "YBINNING": 1
+      },
+      "members": [
+        {
+          "path": "IC443_RGB_P1/2023-10-26_05-17-54_B_IC 443_120.00s_0043.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P1/2023-10-26_05-20-18_B_IC 443_120.00s_0044.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P1/2023-10-26_05-24-22_B_IC 443_120.00s_0046.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P1/2023-10-26_05-26-45_B_IC 443_120.00s_0047.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P1/2023-10-26_05-59-27_B_IC 443_120.00s_0048.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P1/2023-10-26_06-01-29_B_IC 443_120.00s_0049.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P1/2023-10-26_06-07-14_B_IC 443_120.00s_0050.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P1/2023-10-26_06-09-16_B_IC 443_120.00s_0051.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P1/2023-10-26_06-15-04_B_IC 443_120.00s_0052.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P1/2023-10-26_06-17-37_B_IC 443_120.00s_0053.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P1/2023-10-26_06-49-44_B_IC 443_120.00s_0054.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P1/2023-10-26_06-51-45_B_IC 443_120.00s_0055.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P1/2023-10-26_06-54-07_B_IC 443_120.00s_0056.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P1/2023-10-26_06-56-08_B_IC 443_120.00s_0057.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P1/2023-10-26_07-01-54_B_IC 443_120.00s_0058.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P1/2023-10-26_07-04-16_B_IC 443_120.00s_0059.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        }
+      ]
+    },
+    {
+      "name": "IC443_RGB_P1_Blue__T-20.0__EXP120.0__Group02",
+      "source_folder": "IC443_RGB_P1",
+      "classification": {
+        "frame_class": "subframe",
+        "frame_type": "light"
+      },
+      "accept_unknown": true,
+      "header": {
+        "CCD-TEMP": -20.0,
+        "EXPTIME": 120.0,
+        "FILTER": "Blue",
+        "GAIN": 90,
+        "INSTRUME": "ASI Camera (1) (ASCOM)",
+        "ISO": null,
+        "ISOSPEED": null,
+        "NAXIS1": 4656,
+        "NAXIS2": 3520,
+        "OFFSET": null,
+        "READMODE": null,
+        "READOUTM": null,
+        "TELESCOP": "Moana",
+        "XBINNING": 1,
+        "YBINNING": 1
+      },
+      "members": [
+        {
+          "path": "IC443_RGB_P1/2023-10-20_05-26-15_B_IC 443_120.00s_0024.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P1/2023-10-20_05-28-17_B_IC 443_120.00s_0025.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P1/2023-10-20_05-30-39_B_IC 443_120.00s_0026.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P1/2023-10-20_05-32-41_B_IC 443_120.00s_0027.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P1/2023-10-20_05-34-42_B_IC 443_120.00s_0028.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P1/2023-10-20_05-41-14_B_IC 443_120.00s_0029.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P1/2023-10-20_06-09-13_B_IC 443_120.00s_0030.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P1/2023-10-20_06-11-15_B_IC 443_120.00s_0031.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P1/2023-10-20_06-13-38_B_IC 443_120.00s_0032.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P1/2023-10-20_06-15-40_B_IC 443_120.00s_0033.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P1/2023-10-20_06-17-42_B_IC 443_120.00s_0034.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P1/2023-10-20_06-20-03_B_IC 443_120.00s_0035.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P1/2023-10-20_06-55-37_B_IC 443_120.00s_0036.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        }
+      ]
+    },
+    {
+      "name": "IC443_RGB_P1_G__T-20.0__EXP120.0__Group03",
+      "source_folder": "IC443_RGB_P1",
+      "classification": {
+        "frame_class": "subframe",
+        "frame_type": "light"
+      },
+      "accept_unknown": true,
+      "header": {
+        "CCD-TEMP": -20.0,
+        "EXPTIME": 120.0,
+        "FILTER": "G",
+        "GAIN": 90,
+        "INSTRUME": "ASI Camera (1) (ASCOM)",
+        "ISO": null,
+        "ISOSPEED": null,
+        "NAXIS1": 4656,
+        "NAXIS2": 3520,
+        "OFFSET": null,
+        "READMODE": null,
+        "READOUTM": null,
+        "TELESCOP": "Moana",
+        "XBINNING": 1,
+        "YBINNING": 1
+      },
+      "members": [
+        {
+          "path": "IC443_RGB_P1/2023-10-26_04-58-47_G_IC 443_120.00s_0042.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P1/2023-10-26_05-03-11_G_IC 443_120.00s_0044.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P1/2023-10-26_05-11-15_G_IC 443_120.00s_0046.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P1/2023-10-26_05-13-45_G_IC 443_120.00s_0047.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P1/2023-10-26_05-41-54_G_IC 443_120.00s_0048.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P1/2023-10-26_05-43-57_G_IC 443_120.00s_0049.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P1/2023-10-26_05-46-20_G_IC 443_120.00s_0050.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P1/2023-10-26_05-48-23_G_IC 443_120.00s_0051.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P1/2023-10-26_05-50-25_G_IC 443_120.00s_0052.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P1/2023-10-26_05-52-50_G_IC 443_120.00s_0053.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P1/2023-10-26_06-36-45_G_IC 443_120.00s_0054.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P1/2023-10-26_06-38-47_G_IC 443_120.00s_0055.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P1/2023-10-26_06-41-09_G_IC 443_120.00s_0056.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P1/2023-10-26_06-43-11_G_IC 443_120.00s_0057.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P1/2023-10-26_06-45-14_G_IC 443_120.00s_0058.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P1/2023-10-26_06-47-37_G_IC 443_120.00s_0059.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        }
+      ]
+    },
+    {
+      "name": "IC443_RGB_P1_Green__T-20.0__EXP120.0__Group04",
+      "source_folder": "IC443_RGB_P1",
+      "classification": {
+        "frame_class": "subframe",
+        "frame_type": "light"
+      },
+      "accept_unknown": true,
+      "header": {
+        "CCD-TEMP": -20.0,
+        "EXPTIME": 120.0,
+        "FILTER": "Green",
+        "GAIN": 90,
+        "INSTRUME": "ASI Camera (1) (ASCOM)",
+        "ISO": null,
+        "ISOSPEED": null,
+        "NAXIS1": 4656,
+        "NAXIS2": 3520,
+        "OFFSET": null,
+        "READMODE": null,
+        "READOUTM": null,
+        "TELESCOP": "Moana",
+        "XBINNING": 1,
+        "YBINNING": 1
+      },
+      "members": [
+        {
+          "path": "IC443_RGB_P1/2023-10-20_05-15-22_G_IC 443_120.00s_0025.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P1/2023-10-20_05-17-44_G_IC 443_120.00s_0026.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P1/2023-10-20_05-19-46_G_IC 443_120.00s_0027.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P1/2023-10-20_05-21-48_G_IC 443_120.00s_0028.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P1/2023-10-20_05-24-09_G_IC 443_120.00s_0029.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P1/2023-10-20_05-56-15_G_IC 443_120.00s_0030.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P1/2023-10-20_05-58-16_G_IC 443_120.00s_0031.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P1/2023-10-20_06-00-39_G_IC 443_120.00s_0032.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P1/2023-10-20_06-02-42_G_IC 443_120.00s_0033.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P1/2023-10-20_06-04-44_G_IC 443_120.00s_0034.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P1/2023-10-20_06-07-06_G_IC 443_120.00s_0035.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P1/2023-10-20_06-42-32_G_IC 443_120.00s_0036.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P1/2023-10-20_06-44-33_G_IC 443_120.00s_0037.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P1/2023-10-20_06-47-03_G_IC 443_120.00s_0038.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P1/2023-10-20_06-49-04_G_IC 443_120.00s_0039.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P1/2023-10-20_06-51-06_G_IC 443_120.00s_0040.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        }
+      ]
+    },
+    {
+      "name": "IC443_RGB_P1_R__T-20.0__EXP120.0__Group05",
+      "source_folder": "IC443_RGB_P1",
+      "classification": {
+        "frame_class": "subframe",
+        "frame_type": "light"
+      },
+      "accept_unknown": true,
+      "header": {
+        "CCD-TEMP": -20.0,
+        "EXPTIME": 120.0,
+        "FILTER": "R",
+        "GAIN": 90,
+        "INSTRUME": "ASI Camera (1) (ASCOM)",
+        "ISO": null,
+        "ISOSPEED": null,
+        "NAXIS1": 4656,
+        "NAXIS2": 3520,
+        "OFFSET": null,
+        "READMODE": null,
+        "READOUTM": null,
+        "TELESCOP": "Moana",
+        "XBINNING": 1,
+        "YBINNING": 1
+      },
+      "members": [
+        {
+          "path": "IC443_RGB_P1/2023-10-26_04-45-46_R_IC 443_120.00s_0036.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P1/2023-10-26_04-47-47_R_IC 443_120.00s_0037.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P1/2023-10-26_04-50-11_R_IC 443_120.00s_0038.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P1/2023-10-26_04-52-12_R_IC 443_120.00s_0039.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P1/2023-10-26_04-54-14_R_IC 443_120.00s_0040.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P1/2023-10-26_04-56-41_R_IC 443_120.00s_0041.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P1/2023-10-26_05-28-51_R_IC 443_120.00s_0042.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P1/2023-10-26_05-30-54_R_IC 443_120.00s_0043.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P1/2023-10-26_05-33-15_R_IC 443_120.00s_0044.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P1/2023-10-26_05-35-17_R_IC 443_120.00s_0045.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P1/2023-10-26_05-37-19_R_IC 443_120.00s_0046.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P1/2023-10-26_05-39-48_R_IC 443_120.00s_0047.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P1/2023-10-26_06-19-43_R_IC 443_120.00s_0048.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P1/2023-10-26_06-21-45_R_IC 443_120.00s_0049.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P1/2023-10-26_06-24-10_R_IC 443_120.00s_0050.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P1/2023-10-26_06-26-11_R_IC 443_120.00s_0051.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P1/2023-10-26_06-28-13_R_IC 443_120.00s_0052.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P1/2023-10-26_06-34-39_R_IC 443_120.00s_0053.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P1/2023-10-26_07-06-23_R_IC 443_120.00s_0054.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P1/2023-10-26_07-08-24_R_IC 443_120.00s_0055.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P1/2023-10-26_07-10-49_R_IC 443_120.00s_0056.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        }
+      ]
+    },
+    {
+      "name": "IC443_RGB_P1_Red__T-20.0__EXP120.0__Group06",
+      "source_folder": "IC443_RGB_P1",
+      "classification": {
+        "frame_class": "subframe",
+        "frame_type": "light"
+      },
+      "accept_unknown": true,
+      "header": {
+        "CCD-TEMP": -20.0,
+        "EXPTIME": 120.0,
+        "FILTER": "Red",
+        "GAIN": 90,
+        "INSTRUME": "ASI Camera (1) (ASCOM)",
+        "ISO": null,
+        "ISOSPEED": null,
+        "NAXIS1": 4656,
+        "NAXIS2": 3520,
+        "OFFSET": null,
+        "READMODE": null,
+        "READOUTM": null,
+        "TELESCOP": "Moana",
+        "XBINNING": 1,
+        "YBINNING": 1
+      },
+      "members": [
+        {
+          "path": "IC443_RGB_P1/2023-10-20_05-43-20_R_IC 443_120.00s_0024.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P1/2023-10-20_05-45-22_R_IC 443_120.00s_0025.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P1/2023-10-20_05-47-44_R_IC 443_120.00s_0026.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P1/2023-10-20_05-49-46_R_IC 443_120.00s_0027.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P1/2023-10-20_05-51-47_R_IC 443_120.00s_0028.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P1/2023-10-20_05-54-09_R_IC 443_120.00s_0029.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P1/2023-10-20_06-22-11_R_IC 443_120.00s_0030.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P1/2023-10-20_06-24-13_R_IC 443_120.00s_0031.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P1/2023-10-20_06-33-58_R_IC 443_120.00s_0032.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P1/2023-10-20_06-36-00_R_IC 443_120.00s_0033.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P1/2023-10-20_06-38-01_R_IC 443_120.00s_0034.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_RGB_P1/2023-10-20_06-40-26_R_IC 443_120.00s_0035.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        }
+      ]
+    },
+    {
+      "name": "IC443_SHO_P1_Ha__T-18.0__EXP300.0__Group01",
+      "source_folder": "IC443_SHO_P1",
+      "classification": {
+        "frame_class": "subframe",
+        "frame_type": "light"
+      },
+      "accept_unknown": true,
+      "header": {
+        "CCD-TEMP": -18.0,
+        "EXPTIME": 300.0,
+        "FILTER": "Ha",
+        "GAIN": 90,
+        "INSTRUME": "ASI Camera (1) (ASCOM)",
+        "ISO": null,
+        "ISOSPEED": null,
+        "NAXIS1": 4656,
+        "NAXIS2": 3520,
+        "OFFSET": null,
+        "READMODE": null,
+        "READOUTM": null,
+        "TELESCOP": "Moana",
+        "XBINNING": 1,
+        "YBINNING": 1
+      },
+      "members": [
+        {
+          "path": "IC443_SHO_P1/2023-10-09_05-45-04_Ha_IC 443_300.00s_0090.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-09_05-50-23_Ha_IC 443_300.00s_0091.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-09_05-55-25_Ha_IC 443_300.00s_0092.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-09_06-00-48_Ha_IC 443_300.00s_0093.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-09_06-30-30_Ha_IC 443_300.00s_0094.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-09_06-36-00_Ha_IC 443_300.00s_0095.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-09_06-41-02_Ha_IC 443_300.00s_0096.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-09_06-46-27_Ha_IC 443_300.00s_0097.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-10_04-14-05_Ha_IC 443_300.00s_0099.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-10_04-54-42_Ha_IC 443_300.00s_0102.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-10_04-59-44_Ha_IC 443_300.00s_0103.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-10_05-05-08_Ha_IC 443_300.00s_0104.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-10_05-10-10_Ha_IC 443_300.00s_0105.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        }
+      ]
+    },
+    {
+      "name": "IC443_SHO_P1_OIII__T-18.0__EXP300.0__Group02",
+      "source_folder": "IC443_SHO_P1",
+      "classification": {
+        "frame_class": "subframe",
+        "frame_type": "light"
+      },
+      "accept_unknown": true,
+      "header": {
+        "CCD-TEMP": -18.0,
+        "EXPTIME": 300.0,
+        "FILTER": "OIII",
+        "GAIN": 90,
+        "INSTRUME": "ASI Camera (1) (ASCOM)",
+        "ISO": null,
+        "ISOSPEED": null,
+        "NAXIS1": 4656,
+        "NAXIS2": 3520,
+        "OFFSET": null,
+        "READMODE": null,
+        "READOUTM": null,
+        "TELESCOP": "Moana",
+        "XBINNING": 1,
+        "YBINNING": 1
+      },
+      "members": [
+        {
+          "path": "IC443_SHO_P1/2023-10-09_06-05-53_OIII_IC 443_300.00s_0090.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-09_06-16-20_OIII_IC 443_300.00s_0092.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-09_06-25-23_OIII_IC 443_300.00s_0093.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-09_06-51-33_OIII_IC 443_300.00s_0094.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-09_06-56-52_OIII_IC 443_300.00s_0095.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-10_04-29-54_OIII_IC 443_300.00s_0097.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-10_04-34-56_OIII_IC 443_300.00s_0098.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-10_04-44-10_OIII_IC 443_300.00s_0099.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-10_04-49-12_OIII_IC 443_300.00s_0100.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-10_05-15-33_OIII_IC 443_300.00s_0101.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-10_05-26-02_OIII_IC 443_300.00s_0103.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-10_06-10-49_OIII_IC 443_300.00s_0106.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-10_06-16-12_OIII_IC 443_300.00s_0107.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        }
+      ]
+    },
+    {
+      "name": "IC443_SHO_P1_OIII__T-18.5__EXP300.0__Group03",
+      "source_folder": "IC443_SHO_P1",
+      "classification": {
+        "frame_class": "subframe",
+        "frame_type": "light"
+      },
+      "accept_unknown": true,
+      "header": {
+        "CCD-TEMP": -18.5,
+        "EXPTIME": 300.0,
+        "FILTER": "OIII",
+        "GAIN": 90,
+        "INSTRUME": "ASI Camera (1) (ASCOM)",
+        "ISO": null,
+        "ISOSPEED": null,
+        "NAXIS1": 4656,
+        "NAXIS2": 3520,
+        "OFFSET": null,
+        "READMODE": null,
+        "READOUTM": null,
+        "TELESCOP": "Moana",
+        "XBINNING": 1,
+        "YBINNING": 1
+      },
+      "members": [
+        {
+          "path": "IC443_SHO_P1/2023-10-09_06-11-18_OIII_IC 443_300.00s_0091.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        }
+      ]
+    },
+    {
+      "name": "IC443_SHO_P1_Ha__T-19.5__EXP300.0__Group04",
+      "source_folder": "IC443_SHO_P1",
+      "classification": {
+        "frame_class": "subframe",
+        "frame_type": "light"
+      },
+      "accept_unknown": true,
+      "header": {
+        "CCD-TEMP": -19.5,
+        "EXPTIME": 300.0,
+        "FILTER": "Ha",
+        "GAIN": 90,
+        "INSTRUME": "ASI Camera (1) (ASCOM)",
+        "ISO": null,
+        "ISOSPEED": null,
+        "NAXIS1": 4656,
+        "NAXIS2": 3520,
+        "OFFSET": null,
+        "READMODE": null,
+        "READOUTM": null,
+        "TELESCOP": "Moana",
+        "XBINNING": 1,
+        "YBINNING": 1
+      },
+      "members": [
+        {
+          "path": "IC443_SHO_P1/2023-10-16_06-48-39_Ha_IC 443_300.00s_0168.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        }
+      ]
+    },
+    {
+      "name": "IC443_SHO_P1_B__T-20.0__EXP120.0__Group05",
+      "source_folder": "IC443_SHO_P1",
+      "classification": {
+        "frame_class": "subframe",
+        "frame_type": "light"
+      },
+      "accept_unknown": true,
+      "header": {
+        "CCD-TEMP": -20.0,
+        "EXPTIME": 120.0,
+        "FILTER": "B",
+        "GAIN": 90,
+        "INSTRUME": "ASI Camera (1) (ASCOM)",
+        "ISO": null,
+        "ISOSPEED": null,
+        "NAXIS1": 4656,
+        "NAXIS2": 3520,
+        "OFFSET": null,
+        "READMODE": null,
+        "READOUTM": null,
+        "TELESCOP": "Moana",
+        "XBINNING": 1,
+        "YBINNING": 1
+      },
+      "members": [
+        {
+          "path": "IC443_SHO_P1/2023-10-16_06-04-50_B_IC 443_120.00s_0000.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-16_06-07-21_B_IC 443_120.00s_0001.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-16_06-09-23_B_IC 443_120.00s_0002.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-16_06-11-24_B_IC 443_120.00s_0003.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-16_06-13-46_B_IC 443_120.00s_0004.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-16_06-15-47_B_IC 443_120.00s_0005.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        }
+      ]
+    },
+    {
+      "name": "IC443_SHO_P1_G__T-20.0__EXP120.0__Group06",
+      "source_folder": "IC443_SHO_P1",
+      "classification": {
+        "frame_class": "subframe",
+        "frame_type": "light"
+      },
+      "accept_unknown": true,
+      "header": {
+        "CCD-TEMP": -20.0,
+        "EXPTIME": 120.0,
+        "FILTER": "G",
+        "GAIN": 90,
+        "INSTRUME": "ASI Camera (1) (ASCOM)",
+        "ISO": null,
+        "ISOSPEED": null,
+        "NAXIS1": 4656,
+        "NAXIS2": 3520,
+        "OFFSET": null,
+        "READMODE": null,
+        "READOUTM": null,
+        "TELESCOP": "Moana",
+        "XBINNING": 1,
+        "YBINNING": 1
+      },
+      "members": [
+        {
+          "path": "IC443_SHO_P1/2023-10-16_05-48-09_G_IC 443_120.00s_0000.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-16_05-50-31_G_IC 443_120.00s_0001.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-16_05-56-16_G_IC 443_120.00s_0002.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-16_05-58-18_G_IC 443_120.00s_0003.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-16_06-00-43_G_IC 443_120.00s_0004.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-16_06-02-45_G_IC 443_120.00s_0005.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        }
+      ]
+    },
+    {
+      "name": "IC443_SHO_P1_R__T-20.0__EXP120.0__Group07",
+      "source_folder": "IC443_SHO_P1",
+      "classification": {
+        "frame_class": "subframe",
+        "frame_type": "light"
+      },
+      "accept_unknown": true,
+      "header": {
+        "CCD-TEMP": -20.0,
+        "EXPTIME": 120.0,
+        "FILTER": "R",
+        "GAIN": 90,
+        "INSTRUME": "ASI Camera (1) (ASCOM)",
+        "ISO": null,
+        "ISOSPEED": null,
+        "NAXIS1": 4656,
+        "NAXIS2": 3520,
+        "OFFSET": null,
+        "READMODE": null,
+        "READOUTM": null,
+        "TELESCOP": "Moana",
+        "XBINNING": 1,
+        "YBINNING": 1
+      },
+      "members": [
+        {
+          "path": "IC443_SHO_P1/2023-10-16_06-17-54_R_IC 443_120.00s_0000.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-16_06-20-15_R_IC 443_120.00s_0001.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-16_06-22-17_R_IC 443_120.00s_0002.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        }
+      ]
+    },
+    {
+      "name": "IC443_SHO_P1_Ha__T-20.0__EXP300.0__Group08",
+      "source_folder": "IC443_SHO_P1",
+      "classification": {
+        "frame_class": "subframe",
+        "frame_type": "light"
+      },
+      "accept_unknown": true,
+      "header": {
+        "CCD-TEMP": -20.0,
+        "EXPTIME": 300.0,
+        "FILTER": "Ha",
+        "GAIN": 90,
+        "INSTRUME": "ASI Camera (1) (ASCOM)",
+        "ISO": null,
+        "ISOSPEED": null,
+        "NAXIS1": 4656,
+        "NAXIS2": 3520,
+        "OFFSET": null,
+        "READMODE": null,
+        "READOUTM": null,
+        "TELESCOP": "Moana",
+        "XBINNING": 1,
+        "YBINNING": 1
+      },
+      "members": [
+        {
+          "path": "IC443_SHO_P1/2023-10-11_04-53-15_Ha_IC 443_300.00s_0118.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-11_05-54-36_Ha_IC 443_300.00s_0125.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-12_04-58-02_Ha_IC 443_300.00s_0135.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-12_05-03-23_Ha_IC 443_300.00s_0136.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-12_05-08-24_Ha_IC 443_300.00s_0137.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-12_05-38-25_Ha_IC 443_300.00s_0138.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-12_05-43-27_Ha_IC 443_300.00s_0139.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-12_05-48-50_Ha_IC 443_300.00s_0140.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-12_05-53-51_Ha_IC 443_300.00s_0141.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-12_06-20-09_Ha_IC 443_300.00s_0142.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-12_06-28-56_Ha_IC 443_300.00s_0143.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-12_06-34-19_Ha_IC 443_300.00s_0144.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-12_06-39-20_Ha_IC 443_300.00s_0145.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-13_04-07-18_Ha_IC 443_300.00s_0130.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-13_04-12-19_Ha_IC 443_300.00s_0131.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-13_04-17-41_Ha_IC 443_300.00s_0132.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-13_04-22-43_Ha_IC 443_300.00s_0133.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-13_04-52-41_Ha_IC 443_300.00s_0134.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-13_04-57-43_Ha_IC 443_300.00s_0135.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-13_05-08-06_Ha_IC 443_300.00s_0137.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-13_05-38-35_Ha_IC 443_300.00s_0138.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-13_05-43-37_Ha_IC 443_300.00s_0139.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-13_05-49-00_Ha_IC 443_300.00s_0140.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-13_05-54-01_Ha_IC 443_300.00s_0141.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-13_06-20-18_Ha_IC 443_300.00s_0142.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-13_06-29-06_Ha_IC 443_300.00s_0143.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-13_06-34-26_Ha_IC 443_300.00s_0144.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-13_06-39-28_Ha_IC 443_300.00s_0145.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-14_04-01-13_Ha_IC 443_300.00s_0146.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-14_04-06-34_Ha_IC 443_300.00s_0147.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-14_04-11-35_Ha_IC 443_300.00s_0148.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-14_04-16-59_Ha_IC 443_300.00s_0149.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-14_04-42-57_Ha_IC 443_300.00s_0150.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-14_04-52-23_Ha_IC 443_300.00s_0151.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-14_04-57-25_Ha_IC 443_300.00s_0152.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-14_05-02-46_Ha_IC 443_300.00s_0153.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-14_05-28-39_Ha_IC 443_300.00s_0154.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-14_05-34-02_Ha_IC 443_300.00s_0155.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-14_05-42-49_Ha_IC 443_300.00s_0156.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-14_05-48-17_Ha_IC 443_300.00s_0157.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-14_06-14-10_Ha_IC 443_300.00s_0158.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-14_06-19-34_Ha_IC 443_300.00s_0159.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-14_06-24-36_Ha_IC 443_300.00s_0160.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-14_06-33-41_Ha_IC 443_300.00s_0161.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-16_05-06-30_Ha_IC 443_300.00s_0162.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-16_05-11-32_Ha_IC 443_300.00s_0163.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-16_05-16-54_Ha_IC 443_300.00s_0164.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-16_05-21-56_Ha_IC 443_300.00s_0165.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-16_06-31-06_Ha_IC 443_300.00s_0166.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-16_06-36-08_Ha_IC 443_300.00s_0167.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-16_06-53-41_Ha_IC 443_300.00s_0169.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-17_05-58-47_Ha_IC 443_300.00s_0170.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-17_06-03-48_Ha_IC 443_300.00s_0171.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-17_06-09-12_Ha_IC 443_300.00s_0172.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-17_06-14-14_Ha_IC 443_300.00s_0173.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        }
+      ]
+    },
+    {
+      "name": "IC443_SHO_P1_OIII__T-20.0__EXP300.0__Group09",
+      "source_folder": "IC443_SHO_P1",
+      "classification": {
+        "frame_class": "subframe",
+        "frame_type": "light"
+      },
+      "accept_unknown": true,
+      "header": {
+        "CCD-TEMP": -20.0,
+        "EXPTIME": 300.0,
+        "FILTER": "OIII",
+        "GAIN": 90,
+        "INSTRUME": "ASI Camera (1) (ASCOM)",
+        "ISO": null,
+        "ISOSPEED": null,
+        "NAXIS1": 4656,
+        "NAXIS2": 3520,
+        "OFFSET": null,
+        "READMODE": null,
+        "READOUTM": null,
+        "TELESCOP": "Moana",
+        "XBINNING": 1,
+        "YBINNING": 1
+      },
+      "members": [
+        {
+          "path": "IC443_SHO_P1/2023-10-11_05-19-13_OIII_IC 443_300.00s_0117.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-12_04-28-03_OIII_IC 443_300.00s_0128.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-12_04-33-04_OIII_IC 443_300.00s_0129.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-12_04-38-28_OIII_IC 443_300.00s_0130.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-12_04-43-30_OIII_IC 443_300.00s_0131.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-12_05-13-52_OIII_IC 443_300.00s_0132.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-12_05-24-15_OIII_IC 443_300.00s_0134.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-12_05-29-17_OIII_IC 443_300.00s_0135.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-12_05-59-19_OIII_IC 443_300.00s_0136.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-12_06-04-21_OIII_IC 443_300.00s_0137.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-12_06-09-42_OIII_IC 443_300.00s_0138.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-12_06-14-43_OIII_IC 443_300.00s_0139.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-12_06-44-45_OIII_IC 443_300.00s_0140.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-12_06-55-09_OIII_IC 443_300.00s_0142.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-13_04-01-40_OIII_IC 443_300.00s_0127.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-13_04-28-08_OIII_IC 443_300.00s_0128.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-13_04-33-10_OIII_IC 443_300.00s_0129.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-13_04-38-33_OIII_IC 443_300.00s_0130.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-13_04-43-35_OIII_IC 443_300.00s_0131.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-13_05-13-39_OIII_IC 443_300.00s_0132.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-13_05-18-41_OIII_IC 443_300.00s_0133.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-13_05-24-00_OIII_IC 443_300.00s_0134.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-13_05-29-01_OIII_IC 443_300.00s_0135.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-13_05-59-26_OIII_IC 443_300.00s_0136.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-13_06-04-28_OIII_IC 443_300.00s_0137.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-13_06-09-49_OIII_IC 443_300.00s_0138.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-13_06-14-51_OIII_IC 443_300.00s_0139.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-13_06-44-55_OIII_IC 443_300.00s_0140.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-13_06-49-56_OIII_IC 443_300.00s_0141.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-13_06-58-35_OIII_IC 443_300.00s_0142.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-14_04-22-04_OIII_IC 443_300.00s_0143.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-14_04-27-29_OIII_IC 443_300.00s_0144.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-14_04-32-30_OIII_IC 443_300.00s_0145.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-14_04-37-51_OIII_IC 443_300.00s_0146.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-14_05-07-51_OIII_IC 443_300.00s_0147.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-14_05-13-10_OIII_IC 443_300.00s_0148.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-14_05-18-12_OIII_IC 443_300.00s_0149.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-14_05-23-32_OIII_IC 443_300.00s_0150.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-14_05-53-22_OIII_IC 443_300.00s_0151.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-14_05-58-42_OIII_IC 443_300.00s_0152.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-14_06-03-44_OIII_IC 443_300.00s_0153.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-14_06-09-05_OIII_IC 443_300.00s_0154.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-14_06-38-47_OIII_IC 443_300.00s_0155.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-14_06-44-09_OIII_IC 443_300.00s_0156.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-14_06-49-11_OIII_IC 443_300.00s_0157.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-14_06-57-51_OIII_IC 443_300.00s_0158.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-16_05-27-23_OIII_IC 443_300.00s_0159.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-16_05-32-25_OIII_IC 443_300.00s_0160.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-16_05-38-01_OIII_IC 443_300.00s_0161.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-16_05-43-02_OIII_IC 443_300.00s_0162.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-16_06-59-07_OIII_IC 443_300.00s_0163.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-17_05-05-49_OIII_IC 443_300.00s_0164.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-17_05-10-51_OIII_IC 443_300.00s_0165.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-17_06-19-46_OIII_IC 443_300.00s_0166.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-17_06-24-48_OIII_IC 443_300.00s_0167.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-17_06-30-09_OIII_IC 443_300.00s_0168.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-17_06-35-11_OIII_IC 443_300.00s_0169.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        }
+      ]
+    },
+    {
+      "name": "IC443_SHO_P1_Ha__T-20.5__EXP300.0__Group10",
+      "source_folder": "IC443_SHO_P1",
+      "classification": {
+        "frame_class": "subframe",
+        "frame_type": "light"
+      },
+      "accept_unknown": true,
+      "header": {
+        "CCD-TEMP": -20.5,
+        "EXPTIME": 300.0,
+        "FILTER": "Ha",
+        "GAIN": 90,
+        "INSTRUME": "ASI Camera (1) (ASCOM)",
+        "ISO": null,
+        "ISOSPEED": null,
+        "NAXIS1": 4656,
+        "NAXIS2": 3520,
+        "OFFSET": null,
+        "READMODE": null,
+        "READOUTM": null,
+        "TELESCOP": "Moana",
+        "XBINNING": 1,
+        "YBINNING": 1
+      },
+      "members": [
+        {
+          "path": "IC443_SHO_P1/2023-10-12_04-53-00_Ha_IC 443_300.00s_0134.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P1/2023-10-13_05-03-03_Ha_IC 443_300.00s_0136.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        }
+      ]
+    },
+    {
+      "name": "IC443_SHO_P1_OIII__T-20.5__EXP300.0__Group11",
+      "source_folder": "IC443_SHO_P1",
+      "classification": {
+        "frame_class": "subframe",
+        "frame_type": "light"
+      },
+      "accept_unknown": true,
+      "header": {
+        "CCD-TEMP": -20.5,
+        "EXPTIME": 300.0,
+        "FILTER": "OIII",
+        "GAIN": 90,
+        "INSTRUME": "ASI Camera (1) (ASCOM)",
+        "ISO": null,
+        "ISOSPEED": null,
+        "NAXIS1": 4656,
+        "NAXIS2": 3520,
+        "OFFSET": null,
+        "READMODE": null,
+        "READOUTM": null,
+        "TELESCOP": "Moana",
+        "XBINNING": 1,
+        "YBINNING": 1
+      },
+      "members": [
+        {
+          "path": "IC443_SHO_P1/2023-10-12_05-18-53_OIII_IC 443_300.00s_0133.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        }
+      ]
+    },
+    {
+      "name": "IC443_SHO_P2_Ha__T-15.5__EXP300.0__Group01",
+      "source_folder": "IC443_SHO_P2",
+      "classification": {
+        "frame_class": "subframe",
+        "frame_type": "light"
+      },
+      "accept_unknown": true,
+      "header": {
+        "CCD-TEMP": -15.5,
+        "EXPTIME": 300.0,
+        "FILTER": "Ha",
+        "GAIN": 90,
+        "INSTRUME": "ASI Camera (1) (ASCO",
+        "ISO": null,
+        "ISOSPEED": null,
+        "NAXIS1": 4656,
+        "NAXIS2": 3520,
+        "OFFSET": null,
+        "READMODE": null,
+        "READOUTM": null,
+        "TELESCOP": "Moana",
+        "XBINNING": 1,
+        "YBINNING": 1
+      },
+      "members": [
+        {
+          "path": "IC443_SHO_P2/2023-09-20_05-17-36_Ha_IC 443_300.00s_0008.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        }
+      ]
+    },
+    {
+      "name": "IC443_SHO_P2_OIII__T-15.5__EXP300.0__Group02",
+      "source_folder": "IC443_SHO_P2",
+      "classification": {
+        "frame_class": "subframe",
+        "frame_type": "light"
+      },
+      "accept_unknown": true,
+      "header": {
+        "CCD-TEMP": -15.5,
+        "EXPTIME": 300.0,
+        "FILTER": "OIII",
+        "GAIN": 90,
+        "INSTRUME": "ASI Camera (1) (ASCO",
+        "ISO": null,
+        "ISOSPEED": null,
+        "NAXIS1": 4656,
+        "NAXIS2": 3520,
+        "OFFSET": null,
+        "READMODE": null,
+        "READOUTM": null,
+        "TELESCOP": "Moana",
+        "XBINNING": 1,
+        "YBINNING": 1
+      },
+      "members": [
+        {
+          "path": "IC443_SHO_P2/2023-09-20_05-58-16_OIII_IC 443_300.00s_0011.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        }
+      ]
+    },
+    {
+      "name": "IC443_SHO_P2_Ha__T-16.0__EXP300.0__Group03",
+      "source_folder": "IC443_SHO_P2",
+      "classification": {
+        "frame_class": "subframe",
+        "frame_type": "light"
+      },
+      "accept_unknown": true,
+      "header": {
+        "CCD-TEMP": -16.0,
+        "EXPTIME": 300.0,
+        "FILTER": "Ha",
+        "GAIN": 90,
+        "INSTRUME": "ASI Camera (1) (ASCO",
+        "ISO": null,
+        "ISOSPEED": null,
+        "NAXIS1": 4656,
+        "NAXIS2": 3520,
+        "OFFSET": null,
+        "READMODE": null,
+        "READOUTM": null,
+        "TELESCOP": "Moana",
+        "XBINNING": 1,
+        "YBINNING": 1
+      },
+      "members": [
+        {
+          "path": "IC443_SHO_P2/2023-09-20_03-49-50_Ha_IC 443_300.00s_0000.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-20_03-54-52_Ha_IC 443_300.00s_0001.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-20_04-00-11_Ha_IC 443_300.00s_0002.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-20_04-05-13_Ha_IC 443_300.00s_0003.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-20_04-31-43_Ha_IC 443_300.00s_0004.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-20_04-40-37_Ha_IC 443_300.00s_0005.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-20_04-46-00_Ha_IC 443_300.00s_0006.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-20_04-51-02_Ha_IC 443_300.00s_0007.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-20_05-22-38_Ha_IC 443_300.00s_0009.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-20_05-31-58_Ha_IC 443_300.00s_0010.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-20_05-37-00_Ha_IC 443_300.00s_0011.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-20_06-04-09_Ha_IC 443_300.00s_0012.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-20_06-09-11_Ha_IC 443_300.00s_0013.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-20_06-18-52_Ha_IC 443_300.00s_0014.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-20_06-23-54_Ha_IC 443_300.00s_0015.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-23_05-00-50_Ha_IC 443_300.00s_0024.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-23_05-05-52_Ha_IC 443_300.00s_0025.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-23_05-11-19_Ha_IC 443_300.00s_0026.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-23_05-16-20_Ha_IC 443_300.00s_0027.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-23_05-46-57_Ha_IC 443_300.00s_0028.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-23_05-51-59_Ha_IC 443_300.00s_0029.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-23_05-57-27_Ha_IC 443_300.00s_0030.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-23_06-02-28_Ha_IC 443_300.00s_0031.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-23_06-32-56_Ha_IC 443_300.00s_0032.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-23_06-37-58_Ha_IC 443_300.00s_0033.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-23_06-43-18_Ha_IC 443_300.00s_0034.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        }
+      ]
+    },
+    {
+      "name": "IC443_SHO_P2_Ha__T-16.0__EXP300.0__Group04",
+      "source_folder": "IC443_SHO_P2",
+      "classification": {
+        "frame_class": "subframe",
+        "frame_type": "light"
+      },
+      "accept_unknown": true,
+      "header": {
+        "CCD-TEMP": -16.0,
+        "EXPTIME": 300.0,
+        "FILTER": "Ha",
+        "GAIN": 90,
+        "INSTRUME": "ASI Camera (1) (ASCOM)",
+        "ISO": null,
+        "ISOSPEED": null,
+        "NAXIS1": 4656,
+        "NAXIS2": 3520,
+        "OFFSET": null,
+        "READMODE": null,
+        "READOUTM": null,
+        "TELESCOP": "Moana",
+        "XBINNING": 1,
+        "YBINNING": 1
+      },
+      "members": [
+        {
+          "path": "IC443_SHO_P2/2023-09-25_04-55-02_Ha_IC 443_300.00s_0035.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-25_05-00-27_Ha_IC 443_300.00s_0036.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-25_05-05-29_Ha_IC 443_300.00s_0037.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-25_05-10-56_Ha_IC 443_300.00s_0038.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-25_05-40-59_Ha_IC 443_300.00s_0039.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-25_05-46-34_Ha_IC 443_300.00s_0040.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-25_05-51-36_Ha_IC 443_300.00s_0041.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-25_05-56-54_Ha_IC 443_300.00s_0042.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-25_06-26-50_Ha_IC 443_300.00s_0043.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-25_06-32-28_Ha_IC 443_300.00s_0044.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-25_06-37-30_Ha_IC 443_300.00s_0045.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-25_06-42-57_Ha_IC 443_300.00s_0046.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-26_04-14-32_Ha_IC 443_300.00s_0047.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-26_04-19-56_Ha_IC 443_300.00s_0048.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-26_04-24-59_Ha_IC 443_300.00s_0049.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-26_04-30-26_Ha_IC 443_300.00s_0050.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-26_05-00-32_Ha_IC 443_300.00s_0051.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-26_05-06-00_Ha_IC 443_300.00s_0052.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-26_05-11-02_Ha_IC 443_300.00s_0053.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-26_05-16-23_Ha_IC 443_300.00s_0054.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-26_05-46-39_Ha_IC 443_300.00s_0055.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-26_05-52-02_Ha_IC 443_300.00s_0056.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-26_05-57-04_Ha_IC 443_300.00s_0057.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-26_06-02-39_Ha_IC 443_300.00s_0058.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-26_06-32-31_Ha_IC 443_300.00s_0059.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-26_06-37-59_Ha_IC 443_300.00s_0060.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-26_06-43-01_Ha_IC 443_300.00s_0061.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-26_06-48-44_Ha_IC 443_300.00s_0062.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        }
+      ]
+    },
+    {
+      "name": "IC443_SHO_P2_OIII__T-16.0__EXP300.0__Group05",
+      "source_folder": "IC443_SHO_P2",
+      "classification": {
+        "frame_class": "subframe",
+        "frame_type": "light"
+      },
+      "accept_unknown": true,
+      "header": {
+        "CCD-TEMP": -16.0,
+        "EXPTIME": 300.0,
+        "FILTER": "OIII",
+        "GAIN": 90,
+        "INSTRUME": "ASI Camera (1) (ASCO",
+        "ISO": null,
+        "ISOSPEED": null,
+        "NAXIS1": 4656,
+        "NAXIS2": 3520,
+        "OFFSET": null,
+        "READMODE": null,
+        "READOUTM": null,
+        "TELESCOP": "Moana",
+        "XBINNING": 1,
+        "YBINNING": 1
+      },
+      "members": [
+        {
+          "path": "IC443_SHO_P2/2023-09-20_04-10-45_OIII_IC 443_300.00s_0000.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-20_04-15-47_OIII_IC 443_300.00s_0001.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-20_04-21-11_OIII_IC 443_300.00s_0002.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-20_04-26-13_OIII_IC 443_300.00s_0003.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-20_04-56-44_OIII_IC 443_300.00s_0004.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-20_05-01-46_OIII_IC 443_300.00s_0005.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-20_05-07-04_OIII_IC 443_300.00s_0006.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-20_05-12-08_OIII_IC 443_300.00s_0007.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-20_05-42-24_OIII_IC 443_300.00s_0008.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-20_05-47-25_OIII_IC 443_300.00s_0009.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-20_05-53-14_OIII_IC 443_300.00s_0010.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-20_06-29-23_OIII_IC 443_300.00s_0012.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-20_06-34-25_OIII_IC 443_300.00s_0013.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-20_06-39-50_OIII_IC 443_300.00s_0014.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-20_06-44-52_OIII_IC 443_300.00s_0015.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-23_04-39-38_OIII_IC 443_300.00s_0020.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-23_04-44-39_OIII_IC 443_300.00s_0021.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-23_04-50-24_OIII_IC 443_300.00s_0022.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-23_04-55-26_OIII_IC 443_300.00s_0023.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-23_05-30-42_OIII_IC 443_300.00s_0025.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-23_05-36-26_OIII_IC 443_300.00s_0026.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-23_05-41-27_OIII_IC 443_300.00s_0027.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-23_06-07-51_OIII_IC 443_300.00s_0028.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-23_06-17-07_OIII_IC 443_300.00s_0029.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-23_06-22-30_OIII_IC 443_300.00s_0030.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-23_06-27-32_OIII_IC 443_300.00s_0031.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        }
+      ]
+    },
+    {
+      "name": "IC443_SHO_P2_OIII__T-16.0__EXP300.0__Group06",
+      "source_folder": "IC443_SHO_P2",
+      "classification": {
+        "frame_class": "subframe",
+        "frame_type": "light"
+      },
+      "accept_unknown": true,
+      "header": {
+        "CCD-TEMP": -16.0,
+        "EXPTIME": 300.0,
+        "FILTER": "OIII",
+        "GAIN": 90,
+        "INSTRUME": "ASI Camera (1) (ASCOM)",
+        "ISO": null,
+        "ISOSPEED": null,
+        "NAXIS1": 4656,
+        "NAXIS2": 3520,
+        "OFFSET": null,
+        "READMODE": null,
+        "READOUTM": null,
+        "TELESCOP": "Moana",
+        "XBINNING": 1,
+        "YBINNING": 1
+      },
+      "members": [
+        {
+          "path": "IC443_SHO_P2/2023-09-25_04-33-46_OIII_IC 443_300.00s_0032.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-25_04-39-27_OIII_IC 443_300.00s_0033.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-25_04-44-28_OIII_IC 443_300.00s_0034.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-25_04-49-57_OIII_IC 443_300.00s_0035.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-25_05-16-03_OIII_IC 443_300.00s_0036.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-25_05-25-18_OIII_IC 443_300.00s_0037.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-25_05-30-20_OIII_IC 443_300.00s_0038.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-25_05-35-54_OIII_IC 443_300.00s_0039.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-25_06-02-00_OIII_IC 443_300.00s_0040.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-25_06-07-22_OIII_IC 443_300.00s_0041.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-25_06-16-16_OIII_IC 443_300.00s_0042.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-25_06-21-44_OIII_IC 443_300.00s_0043.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-25_06-48-03_OIII_IC 443_300.00s_0044.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-26_04-03-52_OIII_IC 443_300.00s_0045.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-26_04-09-27_OIII_IC 443_300.00s_0046.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-26_04-35-33_OIII_IC 443_300.00s_0047.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-26_04-41-01_OIII_IC 443_300.00s_0048.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-26_04-46-03_OIII_IC 443_300.00s_0049.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-26_04-55-25_OIII_IC 443_300.00s_0050.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-26_05-21-28_OIII_IC 443_300.00s_0051.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-26_05-26-49_OIII_IC 443_300.00s_0052.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-26_05-31-51_OIII_IC 443_300.00s_0053.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-26_05-37-16_OIII_IC 443_300.00s_0054.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-26_06-07-43_OIII_IC 443_300.00s_0055.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-26_06-13-07_OIII_IC 443_300.00s_0056.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-26_06-18-09_OIII_IC 443_300.00s_0057.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-26_06-27-24_OIII_IC 443_300.00s_0058.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        }
+      ]
+    },
+    {
+      "name": "IC443_SHO_P2_Ha__T-16.5__EXP300.0__Group07",
+      "source_folder": "IC443_SHO_P2",
+      "classification": {
+        "frame_class": "subframe",
+        "frame_type": "light"
+      },
+      "accept_unknown": true,
+      "header": {
+        "CCD-TEMP": -16.5,
+        "EXPTIME": 300.0,
+        "FILTER": "Ha",
+        "GAIN": 90,
+        "INSTRUME": "ASI Camera (1) (ASCO",
+        "ISO": null,
+        "ISOSPEED": null,
+        "NAXIS1": 4656,
+        "NAXIS2": 3520,
+        "OFFSET": null,
+        "READMODE": null,
+        "READOUTM": null,
+        "TELESCOP": "Moana",
+        "XBINNING": 1,
+        "YBINNING": 1
+      },
+      "members": [
+        {
+          "path": "IC443_SHO_P2/2023-09-23_04-34-03_Ha_IC 443_300.00s_0023.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        }
+      ]
+    },
+    {
+      "name": "IC443_SHO_P2_OIII__T-16.5__EXP300.0__Group08",
+      "source_folder": "IC443_SHO_P2",
+      "classification": {
+        "frame_class": "subframe",
+        "frame_type": "light"
+      },
+      "accept_unknown": true,
+      "header": {
+        "CCD-TEMP": -16.5,
+        "EXPTIME": 300.0,
+        "FILTER": "OIII",
+        "GAIN": 90,
+        "INSTRUME": "ASI Camera (1) (ASCO",
+        "ISO": null,
+        "ISOSPEED": null,
+        "NAXIS1": 4656,
+        "NAXIS2": 3520,
+        "OFFSET": null,
+        "READMODE": null,
+        "READOUTM": null,
+        "TELESCOP": "Moana",
+        "XBINNING": 1,
+        "YBINNING": 1
+      },
+      "members": [
+        {
+          "path": "IC443_SHO_P2/2023-09-23_05-25-41_OIII_IC 443_300.00s_0024.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        }
+      ]
+    },
+    {
+      "name": "IC443_SHO_P2_Ha__T-18.0__EXP300.0__Group09",
+      "source_folder": "IC443_SHO_P2",
+      "classification": {
+        "frame_class": "subframe",
+        "frame_type": "light"
+      },
+      "accept_unknown": true,
+      "header": {
+        "CCD-TEMP": -18.0,
+        "EXPTIME": 300.0,
+        "FILTER": "Ha",
+        "GAIN": 90,
+        "INSTRUME": "ASI Camera (1) (ASCOM)",
+        "ISO": null,
+        "ISOSPEED": null,
+        "NAXIS1": 4656,
+        "NAXIS2": 3520,
+        "OFFSET": null,
+        "READMODE": null,
+        "READOUTM": null,
+        "TELESCOP": "Moana",
+        "XBINNING": 1,
+        "YBINNING": 1
+      },
+      "members": [
+        {
+          "path": "IC443_SHO_P2/2023-09-28_04-30-18_Ha_IC 443_300.00s_0050.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-10-08_03-27-28_Ha_IC 443_300.00s_0062.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-10-08_03-32-31_Ha_IC 443_300.00s_0063.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-10-08_03-38-08_Ha_IC 443_300.00s_0064.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-10-08_03-43-10_Ha_IC 443_300.00s_0065.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-10-08_05-49-14_Ha_IC 443_300.00s_0074.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-10-08_05-54-16_Ha_IC 443_300.00s_0075.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-10-08_05-59-53_Ha_IC 443_300.00s_0076.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-10-08_06-04-55_Ha_IC 443_300.00s_0077.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-10-08_06-31-28_Ha_IC 443_300.00s_0078.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-10-08_06-45-46_Ha_IC 443_300.00s_0080.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-10-08_06-50-48_Ha_IC 443_300.00s_0081.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-10-09_04-14-07_Ha_IC 443_300.00s_0082.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-10-09_04-19-33_Ha_IC 443_300.00s_0083.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-10-09_04-24-34_Ha_IC 443_300.00s_0084.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-10-09_04-29-57_Ha_IC 443_300.00s_0085.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-10-09_04-59-36_Ha_IC 443_300.00s_0086.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-10-09_05-04-57_Ha_IC 443_300.00s_0087.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-10-09_05-09-58_Ha_IC 443_300.00s_0088.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-10-09_05-15-22_Ha_IC 443_300.00s_0089.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        }
+      ]
+    },
+    {
+      "name": "IC443_SHO_P2_OIII__T-18.0__EXP300.0__Group10",
+      "source_folder": "IC443_SHO_P2",
+      "classification": {
+        "frame_class": "subframe",
+        "frame_type": "light"
+      },
+      "accept_unknown": true,
+      "header": {
+        "CCD-TEMP": -18.0,
+        "EXPTIME": 300.0,
+        "FILTER": "OIII",
+        "GAIN": 90,
+        "INSTRUME": "ASI Camera (1) (ASCOM)",
+        "ISO": null,
+        "ISOSPEED": null,
+        "NAXIS1": 4656,
+        "NAXIS2": 3520,
+        "OFFSET": null,
+        "READMODE": null,
+        "READOUTM": null,
+        "TELESCOP": "Moana",
+        "XBINNING": 1,
+        "YBINNING": 1
+      },
+      "members": [
+        {
+          "path": "IC443_SHO_P2/2023-09-28_04-35-39_OIII_IC 443_300.00s_0047.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-28_04-40-41_OIII_IC 443_300.00s_0048.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-09-28_05-32-27_OIII_IC 443_300.00s_0053.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-10-08_03-05-46_OIII_IC 443_300.00s_0059.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-10-08_03-10-48_OIII_IC 443_300.00s_0060.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-10-08_03-22-03_OIII_IC 443_300.00s_0062.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-10-08_03-48-41_OIII_IC 443_300.00s_0063.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-10-08_03-57-37_OIII_IC 443_300.00s_0064.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-10-08_04-06-48_OIII_IC 443_300.00s_0065.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-10-08_04-11-50_OIII_IC 443_300.00s_0066.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-10-08_05-24-22_OIII_IC 443_300.00s_0071.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-10-08_05-29-23_OIII_IC 443_300.00s_0072.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-10-08_05-34-53_OIII_IC 443_300.00s_0073.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-10-08_05-39-54_OIII_IC 443_300.00s_0074.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-10-08_06-10-38_OIII_IC 443_300.00s_0075.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-10-08_06-15-40_OIII_IC 443_300.00s_0076.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-10-08_06-20-58_OIII_IC 443_300.00s_0077.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-10-08_06-26-00_OIII_IC 443_300.00s_0078.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-10-09_04-03-39_OIII_IC 443_300.00s_0080.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-10-09_04-09-01_OIII_IC 443_300.00s_0081.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-10-09_04-35-03_OIII_IC 443_300.00s_0082.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-10-09_04-44-07_OIII_IC 443_300.00s_0083.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-10-09_04-49-09_OIII_IC 443_300.00s_0084.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-10-09_04-54-29_OIII_IC 443_300.00s_0085.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-10-09_05-20-27_OIII_IC 443_300.00s_0086.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-10-09_05-25-51_OIII_IC 443_300.00s_0087.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-10-09_05-34-39_OIII_IC 443_300.00s_0088.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        },
+        {
+          "path": "IC443_SHO_P2/2023-10-09_05-39-58_OIII_IC 443_300.00s_0089.fits",
+          "byte_size": 32785920,
+          "image_type": "LIGHT"
+        }
+      ]
+    }
+  ],
+  "masters": [
+    {
+      "path": "2023-10-01_Calibration/masterDark_BIN-1_4656x3520_EXPOSURE-120.00s.fit",
+      "byte_size": 65566080,
+      "image_type": "Master Dark",
+      "frame_type": "dark",
+      "header": {
+        "INSTRUME": "ASI Camera (1)",
+        "TELESCOP": null,
+        "READMODE": null,
+        "READOUTM": null,
+        "GAIN": null,
+        "OFFSET": null,
+        "ISOSPEED": null,
+        "ISO": null,
+        "CCD-TEMP": null,
+        "EXPTIME": 120.0,
+        "FILTER": null,
+        "XBINNING": 1.0,
+        "YBINNING": 1.0,
+        "NAXIS1": 4656,
+        "NAXIS2": 3520
+      }
+    },
+    {
+      "path": "2023-10-01_Calibration/masterDark_BIN-1_4656x3520_EXPOSURE-300.00s.fit",
+      "byte_size": 65566080,
+      "image_type": "Master Dark",
+      "frame_type": "dark",
+      "header": {
+        "INSTRUME": "ASI Camera (1)",
+        "TELESCOP": null,
+        "READMODE": null,
+        "READOUTM": null,
+        "GAIN": null,
+        "OFFSET": null,
+        "ISOSPEED": null,
+        "ISO": null,
+        "CCD-TEMP": null,
+        "EXPTIME": 300.0,
+        "FILTER": null,
+        "XBINNING": 1.0,
+        "YBINNING": 1.0,
+        "NAXIS1": 4656,
+        "NAXIS2": 3520
+      }
+    },
+    {
+      "path": "2023-10-01_Calibration/masterDark_BIN-1_4656x3520_EXPOSURE-60.00s.fit",
+      "byte_size": 65571840,
+      "image_type": "Master Dark",
+      "frame_type": "dark",
+      "header": {
+        "INSTRUME": "ASI Camera (1)",
+        "TELESCOP": null,
+        "READMODE": null,
+        "READOUTM": null,
+        "GAIN": null,
+        "OFFSET": null,
+        "ISOSPEED": null,
+        "ISO": null,
+        "CCD-TEMP": null,
+        "EXPTIME": 60.0,
+        "FILTER": null,
+        "XBINNING": 1.0,
+        "YBINNING": 1.0,
+        "NAXIS1": 4656,
+        "NAXIS2": 3520
+      }
+    },
+    {
+      "path": "2023-10-01_Calibration/masterFlat_BIN-1_4656x3520_FILTER-Blue_mono.fit",
+      "byte_size": 65574720,
+      "image_type": "Master Flat",
+      "frame_type": "flat",
+      "header": {
+        "INSTRUME": "ASI Camera (1) (ASCO",
+        "TELESCOP": "Moana",
+        "READMODE": null,
+        "READOUTM": null,
+        "GAIN": null,
+        "OFFSET": null,
+        "ISOSPEED": null,
+        "ISO": null,
+        "CCD-TEMP": null,
+        "EXPTIME": 2.5,
+        "FILTER": "Blue",
+        "XBINNING": 1.0,
+        "YBINNING": 1.0,
+        "NAXIS1": 4656,
+        "NAXIS2": 3520
+      }
+    },
+    {
+      "path": "2023-10-01_Calibration/masterFlat_BIN-1_4656x3520_FILTER-Green_mono.fit",
+      "byte_size": 65586240,
+      "image_type": "Master Flat",
+      "frame_type": "flat",
+      "header": {
+        "INSTRUME": "ASI Camera (1) (ASCO",
+        "TELESCOP": "Moana",
+        "READMODE": null,
+        "READOUTM": null,
+        "GAIN": null,
+        "OFFSET": null,
+        "ISOSPEED": null,
+        "ISO": null,
+        "CCD-TEMP": null,
+        "EXPTIME": 2.5,
+        "FILTER": "Green",
+        "XBINNING": 1.0,
+        "YBINNING": 1.0,
+        "NAXIS1": 4656,
+        "NAXIS2": 3520
+      }
+    },
+    {
+      "path": "2023-10-01_Calibration/masterFlat_BIN-1_4656x3520_FILTER-Ha_mono.fit",
+      "byte_size": 65586240,
+      "image_type": "Master Flat",
+      "frame_type": "flat",
+      "header": {
+        "INSTRUME": "ASI Camera (1) (ASCO",
+        "TELESCOP": "Moana",
+        "READMODE": null,
+        "READOUTM": null,
+        "GAIN": null,
+        "OFFSET": null,
+        "ISOSPEED": null,
+        "ISO": null,
+        "CCD-TEMP": null,
+        "EXPTIME": 120.0,
+        "FILTER": "Ha",
+        "XBINNING": 1.0,
+        "YBINNING": 1.0,
+        "NAXIS1": 4656,
+        "NAXIS2": 3520
+      }
+    },
+    {
+      "path": "2023-10-01_Calibration/masterFlat_BIN-1_4656x3520_FILTER-Lum_mono.fit",
+      "byte_size": 65586240,
+      "image_type": "Master Flat",
+      "frame_type": "flat",
+      "header": {
+        "INSTRUME": "ASI Camera (1) (ASCO",
+        "TELESCOP": "Moana",
+        "READMODE": null,
+        "READOUTM": null,
+        "GAIN": null,
+        "OFFSET": null,
+        "ISOSPEED": null,
+        "ISO": null,
+        "CCD-TEMP": null,
+        "EXPTIME": 1.5,
+        "FILTER": "Lum",
+        "XBINNING": 1.0,
+        "YBINNING": 1.0,
+        "NAXIS1": 4656,
+        "NAXIS2": 3520
+      }
+    },
+    {
+      "path": "2023-10-01_Calibration/masterFlat_BIN-1_4656x3520_FILTER-OIII_mono.fit",
+      "byte_size": 65586240,
+      "image_type": "Master Flat",
+      "frame_type": "flat",
+      "header": {
+        "INSTRUME": "ASI Camera (1) (ASCO",
+        "TELESCOP": "Moana",
+        "READMODE": null,
+        "READOUTM": null,
+        "GAIN": null,
+        "OFFSET": null,
+        "ISOSPEED": null,
+        "ISO": null,
+        "CCD-TEMP": null,
+        "EXPTIME": 45.0,
+        "FILTER": "OIII",
+        "XBINNING": 1.0,
+        "YBINNING": 1.0,
+        "NAXIS1": 4656,
+        "NAXIS2": 3520
+      }
+    },
+    {
+      "path": "2023-10-01_Calibration/masterFlat_BIN-1_4656x3520_FILTER-Red_mono.fit",
+      "byte_size": 65586240,
+      "image_type": "Master Flat",
+      "frame_type": "flat",
+      "header": {
+        "INSTRUME": "ASI Camera (1) (ASCO",
+        "TELESCOP": "Moana",
+        "READMODE": null,
+        "READOUTM": null,
+        "GAIN": null,
+        "OFFSET": null,
+        "ISOSPEED": null,
+        "ISO": null,
+        "CCD-TEMP": null,
+        "EXPTIME": 2.5,
+        "FILTER": "Red",
+        "XBINNING": 1.0,
+        "YBINNING": 1.0,
+        "NAXIS1": 4656,
+        "NAXIS2": 3520
+      }
+    },
+    {
+      "path": "2023-10-01_Calibration/masterFlat_BIN-1_4656x3520_FILTER-SII_mono.fit",
+      "byte_size": 65586240,
+      "image_type": "Master Flat",
+      "frame_type": "flat",
+      "header": {
+        "INSTRUME": "ASI Camera (1) (ASCO",
+        "TELESCOP": "Moana",
+        "READMODE": null,
+        "READOUTM": null,
+        "GAIN": null,
+        "OFFSET": null,
+        "ISOSPEED": null,
+        "ISO": null,
+        "CCD-TEMP": null,
+        "EXPTIME": 120.0,
+        "FILTER": "SII",
+        "XBINNING": 1.0,
+        "YBINNING": 1.0,
+        "NAXIS1": 4656,
+        "NAXIS2": 3520
+      }
+    }
+  ]
+}

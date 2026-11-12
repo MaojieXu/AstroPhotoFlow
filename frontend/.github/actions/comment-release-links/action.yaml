@@ -1,0 +1,126 @@
+name: Post Release Summary Comment
+description: Upsert a release-links section (diff, derived versions, optional extras) into the unified PR report comment.
+author: ComfyUI Frontend Team
+
+inputs:
+  issue-number:
+    description: Optional PR number override (defaults to the current pull request)
+    default: ''
+  version_file:
+    description: Path to the JSON file containing the current version (relative to repo root)
+    required: true
+
+outputs:
+  prev_version:
+    description: Previous version derived from the parent commit
+    value: ${{ steps.build.outputs.prev_version }}
+  new_version:
+    description: Current version read from the version file
+    value: ${{ steps.build.outputs.new_version }}
+
+runs:
+  using: composite
+  steps:
+    - name: Build comment body
+      id: build
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        VERSION_FILE="${{ inputs.version_file }}"
+        REPO="${{ github.repository }}"
+
+        if [[ -z "$VERSION_FILE" ]]; then
+          echo "::error::version_file input is required" >&2
+          exit 1
+        fi
+
+        PREV_JSON=$(git show HEAD^1:"$VERSION_FILE" 2>/dev/null || true)
+        if [[ -z "$PREV_JSON" ]]; then
+          echo "::error::Unable to read $VERSION_FILE from parent commit" >&2
+          exit 1
+        fi
+        PREV_VERSION=$(printf '%s' "$PREV_JSON" | node -pe "const data = JSON.parse(require('fs').readFileSync(0, 'utf8')); if (!data.version) { process.exit(1); } data.version")
+        if [[ -z "$PREV_VERSION" ]]; then
+          echo "::error::Unable to determine previous version from $VERSION_FILE" >&2
+          exit 1
+        fi
+
+        NEW_VERSION=$(node -pe "const fs=require('fs');const data=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));if(!data.version){process.exit(1);}data.version" "$VERSION_FILE")
+        if [[ -z "$NEW_VERSION" ]]; then
+          echo "::error::Unable to determine current version from $VERSION_FILE" >&2
+          exit 1
+        fi
+
+        SECTION_NAME='release'
+        MESSAGE='Publish jobs finished successfully:'
+        LINKS_VALUE=''
+
+        case "$VERSION_FILE" in
+          package.json)
+            LINKS_VALUE=$(printf '%s\n%s' \
+              'PyPI|https://pypi.org/project/comfyui-frontend-package/{{version}}/' \
+              'npm types|https://www.npmjs.com/package/@comfyorg/comfyui-frontend-types/v/{{version}}')
+            ;;
+          packages/design-system/package.json)
+            SECTION_NAME='design-system-release'
+            LINKS_VALUE='npm design-system|https://www.npmjs.com/package/@comfyorg/design-system/v/{{version}}'
+            ;;
+          packages/account-core/package.json)
+            SECTION_NAME='account-core-release'
+            LINKS_VALUE='npm account-core|https://www.npmjs.com/package/@comfyorg/account-core/v/{{version}}'
+            ;;
+          packages/billing-contract/package.json)
+            SECTION_NAME='billing-contract-release'
+            LINKS_VALUE='npm billing-contract|https://www.npmjs.com/package/@comfyorg/billing-contract/v/{{version}}'
+            ;;
+          packages/ingest-types/package.json)
+            SECTION_NAME='ingest-types-release'
+            LINKS_VALUE='npm ingest-types|https://www.npmjs.com/package/@comfyorg/ingest-types/v/{{version}}'
+            ;;
+        esac
+
+        DIFF_PREFIX='v'
+        DIFF_LABEL='Diff'
+        DIFF_URL="https://github.com/${REPO}/compare/${DIFF_PREFIX}${PREV_VERSION}...${DIFF_PREFIX}${NEW_VERSION}"
+        COMMENT_FILE=$(mktemp)
+
+        {
+          echo "$MESSAGE"
+          echo ""
+          echo "- $DIFF_LABEL: [\`$DIFF_PREFIX$PREV_VERSION...$DIFF_PREFIX$NEW_VERSION\`]($DIFF_URL)"
+
+          while IFS= read -r RAW_LINE; do
+            LINE=$(echo "$RAW_LINE" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+            [[ -z "$LINE" ]] && continue
+            if [[ "$LINE" != *"|"* ]]; then
+              echo "::warning::Skipping malformed link entry: $LINE" >&2
+              continue
+            fi
+            LABEL=${LINE%%|*}
+            URL_TEMPLATE=${LINE#*|}
+            URL=${URL_TEMPLATE//\{\{version\}\}/$NEW_VERSION}
+            URL=${URL//\{\{prev_version\}\}/$PREV_VERSION}
+            echo "- $LABEL: [\`$NEW_VERSION\`]($URL)"
+          done <<< "$LINKS_VALUE"
+
+          echo ""
+        } > "$COMMENT_FILE"
+
+        {
+          echo "body<<COMMENT_BODY_END_MARKER"
+          cat "$COMMENT_FILE"
+          echo "COMMENT_BODY_END_MARKER"
+        } >> "$GITHUB_OUTPUT"
+        echo "prev_version=$PREV_VERSION" >> "$GITHUB_OUTPUT"
+        echo "section_name=$SECTION_NAME" >> "$GITHUB_OUTPUT"
+        echo "new_version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
+
+    - name: Upsert release section into unified report
+      uses: ./.github/actions/upsert-comment-section
+      with:
+        pr-number: ${{ inputs.issue-number || github.event.pull_request.number }}
+        section-name: ${{ steps.build.outputs.section_name }}
+        section-content: ${{ steps.build.outputs.body }}
+        comment-marker: '<!-- COMFYUI_FRONTEND_PR_REPORT -->'
+        token: ${{ github.token }}

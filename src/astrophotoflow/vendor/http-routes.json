@@ -1,0 +1,649 @@
+{
+  "schema_version": 1,
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/asset-tasks"
+    },
+    {
+      "method": "GET",
+      "path": "/asset-tasks/{task_id}"
+    },
+    {
+      "method": "POST",
+      "path": "/asset-tasks/{task_id}/cancel"
+    },
+    {
+      "method": "POST",
+      "path": "/asset-tasks/{task_id}/organization"
+    },
+    {
+      "method": "POST",
+      "path": "/asset-tasks/{task_id}/resume"
+    },
+    {
+      "method": "POST",
+      "path": "/asset-tasks/{task_id}/retry"
+    },
+    {
+      "method": "POST",
+      "path": "/calibration/check"
+    },
+    {
+      "method": "POST",
+      "path": "/calibration/import-check"
+    },
+    {
+      "method": "GET",
+      "path": "/calibration/operations/{request_id}"
+    },
+    {
+      "method": "POST",
+      "path": "/calibration/search"
+    },
+    {
+      "method": "GET",
+      "path": "/calibration/targets"
+    },
+    {
+      "method": "POST",
+      "path": "/canvas/graph"
+    },
+    {
+      "method": "GET",
+      "path": "/canvas/pages"
+    },
+    {
+      "method": "POST",
+      "path": "/canvas/requests"
+    },
+    {
+      "method": "GET",
+      "path": "/canvas/requests/{operation_id}"
+    },
+    {
+      "method": "GET",
+      "path": "/capabilities"
+    },
+    {
+      "method": "GET",
+      "path": "/data-nodes/{run_id}/{execution_id}"
+    },
+    {
+      "method": "GET",
+      "path": "/datasets"
+    },
+    {
+      "method": "POST",
+      "path": "/datasets"
+    },
+    {
+      "method": "GET",
+      "path": "/datasets/{dataset_id}"
+    },
+    {
+      "method": "PATCH",
+      "path": "/datasets/{dataset_id}"
+    },
+    {
+      "method": "GET",
+      "path": "/datasets/{dataset_id}/calibration"
+    },
+    {
+      "method": "POST",
+      "path": "/datasets/{dataset_id}/calibration"
+    },
+    {
+      "method": "GET",
+      "path": "/datasets/{dataset_id}/detail"
+    },
+    {
+      "method": "POST",
+      "path": "/datasets/{dataset_id}/manifest"
+    },
+    {
+      "method": "POST",
+      "path": "/datasets/{dataset_id}/member-edits"
+    },
+    {
+      "method": "PATCH",
+      "path": "/datasets/{dataset_id}/member-parameters"
+    },
+    {
+      "method": "GET",
+      "path": "/datasets/{dataset_id}/member-summaries"
+    },
+    {
+      "method": "GET",
+      "path": "/datasets/{dataset_id}/members"
+    },
+    {
+      "method": "PUT",
+      "path": "/datasets/{dataset_id}/members"
+    },
+    {
+      "method": "GET",
+      "path": "/datasets/{dataset_id}/members/{asset_id}/thumbnail"
+    },
+    {
+      "method": "GET",
+      "path": "/equipment"
+    },
+    {
+      "method": "POST",
+      "path": "/equipment"
+    },
+    {
+      "method": "POST",
+      "path": "/equipment-management/delete"
+    },
+    {
+      "method": "POST",
+      "path": "/equipment-management/delete-preview"
+    },
+    {
+      "method": "GET",
+      "path": "/equipment-setups"
+    },
+    {
+      "method": "POST",
+      "path": "/equipment-setups"
+    },
+    {
+      "method": "GET",
+      "path": "/equipment-setups/{setup_id}"
+    },
+    {
+      "method": "PATCH",
+      "path": "/equipment-setups/{setup_id}"
+    },
+    {
+      "method": "GET",
+      "path": "/equipment/{equipment_id}"
+    },
+    {
+      "method": "PATCH",
+      "path": "/equipment/{equipment_id}"
+    },
+    {
+      "method": "POST",
+      "path": "/exports"
+    },
+    {
+      "method": "POST",
+      "path": "/exports/select-local"
+    },
+    {
+      "method": "GET",
+      "path": "/exports/{request_id}"
+    },
+    {
+      "method": "POST",
+      "path": "/exports/{request_id}/cancel"
+    },
+    {
+      "method": "GET",
+      "path": "/health"
+    },
+    {
+      "method": "POST",
+      "path": "/import-batches"
+    },
+    {
+      "method": "POST",
+      "path": "/import-batches/wait"
+    },
+    {
+      "method": "GET",
+      "path": "/import-batches/{request_id}"
+    },
+    {
+      "method": "POST",
+      "path": "/import-batches/{request_id}/project-references"
+    },
+    {
+      "method": "POST",
+      "path": "/import-inspections"
+    },
+    {
+      "method": "GET",
+      "path": "/import-inspections/{scan_id}"
+    },
+    {
+      "method": "GET",
+      "path": "/import-inspections/{scan_id}/entries"
+    },
+    {
+      "method": "GET",
+      "path": "/import-roots"
+    },
+    {
+      "method": "GET",
+      "path": "/import-roots/{root_id}/entries"
+    },
+    {
+      "method": "POST",
+      "path": "/imports"
+    },
+    {
+      "method": "GET",
+      "path": "/imports/requests/{request_id}"
+    },
+    {
+      "method": "POST",
+      "path": "/imports/requests/{request_id}/wait"
+    },
+    {
+      "method": "POST",
+      "path": "/imports/select-local"
+    },
+    {
+      "method": "POST",
+      "path": "/imports/{task_id}/dataset-publication"
+    },
+    {
+      "method": "GET",
+      "path": "/library/assets"
+    },
+    {
+      "method": "POST",
+      "path": "/library/assets/equipment-applications"
+    },
+    {
+      "method": "POST",
+      "path": "/library/assets/metadata-updates"
+    },
+    {
+      "method": "GET",
+      "path": "/library/assets/{asset_id}"
+    },
+    {
+      "method": "PATCH",
+      "path": "/library/assets/{asset_id}"
+    },
+    {
+      "method": "GET",
+      "path": "/library/assets/{asset_id}/calibration"
+    },
+    {
+      "method": "POST",
+      "path": "/library/assets/{asset_id}/calibration"
+    },
+    {
+      "method": "POST",
+      "path": "/library/assets/{asset_id}/content-observation"
+    },
+    {
+      "method": "GET",
+      "path": "/library/assets/{asset_id}/detail"
+    },
+    {
+      "method": "GET",
+      "path": "/library/assets/{asset_id}/hdus"
+    },
+    {
+      "method": "GET",
+      "path": "/library/assets/{asset_id}/hdus/{hdu_index}/header"
+    },
+    {
+      "method": "GET",
+      "path": "/library/assets/{asset_id}/master-provenance"
+    },
+    {
+      "method": "PATCH",
+      "path": "/library/assets/{asset_id}/master-provenance"
+    },
+    {
+      "method": "POST",
+      "path": "/library/assets/{asset_id}/previews/display"
+    },
+    {
+      "method": "POST",
+      "path": "/library/assets/{asset_id}/previews/display/auto-stretch"
+    },
+    {
+      "method": "GET",
+      "path": "/library/assets/{asset_id}/previews/display/status"
+    },
+    {
+      "method": "POST",
+      "path": "/library/assets/{asset_id}/previews/viewer"
+    },
+    {
+      "method": "DELETE",
+      "path": "/library/assets/{asset_id}/previews/viewer/consumer/{consumer_id}"
+    },
+    {
+      "method": "GET",
+      "path": "/library/assets/{asset_id}/previews/viewer/{key}/status"
+    },
+    {
+      "method": "GET",
+      "path": "/library/assets/{asset_id}/previews/viewer/{key}/tiles/{level}/{x}/{y}"
+    },
+    {
+      "method": "GET",
+      "path": "/library/assets/{asset_id}/previews/viewer/{key}/{file}"
+    },
+    {
+      "method": "GET",
+      "path": "/library/assets/{asset_id}/previews/{size}"
+    },
+    {
+      "method": "POST",
+      "path": "/library/canvas-data"
+    },
+    {
+      "method": "POST",
+      "path": "/library/canvas-data/inspect"
+    },
+    {
+      "method": "GET",
+      "path": "/library/change-state"
+    },
+    {
+      "method": "GET",
+      "path": "/library/filter-options"
+    },
+    {
+      "method": "DELETE",
+      "path": "/library/items"
+    },
+    {
+      "method": "GET",
+      "path": "/library/items"
+    },
+    {
+      "method": "GET",
+      "path": "/library/locations/{entry_type}/{entry_id}"
+    },
+    {
+      "method": "POST",
+      "path": "/library/locations/{entry_type}/{entry_id}/open"
+    },
+    {
+      "method": "POST",
+      "path": "/library/organization"
+    },
+    {
+      "method": "POST",
+      "path": "/library/organization/plan"
+    },
+    {
+      "method": "GET",
+      "path": "/library/organization/{request_id}"
+    },
+    {
+      "method": "GET",
+      "path": "/library/trash"
+    },
+    {
+      "method": "POST",
+      "path": "/library/trash/delete"
+    },
+    {
+      "method": "POST",
+      "path": "/library/trash/delete-preview"
+    },
+    {
+      "method": "POST",
+      "path": "/library/trash/restore"
+    },
+    {
+      "method": "GET",
+      "path": "/nodes"
+    },
+    {
+      "method": "GET",
+      "path": "/nodes/{definition_id}"
+    },
+    {
+      "method": "GET",
+      "path": "/projects"
+    },
+    {
+      "method": "POST",
+      "path": "/projects"
+    },
+    {
+      "method": "GET",
+      "path": "/projects/{project_id}"
+    },
+    {
+      "method": "PATCH",
+      "path": "/projects/{project_id}"
+    },
+    {
+      "method": "POST",
+      "path": "/projects/{project_id}/asset-references"
+    },
+    {
+      "method": "DELETE",
+      "path": "/projects/{project_id}/asset-references/{reference_id}"
+    },
+    {
+      "method": "GET",
+      "path": "/projects/{project_id}/asset-references/{reference_id}"
+    },
+    {
+      "method": "GET",
+      "path": "/projects/{project_id}/asset-references/{reference_id}/hdus"
+    },
+    {
+      "method": "GET",
+      "path": "/projects/{project_id}/asset-references/{reference_id}/hdus/{hdu_index}/header"
+    },
+    {
+      "method": "POST",
+      "path": "/projects/{project_id}/asset-references/{reference_id}/previews/display"
+    },
+    {
+      "method": "POST",
+      "path": "/projects/{project_id}/asset-references/{reference_id}/previews/display/auto-stretch"
+    },
+    {
+      "method": "GET",
+      "path": "/projects/{project_id}/asset-references/{reference_id}/previews/display/status"
+    },
+    {
+      "method": "POST",
+      "path": "/projects/{project_id}/asset-references/{reference_id}/previews/viewer"
+    },
+    {
+      "method": "DELETE",
+      "path": "/projects/{project_id}/asset-references/{reference_id}/previews/viewer/consumer/{consumer_id}"
+    },
+    {
+      "method": "GET",
+      "path": "/projects/{project_id}/asset-references/{reference_id}/previews/viewer/{key}/status"
+    },
+    {
+      "method": "GET",
+      "path": "/projects/{project_id}/asset-references/{reference_id}/previews/viewer/{key}/tiles/{level}/{x}/{y}"
+    },
+    {
+      "method": "GET",
+      "path": "/projects/{project_id}/asset-references/{reference_id}/previews/viewer/{key}/{file}"
+    },
+    {
+      "method": "GET",
+      "path": "/projects/{project_id}/asset-references/{reference_id}/previews/{size}"
+    },
+    {
+      "method": "GET",
+      "path": "/projects/{project_id}/assets"
+    },
+    {
+      "method": "GET",
+      "path": "/projects/{project_id}/dataset-references"
+    },
+    {
+      "method": "POST",
+      "path": "/projects/{project_id}/dataset-references"
+    },
+    {
+      "method": "DELETE",
+      "path": "/projects/{project_id}/dataset-references/{reference_id}"
+    },
+    {
+      "method": "GET",
+      "path": "/projects/{project_id}/dataset-references/{reference_id}"
+    },
+    {
+      "method": "GET",
+      "path": "/projects/{project_id}/datasets"
+    },
+    {
+      "method": "GET",
+      "path": "/runs/{prompt_id}/calls"
+    },
+    {
+      "method": "GET",
+      "path": "/runs/{prompt_id}/calls/{call_id}"
+    },
+    {
+      "method": "GET",
+      "path": "/runs/{prompt_id}/calls/{call_id}/log"
+    },
+    {
+      "method": "GET",
+      "path": "/runs/{prompt_id}/calls/{call_id}/outputs/{output_index}/members/{member_index}/analysis"
+    },
+    {
+      "method": "GET",
+      "path": "/runs/{prompt_id}/calls/{call_id}/outputs/{output_index}/members/{member_index}/file"
+    },
+    {
+      "method": "GET",
+      "path": "/runs/{prompt_id}/calls/{call_id}/outputs/{output_index}/members/{member_index}/thumbnail"
+    },
+    {
+      "method": "POST",
+      "path": "/runs/{prompt_id}/calls/{call_id}/outputs/{output_index}/members/{member_index}/viewer"
+    },
+    {
+      "method": "DELETE",
+      "path": "/runs/{prompt_id}/calls/{call_id}/outputs/{output_index}/members/{member_index}/viewer/consumer/{consumer_id}"
+    },
+    {
+      "method": "GET",
+      "path": "/runs/{prompt_id}/calls/{call_id}/outputs/{output_index}/members/{member_index}/viewer/{key}/status"
+    },
+    {
+      "method": "GET",
+      "path": "/runs/{prompt_id}/calls/{call_id}/outputs/{output_index}/members/{member_index}/viewer/{key}/tiles/{level}/{x}/{y}"
+    },
+    {
+      "method": "GET",
+      "path": "/runs/{prompt_id}/calls/{call_id}/outputs/{output_index}/members/{member_index}/viewer/{key}/{file}"
+    },
+    {
+      "method": "GET",
+      "path": "/settings/locale"
+    },
+    {
+      "method": "GET",
+      "path": "/settings/trash"
+    },
+    {
+      "method": "POST",
+      "path": "/settings/trash/archive"
+    },
+    {
+      "method": "POST",
+      "path": "/settings/trash/delete"
+    },
+    {
+      "method": "POST",
+      "path": "/settings/trash/delete-preview"
+    },
+    {
+      "method": "POST",
+      "path": "/settings/trash/restore"
+    },
+    {
+      "method": "GET",
+      "path": "/settings/workbench"
+    },
+    {
+      "method": "PATCH",
+      "path": "/settings/workbench"
+    },
+    {
+      "method": "POST",
+      "path": "/settings/workbench/restart"
+    },
+    {
+      "method": "GET",
+      "path": "/settings/workbench/restart/{operation_id}"
+    },
+    {
+      "method": "POST",
+      "path": "/settings/workbench/select-directory"
+    },
+    {
+      "method": "GET",
+      "path": "/software/packages"
+    },
+    {
+      "method": "GET",
+      "path": "/software/packages/{package_id}"
+    },
+    {
+      "method": "POST",
+      "path": "/software/packages/{package_id}/install"
+    },
+    {
+      "method": "POST",
+      "path": "/software/packages/{package_id}/prepare"
+    },
+    {
+      "method": "GET",
+      "path": "/software/packages/{package_id}/releases"
+    },
+    {
+      "method": "POST",
+      "path": "/software/packages/{package_id}/uninstall"
+    },
+    {
+      "method": "GET",
+      "path": "/software/packages/{package_id}/versions/{version}/commands"
+    },
+    {
+      "method": "POST",
+      "path": "/software/preview"
+    },
+    {
+      "method": "DELETE",
+      "path": "/software/preview/{consumer_id}"
+    },
+    {
+      "method": "POST",
+      "path": "/thumbnail-batches"
+    },
+    {
+      "method": "GET",
+      "path": "/thumbnail-batches/{request_id}"
+    },
+    {
+      "method": "POST",
+      "path": "/thumbnail-batches/{request_id}/retry"
+    },
+    {
+      "method": "POST",
+      "path": "/uploads"
+    },
+    {
+      "method": "POST",
+      "path": "/uploads/{task_id}/fail"
+    },
+    {
+      "method": "POST",
+      "path": "/uploads/{task_id}/start"
+    },
+    {
+      "method": "PUT",
+      "path": "/uploads/{task_id}/{index}"
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+include LICENSE
+include README.md AGENTS.md
+include uv.lock
+include .env.example config.example.toml
+include package.json
+include pnpm-workspace.yaml
+recursive-include src/astrophotoflow *.py *.ini *.md
+recursive-include src/astrophotoflow/vendor *.zip *.json *.lock
+include src/astrophotoflow/vendor/comfyui-frontend-LICENSE
+graft engine/ComfyUI
+global-exclude .env
+recursive-include scripts *.py
+include .agents/skills/astrophotoflow-library/SKILL.md
+graft docs
+global-exclude *.py[cod]
+prune web
+prune tests
+prune .artifacts
+graft .artifacts/build/frontend

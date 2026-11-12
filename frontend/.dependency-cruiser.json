@@ -1,0 +1,55 @@
+{
+  "$schema": "https://raw.githubusercontent.com/sverweij/dependency-cruiser/v18.5.0/src/schema/configuration.schema.json",
+  "forbidden": [
+    {
+      "name": "no-circular",
+      "severity": "error",
+      "from": {
+        "pathNot": "^packages/astrophotoflow-ui/src/generated/"
+      },
+      "to": { "circular": true }
+    },
+    {
+      "name": "apf-ui-does-not-import-native-application",
+      "severity": "error",
+      "from": {
+        "path": "^packages/astrophotoflow-ui/src/"
+      },
+      "to": {
+        "path": "^src/"
+      }
+    },
+    {
+      "name": "apf-native-consumes-ui-public-entry",
+      "severity": "error",
+      "from": {
+        "path": "^src/"
+      },
+      "to": {
+        "path": "^packages/astrophotoflow-ui/src/(?!index\\.ts$)"
+      }
+    },
+    {
+      "name": "apf-module-data-public-entry",
+      "severity": "error",
+      "from": {
+        "path": "^packages/astrophotoflow-ui/src/modules/(?!data/)"
+      },
+      "to": {
+        "path": "^packages/astrophotoflow-ui/src/modules/data/(?!index\\.ts$)"
+      }
+    }
+  ],
+  "options": {
+    "tsConfig": { "fileName": "tsconfig.json" },
+    "tsPreCompilationDeps": "specify",
+    "doNotFollow": { "path": "node_modules" },
+    "exclude": {
+      "path": ["\\.(test|spec|stories)\\.ts$", "/__tests?__/", "/test/"]
+    },
+    "enhancedResolveOptions": {
+      "extensions": [".ts", ".mts", ".js", ".vue", ".json"],
+      "mainFields": ["module", "main", "types"]
+    }
+  }
+}

@@ -1,0 +1,390 @@
+from datetime import datetime
+from math import isfinite
+from pathlib import Path
+from typing import Literal
+from uuid import UUID
+from pydantic import ConfigDict, Field, FiniteFloat, JsonValue, TypeAdapter, field_validator, model_validator
+from astrophotoflow.contracts.calibration_status import CalibrationEffect
+from astrophotoflow.contracts.bundles import ParameterEditor, PixelSelection
+from astrophotoflow.contracts.common import ErrorDetail, JsonObject, StrictModel, UuidInput, check_name, optional_response_fields
+from astrophotoflow.contracts.inputs import InputReference, OutputLocator, ResolvedInput, ScienceFormat
+BundleDataKind = Literal['image', 'sequence', 'video', 'analysis', 'file']
+
+def bundle_data_kind(port_type: str, formats: list[ScienceFormat]) -> BundleDataKind:
+    if port_type == 'APF_ANALYSIS':
+        return 'analysis'
+    if port_type == 'APF_FILE':
+        return 'file'
+    return 'video' if formats == ['video'] else 'image'
+
+class ParameterDefinition(StrictModel):
+    name: str
+    kind: Literal['int', 'float', 'string', 'boolean', 'choice']
+    default: JsonValue
+    minimum: float | None = None
+    maximum: float | None = None
+    step: float | None = None
+    choices: list[JsonValue] | None = None
+    advanced: bool = False
+    nullable: bool = False
+    unit: str | None = None
+    editor: ParameterEditor | None = None
+    _name = field_validator('name')(check_name)
+
+    @model_validator(mode='after')
+    def valid_default_and_constraints(self):
+        value = self.default
+        if self.editor is not None:
+            if self.kind != 'string':
+                raise ValueError('Editors use a JSON string parameter.')
+            self.editor_value(value)
+        if value is None:
+            if not self.nullable:
+                raise ValueError('非nullable参数不能使用null默认值。')
+        elif self.kind == 'int' and (not isinstance(value, int) or isinstance(value, bool)):
+            raise ValueError('int参数默认值必须是整数。')
+        elif self.kind == 'float' and (not isinstance(value, (int, float)) or isinstance(value, bool)):
+            raise ValueError('float参数默认值必须是数值。')
+        elif self.kind == 'string' and (not isinstance(value, str)):
+            raise ValueError('string参数默认值必须是字符串。')
+        elif self.kind == 'boolean' and (not isinstance(value, bool)):
+            raise ValueError('boolean参数默认值必须是布尔值。')
+        if self.minimum is not None and (not isfinite(self.minimum)):
+            raise ValueError('参数minimum必须是有限值。')
+        if self.maximum is not None and (not isfinite(self.maximum)):
+            raise ValueError('参数maximum必须是有限值。')
+        if self.step is not None and (not isfinite(self.step) or self.step <= 0):
+            raise ValueError('参数step必须是正有限值。')
+        if self.kind in {'int', 'float'}:
+            if value is not None and (not isfinite(value)):
+                raise ValueError('数值参数默认值必须是有限值。')
+            if self.minimum is not None and self.maximum is not None and (self.minimum > self.maximum):
+                raise ValueError('参数minimum不能大于maximum。')
+            if value is not None and self.minimum is not None and (value < self.minimum):
+                raise ValueError('参数默认值不能小于minimum。')
+            if value is not None and self.maximum is not None and (value > self.maximum):
+                raise ValueError('参数默认值不能大于maximum。')
+        elif self.minimum is not None or self.maximum is not None or self.step is not None:
+            raise ValueError('minimum、maximum和step只用于数值参数。')
+        if self.kind == 'choice':
+            if self.choices is None or value not in self.choices:
+                raise ValueError('choice参数默认值必须存在于choices中。')
+        elif self.choices is not None:
+            raise ValueError('choices只用于choice参数。')
+        return self
+
+    def editor_value(self, value: JsonValue):
+        if self.editor is None or value is None or value == '':
+            return None
+        if not isinstance(value, str):
+            raise ValueError('Editor value must be JSON text.')
+        if self.editor.kind == 'curve':
+            points = TypeAdapter(list[tuple[FiniteFloat, FiniteFloat]]).validate_json(value)
+            if any((not (0 <= x <= 1 and 0 <= y <= 1) for x, y in points)) or any((a[0] >= b[0] for a, b in zip(points, points[1:]))):
+                raise ValueError('Curve coordinates must be normalized and ordered by X.')
+            return points
+        selection = PixelSelection.model_validate_json(value)
+        if self.editor.kind in {'line', 'region'} and len(selection.points) != 2:
+            raise ValueError('This editor requires exactly two points.')
+        if self.editor.kind == 'region' and (selection.points[0][0] == selection.points[1][0] or selection.points[0][1] == selection.points[1][1]):
+            raise ValueError('A region must have a positive width and height.')
+        if self.editor.kind == 'line' and selection.points[0] == selection.points[1]:
+            raise ValueError('A line needs two distinct points.')
+        return selection
+
+class SoftwareInputDefinition(StrictModel):
+    name: str
+    type: str
+    formats: list[ScienceFormat]
+    cardinality: Literal['one', 'many']
+    required: bool
+    supports_hdu: bool | None
+    supports_slice: bool | None
+    multiple_connections: bool = False
+    data_kind: BundleDataKind = 'image'
+    colour_layout: Literal['planar', 'interleaved'] | None = None
+
+class SoftwareOutputDefinition(StrictModel):
+    name: str
+    type: str
+    formats: list[ScienceFormat]
+    cardinality: Literal['one', 'many']
+    required: bool = True
+    colour_layout: Literal['planar', 'interleaved'] | None = None
+    data_kind: BundleDataKind | None = None
+    role: str | None = None
+
+class SoftwareOperation(StrictModel):
+    calibration_effect: CalibrationEffect = Field(default_factory=CalibrationEffect)
+    package_id: str
+    version: str
+    operation_id: str
+    name: str
+    description: str
+    syntax: str
+    scriptable: bool
+    inputs: list[SoftwareInputDefinition]
+    outputs: list[SoftwareOutputDefinition]
+    parameters: list[ParameterDefinition]
+    parameter_widgets: dict[str, Literal['multiline']] = Field(default_factory=dict)
+    content_token: str
+    ready: bool
+    reason: str | None = None
+    cancel_supported: bool | None
+
+    @model_validator(mode='after')
+    def valid_parameter_widgets(self):
+        effect = self.calibration_effect
+        if effect.behavior != 'unknown':
+            science_inputs = {port.name for port in self.inputs if port.type == 'APF_SCIENCE'}
+            science_outputs = {port.name for port in self.outputs if port.type == 'APF_SCIENCE'}
+            if effect.input not in science_inputs or not effect.outputs or not set(effect.outputs) <= science_outputs or not set(effect.masters.values()) <= science_inputs:
+                raise ValueError('Calibration semantics must reference declared science input and output ports.')
+        strings = {parameter.name for parameter in self.parameters if parameter.kind == 'string'}
+        if not set(self.parameter_widgets).issubset(strings):
+            raise ValueError('多行控件必须绑定已声明的字符串参数。')
+        media_inputs = {item.name for item in self.inputs if item.data_kind in {'image', 'sequence', 'video'} and (not item.multiple_connections)}
+        if any((p.editor and p.editor.input is not None and (p.editor.input not in media_inputs) for p in self.parameters)):
+            raise ValueError('An image editor must reference a declared media input.')
+        return self
+
+class BundleDevelopmentSource(StrictModel):
+    root: Path
+    head: str | None = None
+    dirty: bool = True
+    fingerprint: str = ''
+    state: Literal['building', 'ready', 'failed'] = 'building'
+    error: str | None = None
+    software_version: str | None = None
+    bundle_version: str | None = None
+
+class SoftwarePackage(StrictModel):
+    package_id: str
+    name: str
+    available_versions: list[str]
+    installed_version: str | None
+    install_path: Path | None
+    package_token: str
+    availability: Literal['not_installed', 'ready', 'not_ready', 'unknown']
+    reason: str | None = None
+    operation: Literal['install', 'prepare', 'update', 'uninstall'] | None = None
+    operation_state: Literal['idle', 'running', 'completed', 'failed', 'unknown']
+    phase: str | None = None
+    progress: float | None = Field(default=None, ge=0, le=1)
+    last_error: ErrorDetail | None = None
+    node_definition_ids: list[UUID]
+    bundle_version: str | None = None
+    bundle_commit: str | None = None
+    update_available: bool = False
+    restart_required: bool = False
+    migration_required: bool = False
+    development_source: BundleDevelopmentSource | None = None
+
+    @property
+    def effective_version(self):
+        return self.development_source.software_version if self.development_source else self.installed_version
+
+    @property
+    def effective_bundle_commit(self):
+        return self.development_source.head if self.development_source else self.bundle_commit
+
+    @property
+    def effective_bundle_version(self):
+        return self.development_source.bundle_version if self.development_source else self.bundle_version
+
+    @property
+    def effective_availability(self):
+        return ('ready' if self.development_source.state == 'ready' else 'not_ready') if self.development_source else self.availability
+
+    @property
+    def effective_reason(self):
+        return self.development_source.error if self.development_source else self.reason
+
+class SoftwarePackageState(StrictModel):
+    installed_version: str | None
+    install_path: Path | None
+    availability: Literal['not_installed', 'ready', 'not_ready', 'unknown']
+    reason: str | None
+    operation: Literal['install', 'prepare', 'update', 'uninstall'] | None
+    operation_state: Literal['idle', 'running', 'completed', 'failed', 'unknown']
+    phase: str | None
+    progress: float | None = Field(default=None, ge=0, le=1)
+    last_error: ErrorDetail | None
+    node_definition_ids: list[UUID]
+
+class SoftwarePreparation(StrictModel):
+    package: SoftwarePackage
+    user_action: str | None
+    ui_kind: Literal['software', 'platform'] | None
+    ui_target: str | None
+
+class SoftwareInstallRequest(StrictModel):
+    version: str
+    package_token: str
+    bundle_version: str | None = None
+    release_token: str | None = None
+
+    @model_validator(mode='after')
+    def selected_release(self):
+        provided = self.model_fields_set & {'bundle_version', 'release_token'}
+        if provided and (self.bundle_version is None or self.release_token is None):
+            raise ValueError('bundle_version and release_token must be provided together.')
+        return self
+
+class SoftwareRelease(StrictModel):
+    bundle_version: str
+    software_version: str | None
+    channel: Literal['stable', 'dev']
+    tag: str
+    commit: str
+    is_latest: bool = False
+    compatible: bool
+    reason_code: Literal['invalid_metadata', 'unsupported_platform', 'unsupported_sdk', 'unsupported_schema', 'missing_resources'] | None = None
+    reason_parameters: dict[str, str] = Field(default_factory=dict)
+    release_token: str | None = None
+
+class SoftwareReleaseListing(StrictModel):
+    package_id: str
+    releases: list[SoftwareRelease]
+    checked_at: datetime | None
+    stale: bool = False
+    error: ErrorDetail | None = None
+
+class SoftwareUninstallRequest(StrictModel):
+    package_token: str
+
+class SoftwareInvocation(StrictModel):
+    run_id: UUID
+    node_execution_id: str
+    call_id: UUID
+    package_id: str
+    version: str
+    operation_id: str
+    operation_content_token: str
+    bundle_commit: str | None = None
+    development_source: BundleDevelopmentSource | None = None
+    inputs: dict[str, list[ResolvedInput]]
+    supporting_inputs: dict[str, list[ResolvedInput]] = Field(default_factory=dict)
+    parameters: dict[str, JsonValue]
+    work_directory: Path
+
+class ProducedFile(StrictModel):
+    path: Path
+    format: ScienceFormat
+    allow_empty: bool = False
+    frame_count: int | None = Field(default=None, ge=1)
+
+class SoftwareObservation(StrictModel):
+    run_id: UUID
+    node_execution_id: str
+    call_id: UUID
+    observed_at: datetime
+    active: bool | None
+    runtime_ref: JsonObject | None
+    state: Literal['starting', 'running', 'completed', 'failed', 'cancelled', 'unknown']
+    phase: str | None = None
+    progress: float | None = Field(default=None, ge=0, le=1)
+    log_path: Path | None = None
+    exit_code: int | None = None
+    error: ErrorDetail | None = None
+
+class SoftwareResult(StrictModel):
+    call_id: UUID
+    state: Literal['completed', 'failed', 'cancelled', 'unknown']
+    started_at: datetime
+    ended_at: datetime | None
+    exit_code: int | None
+    outputs: dict[str, list[ProducedFile]]
+    supporting_outputs: dict[str, list[ProducedFile]] = Field(default_factory=dict)
+    log_path: Path | None
+    error: ErrorDetail | None
+
+class SoftwareCancelResult(StrictModel):
+    call_id: UUID
+    request_state: Literal['sent', 'not_supported', 'not_running', 'unknown']
+    stop_state: Literal['stopped', 'running', 'unknown']
+    observed_at: datetime
+    reason: str | None = None
+
+class SoftwareUse(StrictModel):
+    call_id: UUID
+    run_id: UUID
+    node_execution_id: str
+    state: Literal['running', 'unknown']
+
+class NativeBundleCall(StrictModel):
+    call_id: UuidInput
+    prompt_id: UuidInput
+    node_id: str
+    definition_id: UuidInput
+    definition_token: str
+    workflow_id: UuidInput | None = None
+    calculation_signature: str | None = None
+    inputs: dict[str, InputReference | OutputLocator | list[InputReference | OutputLocator]]
+    parameters: dict[str, JsonValue]
+
+class BundlePreviewRequest(StrictModel):
+    reference: InputReference
+    member_index: int = Field(default=0, ge=0)
+    consumer_id: UuidInput
+    generation: int = Field(ge=0)
+    package_id: str
+    operation_id: str
+    parameters: dict[str, JsonValue]
+    preview_max_edge: Literal[512, 1024, 2048] | None = 1024
+    display_balance: Literal['auto', 'preserve'] | None = None
+
+class RunOutputMember(StrictModel):
+    name: str
+    format: ScienceFormat
+    view_base: str
+    file_url: str
+    width: int | None = None
+    height: int | None = None
+    frame_count: int | None = None
+    hdu_index: int | None = None
+    content_hash: str | None = None
+    position_token: str | None = None
+
+class RunOutputPort(StrictModel):
+    model_config = ConfigDict(json_schema_serialization_defaults_required=True, json_schema_extra=optional_response_fields('data_kind', 'role', 'operation_output'))
+    name: str
+    type: str
+    members: list[RunOutputMember]
+    data_kind: BundleDataKind | None = None
+    role: str | None = None
+    operation_output: str | None = None
+
+class SoftwareCallResult(StrictModel):
+    model_config = ConfigDict(json_schema_serialization_defaults_required=True, json_schema_extra=optional_response_fields('input_token', 'editor_values'))
+    prompt_id: UUID
+    call_id: UUID
+    log_url: str
+    node_id: str
+    workflow_id: UUID | None = None
+    calculation_signature: str | None = None
+    package_id: str | None = None
+    software_version: str | None = None
+    bundle_version: str | None = None
+    bundle_commit: str | None = None
+    development_source: BundleDevelopmentSource | None = None
+    operation_id: str | None = None
+    definition_token: str | None = None
+    state: Literal['starting', 'running', 'completed', 'failed', 'cancelled', 'unknown']
+    ports: list[RunOutputPort]
+    preview_error: str | None = None
+    observation: SoftwareObservation | None = None
+    error: ErrorDetail | None = None
+    input_token: str | None = None
+    editor_values: dict[str, PixelSelection | list[tuple[FiniteFloat, FiniteFloat]]] = Field(default_factory=dict)
+
+class ConfirmSoftwareEvent(StrictModel):
+    operation_id: UuidInput
+
+class SoftwareCommand(StrictModel):
+    command: str
+    scriptable: bool
+    syntax: str
+    description: str
+    url: str
+    assessment: dict[str, JsonValue] = Field(default_factory=dict)
