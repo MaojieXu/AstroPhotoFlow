@@ -131,7 +131,7 @@ def _tool_data(result, service: dict) -> dict:
 async def _call_operation(session, name, arguments, **kwargs):
     return await session.call_tool(name, arguments, **kwargs)
 
-async def _wait_mcp_task(session: ClientSession, service: dict, task_id: str) -> dict:
+async def _wait_mcp_task(session: ClientSession, service: dict, task_id: str, *, expected_status='completed') -> dict:
     deadline = time.monotonic() + 30
     while time.monotonic() < deadline:
         try:
@@ -140,7 +140,7 @@ async def _wait_mcp_task(session: ClientSession, service: dict, task_id: str) ->
             pytest.fail(f'Reading import task {task_id} timed out: {exc}\nService log:\n{_service_logs(service)}')
         task = _tool_data(result, service)
         if task['status'] in FINAL_TASK_STATUSES:
-            assert task['status'] == 'completed', f'Import task failed: {task}\nService log:\n{_service_logs(service)}'
+            assert task['status'] == expected_status, f'Unexpected import task outcome: {task}\nService log:\n{_service_logs(service)}'
             return task
         await asyncio.sleep(0.2)
     pytest.fail(f'Import task {task_id} did not finish within 30 seconds.\nService log:\n{_service_logs(service)}')
@@ -282,10 +282,11 @@ def test_apf_mcp_business_domains_protocol(service, tmp_path):
                 broken = next((item for item in local_task['items'] if item['source_path'].endswith('broken.fits')))
                 hdu.writeto(night / 'broken.fits', overwrite=True)
                 retry = await call('data_tasks_retry', task_id=local_task['id'], item_ids=[broken['id']])
-                repaired = await _wait_mcp_task(session, service, retry['task_id'])
-                assert repaired['items'][0]['retry_of_item_id'] == broken['id']
-                if broken['asset_id']:
-                    assert repaired['items'][0]['asset_id'] == broken['asset_id']
+                retried = await _wait_mcp_task(session, service, retry['task_id'], expected_status='completed_with_errors')
+                retried_item = retried['items'][0]
+                assert retried_item['retry_of_item_id'] == broken['id']
+                assert retried_item['asset_id'] == broken['asset_id']
+                assert retried_item['content_status'] == 'available' and retried_item['metadata_status'] == 'failed'
                 assert (night / 'good.png').is_file()
                 for tool_name in ('data_tasks_cancel', 'data_tasks_resume'):
                     rejected = await _call_operation(session, tool_name, {'task_id': task['task_id']})
