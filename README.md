@@ -6,24 +6,24 @@ AstroPhotoFlow 是本地运行的天文图像工作台：把拍摄的 FITS 整�
 
 ## Quickstart
 
-准备 Git、uv、Node.js 和 pnpm，版本见[开发环境](docs/development.md)。在一个检出目录安装依赖。
+首次开发先准备 Git、uv、Node.js 和 pnpm，版本见[开发环境](docs/development.md)。安装依赖、构建网页并打开开发工作台。
 
 ```sh
-git clone --branch dev --depth 1 https://github.com/MaojieXu/AstroPhotoFlow.git
+git clone --branch dev https://github.com/MaojieXu/AstroPhotoFlow.git
 cd AstroPhotoFlow
-uv sync --locked --extra dev
-pnpm --dir frontend install --frozen-lockfile --ignore-scripts
+uv sync
+pnpm -C frontend install
+pnpm build
+pnpm web
 ```
 
-首次打开工作台时构建网页、初始化开发 workspace，再启动服务。
+之后每次开发使用同一个启动命令。
 
 ```sh
-pnpm build
-uv run --locked --no-sync apf init --workspace .artifacts/workspaces/dev --frontend-assets .artifacts/build/frontend --no-activate
-uv run --locked --no-sync apf start --workspace .artifacts/workspaces/dev
+pnpm web
 ```
 
-工作台就绪后，`start` 在交互式终端显示实际前端地址。加 `--open` 可在默认浏览器打开。脚本仍可从标准输出的 JSON 读取 `web_url`。更新工作台网页时先停止该实例，再构建和初始化。
+打开 Vite 页面后，前端保存即热更新，Python 保存后开发脚本重启工作台。日常源码修改无需再运行 `pnpm build`。
 
 ## 文档入口
 

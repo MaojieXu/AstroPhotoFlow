@@ -6,24 +6,24 @@ AstroPhotoFlow is a local astronomy imaging workbench: it turns captured FITS da
 
 ## Quickstart
 
-Have Git, uv, Node.js, and pnpm available. See the [development environment](docs/development.en.md) for versions. Install dependencies in a single checkout.
+For the first development session, have Git, uv, Node.js, and pnpm available. See the [development environment](docs/development.en.md) for versions. Install dependencies, build the web assets, and open the development workbench.
 
 ```sh
-git clone --branch dev --depth 1 https://github.com/MaojieXu/AstroPhotoFlow.git
+git clone --branch dev https://github.com/MaojieXu/AstroPhotoFlow.git
 cd AstroPhotoFlow
-uv sync --locked --extra dev
-pnpm --dir frontend install --frozen-lockfile --ignore-scripts
+uv sync
+pnpm -C frontend install
+pnpm build
+pnpm web
 ```
 
-To open the workbench for the first time, build the web assets, initialize the development workspace, then start the services.
+Use the same launch command for subsequent development sessions.
 
 ```sh
-pnpm build
-uv run --locked --no-sync apf init --workspace .artifacts/workspaces/dev --frontend-assets .artifacts/build/frontend --no-activate
-uv run --locked --no-sync apf start --workspace .artifacts/workspaces/dev
+pnpm web
 ```
 
-Once the workbench is ready, `start` shows the actual web address in interactive terminals. Add `--open` to launch the default browser. Scripts can still read `web_url` from the JSON on standard output. To update the workbench web assets, stop that instance before building and initializing again.
+On the Vite page, frontend changes hot-reload on save and Python changes restart the workbench. Day-to-day source edits require no additional `pnpm build`.
 
 ## Documentation map
 

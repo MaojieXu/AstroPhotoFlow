@@ -30,10 +30,12 @@
 | 任务 | 命令 |
 | --- | --- |
 | 停止开发工作台 | `uv run --locked --no-sync apf stop --workspace .artifacts/workspaces/dev` |
-| 前端热更新 | `pnpm build:watch --workspace .artifacts/workspaces/dev --port 32589 --strictPort` |
+| 打开开发工作台 | `pnpm web` |
+| 单独启动 Vite | `pnpm build:watch --workspace .artifacts/workspaces/dev --port 32589 --strictPort` |
 | MCP 开发热加载 | `pnpm dev:mcp --workspace .artifacts/workspaces/<test> --port 8765` |
 | 开发 Bundle 源码 | `uv run --locked --no-sync python scripts/dev_bundle_sources.py --help` |
 | Python 测试 | `uv run --locked --no-sync pytest -q --basetemp=.artifacts/pytest-<task>` |
+| 安装 Python 测试和打包工具 | `uv sync --locked --extra dev` |
 | 前端单元测试 | `pnpm test` |
 | 架构边界检查 | `pnpm check:boundaries` |
 | 文档门禁 | `pnpm check:docs` |
@@ -56,4 +58,5 @@ git clone --branch dev https://github.com/MaojieXu/AstroPhotoFlow-Siril.git bund
 
 - 实际地址以 `apf start` 或 `apf status` 返回的 `web_url` 为准。实际端口见 workspace 的 `run/processes.json`，首选端口保存在 `config.toml`。
 - 浏览器与 MCP 验证使用仓库内独立的测试 workspace。浏览器和并行测试的设置见[测试说明](testing.md)。
-- 更新依赖、引擎或工作台网页前先停止自己的实例。Python 服务代码修改后显式重启，MCP 热加载只刷新 MCP 进程。
+- `pnpm web` 打开 Vite 页面并监听平台 Python 源码。工作台忙时终端显示重启受阻的原因，任务结束后可再次保存或显式重启。Ctrl+C 结束 Vite 和监听，工作台服务可用上表的停止命令关闭。
+- 更新依赖、引擎或静态网页前先停止自己的实例。单独使用 `pnpm build:watch` 时，Python 变更后显式重启工作台。MCP 热加载只刷新 MCP 进程。

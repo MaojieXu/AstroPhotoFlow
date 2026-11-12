@@ -14,6 +14,7 @@
     "benchmark:library": "uv run --locked --no-sync python scripts/benchmark_library.py",
     "typecheck": "pnpm --dir frontend --filter @astrophotoflow/ui typecheck",
     "build": "uv run --locked --no-sync python scripts/build_frontend.py",
+    "web": "uv run --locked --no-sync python scripts/dev_frontend.py --start-workbench --workspace .artifacts/workspaces/dev --port 32589 --strictPort --open",
     "dev:mcp": "uv run --locked --no-sync python scripts/dev_mcp.py",
     "build:watch": "uv run --locked --no-sync python scripts/dev_frontend.py",
     "test": "pnpm --dir frontend --filter @astrophotoflow/ui test",
